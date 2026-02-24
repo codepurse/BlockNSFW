@@ -90868,3 +90868,5 @@
 0.0.0.0    zzztube.tv
 0.0.0.0    pat.com
 0.0.0.0    hanime.boo
+0.0.0.0    intim.to
+0.0.0.0    intelaf.com
