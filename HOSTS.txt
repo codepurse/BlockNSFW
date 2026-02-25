@@ -90870,3 +90870,5 @@
 0.0.0.0    hanime.boo
 0.0.0.0    intim.to
 0.0.0.0    intelaf.com
+0.0.0.0    simpcity.cr
+0.0.0.0    myhypnohub.com
