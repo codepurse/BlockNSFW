@@ -1,0 +1,33 @@
+SOURCE_NOTES for data files in this directory
+==============================================
+
+This directory contains self-hosted blocklist and whitelist data used by the
+BlockNSFW extension as a remote sync source. The `codepurse/BlockNSFW`
+GitHub repository is owned by the same maintainer who publishes this
+extension, so the data and the data license are under the maintainer's
+control.
+
+Files
+-----
+
+- HOSTS.txt     Domain blocklist in standard hosts-file format (0.0.0.0 <domain>).
+                Sourced from a one-time snapshot of the upstream
+                codepurse/BlockNSFW HOSTS.txt (commit bee0db2, fetched 2026-06-03).
+- WHITELIST.txt Global whitelist of domains that must never be blocked.
+                Sourced from a one-time snapshot of the upstream
+                codepurse/BlockNSFW WHITELIST.txt (commit bee0db2, fetched 2026-06-03).
+
+License
+-------
+
+These data files are licensed under the MIT License (see LICENSE in this
+directory). Because the maintainer owns both the upstream and this
+extension, the data may be updated directly in the upstream repository
+and re-synced here.
+
+Maintenance
+-----------
+
+Updates to HOSTS.txt and WHITELIST.txt are the responsibility of the
+project maintainer. The upstream `codepurse/BlockNSFW` repository should
+be kept in sync with this directory.

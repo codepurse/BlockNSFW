@@ -1,0 +1,86 @@
+name: Build extension bundles
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  pull_request:
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build Chrome bundle
+        shell: pwsh
+        run: |
+          powershell -ExecutionPolicy Bypass -File .\build-chrome.ps1
+
+      - name: Build Firefox bundle
+        shell: pwsh
+        run: |
+          powershell -ExecutionPolicy Bypass -File .\build-firefox.ps1
+
+      - name: Install npm dependencies
+        shell: pwsh
+        run: |
+          npm install --no-audit --no-fund
+
+      - name: Run focused unit tests
+        shell: pwsh
+        run: |
+          npm test
+
+      - name: Lint Firefox bundle with web-ext
+        shell: pwsh
+        run: |
+          npm run lint:firefox
+
+      - name: Validate expected outputs
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $required = @(
+            "dist\chrome\manifest.json",
+            "dist\chrome\background.js",
+            "dist\chrome\content.js",
+            "dist\chrome\popup.html",
+            "dist\chrome\options.html",
+            "dist\chrome\blocklist.json",
+            "dist\firefox\manifest.json",
+            "dist\firefox\background.js",
+            "dist\firefox\content.js",
+            "dist\firefox\popup.html",
+            "dist\firefox\options.html",
+            "dist\firefox\blocklist.json"
+          )
+
+          foreach ($path in $required) {
+            if (-not (Test-Path $path)) {
+              throw "Missing build output: $path"
+            }
+          }
+
+          if (Test-Path "dist\chrome\content1.js") {
+            throw "Legacy file should not be shipped: dist\\chrome\\content1.js"
+          }
+
+          if (Test-Path "dist\firefox\content1.js") {
+            throw "Legacy file should not be shipped: dist\\firefox\\content1.js"
+          }
+
+      - name: Upload Chrome artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: chrome-bundle
+          path: dist/chrome
+
+      - name: Upload Firefox artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: firefox-bundle
+          path: dist/firefox

@@ -1,0 +1,2041 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>BlockNSFW Settings</title>
+  <style>
+    :root {
+      /* Enhanced Dark Theme Colors */
+      --background: #0a0a0f;
+      --background-gradient: linear-gradient(135deg, #0a0a0f 0%, #121218 100%);
+      --foreground: #f8fafc;
+      --foreground-muted: #94a3b8;
+      --foreground-dim: #64748b;
+      
+      /* Card Design */
+      --card-bg: rgba(15, 23, 42, 0.8);
+      --card-border: rgba(51, 65, 85, 0.3);
+      --card-border-hover: rgba(99, 102, 241, 0.5);
+      --card-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+      --card-shadow-hover: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+      
+      /* Primary Accent Colors */
+      --primary: #6366f1;
+      --primary-hover: #4f46e5;
+      --primary-glow: rgba(99, 102, 241, 0.3);
+      --primary-foreground: #ffffff;
+      
+      /* Secondary Elements */
+      --secondary: #1e293b;
+      --secondary-hover: #334155;
+      --secondary-foreground: #f1f5f9;
+      
+      /* Input Elements */
+      --input-bg: rgba(15, 23, 42, 0.6);
+      --input-border: rgba(51, 65, 85, 0.4);
+      --input-border-focus: rgba(99, 102, 241, 0.8);
+      --input-shadow-focus: 0 0 0 3px rgba(99, 102, 241, 0.1);
+      
+      /* Status Colors */
+      --success: #10b981;
+      --warning: #f59e0b;
+      --destructive: #ef4444;
+      --destructive-hover: #dc2626;
+      
+      /* Typography */
+      --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      
+      /* Spacing & Sizing */
+      --radius: 12px;
+      --radius-sm: 8px;
+      --radius-lg: 16px;
+      --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      --transition-fast: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    /* Dark mode enhancements */
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --card-bg: rgba(15, 23, 42, 0.9);
+      }
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: var(--font-sans);
+      background: var(--background-gradient);
+      color: var(--foreground);
+      line-height: 1.6;
+      font-size: 14px;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      min-height: 100vh;
+    }
+
+    /* Container & Layout */
+    .container {
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 1.5rem 0.75rem;
+      position: relative;
+    }
+
+    /* Header Section */
+    .header {
+      margin-bottom: 2rem;
+      position: relative;
+      background: linear-gradient(135deg, var(--card-bg) 0%, rgba(99, 102, 241, 0.05) 100%);
+      border: 1px solid var(--card-border);
+      border-radius: var(--radius);
+      padding: 1.5rem;
+      backdrop-filter: blur(10px);
+      box-shadow: var(--card-shadow);
+      transition: var(--transition);
+    }
+
+    .header:hover {
+      transform: translateY(-1px);
+      box-shadow: var(--card-shadow-hover);
+      border-color: var(--card-border-hover);
+    }
+
+    .header::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, var(--primary), transparent);
+      opacity: 0.5;
+    }
+
+    .header-content {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 0.75rem;
+    }
+
+    .header-main {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      width: 100%;
+    }
+
+    .header-icon {
+      width: 48px;
+      height: 48px;
+      background: linear-gradient(135deg, var(--primary) 0%, var(--primary-hover) 100%);
+      border-radius: var(--radius);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.5rem;
+      box-shadow: 0 4px 12px var(--primary-glow);
+      flex-shrink: 0;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .header-icon::before {
+      content: '';
+      position: absolute;
+      top: -50%;
+      left: -50%;
+      width: 200%;
+      height: 200%;
+      background: linear-gradient(45deg, transparent, rgba(255, 255, 255, 0.1), transparent);
+      transform: rotate(45deg);
+      transition: var(--transition);
+    }
+
+    .header:hover .header-icon::before {
+      animation: shine 1.5s ease-in-out;
+    }
+
+    @keyframes shine {
+      0% { transform: translateX(-100%) translateY(-100%) rotate(45deg); }
+      100% { transform: translateX(100%) translateY(100%) rotate(45deg); }
+    }
+
+    /* Toast Notification Animations */
+    @keyframes slideIn {
+      from {
+        transform: translateX(100%);
+        opacity: 0;
+      }
+      to {
+        transform: translateX(0);
+        opacity: 1;
+      }
+    }
+
+    @keyframes slideOut {
+      from {
+        transform: translateX(0);
+        opacity: 1;
+      }
+      to {
+        transform: translateX(100%);
+        opacity: 0;
+      }
+    }
+
+    .header-title-section h1 {
+      font-size: 1.5rem;
+      font-weight: 600;
+      background: linear-gradient(135deg, var(--foreground) 0%, var(--primary) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      margin-bottom: 0.25rem;
+      letter-spacing: -0.02em;
+    }
+
+    .header-subtitle {
+      color: var(--foreground-muted);
+      font-size: 0.9rem;
+      font-weight: 400;
+      margin: 0;
+      line-height: 1.4;
+    }
+
+    .header-actions {
+      margin-left: auto;
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      flex: 1;
+    }
+
+    .coffee-button {
+      background: linear-gradient(135deg, #ffdd00, #fbb034);
+      color: #000 !important;
+      text-decoration: none;
+      padding: 0.25rem 0.75rem;
+      border-radius: 50px;
+      font-weight: 600;
+      font-size: 0.8rem;
+      border: 1px solid #e6b800;
+      transition: all 0.3s ease;
+      box-shadow: 0 2px 8px rgba(251, 176, 52, 0.3);
+      display: flex;
+      align-items: center;
+      gap: 0.25rem;
+      white-space: nowrap;
+    }
+
+    .coffee-button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(251, 176, 52, 0.4);
+      background: linear-gradient(135deg, #ffd700, #ffaa00);
+    }
+
+    .coffee-button:active {
+      transform: translateY(0);
+      box-shadow: 0 2px 10px rgba(251, 176, 52, 0.3);
+    }
+
+    .stats-button {
+      background: linear-gradient(135deg, #6366f1, #4f46e5);
+      color: #fff !important;
+      text-decoration: none;
+      padding: 0.25rem 0.75rem;
+      border-radius: 50px;
+      font-weight: 600;
+      font-size: 0.8rem;
+      border: 1px solid #4338ca;
+      transition: all 0.3s ease;
+      box-shadow: 0 2px 8px rgba(99, 102, 241, 0.3);
+      display: flex;
+      align-items: center;
+      gap: 0.25rem;
+      white-space: nowrap;
+      margin-right: 0.5rem;
+    }
+
+    .stats-button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(99, 102, 241, 0.4);
+      background: linear-gradient(135deg, #818cf8, #6366f1);
+    }
+
+    .header-stats {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      background: rgba(99, 102, 241, 0.1);
+      padding: 0.75rem 1rem;
+      border-radius: var(--radius);
+      border: 1px solid rgba(99, 102, 241, 0.2);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .header-stats::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: -100%;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(90deg, transparent, rgba(99, 102, 241, 0.1), transparent);
+      transition: left 0.6s ease;
+    }
+
+    .header:hover .header-stats::before {
+      left: 100%;
+    }
+
+    .status-indicator {
+      width: 8px;
+      height: 8px;
+      background: #10b981;
+      border-radius: 50%;
+      margin-right: 0.5rem;
+      animation: pulse-status 2s infinite;
+    }
+
+    @keyframes pulse-status {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+
+    .header-stat {
+      text-align: center;
+    }
+
+    .header-stat-value {
+      font-size: 1.25rem;
+      font-weight: 600;
+      color: var(--primary);
+      display: block;
+      line-height: 1;
+    }
+
+    .header-stat-label {
+      font-size: 0.75rem;
+      color: var(--foreground-dim);
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-top: 0.125rem;
+    }
+
+    .header-description {
+      color: var(--foreground-muted);
+      font-size: 0.95rem;
+      line-height: 1.6;
+      font-weight: 400;
+      margin: 0;
+      padding-top: 1rem;
+      border-top: 1px solid var(--card-border);
+    }
+
+    /* Card Design */
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: var(--radius);
+      padding: 1.25rem;
+      margin-bottom: 0.875rem;
+      transition: var(--transition);
+      backdrop-filter: blur(10px);
+      box-shadow: var(--card-shadow);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, var(--primary), transparent);
+      opacity: 0;
+      transition: var(--transition);
+    }
+
+    .card:hover {
+      transform: translateY(-2px);
+      box-shadow: var(--card-shadow-hover);
+      border-color: var(--card-border-hover);
+    }
+
+    .card:hover::before {
+      opacity: 1;
+    }
+
+    .card-header {
+      margin-bottom: 1rem;
+      position: relative;
+    }
+
+    .card-title {
+      font-size: 1.125rem;
+      font-weight: 600;
+      color: var(--foreground);
+      margin-bottom: 0.375rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .card-title::before {
+      content: '';
+      width: 3px;
+      height: 16px;
+      background: var(--primary);
+      border-radius: 2px;
+      transition: var(--transition);
+    }
+
+    .card:hover .card-title::before {
+      transform: scaleY(1.2);
+    }
+
+    .card-description {
+      color: var(--foreground-muted);
+      font-size: 0.95rem;
+      line-height: 1.6;
+      font-weight: 400;
+    }
+
+    /* Form Elements */
+    .form-group {
+      margin-bottom: 1rem;
+    }
+
+    .form-group:last-child {
+      margin-bottom: 0;
+    }
+
+    /* Switch Component */
+    .switch-container {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0.75rem 0;
+      border-bottom: 1px solid var(--card-border);
+      transition: var(--transition-fast);
+    }
+
+    .switch-container:last-child {
+      border-bottom: none;
+    }
+
+    .switch-container:hover {
+      background: rgba(99, 102, 241, 0.05);
+      margin: 0 -1rem;
+      padding: 0.75rem 1.5rem;
+      border-radius: var(--radius);
+    }
+
+    .switch-label {
+      display: flex;
+      flex-direction: column;
+      gap: 0.125rem;
+      flex: 1;
+    }
+
+    .switch-label .label {
+      font-weight: 500;
+      color: var(--foreground);
+      font-size: 0.9rem;
+      transition: var(--transition-fast);
+    }
+
+    .switch-label .description {
+      font-size: 0.8rem;
+      color: var(--foreground-dim);
+      font-weight: 400;
+    }
+
+    .switch {
+      position: relative;
+      display: inline-block;
+      width: 44px;
+      height: 24px;
+      flex-shrink: 0;
+    }
+
+    .switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+
+    .slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: var(--secondary);
+      transition: var(--transition-fast);
+      border-radius: 24px;
+      border: 1px solid transparent;
+    }
+
+    .slider::before {
+      position: absolute;
+      content: "";
+      height: 18px;
+      width: 18px;
+      left: 3px;
+      bottom: 3px;
+      background: white;
+      transition: var(--transition-fast);
+      border-radius: 50%;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+    }
+
+    input:checked + .slider {
+      background: var(--primary);
+      box-shadow: 0 0 20px var(--primary-glow);
+    }
+
+    input:checked + .slider::before {
+      transform: translateX(18px);
+    }
+
+    .slider:hover {
+      border-color: var(--primary);
+    }
+
+    /* Input Groups */
+    .input-group {
+      display: flex;
+      gap: 0.75rem;
+      margin-top: 1rem;
+      align-items: center;
+    }
+
+    .input {
+      width: 100%;
+      padding: 0.625rem 0.875rem;
+      background: var(--input-bg);
+      border: 1px solid var(--input-border);
+      border-radius: var(--radius);
+      color: var(--foreground);
+      font-size: 0.875rem;
+      transition: var(--transition-fast);
+      font-family: var(--font-sans);
+    }
+
+    .input:focus {
+      outline: none;
+      border-color: var(--input-border-focus);
+      box-shadow: var(--input-shadow-focus);
+      transform: translateY(-1px);
+    }
+
+    .input::placeholder {
+      color: var(--foreground-dim);
+      font-weight: 400;
+    }
+
+    /* Textarea */
+    .textarea {
+      width: 100%;
+      min-height: 120px;
+      padding: 0.875rem;
+      background: var(--input-bg);
+      border: 1px solid var(--input-border);
+      border-radius: var(--radius);
+      color: var(--foreground);
+      font-family: var(--font-mono);
+      font-size: 0.85rem;
+      resize: vertical;
+      transition: var(--transition-fast);
+      line-height: 1.5;
+    }
+
+    .textarea:focus {
+      outline: none;
+      border-color: var(--input-border-focus);
+      box-shadow: var(--input-shadow-focus);
+      transform: translateY(-1px);
+    }
+
+    .textarea::placeholder {
+      color: var(--foreground-dim);
+      font-weight: 400;
+    }
+
+    /* Buttons */
+    .button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0.625rem 1.125rem;
+      font-size: 0.875rem;
+      font-weight: 500;
+      border-radius: var(--radius);
+      border: 1px solid transparent;
+      background: var(--secondary);
+      color: var(--secondary-foreground);
+      cursor: pointer;
+      transition: var(--transition-fast);
+      white-space: nowrap;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .button::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: -100%;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent);
+      transition: left 0.6s ease;
+    }
+
+    .button:hover::before {
+      left: 100%;
+    }
+
+    .button:hover {
+      background: var(--secondary-hover);
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    }
+
+    .button:focus {
+      outline: none;
+      box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
+    }
+
+    .button-primary {
+      background: var(--primary);
+      color: var(--primary-foreground);
+      border-color: var(--primary);
+    }
+
+    .button-primary:hover {
+      background: var(--primary-hover);
+      border-color: var(--primary-hover);
+      box-shadow: 0 4px 20px var(--primary-glow);
+    }
+
+    .button-destructive {
+      background: var(--destructive);
+      color: white;
+      border-color: var(--destructive);
+    }
+
+    .button-destructive:hover {
+      background: var(--destructive-hover);
+      border-color: var(--destructive-hover);
+      box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
+    }
+
+    .button-sm {
+      padding: 0.5rem 0.875rem;
+      font-size: 0.8rem;
+    }
+
+    .button-group {
+      display: flex;
+      gap: 0.625rem;
+      margin-top: 1rem;
+      flex-wrap: wrap;
+    }
+
+    /* Status Badges */
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 0.5rem 1rem;
+      font-size: 0.875rem;
+      font-weight: 500;
+      border-radius: 9999px;
+      background: rgba(99, 102, 241, 0.1);
+      color: var(--primary);
+      border: 1px solid rgba(99, 102, 241, 0.2);
+      transition: var(--transition-fast);
+    }
+
+    .status-badge:hover {
+      background: rgba(99, 102, 241, 0.2);
+      transform: translateY(-1px);
+    }
+
+    .info-box {
+      margin-top: 0.875rem;
+      padding: 0.875rem 1rem;
+      border-radius: var(--radius-sm);
+      border: 1px solid rgba(16, 185, 129, 0.35);
+      background: linear-gradient(135deg, rgba(16, 185, 129, 0.12), rgba(99, 102, 241, 0.08));
+      color: var(--foreground);
+    }
+
+    .info-box-title {
+      font-size: 0.9rem;
+      font-weight: 600;
+      margin-bottom: 0.35rem;
+      color: #6ee7b7;
+    }
+
+    .info-box-text {
+      font-size: 0.86rem;
+      color: var(--foreground-muted);
+      line-height: 1.5;
+    }
+
+    /* Whitelist Items */
+    .whitelist-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0.875rem 1rem;
+      background: var(--input-bg);
+      border: 2px solid var(--input-border);
+      border-radius: var(--radius);
+      margin-bottom: 0.75rem;
+      transition: var(--transition-fast);
+      animation: slideIn 0.3s ease-out;
+    }
+
+    @keyframes slideIn {
+      from {
+        opacity: 0;
+        transform: translateX(-20px);
+      }
+      to {
+        opacity: 1;
+        transform: translateX(0);
+      }
+    }
+
+    .whitelist-item:last-child {
+      margin-bottom: 0;
+    }
+
+    .whitelist-item:hover {
+      border-color: var(--primary);
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    }
+
+    .whitelist-domain {
+      font-family: var(--font-mono);
+      font-size: 0.9rem;
+      color: var(--foreground);
+      font-weight: 500;
+    }
+
+    .whitelist-empty {
+      text-align: center;
+      padding: 3rem 2rem;
+      color: var(--foreground-dim);
+      font-size: 0.95rem;
+      background: var(--input-bg);
+      border: 2px dashed var(--input-border);
+      border-radius: var(--radius);
+      transition: var(--transition-fast);
+    }
+
+    .whitelist-empty:hover {
+      border-color: var(--primary);
+      color: var(--foreground-muted);
+    }
+
+    /* Code Elements */
+    .code {
+      background: rgba(99, 102, 241, 0.1);
+      color: var(--primary);
+      padding: 0.25rem 0.5rem;
+      border-radius: var(--radius-sm);
+      font-family: var(--font-mono);
+      font-size: 0.8125rem;
+      font-weight: 500;
+      border: 1px solid rgba(99, 102, 241, 0.2);
+      transition: var(--transition-fast);
+    }
+
+    .code:hover {
+      background: rgba(99, 102, 241, 0.2);
+      transform: translateY(-1px);
+    }
+
+    /* Grid System */
+    .grid {
+      display: grid;
+      gap: 0.75rem;
+    }
+
+    .grid-cols-2 {
+      grid-template-columns: repeat(2, 1fr);
+    }
+
+    /* Footer */
+    .footer {
+      margin-top: 1.5rem;
+      padding-top: 1.25rem;
+      border-top: 1px solid var(--card-border);
+      text-align: center;
+      color: var(--foreground-dim);
+      font-size: 0.8rem;
+      position: relative;
+    }
+
+    .footer::before {
+      content: '';
+      position: absolute;
+      top: -1px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 40px;
+      height: 1px;
+      background: var(--primary);
+    }
+
+    .footer p {
+      margin-bottom: 0.5rem;
+    }
+
+    /* Responsive Design */
+    @media (max-width: 768px) {
+      .container {
+        padding: 1.25rem 0.5rem;
+      }
+
+      .header {
+        padding: 1.25rem;
+      }
+
+      .header-content {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 1.5rem;
+      }
+
+      .header-stats {
+        width: 100%;
+        justify-content: space-around;
+      }
+
+      .header-title-section h1 {
+        font-size: 1.25rem;
+      }
+
+      .header h1 {
+        font-size: 1.5rem;
+      }
+
+      .header p {
+        font-size: 0.9rem;
+      }
+
+      .grid-cols-2 {
+        grid-template-columns: 1fr;
+      }
+
+      .button-group {
+        flex-direction: column;
+      }
+
+      .input-group {
+        flex-direction: column;
+        align-items: stretch;
+      }
+
+      .card {
+        padding: 1.25rem;
+      }
+
+      .switch-container:hover {
+        margin: 0 -0.75rem;
+        padding: 0.75rem;
+      }
+    }
+
+    /* Animations */
+    .fade-in {
+      animation: fadeIn 0.5s ease-out;
+    }
+
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+        transform: translateY(20px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    /* Loading Animation */
+    .loading {
+      display: inline-block;
+      width: 20px;
+      height: 20px;
+      border: 2px solid var(--input-border);
+      border-radius: 50%;
+      border-top-color: var(--primary);
+      animation: spin 1s ease-in-out infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    /* Focus Visible */
+    :focus-visible {
+      outline: none;
+      box-shadow: 0 0 0 3px var(--primary-glow);
+      border-radius: var(--radius-sm);
+    }
+
+    /* Scrollbar Styling */
+    ::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: var(--input-bg);
+      border-radius: var(--radius-sm);
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: var(--input-border);
+      border-radius: var(--radius-sm);
+      transition: var(--transition-fast);
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+      background: var(--primary);
+    }
+
+    /* PIN Modal Styles - Minimal Design */
+    .modal-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.5);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 9999;
+    }
+
+    .modal-content {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: var(--radius);
+      padding: 1.5rem;
+      max-width: 360px;
+      width: 90%;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    }
+
+    .modal-header {
+      margin-bottom: 1rem;
+      text-align: center;
+    }
+
+    .modal-icon {
+      width: 40px;
+      height: 40px;
+      margin: 0 auto 0.75rem;
+      background: var(--primary);
+      border-radius: var(--radius);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.25rem;
+    }
+
+    .modal-title {
+      font-size: 1.25rem;
+      font-weight: 600;
+      color: var(--foreground);
+      margin-bottom: 0.25rem;
+    }
+
+    .modal-description {
+      color: var(--foreground-muted);
+      font-size: 0.85rem;
+      line-height: 1.4;
+    }
+
+    .modal-body {
+      margin-bottom: 1rem;
+    }
+
+    .pin-input-group {
+      margin-bottom: 0.75rem;
+    }
+
+    .pin-input-label {
+      display: block;
+      font-size: 0.85rem;
+      font-weight: 500;
+      color: var(--foreground);
+      margin-bottom: 0.375rem;
+    }
+
+    .pin-input {
+      width: 100%;
+      padding: 0.75rem;
+      background: var(--input-bg);
+      border: 1px solid var(--input-border);
+      border-radius: var(--radius);
+      color: var(--foreground);
+      font-size: 1rem;
+      font-family: var(--font-mono);
+      letter-spacing: 0.5em;
+      text-align: center;
+    }
+
+    .pin-input:focus {
+      outline: none;
+      border-color: var(--input-border-focus);
+    }
+
+    .pin-input::placeholder {
+      color: var(--foreground-dim);
+      letter-spacing: normal;
+    }
+
+    .pin-input.error {
+      border-color: var(--destructive);
+    }
+
+    .pin-strength-indicator {
+      margin-top: 0.5rem;
+      height: 2px;
+      background: var(--input-border);
+      border-radius: 1px;
+      overflow: hidden;
+    }
+
+    .pin-strength-bar {
+      height: 100%;
+      width: 0;
+      background: var(--success);
+    }
+
+    .pin-strength-bar.weak { width: 33%; background: var(--destructive); }
+    .pin-strength-bar.medium { width: 66%; background: var(--warning); }
+    .pin-strength-bar.strong { width: 100%; background: var(--success); }
+
+    .pin-hint {
+      margin-top: 0.375rem;
+      font-size: 0.75rem;
+      color: var(--foreground-dim);
+    }
+
+    .pin-hint.error {
+      color: var(--destructive);
+    }
+
+    .pin-hint.success {
+      color: var(--success);
+    }
+
+    .modal-footer {
+      display: flex;
+      gap: 0.5rem;
+      justify-content: flex-end;
+    }
+
+    .modal-button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0.625rem 1.25rem;
+      font-size: 0.85rem;
+      font-weight: 500;
+      border-radius: var(--radius);
+      border: 1px solid transparent;
+      cursor: pointer;
+      min-width: 80px;
+    }
+
+    .modal-button-primary {
+      background: var(--primary);
+      color: var(--primary-foreground);
+      border-color: var(--primary);
+    }
+
+    .modal-button-primary:hover {
+      background: var(--primary-hover);
+    }
+
+    .modal-button-primary:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .modal-button-secondary {
+      background: var(--secondary);
+      color: var(--secondary-foreground);
+      border-color: var(--input-border);
+    }
+
+    .modal-button-secondary:hover {
+      background: var(--secondary-hover);
+    }
+
+    .modal-button-destructive {
+      background: var(--destructive);
+      color: white;
+      border-color: var(--destructive);
+    }
+
+    .modal-button-destructive:hover {
+      background: var(--destructive-hover);
+    }
+
+    /* Loading state */
+    .modal-button.loading::after {
+      content: '';
+      position: absolute;
+      width: 16px;
+      height: 16px;
+      border: 2px solid rgba(255, 255, 255, 0.3);
+      border-radius: 50%;
+      border-top-color: white;
+      animation: spin 0.8s linear infinite;
+      margin-left: 8px;
+    }
+
+    .success-message {
+      padding: 1rem;
+      background: rgba(16, 185, 129, 0.1);
+      border: 1px solid rgba(16, 185, 129, 0.3);
+      border-radius: var(--radius);
+      color: var(--success);
+      font-size: 0.9rem;
+      text-align: center;
+      margin-bottom: 1rem;
+      animation: slideIn 0.3s ease-out;
+    }
+
+    .error-message {
+      padding: 1rem;
+      background: rgba(239, 68, 68, 0.1);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+      border-radius: var(--radius);
+      color: var(--destructive);
+      font-size: 0.9rem;
+      text-align: center;
+      margin-bottom: 1rem;
+      animation: slideIn 0.3s ease-out;
+    }
+
+    /* Commitment Gate Modal */
+    .commitment-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.7);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 10000;
+    }
+    .commitment-modal {
+      width: 90%;
+      max-width: 420px;
+      background: var(--card-bg);
+      color: var(--foreground);
+      border: 1px solid var(--card-border);
+      border-radius: var(--radius-lg);
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+      padding: 1.5rem;
+      backdrop-filter: blur(12px);
+    }
+    .commitment-step { animation: slideIn 0.3s ease-out; }
+
+    .commitment-streak-display {
+      text-align: center;
+      padding: 1.5rem 1rem;
+      background: linear-gradient(135deg, rgba(99, 102, 241, 0.12), rgba(37, 117, 252, 0.12));
+      border: 1px solid rgba(99, 102, 241, 0.2);
+      border-radius: var(--radius);
+      margin-bottom: 1rem;
+    }
+    .commitment-shield { font-size: 2.5rem; margin-bottom: 0.5rem; }
+    .commitment-streak-number {
+      font-size: 3.5rem;
+      font-weight: 800;
+      background: linear-gradient(135deg, var(--primary), #2575fc);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      line-height: 1.1;
+    }
+    .commitment-streak-unit {
+      font-size: 1.1rem;
+      font-weight: 600;
+      color: var(--foreground-muted);
+      margin-bottom: 0.25rem;
+    }
+    .commitment-streak-detail {
+      font-size: 0.8rem;
+      color: var(--foreground-dim);
+    }
+    .commitment-streak-msg {
+      font-size: 0.9rem;
+      font-style: italic;
+      color: var(--foreground-muted);
+      margin-top: 0.75rem;
+      margin-bottom: 1.25rem;
+      line-height: 1.5;
+      text-align: center;
+    }
+    .commitment-warning {
+      font-size: 0.875rem;
+      color: var(--destructive);
+      font-weight: 600;
+      text-align: center;
+      margin-bottom: 1.25rem;
+      padding: 0.625rem;
+      background: rgba(239, 68, 68, 0.08);
+      border: 1px solid rgba(239, 68, 68, 0.2);
+      border-radius: var(--radius-sm);
+    }
+    .commitment-actions {
+      display: flex;
+      gap: 0.625rem;
+    }
+    .commitment-actions .commitment-btn {
+      flex: 1;
+      padding: 0.75rem 0.5rem;
+      font-weight: 600;
+      font-size: 0.875rem;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      transition: var(--transition-fast);
+    }
+    .commitment-btn-keep {
+      background: var(--primary);
+      color: var(--primary-foreground);
+      border: none;
+    }
+    .commitment-btn-keep:hover { background: var(--primary-hover); }
+    .commitment-btn-proceed {
+      background: transparent;
+      color: var(--foreground-dim);
+      border: 1px solid var(--input-border);
+      font-size: 0.8rem;
+    }
+    .commitment-btn-proceed:hover {
+      background: rgba(239, 68, 68, 0.08);
+      color: var(--destructive);
+      border-color: var(--destructive);
+    }
+
+    .commitment-section-title {
+      font-weight: 600;
+      font-size: 1.1rem;
+      margin-bottom: 0.5rem;
+      color: var(--foreground);
+    }
+    .commitment-section-desc {
+      font-size: 0.85rem;
+      color: var(--foreground-muted);
+      margin-bottom: 1rem;
+      line-height: 1.5;
+    }
+    .commitment-textarea {
+      width: 100%;
+      min-height: 80px;
+      padding: 0.75rem;
+      border: 1px solid var(--input-border);
+      border-radius: var(--radius-sm);
+      background: var(--input-bg);
+      color: var(--foreground);
+      font-size: 0.9rem;
+      resize: vertical;
+      font-family: var(--font-sans);
+      line-height: 1.5;
+    }
+    .commitment-textarea:focus {
+      outline: none;
+      border-color: var(--input-border-focus);
+      box-shadow: var(--input-shadow-focus);
+    }
+    .commitment-text-input {
+      width: 100%;
+      padding: 0.75rem;
+      border: 1px solid var(--input-border);
+      border-radius: var(--radius-sm);
+      background: var(--input-bg);
+      color: var(--foreground);
+      font-size: 0.9rem;
+      font-family: var(--font-sans);
+    }
+    .commitment-text-input:focus {
+      outline: none;
+      border-color: var(--destructive);
+      box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.1);
+    }
+    .commitment-error {
+      font-size: 0.75rem;
+      color: var(--destructive);
+      min-height: 1.125rem;
+      margin-top: 0.375rem;
+    }
+    .commitment-match {
+      font-size: 0.75rem;
+      min-height: 1.125rem;
+      margin-top: 0.375rem;
+    }
+    .commitment-match.partial { color: var(--warning); }
+    .commitment-match.valid { color: var(--success); }
+    .commitment-match.invalid { color: var(--destructive); }
+    .commitment-hint {
+      font-size: 0.8rem;
+      color: var(--foreground-dim);
+      margin-bottom: 0.625rem;
+      font-style: italic;
+    }
+    .commitment-reference {
+      max-height: 160px;
+      overflow-y: auto;
+      padding: 0.75rem;
+      margin-bottom: 0.75rem;
+      background: rgba(239, 68, 68, 0.04);
+      border: 1px solid rgba(239, 68, 68, 0.15);
+      border-left: 3px solid var(--destructive);
+      border-radius: var(--radius-sm);
+      font-size: 0.8rem;
+      line-height: 1.6;
+      color: var(--foreground-muted);
+      user-select: none;
+    }
+    .commitment-btn-danger {
+      background: var(--destructive);
+      color: white;
+      border: none;
+    }
+    .commitment-btn-danger:hover { background: var(--destructive-hover); }
+    .commitment-btn-back {
+      background: var(--secondary);
+      color: var(--secondary-foreground);
+      border: 1px solid var(--input-border);
+    }
+    .commitment-btn-back:hover { background: var(--secondary-hover); }
+
+    .commitment-progress {
+      display: flex;
+      justify-content: center;
+      gap: 0.5rem;
+      margin-bottom: 1.25rem;
+    }
+    .commitment-progress-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--input-border);
+      transition: var(--transition-fast);
+    }
+    .commitment-progress-dot.active {
+      background: var(--primary);
+      transform: scale(1.3);
+      box-shadow: 0 0 8px var(--primary-glow);
+    }
+    .commitment-progress-dot.done {
+      background: var(--success);
+    }
+    .hidden { display: none !important; }
+
+    /* Featured Card — "New Feature" subtle treatment */
+    .card-featured {
+      border: 1px solid rgba(6, 182, 212, 0.25);
+      background:
+        linear-gradient(135deg, #0c1627, #0f172a, #111a2e) padding-box,
+        linear-gradient(90deg, rgba(6, 182, 212, 0.25), rgba(99, 102, 241, 0.2), rgba(6, 182, 212, 0.25)) border-box;
+      background-size: 100% 100%, 300% 100%;
+      animation: border-gradient-flow 10s ease infinite;
+    }
+
+    .card-featured::before {
+      opacity: 0.6;
+      background: linear-gradient(
+        90deg,
+        transparent,
+        rgba(6, 182, 212, 0.5),
+        rgba(99, 102, 241, 0.4),
+        transparent
+      );
+    }
+
+    .card-featured:hover {
+      border-color: rgba(6, 182, 212, 0.4);
+      box-shadow:
+        var(--card-shadow-hover),
+        0 0 20px rgba(6, 182, 212, 0.08);
+    }
+
+    .card-featured:hover::before {
+      opacity: 1;
+    }
+
+    .card-featured .card-title::before {
+      background: linear-gradient(180deg, #06b6d4, #6366f1);
+    }
+
+    @keyframes border-gradient-flow {
+      0%, 100% { background-position: 0 0, 0% 50%; }
+      50% { background-position: 0 0, 100% 50%; }
+    }
+
+    /* "NEW" badge */
+    .badge-new {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.25rem;
+      font-size: 0.625rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      padding: 0.175rem 0.5rem;
+      border-radius: 999px;
+      background: linear-gradient(135deg, rgba(6, 182, 212, 0.2), rgba(99, 102, 241, 0.15));
+      border: 1px solid rgba(6, 182, 212, 0.4);
+      color: #22d3ee;
+      line-height: 1;
+      animation: badge-pulse 3s ease-in-out infinite;
+      flex-shrink: 0;
+    }
+
+    @keyframes badge-pulse {
+      0%, 100% {
+        box-shadow: 0 0 4px rgba(6, 182, 212, 0.15);
+      }
+      50% {
+        box-shadow: 0 0 12px rgba(6, 182, 212, 0.3);
+      }
+    }
+
+    /* Message from the Dev */
+    .dev-message {
+      background: linear-gradient(
+        135deg,
+        rgba(251, 191, 36, 0.04) 0%,
+        var(--card-bg) 50%,
+        rgba(251, 191, 36, 0.03) 100%
+      );
+      border: 1px solid rgba(251, 191, 36, 0.15);
+      position: relative;
+    }
+
+    .dev-message::before {
+      background: linear-gradient(
+        90deg,
+        transparent,
+        rgba(251, 191, 36, 0.35),
+        transparent
+      );
+      opacity: 0.7;
+    }
+
+    .dev-message:hover {
+      border-color: rgba(251, 191, 36, 0.3);
+    }
+
+    .dev-message:hover::before {
+      opacity: 1;
+    }
+
+    .dev-message .card-title::before {
+      background: linear-gradient(180deg, #fbbf24, #f59e0b);
+    }
+
+    .dev-message-body {
+      font-size: 0.9rem;
+      line-height: 1.8;
+      color: var(--foreground-muted);
+    }
+
+    .dev-message-body p {
+      margin-bottom: 0.875rem;
+    }
+
+    .dev-message-body p:last-child {
+      margin-bottom: 0;
+    }
+
+    .dev-message-body strong {
+      color: var(--foreground);
+      font-weight: 500;
+    }
+
+    .dev-message-signature {
+      margin-top: 1.25rem;
+      padding-top: 1rem;
+      border-top: 1px solid rgba(251, 191, 36, 0.1);
+      font-size: 0.8rem;
+      color: var(--foreground-dim);
+      font-style: italic;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header fade-in">
+      <div class="header-content">
+        <div class="header-main">
+          <div class="header-icon">🛡️</div>
+          <div class="header-title-section">
+            <h1>BlockNSFW – Porn & Adult Content Filter</h1>
+            <p class="header-subtitle">Enterprise-grade content filtering & privacy protection</p>
+          </div>
+          <div class="header-actions">
+            <a href="stats.html" class="stats-button">
+              📊 Statistics
+            </a>
+            <a href="https://buymeacoffee.com/monolab.co" target="_blank" class="coffee-button">
+              ☕ Buy Me a Coffee
+            </a>
+          </div>
+        </div>
+
+      </div>
+      <p class="header-description">
+        Configure advanced content filtering, manage blocklists, and customize privacy controls with military-grade security. 
+        All processing happens locally on your device for maximum privacy protection.
+      </p>
+    </div>
+
+    <div class="card dev-message fade-in">
+      <div class="card-header">
+        <h2 class="card-title">Message from the Dev</h2>
+      </div>
+      <div class="dev-message-body">
+        <p>More advanced features are coming soon — this is just the start.</p>
+        <p><strong>This app will always stay 100% free.</strong> I will never add monetization because I don't want money to become a reason for anyone to go back to old habits.</p>
+        <p>We're in this together. If the app misses a website, please report it so we can keep improving and help each other stay strong.</p>
+        <p>And from my heart, thank you to everyone who supported this project on Buy Me a Coffee. Your kindness keeps this mission alive and helps me keep building for people who truly need it.</p>
+        <p>Thank you as well to everyone who reported sites. Because of your reports, we have already blocked 213 out of 345 reported sites, and some of the remaining sites are still under review.</p>
+      </div>
+      <div class="dev-message-signature">
+        — The BlockNSFW Developer
+      </div>
+    </div>
+
+    <div class="card fade-in" id="whats-new-card">
+      <div class="card-header">
+        <h2 class="card-title">What’s New</h2>
+        <div class="card-description">
+          <ul style="margin: 0; padding-left: 1.1rem">
+            <li><strong>Expanded Safe Search Coverage</strong> — Safe Search now also works on <strong>AOL Search</strong>, <strong>Presearch</strong>, and <strong>Qwant</strong>, in addition to existing protected engines.</li>
+            <li><strong>Facebook Reels Blocking</strong> — Facebook Reels pages and reel entry points are now blocked or hidden automatically based on user requests.</li>
+            <li><strong>Instagram Reels Blocking</strong> — Optional Instagram Reels blocking hides reel pages and entry points (off by default).</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <div class="card fade-in">
+      <div class="card-header">
+        <h2 class="card-title">General Settings</h2>
+        <p class="card-description">Enable or disable the main blocking functionality and monitor protection status</p>
+      </div>
+      <div class="switch-container">
+        <div class="switch-label">
+          <span class="label">Enable Blocking</span>
+          <span class="description">Turn on intelligent content filtering and real-time blocking</span>
+        </div>
+        <label class="switch">
+          <input type="checkbox" id="enabled" />
+          <span class="slider"></span>
+        </label>
+      </div>
+      <div style="margin-top: 1.5rem; display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: center;">
+        <span class="status-badge" id="blocked-stats">🛡️ Blocked: 0 sites</span>
+        <a class="button button-primary" href="audit.html" target="_blank" style="text-decoration: none; color: inherit;">
+          📊 View Audit Log
+        </a>
+        <button class="button button-primary" id="refresh-blocklist" style="text-decoration: none; color: inherit;">🔄 Refresh Blocklist</button>
+      </div>
+    </div>
+
+    <div class="card fade-in" id="community-reports-card">
+      <div class="card-header">
+        <h2 class="card-title">Community Reports</h2>
+        <p class="card-description">
+          Suggest websites that should be blocked or report ones that were missed. 
+          No account needed — your privacy is fully protected.
+        </p>
+      </div>
+
+      <div class="form-group">
+        <label class="pin-input-label" for="report-url">Website URL</label>
+        <input type="url" class="input" id="report-url" placeholder="https://example.com" autocomplete="off" required pattern="^(https?:\/\/)?([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}([\/?#].*)?$" title="Enter a valid website URL, e.g. https://example.com" />
+        <div class="pin-hint" style="margin-top: 0.5rem;">
+          Reports are grouped by domain (e.g., <span class="code">youtube.com</span>). Different page paths on the same domain count as one report.
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="pin-input-label" for="report-type">Report Type</label>
+        <select class="input" id="report-type">
+          <option value="" disabled selected>-- Please select a report type --</option>
+          <option value="should_block">🚫 This site should be blocked</option>
+          <option value="incorrectly_blocked">✅ This site was incorrectly blocked</option>
+        </select>
+        <div class="info-box" style="margin-top: 0.75rem;">
+          <div class="info-box-title">⚠ Please verify your selection</div>
+          <p class="info-box-text">
+            <strong style="color: var(--destructive);">🚫 "Should be blocked"</strong> — Use this only if the site contains adult, explicit, or inappropriate content.<br>
+            <strong style="color: var(--success);">✅ "Incorrectly blocked"</strong> — Use this if a safe, legitimate site was blocked by mistake.
+          </p>
+        </div>
+      </div>
+
+      <div class="form-group" id="report-category-group">
+        <label class="pin-input-label" for="report-category">Category</label>
+        <select class="input" id="report-category">
+          <option value="adult">Adult / NSFW Content</option>
+          <option value="gambling">Gambling</option>
+          <option value="violence">Violence / Gore</option>
+          <option value="other">Other</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label class="pin-input-label" for="report-notes">Additional Notes (optional)</label>
+        <textarea class="textarea" id="report-notes" placeholder="Any additional context..." maxlength="500" autocomplete="off" style="min-height: 80px;"></textarea>
+        <div class="pin-hint" id="report-notes-counter" style="margin-top: 0.375rem; text-align: right;">0 / 500</div>
+      </div>
+
+      <div class="button-group" style="align-items: center;">
+        <button class="button button-primary" id="submit-report">Submit Report</button>
+        <span id="report-cooldown" style="font-size: 0.8rem; color: var(--foreground-dim);"></span>
+      </div>
+
+      <div class="pin-hint" id="report-status" style="margin-top: 0.75rem;">
+        Reports are reviewed and may be added to the default blocklist in future updates.
+      </div>
+    </div>
+
+    <div class="card fade-in">
+      <div class="card-header">
+        <h2 class="card-title">Image Filtering Level</h2>
+        <p class="card-description">Choose how aggressively images are filtered to reduce false positives while keeping protection where you want it.</p>
+      </div>
+      <div class="form-group">
+        <select class="input" id="image-filter-level">
+          <option value="strict">Strict - Maximum protection (current behavior)</option>
+          <option value="moderate">Moderate - Balanced filtering</option>
+          <option value="lenient">Lenient - Block only clearly explicit images</option>
+        </select>
+        <div class="pin-hint" id="image-filter-level-detail" style="margin-top: 0.5rem;">
+          Most aggressive filtering. Best protection, but may hide more borderline images.
+        </div>
+      </div>
+    </div>
+
+    <div class="card card-featured fade-in" id="dns-protection-card">
+      <div class="card-header">
+        <h2 class="card-title">DNS Protection <span class="badge-new">New</span></h2>
+        <p class="card-description">
+          Block adult domains at the DNS level using Cloudflare for Families.
+          This adds an extra layer of protection by checking domains against
+          a constantly-updated global filter before the page even loads.
+        </p>
+      </div>
+
+      <div class="switch-container">
+        <div class="switch-label">
+          <span class="label">Enable DNS Filtering</span>
+          <span class="description">Query Cloudflare's family-safe DNS to detect and block adult domains automatically</span>
+        </div>
+        <label class="switch">
+          <input type="checkbox" id="dns-filter-enabled" />
+          <span class="slider"></span>
+        </label>
+      </div>
+
+      <div style="margin-top: 1rem; display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: center;">
+        <span class="status-badge" id="dns-status">🌐 DNS: Off</span>
+        <button class="button button-sm" id="dns-test-btn" type="button">Test DNS Connection</button>
+      </div>
+
+      <div id="dns-test-result" class="pin-hint" style="margin-top: 0.5rem"></div>
+
+      <div class="info-box" style="margin-top: 0.875rem">
+        <div class="info-box-title">How it works</div>
+        <p class="info-box-text">
+          When enabled, each new domain you visit is checked against
+          Cloudflare's family-safe DNS (1.1.1.3) via DNS-over-HTTPS. Results
+          are cached locally so repeat visits have zero delay. This uses a
+          free public service — no account or API key required.
+        </p>
+      </div>
+    </div>
+
+    <div class="card card-featured fade-in" id="safe-search-card">
+      <div class="card-header">
+        <h2 class="card-title">Search &amp; Social Filters <span class="badge-new">New</span></h2>
+        <p class="card-description">
+          Force family-safe results on major search engines. You can also disable
+          Facebook Reels and Instagram Reels so reel pages and reel entry points
+          are hidden automatically.
+        </p>
+      </div>
+
+      <div class="switch-container">
+        <div class="switch-label">
+          <span class="label">Enforce Safe Search</span>
+          <span class="description">Google, Bing, DuckDuckGo, Yahoo, Brave, Ecosia, Qwant, AOL Search, Presearch — safe results are injected into the URL and the SafeSearch toggle is locked from being disabled</span>
+        </div>
+        <label class="switch">
+          <input type="checkbox" id="safe-search-enabled" />
+          <span class="slider"></span>
+        </label>
+      </div>
+
+      <div class="switch-container" style="margin-top: 0.75rem;">
+        <div class="switch-label">
+          <span class="label">Disable Facebook Reels</span>
+          <span class="description">Hide reel entry points and redirect direct reel pages back to the main Facebook feed</span>
+        </div>
+        <label class="switch">
+          <input type="checkbox" id="facebook-reels-enabled" />
+          <span class="slider"></span>
+        </label>
+      </div>
+
+      <div class="switch-container" style="margin-top: 0.75rem;">
+        <div class="switch-label">
+          <span class="label">Disable Instagram Reels</span>
+          <span class="description">Hide reel entry points and redirect direct reel pages back to the main Instagram feed</span>
+        </div>
+        <label class="switch">
+          <input type="checkbox" id="instagram-reels-enabled" />
+          <span class="slider"></span>
+        </label>
+      </div>
+
+      <div style="margin-top: 1rem; display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: center;">
+        <span class="status-badge" id="safe-search-status">🔎 Safe Search: Off</span>
+        <span class="status-badge" id="facebook-reels-status">📵 FB Reels: Off</span>
+        <span class="status-badge" id="instagram-reels-status">📵 IG Reels: Off</span>
+      </div>
+
+      <div class="info-box" style="margin-top: 0.875rem">
+        <div class="info-box-title">How it works</div>
+        <p class="info-box-text">
+          Uses Chrome's <code>declarativeNetRequest</code> engine to rewrite
+          search URLs (<code>safe=active</code>, <code>adlt=strict</code>, etc.)
+          before the request leaves your browser. YouTube 18+ videos, Facebook Reels and
+          Instagram Reels are blocked locally with an early page redirect plus DOM filtering.
+          Nothing is sent to a third party.
+        </p>
+        <p class="info-box-text" style="margin-top: 0.625rem;">
+          For cookie-backed engines (Qwant, AOL Search, Presearch), BlockNSFW
+          additionally pins the SafeSearch cookie to <em>strict</em> on every
+          response and silently redirects the engine's own settings page back
+          to its home, so the toggle cannot be flipped off from the UI.
+        </p>
+      </div>
+    </div>
+
+    <div class="card fade-in">
+      <div class="card-header">
+        <h2 class="card-title">Custom Blocked Page</h2>
+        <p class="card-description">Choose what page to display when content is blocked. Use the default blocked page, specify a custom URL, or show your own HTML.</p>
+      </div>
+      
+      <div class="form-group">
+        <div class="switch-container">
+          <div class="switch-label">
+            <span class="label">Use Custom Blocked Page</span>
+            <span class="description">Override the default blocked page with your own custom URL</span>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="use-custom-blocked-page" />
+            <span class="slider"></span>
+          </label>
+        </div>
+      </div>
+
+      <div class="form-group" id="custom-blocked-page-section" style="display: none;">
+        <div class="input-group">
+          <input type="url" class="input" id="custom-blocked-page-url" 
+                 placeholder="https://example.com/custom-blocked-page.html" 
+                 pattern="https?://.+" 
+                 title="Please enter a valid URL starting with http:// or https://" />
+          <button class="button button-primary" id="test-custom-url">Test URL</button>
+        </div>
+        <div class="pin-hint" id="url-validation-hint" style="margin-top: 0.5rem;">
+          Enter a valid URL that will be displayed when content is blocked
+        </div>
+      </div>
+
+      <div class="form-group" style="margin-top: 1rem;">
+        <div class="switch-container">
+          <div class="switch-label">
+            <span class="label">Use Plain HTML Blocked Page</span>
+            <span class="description">Render your own HTML instead of redirecting to a URL</span>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="use-plain-html-blocked-page" />
+            <span class="slider"></span>
+          </label>
+        </div>
+      </div>
+
+      <div class="form-group" id="plain-blocked-page-section" style="display: none;">
+        <div class="input-group" style="margin-bottom: 0.75rem;">
+          <input type="file" class="input" id="plain-blocked-page-file" accept=".html,text/html" />
+          <button class="button" id="clear-plain-html" type="button">Clear</button>
+        </div>
+        <div class="pin-hint" id="plain-html-status" style="margin-top: 0.5rem;">
+          No HTML uploaded yet
+        </div>
+        <div class="pin-hint" style="margin-top: 0.5rem;">
+          Your HTML file can use {{url}} and {{reason}} placeholders
+        </div>
+      </div>
+
+      <div class="button-group">
+        <button class="button" id="reset-blocked-page-settings">Reset to Default</button>
+      </div>
+    </div>
+
+    <div class="card fade-in">
+      <div class="card-header">
+        <h2 class="card-title">PIN Protection</h2>
+        <p class="card-description">Secure your settings with military-grade PIN protection to prevent unauthorized changes</p>
+      </div>
+      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem;">
+        <span class="status-badge" id="pin-status">🔒 PIN: Not set</span>
+        <div class="button-group" style="margin-top: 0;">
+          <button class="button button-sm" id="set-pin">Set PIN</button>
+          <button class="button button-sm button-destructive" id="clear-pin">Clear PIN</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card fade-in">
+      <div class="card-header">
+        <h2 class="card-title">Incognito Mode</h2>
+        <p class="card-description">Allow the extension to run in Incognito (private) windows. Chrome requires you to enable this on the extension's details page.</p>
+      </div>
+
+      <div class="switch-container">
+        <div class="switch-label">
+          <span class="label">Allow in Incognito</span>
+          <span class="description">Manage permission for private browsing windows</span>
+        </div>
+        <label class="switch">
+          <input type="checkbox" id="allow-incognito" />
+          <span class="slider"></span>
+        </label>
+      </div>
+
+      <div style="margin-top: 1rem; display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: center;">
+        <span class="status-badge" id="incognito-status">🟡 Incognito: Checking…</span>
+        <a class="button button-sm" id="open-incognito-settings" href="#" target="_blank" rel="noreferrer noopener">
+          Open Extensions Page
+        </a>
+      </div>
+
+      <div class="pin-hint" style="margin-top: 0.5rem;">
+        Chrome/Edge require you to toggle "Allow in incognito" on the extension's details page. We'll try to open it for you.
+      </div>
+    </div>
+
+    <div class="grid grid-cols-2 fade-in">
+      <div class="card">
+        <div class="card-header">
+          <h2 class="card-title">Smart Detection</h2>
+          <p class="card-description">Enable advanced keyword detection with contextual analysis for comprehensive content coverage</p>
+        </div>
+        <label class="switch">
+          <input type="checkbox" id="smart" />
+          <span class="slider"></span>
+        </label>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <h2 class="card-title">Debug Mode</h2>
+          <p class="card-description">Enable advanced logging and diagnostics for troubleshooting</p>
+        </div>
+        <label class="switch">
+          <input type="checkbox" id="debug-mode" />
+          <span class="slider"></span>
+        </label>
+      </div>
+    </div>
+
+    <div class="card fade-in">
+      <div class="card-header">
+        <h2 class="card-title">Trusted Image Domains</h2>
+        <p class="card-description">Images from these domains will never be blocked, even if they contain keywords. Perfect for legitimate platforms.</p>
+      </div>
+      <textarea class="textarea" id="trusted-domains" placeholder="Enter trusted domains, one per line:
+steampowered.com
+amazon.com
+youtube.com
+twitch.tv
+reddit.com
+netflix.com
+disney.com"></textarea>
+      <div class="button-group">
+        <button class="button button-primary" id="save-trusted">Save Trusted Domains</button>
+        <button class="button" id="reset-trusted">Reset to Defaults</button>
+      </div>
+    </div>
+
+    <div class="card fade-in">
+      <div class="card-header">
+        <h2 class="card-title">Custom Blocked Words</h2>
+        <p class="card-description">Add words or phrases that should always trigger blocking when they appear on a page.</p>
+      </div>
+      <textarea class="textarea" id="custom-keywords" placeholder="Add one word or phrase per line:
+keyword
+another phrase
+site name"></textarea>
+      <div class="button-group">
+        <button class="button button-primary" id="save-keywords">Save Words</button>
+        <button class="button" id="reset-keywords">Reset to Defaults</button>
+        <button class="button button-destructive" id="clear-keywords">Clear All</button>
+      </div>
+    </div>
+
+    <div class="card fade-in">
+      <div class="card-header">
+        <h2 class="card-title">Custom Blocklist</h2>
+        <p class="card-description">Add custom patterns to block specific content. Use wildcards for broader coverage. Examples: <code class="code">pornhub.com</code>, <code class="code">*.inappropriate.net</code>, <code class="code">example.com/adult/*</code></p>
+      </div>
+      <textarea class="textarea" id="patterns" placeholder="Add one pattern per line:
+badexample.com
+*.inappropriate.net
+specific.com/badpath
+another-site.org/adult/*"></textarea>
+      <div class="button-group">
+        <button class="button button-primary" id="save">Save Blocklist</button>
+        <button class="button" id="reset">Reset to Defaults</button>
+        <button class="button button-destructive" id="clear">Clear All</button>
+      </div>
+    </div>
+
+    <div class="card fade-in">
+      <div class="card-header">
+        <h2 class="card-title">Whitelist Management</h2>
+        <p class="card-description">Domains in this list will never be blocked, even if they match adult content patterns. Your personal safe list.</p>
+      </div>
+      
+      <div class="form-group">
+        <div class="input-group">
+          <input type="text" class="input" id="whitelist-domain" placeholder="example.com" />
+          <button class="button button-primary" id="add-whitelist">Add Domain</button>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <h3 style="font-size: 1.125rem; font-weight: 600; margin-bottom: 1rem; color: var(--foreground);">Current Whitelist</h3>
+        <div id="whitelist-display" style="max-height: 200px; overflow-y: auto;">
+          <div class="whitelist-empty">No whitelisted domains yet. Add some above to get started.</div>
+        </div>
+      </div>
+
+      <div class="button-group">
+        <button class="button" id="export-whitelist">Export Whitelist</button>
+        <button class="button" id="import-whitelist">Import Whitelist</button>
+        <button class="button button-destructive" id="clear-whitelist">Clear All</button>
+      </div>
+      <input type="file" id="whitelist-file" accept=".json" style="display: none;" />
+    </div>
+
+    <div class="footer fade-in">
+      <p>🔒 BlockNSFW runs entirely locally. Your browsing data never leaves your device.</p>
+      <p style="margin-top: 0.75rem; font-size: 0.8125rem;">Built with privacy-first architecture and enterprise-grade security</p>
+    </div>
+  </div>
+
+  <!-- Commitment Gate Modal -->
+  <div id="commitment-overlay" class="commitment-overlay hidden" aria-hidden="true">
+    <div class="commitment-modal" role="dialog" aria-modal="true">
+      <div class="commitment-progress">
+        <div class="commitment-progress-dot active" id="commitment-progress-1"></div>
+        <div class="commitment-progress-dot" id="commitment-progress-2"></div>
+        <div class="commitment-progress-dot" id="commitment-progress-3"></div>
+      </div>
+
+      <!-- Step 1: Streak + Emotional Appeal -->
+      <div class="commitment-step" id="commitment-step-1">
+        <div class="commitment-streak-display">
+          <div class="commitment-shield">🛡️</div>
+          <div class="commitment-streak-number" id="commitment-streak-number">0</div>
+          <div class="commitment-streak-unit" id="commitment-streak-unit">days</div>
+          <div class="commitment-streak-detail" id="commitment-streak-detail">of continuous protection</div>
+        </div>
+        <div class="commitment-streak-msg" id="commitment-streak-text">
+          Every day matters. Don't break the chain.
+        </div>
+        <div class="commitment-warning">
+          Disabling will reset your streak to zero.
+        </div>
+        <div class="commitment-actions">
+          <button class="commitment-btn commitment-btn-keep" id="commitment-keep-btn">Stay Protected</button>
+          <button class="commitment-btn commitment-btn-proceed" id="commitment-continue-btn">Disable anyway</button>
+        </div>
+      </div>
+
+      <!-- Step 2: Reflective Question -->
+      <div class="commitment-step hidden" id="commitment-step-2">
+        <div class="commitment-section-title">Before you continue...</div>
+        <div class="commitment-section-desc">
+          Take a moment to reflect. Why did you install this extension in the first place?
+        </div>
+        <textarea class="commitment-textarea" id="commitment-reflect-input"
+          placeholder="Write your reason here..." maxlength="500"></textarea>
+        <div class="commitment-error" id="commitment-reflect-error"></div>
+        <div class="commitment-actions" style="margin-top: 0.75rem;">
+          <button class="commitment-btn commitment-btn-back" id="commitment-reflect-back">Back</button>
+          <button class="commitment-btn commitment-btn-proceed" id="commitment-reflect-next" style="color: var(--foreground);">Continue</button>
+        </div>
+      </div>
+
+      <!-- Step 3: Type Commitment Sentence -->
+      <div class="commitment-step hidden" id="commitment-step-3">
+        <div class="commitment-section-title">Final step</div>
+        <div class="commitment-section-desc">
+          Type the entire sentence below exactly to confirm. Read every word.
+        </div>
+        <div class="commitment-reference" id="commitment-confirm-hint"></div>
+        <textarea class="commitment-textarea" id="commitment-confirm-input"
+          placeholder="Start typing the sentence above..." autocomplete="off" spellcheck="false"
+          rows="4"></textarea>
+        <div class="commitment-match" id="commitment-confirm-match"></div>
+        <div class="commitment-error" id="commitment-confirm-error"></div>
+        <div class="commitment-actions" style="margin-top: 0.75rem;">
+          <button class="commitment-btn commitment-btn-back" id="commitment-confirm-back">Back</button>
+          <button class="commitment-btn commitment-btn-danger" id="commitment-confirm-disable">Disable Protection</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="appwrite-client.js"></script>
+  <script src="options.js"></script>
+</body>
+</html>

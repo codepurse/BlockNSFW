@@ -1,0 +1,87 @@
+name: Bug report
+description: Report broken behavior in BlockNSFW
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What broke?
+      placeholder: Brief description of bug.
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Extension version
+      placeholder: "Example: 1.6.0"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: browser
+    attributes:
+      label: Browser
+      options:
+        - Chrome
+        - Firefox
+        - Edge
+        - Brave
+        - Opera
+        - Vivaldi
+        - Other Chromium browser
+    validations:
+      required: true
+
+  - type: input
+    id: browser_version
+    attributes:
+      label: Browser version
+      placeholder: "Example: Chrome 137"
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Reproduction steps
+      placeholder: |
+        1. Open ...
+        2. Click ...
+        3. Observe ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: features
+    attributes:
+      label: Relevant features
+      options:
+        - label: DNS Protection enabled
+        - label: SafeSearch enabled
+        - label: Reddit checks involved
+        - label: Facebook Reels blocking enabled
+        - label: Instagram Reels blocking enabled
+        - label: Whitelist entry involved
+        - label: Manual report flow involved
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Console errors or extra context
+      render: shell

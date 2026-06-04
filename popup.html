@@ -1,0 +1,494 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>BlockNSFW</title>
+  <style>
+    :root { color-scheme: light dark; }
+    * { box-sizing: border-box; }
+    body {
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      margin: 0;
+      padding: 16px;
+      width: 280px;
+      background: Canvas;
+      color: CanvasText;
+      line-height: 1.4;
+    }
+    .header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 16px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid color-mix(in oklab, CanvasText, transparent 85%);
+    }
+    .icon {
+      width: 24px;
+      height: 24px;
+      background: linear-gradient(135deg, #6a11cb, #2575fc);
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-weight: bold;
+      font-size: 12px;
+    }
+    .title {
+      font-weight: 600;
+      font-size: 16px;
+    }
+    .toggle-section {
+      margin-bottom: 16px;
+    }
+    .toggle-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+    .toggle-label {
+      font-weight: 500;
+      flex: 1;
+      font-size: 13px;
+      letter-spacing: 0.5px;
+    }
+    .toggle-switch {
+      position: relative;
+      width: 36px;
+      height: 20px;
+      background: color-mix(in oklab, CanvasText, transparent 80%);
+      border-radius: 10px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .toggle-switch.active {
+      background: #2575fc;
+    }
+    .toggle-slider {
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      width: 16px;
+      height: 16px;
+      background: white;
+      border-radius: 50%;
+      transition: transform 0.2s;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+    }
+    .toggle-switch.active .toggle-slider {
+      transform: translateX(16px);
+    }
+    .stats {
+      background: color-mix(in oklab, Canvas, CanvasText 4%);
+      border: 1px solid color-mix(in oklab, CanvasText, transparent 85%);
+      border-radius: 8px;
+      padding: 12px;
+      margin-bottom: 12px;
+    }
+    .stat-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+    .stat-row:last-child {
+      margin-bottom: 0;
+    }
+    .stat-label {
+      color: color-mix(in oklab, CanvasText, transparent 20%);
+      font-size: 13px;
+    }
+    .stat-value {
+      font-weight: 600;
+      color: #2575fc;
+    }
+    .status {
+      text-align: center;
+      padding: 8px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 500;
+      margin-bottom: 12px;
+    }
+    .status.enabled {
+      background: color-mix(in oklab, #22c55e, transparent 85%);
+      color: #15803d;
+    }
+    .status.disabled {
+      background: color-mix(in oklab, #ef4444, transparent 85%);
+      color: #dc2626;
+    }
+    .actions {
+      display: flex;
+      gap: 8px;
+    }
+    .btn {
+      flex: 1;
+      padding: 8px 12px;
+      border: 1px solid color-mix(in oklab, CanvasText, transparent 70%);
+      border-radius: 6px;
+      background: Canvas;
+      color: CanvasText;
+      font-size: 12px;
+      cursor: pointer;
+      text-decoration: none;
+      text-align: center;
+      transition: all 0.2s;
+    }
+    .btn:hover {
+      background: color-mix(in oklab, Canvas, CanvasText 8%);
+    }
+    .btn-coffee {
+      background: #FFDD00;
+      color: #8B4513;
+      border-color: #FFD700;
+      font-weight: 600;
+    }
+    .btn-coffee:hover {
+      background: #FFD700;
+      color: #654321;
+    }
+    .loading {
+      opacity: 0.6;
+      pointer-events: none;
+    }
+
+    /* Whitelist Section */
+    .whitelist-section {
+      border-top: 1px solid color-mix(in oklab, CanvasText, transparent 85%);
+      padding-top: 15px;
+      margin-top: 15px;
+    }
+
+    .whitelist-section h3 {
+      margin: 0 0 12px 0;
+      font-size: 14px;
+      font-weight: 600;
+    }
+
+    .whitelist-add {
+      margin-bottom: 15px;
+    }
+
+    .whitelist-add input {
+      width: 100%;
+      padding: 8px 12px;
+      border: 1px solid color-mix(in oklab, CanvasText, transparent 70%);
+      border-radius: 6px;
+      font-size: 14px;
+      margin-bottom: 8px;
+      box-sizing: border-box;
+      background: Canvas;
+      color: CanvasText;
+    }
+
+    .whitelist-add input:focus {
+      outline: none;
+      border-color: #2575fc;
+      box-shadow: 0 0 0 2px color-mix(in oklab, #2575fc, transparent 80%);
+    }
+
+    .whitelist-buttons {
+      display: flex;
+      gap: 8px;
+    }
+
+    .whitelist-buttons button {
+      flex: 1;
+      padding: 8px 12px;
+      border: none;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .btn-temp {
+      background: #FF9800;
+      color: white;
+    }
+
+    .btn-temp:hover {
+      background: #F57C00;
+    }
+
+    .btn-perm {
+      background: #2575fc;
+      color: white;
+    }
+
+    .btn-perm:hover {
+      background: #1e5fcf;
+    }
+
+    .whitelist-buttons button:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    .whitelist-list {
+      max-height: 120px;
+      overflow-y: auto;
+    }
+
+    .whitelist-empty {
+      text-align: center;
+      color: color-mix(in oklab, CanvasText, transparent 40%);
+      font-size: 12px;
+      padding: 10px;
+      font-style: italic;
+    }
+
+    .whitelist-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 10px;
+      background: color-mix(in oklab, Canvas, CanvasText 4%);
+      border: 1px solid color-mix(in oklab, CanvasText, transparent 85%);
+      border-radius: 6px;
+      margin-bottom: 6px;
+      font-size: 12px;
+    }
+
+    .whitelist-item:last-child {
+      margin-bottom: 0;
+    }
+
+    .whitelist-domain {
+      font-weight: 500;
+      color: CanvasText;
+      flex: 1;
+    }
+
+    .whitelist-type {
+      font-size: 10px;
+      padding: 2px 6px;
+      border-radius: 10px;
+      margin-right: 8px;
+    }
+
+    .whitelist-type.temp {
+      background: color-mix(in oklab, #FF9800, transparent 80%);
+      color: #E65100;
+    }
+
+    .whitelist-type.permanent {
+      background: color-mix(in oklab, #2575fc, transparent 80%);
+      color: #1e5fcf;
+    }
+
+    .whitelist-remove {
+      background: none;
+      border: none;
+      color: #f44336;
+      cursor: pointer;
+      font-size: 14px;
+      padding: 2px;
+      border-radius: 3px;
+      transition: background 0.2s ease;
+    }
+
+    .whitelist-remove:hover {
+      background: color-mix(in oklab, #f44336, transparent 85%);
+    }
+
+    /* Modal styles */
+    .hidden { display: none !important; }
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: color-mix(in oklab, CanvasText, transparent 85%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 9999;
+    }
+    .modal {
+      width: 100%;
+      max-width: 260px;
+      background: Canvas;
+      color: CanvasText;
+      border: 1px solid color-mix(in oklab, CanvasText, transparent 80%);
+      border-radius: 10px;
+      box-shadow: 0 10px 24px rgba(0,0,0,0.25);
+      padding: 12px;
+    }
+    .modal-title {
+      font-weight: 600;
+      margin-bottom: 6px;
+    }
+    .modal-desc {
+      font-size: 12px;
+      color: color-mix(in oklab, CanvasText, transparent 30%);
+      margin-bottom: 10px;
+    }
+    .modal-field {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 8px;
+    }
+    .modal-field input {
+      flex: 1;
+      padding: 8px 10px;
+      border: 1px solid color-mix(in oklab, CanvasText, transparent 70%);
+      border-radius: 6px;
+      background: Canvas;
+      color: CanvasText;
+    }
+    .eye-btn {
+      border: 1px solid color-mix(in oklab, CanvasText, transparent 70%);
+      background: Canvas;
+      color: CanvasText;
+      border-radius: 6px;
+      padding: 6px 8px;
+      cursor: pointer;
+    }
+    .modal-error {
+      min-height: 16px;
+      font-size: 12px;
+      color: #dc2626;
+      margin-bottom: 8px;
+    }
+    .modal-actions { display:flex; gap:8px; justify-content:flex-end; }
+    .btn-primary {
+      background: #2575fc;
+      color: white;
+      border-color: #1e5fcf;
+    }
+    /* Duration modal extras */
+    .chip-group { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:8px; }
+    .chip {
+      padding: 6px 10px;
+      border: 1px solid color-mix(in oklab, CanvasText, transparent 70%);
+      border-radius: 16px;
+      background: Canvas;
+      color: CanvasText;
+      font-size: 12px;
+      cursor: pointer;
+    }
+    .chip.selected { background:#2575fc; color:white; border-color:#1e5fcf; }
+    .modal-note { font-size: 11px; color: color-mix(in oklab, CanvasText, transparent 40%); margin-top: 4px; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="icon">🛡️</div>
+    <div class="title">BlockNSFW</div>
+  </div>
+
+  <div class="status" id="status">Loading...</div>
+
+  <div class="toggle-section">
+    <div class="toggle-row">
+      <div class="toggle-label">Block adult content</div>
+      <div class="toggle-switch" id="toggle">
+        <div class="toggle-slider"></div>
+      </div>
+    </div>
+    <div class="toggle-row" id="unblock-row" style="display: none;margin-top: 5px">
+      <div class="toggle-label">Unblock this site</div>
+      <div class="toggle-switch" id="unblock-toggle">
+        <div class="toggle-slider"></div>
+      </div>
+    </div>
+    <div class="toggle-row" style="margin-top: 5px">
+      <div class="toggle-label">Enhanced SafeSearch</div>
+      <div class="toggle-switch" id="safesearch-toggle">
+        <div class="toggle-slider"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="stats">
+    <div class="stat-row">
+      <div class="stat-label">Sites blocked today</div>
+      <div class="stat-value" id="blocked-today">0</div>
+    </div>
+    <div class="stat-row">
+      <div class="stat-label">Total blocked</div>
+      <div class="stat-value" id="blocked-total">0</div>
+    </div>
+    <div class="stat-row">
+      <div class="stat-label">Images filtered</div>
+      <div class="stat-value" id="images-filtered">0</div>
+    </div>
+  </div>
+
+  <div class="actions">
+    <a href="#" class="btn" id="settings">Settings</a>
+    <a href="#" class="btn" id="stats-btn">📊 Stats</a>
+  </div>
+
+  <div class="actions" style="margin-top: 8px;">
+    <a href="#" class="btn" id="audit-log">📋 Audit Log</a>
+    <a href="https://buymeacoffee.com/monolab.co" target="_blank" class="btn btn-coffee" id="coffee-btn">☕ Coffee</a>
+  </div>
+
+  <!-- Whitelist Section -->
+  <div class="section whitelist-section">
+    <h3>🤍 Whitelist</h3>
+    <div class="whitelist-add">
+      <input type="text" id="whitelist-input" placeholder="Enter domain (e.g., example.com)" />
+      <div class="whitelist-buttons">
+        <button id="add-whitelist" class="btn-perm">Whitelist</button>
+        <button id="add-whitelist-temp-15" class="btn-temp">15m</button>
+        <button id="add-whitelist-temp-60" class="btn-temp">1h</button>
+      </div>
+    </div>
+    <div class="whitelist-list" id="whitelist-list">
+      <div class="whitelist-empty">No whitelisted sites</div>
+    </div>
+  </div>
+
+  <!-- PIN Modal -->
+  <div id="pin-modal-overlay" class="modal-overlay hidden" aria-hidden="true">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="pin-modal-title">
+      <div class="modal-title" id="pin-modal-title">Enter PIN</div>
+      <div class="modal-desc" id="pin-modal-desc">Enter PIN to continue.</div>
+      <div class="modal-field" id="pin-field">
+        <input type="password" id="pin-input" inputmode="numeric" autocomplete="off" placeholder="••••" />
+        <button id="pin-toggle" class="eye-btn" title="Show/Hide">👁</button>
+      </div>
+      <div class="modal-field hidden" id="pin-confirm-field">
+        <input type="password" id="pin-input-confirm" inputmode="numeric" autocomplete="off" placeholder="Confirm PIN" />
+      </div>
+      <div class="modal-error" id="pin-error"></div>
+      <div class="modal-actions">
+        <button id="pin-cancel" class="btn">Cancel</button>
+        <button id="pin-ok" class="btn btn-primary">OK</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Duration Modal -->
+  <div id="duration-modal-overlay" class="modal-overlay hidden" aria-hidden="true">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="duration-modal-title">
+      <div class="modal-title" id="duration-modal-title">Choose Duration</div>
+      <div class="modal-desc" id="duration-modal-desc">Disable temporarily or make it permanent.</div>
+      <div class="chip-group" id="duration-chips">
+        <button class="chip" data-mins="15">15m</button>
+        <button class="chip" data-mins="30">30m</button>
+        <button class="chip" data-mins="60">1h</button>
+        <button class="chip" data-permanent="true">Permanent</button>
+      </div>
+      <div class="modal-field" id="duration-field">
+        <input type="text" id="duration-input" inputmode="numeric" autocomplete="off" placeholder="Custom minutes" />
+      </div>
+      <div class="modal-error" id="duration-error"></div>
+      <div class="modal-actions">
+        <button id="duration-cancel" class="btn">Cancel</button>
+        <button id="duration-ok" class="btn btn-primary">OK</button>
+      </div>
+      <div class="modal-note">Tip: select a chip or enter minutes.</div>
+    </div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

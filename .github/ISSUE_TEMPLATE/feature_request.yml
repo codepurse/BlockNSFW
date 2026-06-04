@@ -1,0 +1,37 @@
+name: Feature request
+description: Suggest improvement for BlockNSFW
+title: "[Feature]: "
+labels:
+  - enhancement
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or use case
+      description: What problem are you trying to solve?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed change
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+
+  - type: checkboxes
+    id: impact
+    attributes:
+      label: Possible impact areas
+      options:
+        - label: Blocking logic
+        - label: SafeSearch
+        - label: DNS Protection
+        - label: UI / UX
+        - label: Privacy / network behavior
+        - label: Firefox compatibility

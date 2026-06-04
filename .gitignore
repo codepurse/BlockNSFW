@@ -1,0 +1,16 @@
+dist/
+*.zip
+node_modules/
+
+# Editor / OS noise
+.DS_Store
+Thumbs.db
+Desktop.ini
+.idea/
+.vscode/
+
+# Logs / temp
+*.log
+*.tmp
+*.temp
+*.bak
