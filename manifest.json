@@ -35,7 +35,11 @@
   "content_scripts": [
     {
       "matches": ["<all_urls>"],
-      "js": ["content.js"],
+      "js": [
+        "shared/hostname.js",
+        "shared/host-keywords.js",
+        "content.js"
+      ],
       "run_at": "document_start"
     }
   ],

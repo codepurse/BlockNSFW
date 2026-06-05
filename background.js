@@ -1,6 +1,19 @@
 /* BlockNSFW background service worker */
 const browserAPI = typeof browser !== 'undefined' ? browser : chrome;
 
+// Shared browser-safe hostname normalization helpers (RFC 3492 punycode
+// decoder, IDN-aware variant helper). See shared/hostname.js.
+try {
+  if (typeof self !== 'undefined' && typeof self.importScripts === 'function') {
+    self.importScripts('shared/hostname.js');
+    self.importScripts('shared/host-keywords.js');
+  }
+} catch (_) {
+  // shared/hostname.js or shared/host-keywords.js could not be loaded
+  // (e.g. test environment). The helpers are optional; ASCII-only checks
+  // still work via ADULT_HOST_KEYWORDS.
+}
+
 // Storage keys
 const SETTINGS_KEY = 'pblocker_settings';
 const BLOCKED_STATS_KEY = 'pblocker_stats';
@@ -333,7 +346,11 @@ function normalizeDomainForCache(domain) {
 function isLikelyDomain(candidate) {
   if (!candidate) return false;
   if (candidate.length > 253) return false;
-  const domainPattern = /^(?!-)(?:[a-z0-9-]{1,63}\.)+[a-z]{2,63}$/i;
+  // Accept ASCII labels, including ACE-encoded punycode labels that begin with
+  // "xn--". Each label must be 1-63 chars, alphanumeric or hyphen, may not
+  // start or end with a hyphen. The TLD may also be a punycode TLD ("xn--...").
+  const label = '(?!-)(?:xn--[a-z0-9-]{2,61}|[a-z0-9-]{1,63})(?<!-)';
+  const domainPattern = new RegExp(`^(?:${label}\\.)+${label}$`, 'i');
   return domainPattern.test(candidate);
 }
 
@@ -660,66 +677,58 @@ function buildHostPatterns(patterns) {
 
 // Conservative list of adult keywords in host labels (avoid false positives like "essex").
 // Match rule: whole-label or hyphen-separated only (see hostnameMatchesAdultKeywords).
+// Host-only adult keyword list lives in shared/host-keywords.js so the
+// service worker and the content script can share the same source of truth.
 // Foreign-language hosts often use Latin transliterations (bokep/yadong/sikis/seks etc.)
 // because non-Latin domains become unreadable punycode.
-const ADULT_HOST_KEYWORDS = [
-  'porn',
-  'porno',
-  'pornos',
-  'xxx',
-  'xvideos',
-  'xhamster',
-  'xnxx',
-  'redtube',
-  'youporn',
-  'brazzers',
-  'chaturbate',
-  'bongacams',
-  'cam4',
-  'pornhub',
-  'spankbang',
-  'tube8',
-  'youjizz',
-  'nudography',
-  'onlyfans',
-  'erome',
-  'hentai',
-  'hentaihaven',
-  'rule34',
-  // Foreign-language transliterations safe as whole-label hostnames.
-  // NOTE: matcher is whole-label or hyphen-separated, so "essex" can't match "sex".
-  // Risk audit:
-  //   - "seks": appears in legit Estonian/Polish words, but as a whole hostname
-  //     LABEL it's almost exclusively adult ("seks.com", "seks-tube.net").
-  //   - "jav": removed — too ambiguous (Java/JavaScript/jav.com=tech blogs).
-  //   - "sikis": Turkish hostnames using this token are virtually all adult.
-  'seks',
-  'sikis',
-  'bokep',
-  'yadong',
-  'pornoizle',
-  'tubeporn',
-];
+// We keep `ADULT_HOST_KEYWORDS` as an alias for any in-file references that
+// pre-date the shared module.
+const ADULT_HOST_KEYWORDS = (typeof HostBlockKeywords !== 'undefined' && HostBlockKeywords.ADULT_HOST_KEYWORDS)
+  ? HostBlockKeywords.ADULT_HOST_KEYWORDS
+  : [
+      // Same fallback list lives in shared/host-keywords.js. Keep both in sync
+      // only if a future build path can't import the shared module.
+      'porn','porno','pornos','xxx','xvideos','xhamster','xnxx','redtube',
+      'youporn','brazzers','chaturbate','bongacams','cam4','pornhub',
+      'spankbang','tube8','youjizz','nudography','onlyfans','erome',
+      'hentai','hentaihaven','rule34','seks','sikis','bokep','yadong',
+      'pornoizle','tubeporn'
+    ];
 
+// Strict host matcher. The implementation lives in shared/host-keywords.js
+// (matchesAdultKeywordHost) so background.js and content.js agree on the
+// same whole-label / hyphen-bounded rules and the same keyword list. This
+// wrapper adds a small per-hostname cache.
 function hostnameMatchesAdultKeywords(hostname) {
-  // Check cache first
-  if (keywordCheckCache.has(hostname)) {
+  if (typeof keywordCheckCache !== 'undefined' && keywordCheckCache.has(hostname)) {
     return keywordCheckCache.get(hostname);
   }
-  
-  const labels = hostname.split('.');
-  const result = labels.some(label => {
-    const lowerLabel = label.toLowerCase();
-    return ADULT_HOST_KEYWORDS.some(k => 
-      lowerLabel === k || 
-      lowerLabel.endsWith('-' + k) || 
-      lowerLabel.startsWith(k + '-')
-    );
-  });
-  
-  // Cache the result
-  addToCache(keywordCheckCache, hostname, result);
+  const result = (typeof HostBlockKeywords !== 'undefined' && HostBlockKeywords.matchesAdultKeywordHost)
+    ? HostBlockKeywords.matchesAdultKeywordHost(hostname)
+    : hostnameMatchesAdultKeywordsFallback(hostname);
+  if (typeof keywordCheckCache !== 'undefined') {
+    addToCache(keywordCheckCache, hostname, result);
+  }
   return result;
+}
+
+// ASCII-only fallback for environments where the shared module is absent
+// (e.g. when importScripts failed). Mirrors the strict matcher in
+// shared/host-keywords.js.
+function hostnameMatchesAdultKeywordsFallback(hostname) {
+  if (!hostname) return false;
+  const labels = String(hostname).split('.');
+  for (const label of labels) {
+    if (!label) continue;
+    const lowerLabel = label.toLowerCase();
+    for (const k of ADULT_HOST_KEYWORDS) {
+      if (!k) continue;
+      if (lowerLabel === k) return true;
+      if (lowerLabel.endsWith('-' + k)) return true;
+      if (lowerLabel.startsWith(k + '-')) return true;
+    }
+  }
+  return false;
 }
 
 async function getSettings() {

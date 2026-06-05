@@ -1,3 +1,29 @@
+# BlockNSFW curated domain blocklist
+# ==================================
+#
+# Format: one entry per line, "0.0.0.0 <domain>" (standard hosts-file).
+# Lines starting with "#" and blank lines are ignored at parse time.
+#
+# Curation policy (NON_ENGLISH_ADULT_BLOCKING_TODO - Data Pipeline):
+#   - Prefer exact domains: "porn-site.de" is preferred over "porn-site.*".
+#   - Parent / wildcard entries ("*.example.cn") are kept ONLY when the
+#     entire registered domain is unambiguously adult (no shared hosting
+#     with benign content, no user-generated subdomains).
+#   - Non-English adult mirrors (Chinese, Russian, Korean, Arabic, Thai,
+#     Japanese, etc.) are added on a per-report basis, vetted individually
+#     for ownership and intent before inclusion.
+#   - Missed-site reports (user feedback, log analysis) are the primary
+#     feedstock for new entries. See data/SOURCE_NOTES.txt for the
+#     reporting flow.
+#   - IDN / punycode entries are retained as-is. The runtime
+#     isLikelyDomain() regex accepts "xn--" labels in any position.
+#   - Avoid adding a parent domain to a hosting provider (e.g. heroku,
+#     wordpress.com, blogspot.com). Add the exact subdomain instead.
+#
+# Last curation pass: see git history. Source: upstream codepurse/BlockNSFW
+# snapshot commit bee0db2, fetched 2026-06-03, with non-English additions
+# documented in CHANGELOG (future).
+#
 0.0.0.0    0.nextyourcontent.com
 0.0.0.0    0.oldgyhogola.com
 0.0.0.0    0.xd-cdn.com
