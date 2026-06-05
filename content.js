@@ -889,39 +889,30 @@ function matchesAdultKeywordHost(host) {
   const cached = smartHostKeywordCache.get(h);
   if (cached !== undefined) return cached;
 
-  const labels = h.split('.');
+  // Delegate to the shared strict host matcher so the content script and the
+  // service worker use the same keyword list and the same whole-label /
+  // hyphen-bounded matching rules. Falls back to the local ADULT_CONTENT_KEYWORDS
+  // list if the shared module failed to load.
   let result = false;
-
-  outer: for (let i = 0; i < labels.length; i++) {
-    const label = labels[i];
-    if (!label) continue;
-    for (let j = 0; j < ADULT_CONTENT_KEYWORDS.length; j++) {
-      const k = ADULT_CONTENT_KEYWORDS[j];
-      if (!k) continue;
-      if (label === k) {
-        result = true;
-        break outer;
-      }
-
-      if (label.startsWith(k)) {
-        const suffix = label.slice(k.length);
-        if (suffix && (/^\d+$/.test(suffix) || suffix.startsWith('-'))) {
-          result = true;
-          break outer;
+  if (typeof HostBlockKeywords !== 'undefined' && HostBlockKeywords.matchesAdultKeywordHost) {
+    result = HostBlockKeywords.matchesAdultKeywordHost(h);
+  } else {
+    // Local fallback mirrors the shared strict matcher using the page-text
+    // ADULT_CONTENT_KEYWORDS list (used for path/title scanning too).
+    const labels = h.split('.');
+    outer: for (let i = 0; i < labels.length; i++) {
+      const label = labels[i];
+      if (!label) continue;
+      for (let j = 0; j < ADULT_CONTENT_KEYWORDS.length; j++) {
+        const k = ADULT_CONTENT_KEYWORDS[j];
+        if (!k) continue;
+        if (label === k) { result = true; break outer; }
+        if (label.startsWith(k) && (label.length === k.length || label[k.length] === '-')) {
+          result = true; break outer;
         }
-      }
-
-      if (label.endsWith(k)) {
-        const prefix = label.slice(0, label.length - k.length);
-        if (prefix && prefix.endsWith('-')) {
-          result = true;
-          break outer;
+        if (label.endsWith(k) && label.length > k.length && label[label.length - k.length - 1] === '-') {
+          result = true; break outer;
         }
-      }
-
-      if (label.includes('-' + k + '-')) {
-        result = true;
-        break outer;
       }
     }
   }

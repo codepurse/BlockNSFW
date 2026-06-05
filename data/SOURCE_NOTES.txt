@@ -31,3 +31,49 @@ Maintenance
 Updates to HOSTS.txt and WHITELIST.txt are the responsibility of the
 project maintainer. The upstream `codepurse/BlockNSFW` repository should
 be kept in sync with this directory.
+
+Curation rules for HOSTS.txt
+----------------------------
+
+See the header comment in HOSTS.txt for the full rules. Summary:
+
+- Prefer exact domains over parent / wildcard entries.
+- Parent / wildcard entries are added only when the entire registered
+  domain is unambiguously adult.
+- Non-English adult mirrors are added on a per-report basis. Each entry
+  is vetted individually for ownership and intent before inclusion.
+- IDN / punycode entries are retained as-is. The runtime
+  `isLikelyDomain()` regex (background.js) accepts `xn--` labels in any
+  position, so a punycode host is treated like any other host.
+- Avoid adding a parent domain to a shared hosting provider. Add the
+  exact subdomain instead.
+
+Missed-site reporting flow
+--------------------------
+
+User-submitted missed-site reports (collected via the in-extension
+report UI, see content.js / background.js message handlers) are the
+primary feedstock for new HOSTS.txt entries. The flow is:
+
+1. User reports a missed site via the extension popup / page action.
+2. The report is queued in chrome.storage.local under
+   `missedSiteReports` (key shape:
+   `{ domain, url, language, reason, timestamp }`).
+3. The maintainer reviews the queue, vets each domain (ownership,
+   intent, non-shared-hosting), and adds vetted entries to
+   HOSTS.txt in the next curation pass.
+4. The remote-sync pipeline (see "Packaged fallback" below) then
+   propagates the additions to the remote URL and to
+   `blocklist.json` (the packaged fallback shipped in the extension).
+
+Do NOT bulk-import reports. Each entry is reviewed individually to
+keep the false-positive rate low.
+
+Packaged fallback
+-----------------
+
+`blocklist.json` is the packaged fallback shipped inside the extension
+itself. It is regenerated from the same vetted HOSTS.txt so users
+without remote-update access (e.g. offline install, blocked remote
+host) still get full coverage. The regeneration step is part of the
+extension build process and is not run at runtime.

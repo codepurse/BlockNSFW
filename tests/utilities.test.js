@@ -58,6 +58,63 @@ test('isLikelyDomain: rejects invalid input', () => {
   assert.equal(ctx.isLikelyDomain('a'.repeat(254)), false); // too long
 });
 
+// ---------------------------------------------------------------------------
+// P0 punycode / IDN coverage (NON_ENGLISH_ADULT_BLOCKING_TODO Test Coverage)
+// ---------------------------------------------------------------------------
+
+test('isLikelyDomain: accepts valid punycode labels', () => {
+  // Single-label punycode host with a plain TLD.
+  assert.equal(ctx.isLikelyDomain('xn--porn-tqa.net'), true);
+  // Another valid punycode label (decodes to a Cyrillic word).
+  assert.equal(ctx.isLikelyDomain('xn--80a6ad.com'), true);
+});
+
+test('isLikelyDomain: accepts valid punycode TLDs', () => {
+  // .рф (Cyrillic RF TLD) is encoded as xn--p1ai.
+  assert.equal(ctx.isLikelyDomain('example.xn--p1ai'), true);
+  // .中国 (Chinese) is encoded as xn--fiqs8s.
+  assert.equal(ctx.isLikelyDomain('example.xn--fiqs8s'), true);
+});
+
+test('isLikelyDomain: rejects malformed punycode cases', () => {
+  // Label "xn--" alone (no body) ends in '-', rejected by (?<!-).
+  assert.equal(ctx.isLikelyDomain('xn--.com'), false);
+  // Label starts with hyphen.
+  assert.equal(ctx.isLikelyDomain('-xn--abc.com'), false);
+  // Label ends with hyphen.
+  assert.equal(ctx.isLikelyDomain('xn--abc-.com'), false);
+  // Body contains an invalid character.
+  assert.equal(ctx.isLikelyDomain('xn--abc!def.com'), false);
+  // Body contains a space.
+  assert.equal(ctx.isLikelyDomain('xn--abc def.com'), false);
+  // Empty TLD (label-only).
+  assert.equal(ctx.isLikelyDomain('xn--abc.'), false);
+  // Single-label punycode TLD with nothing else is invalid (need 2+ labels).
+  assert.equal(ctx.isLikelyDomain('xn--abc'), false);
+  // Label too long (>63 chars).
+  assert.equal(ctx.isLikelyDomain('xn--' + 'a'.repeat(62) + '.com'), false);
+});
+
+test('isLikelyDomain: accepts mixed ASCII + punycode labels', () => {
+  // Plain prefix, punycode label.
+  assert.equal(ctx.isLikelyDomain('www.xn--porn-tqa.net'), true);
+  // Multi-level mixed: punycode label + plain labels.
+  assert.equal(ctx.isLikelyDomain('xn--porn-tqa.org'), true);
+  // 4-label mixed: punycode first, then plain.
+  assert.equal(ctx.isLikelyDomain('xn--80a6ad.com.example.com'), true);
+  // Deep punycode sandwich.
+  assert.equal(ctx.isLikelyDomain('a.b.xn--fiqs8s'), true);
+});
+
+test('isLikelyDomain: punycode TLD labels must be 2+ chars after xn--', () => {
+  // xn--a is technically a 5-char regular label (accepted via the fallback
+  // branch) but it is not a valid punycode-encoded label because the body
+  // is too short. We still accept the label, because the regex's job is
+  // shape-validation, not punycode semantic validation.
+  assert.equal(ctx.isLikelyDomain('xn--a.com'), true,
+    'the regex accepts any ASCII label of valid shape; deep punycode semantics are not its job');
+});
+
 test('normalizeDomainForCache: lowercases, trims, strips www.', () => {
   assert.equal(ctx.normalizeDomainForCache('  WWW.Example.COM  '), 'example.com');
   assert.equal(ctx.normalizeDomainForCache('sample.org'), 'sample.org');

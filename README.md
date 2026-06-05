@@ -29,7 +29,8 @@ Current version: `1.6.0`
 
 BlockNSFW combines several protection layers:
 
-- Domain blocking with local fallback rules plus cached remote blocklist updates
+- Domain blocking with local fallback rules plus cached remote blocklist updates. IDN / punycode hostnames (e.g. `xn--porn-tqa.net`) are retained at runtime, not silently dropped.
+- Hostname smart filter that scans both the ASCII / punycode form and the decoded Unicode form of a hostname, with multilingual adult-hostword coverage (Chinese, Korean, Russian, Arabic, Thai, plus transliterated Latin).
 - Page and visible-content filtering through a Manifest V3 content script
 - Search SafeSearch enforcement on Google, Bing, DuckDuckGo, Yahoo, Brave, Ecosia, Qwant, AOL Search, and Presearch
 - Optional DNS-based blocking through Cloudflare for Families
@@ -46,12 +47,17 @@ Main files:
 - `manifest.firefox.json` - Firefox MV3 manifest
 - `background.js` - blocklist loading, DNS checks, dynamic rules, stats, audit storage
 - `content.js` - page filtering, SafeSearch enforcement, Reddit checks, DOM scanning
+- `shared/hostname.js` - browser-safe punycode / IDN helpers (RFC 3492)
+- `shared/host-keywords.js` - shared smart-blocking keyword list and strict host matcher
 - `popup.html` / `popup.js` - quick toggle, stats, shortcuts
 - `options.html` / `options.js` - full settings UI, whitelist tools, audit/stats access
 - `blocked.html` / `blocked.js` - blocked page
 - `audit.html` / `audit.js` - audit view
 - `stats.html` / `stats.js` - statistics view
-- `blocklist.json` - bundled fallback blocklist
+- `data/HOSTS.txt` - curated source blocklist (self-hosted in `data/` under MIT)
+- `data/WHITELIST.txt` - curated global whitelist
+- `data/SOURCE_NOTES.txt` - data-file provenance, curation policy, missed-site flow
+- `blocklist.json` - bundled fallback blocklist (regenerated from `data/HOSTS.txt`)
 - `build-chrome.ps1` / `build-firefox.ps1` - release bundle scripts
 
 Tech stack:
