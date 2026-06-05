@@ -106,3 +106,63 @@ test('parseHostsFile: parses real-world HOSTS snapshot sample', () => {
   assert.ok(result.has('0006666.net'));
   assert.ok(result.has('007gayboys.com'));
 });
+
+// ---------------------------------------------------------------------------
+// P0 punycode / IDN coverage (NON_ENGLISH_ADULT_BLOCKING_TODO Test Coverage)
+// ---------------------------------------------------------------------------
+
+test('parseHostsFile: punycode domains survive parse', () => {
+  const text = [
+    '0.0.0.0    xn--porn-tqa.net',
+    '0.0.0.0    xn--80a6ad.com',
+    '0.0.0.0    example.xn--fiqs8s',  // .中国 TLD (must be 2+ labels)
+    '0.0.0.0    example.xn--p1ai'     // .рф TLD (must be 2+ labels)
+  ].join('\n');
+  const result = parseHostsFile(text);
+  assert.equal(result.size, 4);
+  assert.ok(result.has('xn--porn-tqa.net'));
+  assert.ok(result.has('xn--80a6ad.com'));
+  assert.ok(result.has('example.xn--fiqs8s'));
+  assert.ok(result.has('example.xn--p1ai'));
+});
+
+test('parseHostsFile: comments and whitespace still work with punycode entries', () => {
+  const text = [
+    '# Curation policy header comment',
+    '',
+    '   ',
+    '# Another comment',
+    '0.0.0.0    xn--porn-tqa.net   # inline comment after punycode entry',
+    '',
+    '0.0.0.0\txn--80a6ad.com\t\t# tab-separated with inline comment',
+    '0.0.0.0  example.xn--p1ai  ',  // 2-label host with .рф TLD
+  ].join('\n');
+  const result = parseHostsFile(text);
+  assert.equal(result.size, 3);
+  assert.ok(result.has('xn--porn-tqa.net'));
+  assert.ok(result.has('xn--80a6ad.com'));
+  assert.ok(result.has('example.xn--p1ai'));
+});
+
+test('parseHostsFile: malformed IDN-like garbage still rejected', () => {
+  // NOTE: a single-line entry cannot contain a space inside a hostname
+  // because parseHostsFile tokenizes by whitespace - the space would
+  // split the entry into two separate tokens. Test space-malformed
+  // entries on separate lines.
+  const text = [
+    '0.0.0.0    xn--.com',         // bare xn-- (no body) - ends in hyphen
+    '0.0.0.0    xn--abc-.com',     // ends in hyphen
+    '0.0.0.0    -xn--abc.com',     // starts with hyphen
+    '0.0.0.0    xn--abc!def.com',  // invalid char in body
+    '0.0.0.0    xn--abc',          // single label (rejected)
+    '0.0.0.0    xn--valid.com',    // valid punycode, must survive
+    '0.0.0.0    plain.com'         // valid plain, must survive
+  ].join('\n');
+  const result = parseHostsFile(text);
+  assert.equal(result.size, 2);
+  assert.ok(result.has('xn--valid.com'));
+  assert.ok(result.has('plain.com'));
+  assert.ok(!result.has('xn--.com'));
+  assert.ok(!result.has('xn--abc-.com'));
+  assert.ok(!result.has('xn--abc!def.com'));
+});

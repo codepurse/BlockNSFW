@@ -1,5 +1,91 @@
 # Chrome Extension Upgrade Notes
 
+## Future Work
+
+These items are intentionally on hold. Captured here so they are not
+forgotten, but not part of the current release.
+
+### P2 - Page-Level Fallback (on hold)
+Higher false-positive risk than domain-level work. Needs design review
+before implementation. Sub-tasks:
+- Keep the hostname filter as the primary defense. Page-level scan is a
+  fallback for clean-domain doorway pages.
+- Look at more page signals: `<title>`, `<meta>`, first body lines, image
+  `alt` / `aria-label`.
+- Phrase-first matching for CJK / Arabic / Thai (no whitespace in those
+  scripts).
+- Conservative thresholds: one strong explicit phrase = block; one weak
+  word alone = don't block, but 3+ weak signals co-occurring = block.
+- Keep the safe-context bypass for recovery / education / support pages.
+
+### Manual QA Checklist (needs a real browser)
+- IDN / punycode exact-domain block works on a known `xn--` adult site.
+- Host-keyword block works on a non-English hostname not in the blocklist.
+- Sparse / image-heavy pages still block on hostname alone.
+- Support / recovery / education pages are NOT blocked.
+- No English regression: known English adult sites still block.
+- `dnsFilterEnabled` stays optional.
+
+### Non-Goals (project boundaries)
+- Do not add generic page language detection.
+- Do not block on broad Unicode substring matches alone.
+- Do not trust DNS filtering as the only protection layer for
+  non-English sites.
+
+## What's New (Unreleased)
+
+### 🌐 Non-English Blocking Improvements
+
+**IDN / Punycode exact-domain coverage**
+- Fixed `isLikelyDomain()` regex that was silently dropping `xn--`
+  prefixed hostnames. All 93 punycode entries already present in
+  `data/HOSTS.txt` are now retained and used at runtime.
+- Added a browser-safe punycode / IDN decoder in `shared/hostname.js`
+  (RFC 3492) so the smart filter can scan the decoded Unicode form
+  of a hostname, not just the ASCII / punycode form.
+
+**Multilingual hostname smart filter**
+- Curation now splits keywords into two classes:
+  - `STRONG_HOST_KEYWORDS` (used by the filter)
+  - `AMBIGUOUS_HOST_KEYWORDS` (documentation-only reject list with
+    reasons - prevents future accidental additions of `sex`, `jav`,
+    `cam`, `tube`, `video`, `live`, etc.)
+- New non-Latin adult tokens: `色情` (Chinese), `야동` (Korean),
+  `порно` (Russian), `سكس` (Arabic), `หนังโป๊` (Thai).
+- Plus transliterated Latin tokens: `bokep` (Indonesian), `yadong`
+  (Korean), `seks` (Polish / Turkish), `sikis` (Turkish).
+- Strict matching rules: whole-label match, hyphen-bounded match, no
+  broad substring match for adult tokens. `essex.com` still does NOT
+  match `sex` (sex is not even a strong token); `pornreports.com`
+  does NOT match `porn`; `my-porn-tube.com` does NOT match because
+  `porn` is mid-label, not at a boundary.
+- Safe-host bypass (`SAFE_HOST_TOKENS`) preserved and now shared
+  between the service worker and the content script, so a
+  `porn-recovery.org` is correctly NOT blocked.
+
+**Data pipeline**
+- `data/HOSTS.txt` gained a 27-line curation policy header.
+- `data/SOURCE_NOTES.txt` gained "Curation rules", "Missed-site
+  reporting flow", and "Packaged fallback" sections.
+- `blocklist.json` regenerated from the curated source. Deduplicated
+  and validity-filtered - 58,075 entries that exactly match what the
+  runtime parser would load.
+
+**Test coverage**
+- 27 new focused tests added. Total 62, all passing.
+- New file `tests/host-keywords.test.js` covers punycode / IDN,
+  multilingual positive coverage (CN / JP / KR / Cyrillic / AR /
+  TH), strict whole-label vs substring matching, and false-positive
+  guards.
+- `tests/utilities.test.js` extended for `isLikelyDomain()` punycode
+  cases.
+- `tests/parse-hosts.test.js` extended for punycode host survival and
+  malformed IDN-like garbage rejection.
+
+**No regressions**
+- All existing English-domain blocking still works.
+- `dnsFilterEnabled` remains an optional fallback, not required.
+
 ## What's New
 
 ### 🎯 Improved Blocking Accuracy
