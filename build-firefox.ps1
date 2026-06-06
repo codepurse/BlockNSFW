@@ -17,7 +17,10 @@ $OutDir      = Join-Path $ScriptDir "dist\firefox"
 $ManifestSrc = Join-Path $SrcDir "manifest.firefox.json"
 $ManifestDst = Join-Path $OutDir "manifest.json"
 
-$RuntimeFolders = @("icons")
+$RuntimeFolders = @(
+    "icons",
+    "shared"
+)
 $RuntimeFiles   = @(
     "background.js",
     "content.js",
