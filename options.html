@@ -1541,9 +1541,9 @@
         <h2 class="card-title">What’s New</h2>
         <div class="card-description">
           <ul style="margin: 0; padding-left: 1.1rem">
-            <li><strong>Expanded Safe Search Coverage</strong> — Safe Search now also works on <strong>AOL Search</strong>, <strong>Presearch</strong>, and <strong>Qwant</strong>, in addition to existing protected engines.</li>
-            <li><strong>Facebook Reels Blocking</strong> — Facebook Reels pages and reel entry points are now blocked or hidden automatically based on user requests.</li>
-            <li><strong>Instagram Reels Blocking</strong> — Optional Instagram Reels blocking hides reel pages and entry points (off by default).</li>
+            <li><strong>IDN / Punycode Coverage</strong> — Hostnames with <strong>xn--</strong> prefixes (internationalized adult mirrors) are no longer silently dropped at runtime. They now load and block as designed.</li>
+            <li><strong>Non-English Hostname Filter</strong> — High-confidence adult-hostword coverage for Chinese, Korean, Russian, Arabic, and Thai hostnames (e.g. <strong>色情.com</strong>, <strong>야동.com</strong>, <strong>порно.org</strong>).</li>
+            <li><strong>Smarter Bundled Blocklist</strong> — The packaged fallback blocklist has been regenerated and synced with the runtime parser, so offline installs get the same exact-domain coverage.</li>
           </ul>
         </div>
       </div>
