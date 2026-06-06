@@ -5,444 +5,824 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>BlockNSFW</title>
   <style>
-    :root { color-scheme: light dark; }
-    * { box-sizing: border-box; }
-    body {
-      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
-      margin: 0;
-      padding: 16px;
-      width: 280px;
-      background: Canvas;
-      color: CanvasText;
-      line-height: 1.4;
+    :root {
+      --background: #07070a;
+      --background-gradient: linear-gradient(135deg, #07070a 0%, #0f1016 100%);
+      --foreground: #f8fafc;
+      --foreground-muted: #94a3b8;
+      --foreground-dim: #64748b;
+      
+      --card-bg: rgba(15, 23, 42, 0.65);
+      --card-border: rgba(255, 255, 255, 0.08);
+      --card-border-hover: rgba(99, 102, 241, 0.4);
+      --card-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+      
+      --primary: #6366f1;
+      --primary-hover: #4f46e5;
+      --primary-glow: rgba(99, 102, 241, 0.3);
+      --primary-foreground: #ffffff;
+      
+      --secondary: rgba(30, 41, 59, 0.7);
+      --secondary-hover: rgba(51, 65, 85, 0.8);
+      
+      --success: #10b981;
+      --success-glow: rgba(16, 185, 129, 0.2);
+      --destructive: #ef4444;
+      --destructive-glow: rgba(239, 68, 68, 0.2);
+      --warning: #f59e0b;
+      --warning-glow: rgba(245, 158, 11, 0.2);
+      
+      --radius: 12px;
+      --radius-sm: 8px;
+      --transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+      --transition-fast: all 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+      --font-sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
     }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: var(--font-sans);
+      width: 320px;
+      background: var(--background-gradient);
+      color: var(--foreground);
+      padding: 16px;
+      line-height: 1.4;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      overflow-x: hidden;
+      position: relative;
+    }
+
+    /* Ambient Background Glow */
+    body::before {
+      content: '';
+      position: absolute;
+      width: 150px;
+      height: 150px;
+      background: var(--primary);
+      border-radius: 50%;
+      filter: blur(80px);
+      opacity: 0.15;
+      top: -30px;
+      left: -30px;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .container {
+      position: relative;
+      z-index: 1;
+    }
+
+    /* Header */
     .header {
       display: flex;
       align-items: center;
-      gap: 8px;
-      margin-bottom: 16px;
+      justify-content: space-between;
+      margin-bottom: 14px;
       padding-bottom: 12px;
-      border-bottom: 1px solid color-mix(in oklab, CanvasText, transparent 85%);
+      border-bottom: 1px solid var(--card-border);
     }
-    .icon {
-      width: 24px;
-      height: 24px;
-      background: linear-gradient(135deg, #6a11cb, #2575fc);
-      border-radius: 6px;
+
+    .header-logo {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .icon-shield {
+      color: var(--primary);
+      filter: drop-shadow(0 0 8px var(--primary-glow));
+    }
+
+    .title {
+      font-weight: 700;
+      font-size: 16px;
+      letter-spacing: -0.02em;
+      background: linear-gradient(135deg, var(--foreground) 30%, var(--foreground-muted) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .status-badge {
+      font-size: 10px;
+      font-weight: 600;
+      padding: 2px 8px;
+      border-radius: 20px;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+
+    .status-badge.on {
+      background: rgba(16, 185, 129, 0.1);
+      color: var(--success);
+      border: 1px solid rgba(16, 185, 129, 0.2);
+    }
+
+    /* Status Indicator */
+    .status {
+      text-align: center;
+      padding: 10px;
+      border-radius: var(--radius-sm);
+      font-size: 13px;
+      font-weight: 600;
+      margin-bottom: 14px;
+      transition: var(--transition);
+      border: 1px solid transparent;
       display: flex;
       align-items: center;
       justify-content: center;
-      color: white;
-      font-weight: bold;
-      font-size: 12px;
+      gap: 6px;
     }
-    .title {
-      font-weight: 600;
-      font-size: 16px;
+
+    .status.enabled {
+      background: rgba(16, 185, 129, 0.08);
+      color: #34d399;
+      border-color: rgba(16, 185, 129, 0.15);
+      box-shadow: inset 0 0 12px rgba(16, 185, 129, 0.05);
     }
+
+    .status.disabled {
+      background: rgba(239, 68, 68, 0.08);
+      color: #f87171;
+      border-color: rgba(239, 68, 68, 0.15);
+      box-shadow: inset 0 0 12px rgba(239, 68, 68, 0.05);
+    }
+
+    /* Toggle Grid / Bento Box */
     .toggle-section {
-      margin-bottom: 16px;
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: var(--radius);
+      padding: 12px;
+      margin-bottom: 14px;
+      backdrop-filter: blur(12px);
+      box-shadow: var(--card-shadow);
     }
+
     .toggle-row {
       display: flex;
       align-items: center;
       justify-content: space-between;
       gap: 12px;
+      padding: 8px 0;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.04);
     }
-    .toggle-label {
-      font-weight: 500;
+
+    .toggle-row:last-child {
+      border-bottom: none;
+      padding-bottom: 2px;
+    }
+
+    .toggle-row:first-child {
+      padding-top: 2px;
+    }
+
+    .toggle-label-container {
+      display: flex;
+      flex-direction: column;
       flex: 1;
-      font-size: 13px;
-      letter-spacing: 0.5px;
     }
+
+    .toggle-label {
+      font-weight: 600;
+      font-size: 12px;
+      color: var(--foreground);
+    }
+
+    .toggle-desc {
+      font-size: 10px;
+      color: var(--foreground-muted);
+    }
+
+    /* Premium Toggle Switch */
     .toggle-switch {
       position: relative;
-      width: 36px;
-      height: 20px;
-      background: color-mix(in oklab, CanvasText, transparent 80%);
-      border-radius: 10px;
+      width: 40px;
+      height: 22px;
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      border-radius: 100px;
       cursor: pointer;
-      transition: background 0.2s;
+      transition: var(--transition-fast);
     }
-    .toggle-switch.active {
-      background: #2575fc;
-    }
+
     .toggle-slider {
       position: absolute;
       top: 2px;
       left: 2px;
       width: 16px;
       height: 16px;
-      background: white;
+      background: #ffffff;
       border-radius: 50%;
-      transition: transform 0.2s;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+      transition: var(--transition-fast);
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.4);
     }
+
+    .toggle-switch.active {
+      background: var(--primary);
+      border-color: var(--primary-hover);
+      box-shadow: 0 0 10px var(--primary-glow);
+    }
+
     .toggle-switch.active .toggle-slider {
-      transform: translateX(16px);
+      transform: translateX(18px);
     }
+
+    /* Stats Grid */
     .stats {
-      background: color-mix(in oklab, Canvas, CanvasText 4%);
-      border: 1px solid color-mix(in oklab, CanvasText, transparent 85%);
-      border-radius: 8px;
-      padding: 12px;
-      margin-bottom: 12px;
-    }
-    .stat-row {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 8px;
-    }
-    .stat-row:last-child {
-      margin-bottom: 0;
-    }
-    .stat-label {
-      color: color-mix(in oklab, CanvasText, transparent 20%);
-      font-size: 13px;
-    }
-    .stat-value {
-      font-weight: 600;
-      color: #2575fc;
-    }
-    .status {
-      text-align: center;
-      padding: 8px;
-      border-radius: 6px;
-      font-size: 13px;
-      font-weight: 500;
-      margin-bottom: 12px;
-    }
-    .status.enabled {
-      background: color-mix(in oklab, #22c55e, transparent 85%);
-      color: #15803d;
-    }
-    .status.disabled {
-      background: color-mix(in oklab, #ef4444, transparent 85%);
-      color: #dc2626;
-    }
-    .actions {
-      display: flex;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
       gap: 8px;
+      margin-bottom: 14px;
     }
+
+    .stat-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: var(--radius);
+      padding: 10px 6px;
+      text-align: center;
+      backdrop-filter: blur(12px);
+      transition: var(--transition);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .stat-card:hover {
+      border-color: var(--card-border-hover);
+      transform: translateY(-1px);
+    }
+
+    .stat-card::after {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0; height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.15), transparent);
+    }
+
+    .stat-value {
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--primary);
+      font-family: var(--font-mono);
+      line-height: 1.2;
+      margin-bottom: 2px;
+      text-shadow: 0 0 8px var(--primary-glow);
+    }
+
+    .stat-label {
+      color: var(--foreground-muted);
+      font-size: 9px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      font-weight: 600;
+    }
+
+    /* Actions Grid */
+    .actions-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 8px;
+      margin-bottom: 14px;
+    }
+
     .btn {
-      flex: 1;
-      padding: 8px 12px;
-      border: 1px solid color-mix(in oklab, CanvasText, transparent 70%);
-      border-radius: 6px;
-      background: Canvas;
-      color: CanvasText;
-      font-size: 12px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      padding: 8px 10px;
+      border: 1px solid var(--card-border);
+      border-radius: var(--radius-sm);
+      background: var(--secondary);
+      color: var(--foreground-muted);
+      font-size: 11px;
+      font-weight: 600;
       cursor: pointer;
       text-decoration: none;
       text-align: center;
-      transition: all 0.2s;
+      transition: var(--transition-fast);
     }
+
     .btn:hover {
-      background: color-mix(in oklab, Canvas, CanvasText 8%);
+      background: var(--secondary-hover);
+      color: var(--foreground);
+      border-color: var(--card-border-hover);
+      transform: translateY(-1px);
     }
+
+    .btn:active {
+      transform: translateY(1px);
+    }
+
+    .btn svg {
+      width: 14px;
+      height: 14px;
+      transition: transform 0.2s;
+    }
+
+    .btn:hover svg {
+      transform: scale(1.1);
+    }
+
+    /* Coffee Button Custom Style (Match options.html) */
     .btn-coffee {
-      background: #FFDD00;
-      color: #8B4513;
-      border-color: #FFD700;
-      font-weight: 600;
+      grid-column: span 2;
+      background: linear-gradient(135deg, #ffdd00 0%, #fbb034 100%);
+      color: #0c0d12 !important;
+      border: 1px solid #ffd700;
+      font-weight: 700;
+      box-shadow: 0 4px 10px rgba(251, 176, 52, 0.2);
     }
+
     .btn-coffee:hover {
-      background: #FFD700;
-      color: #654321;
-    }
-    .loading {
-      opacity: 0.6;
-      pointer-events: none;
+      background: linear-gradient(135deg, #ffd700 0%, #ffaa00 100%);
+      color: #000000 !important;
+      border-color: #ffaa00;
+      box-shadow: 0 6px 15px rgba(251, 176, 52, 0.35);
     }
 
     /* Whitelist Section */
     .whitelist-section {
-      border-top: 1px solid color-mix(in oklab, CanvasText, transparent 85%);
-      padding-top: 15px;
-      margin-top: 15px;
+      border-top: 1px solid var(--card-border);
+      padding-top: 14px;
+      margin-top: 14px;
     }
 
-    .whitelist-section h3 {
-      margin: 0 0 12px 0;
-      font-size: 14px;
-      font-weight: 600;
+    .whitelist-header-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 10px;
+    }
+
+    .whitelist-title {
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+      color: var(--foreground);
+      display: flex;
+      align-items: center;
+      gap: 6px;
     }
 
     .whitelist-add {
-      margin-bottom: 15px;
+      margin-bottom: 12px;
+    }
+
+    .whitelist-input-container {
+      position: relative;
+      margin-bottom: 8px;
     }
 
     .whitelist-add input {
       width: 100%;
       padding: 8px 12px;
-      border: 1px solid color-mix(in oklab, CanvasText, transparent 70%);
-      border-radius: 6px;
-      font-size: 14px;
-      margin-bottom: 8px;
-      box-sizing: border-box;
-      background: Canvas;
-      color: CanvasText;
+      border: 1px solid var(--card-border);
+      border-radius: var(--radius-sm);
+      font-size: 12px;
+      background: rgba(15, 23, 42, 0.4);
+      color: var(--foreground);
+      transition: var(--transition);
     }
 
     .whitelist-add input:focus {
       outline: none;
-      border-color: #2575fc;
-      box-shadow: 0 0 0 2px color-mix(in oklab, #2575fc, transparent 80%);
+      border-color: var(--primary);
+      box-shadow: 0 0 0 2px var(--primary-glow);
+      background: rgba(15, 23, 42, 0.6);
     }
 
     .whitelist-buttons {
       display: flex;
-      gap: 8px;
+      gap: 6px;
     }
 
     .whitelist-buttons button {
       flex: 1;
-      padding: 8px 12px;
-      border: none;
-      border-radius: 6px;
-      font-size: 12px;
-      font-weight: 500;
+      padding: 6px 10px;
+      border: 1px solid transparent;
+      border-radius: var(--radius-sm);
+      font-size: 11px;
+      font-weight: 600;
       cursor: pointer;
-      transition: all 0.2s ease;
-    }
-
-    .btn-temp {
-      background: #FF9800;
-      color: white;
-    }
-
-    .btn-temp:hover {
-      background: #F57C00;
+      transition: var(--transition-fast);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
     }
 
     .btn-perm {
-      background: #2575fc;
-      color: white;
+      background: var(--primary);
+      color: var(--primary-foreground);
+      border-color: var(--primary);
     }
 
     .btn-perm:hover {
-      background: #1e5fcf;
+      background: var(--primary-hover);
+      box-shadow: 0 0 10px var(--primary-glow);
+    }
+
+    .btn-temp {
+      background: rgba(245, 158, 11, 0.12);
+      color: #fbbf24;
+      border: 1px solid rgba(245, 158, 11, 0.25);
+    }
+
+    .btn-temp:hover {
+      background: rgba(245, 158, 11, 0.2);
+      border-color: #fbbf24;
     }
 
     .whitelist-buttons button:disabled {
-      opacity: 0.6;
+      opacity: 0.4;
       cursor: not-allowed;
+      box-shadow: none !important;
     }
 
+    /* Whitelist Container & Scrollbar */
     .whitelist-list {
-      max-height: 120px;
+      max-height: 105px;
       overflow-y: auto;
+      padding-right: 2px;
+    }
+
+    .whitelist-list::-webkit-scrollbar {
+      width: 4px;
+    }
+
+    .whitelist-list::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    .whitelist-list::-webkit-scrollbar-thumb {
+      background: var(--card-border);
+      border-radius: 10px;
+    }
+
+    .whitelist-list::-webkit-scrollbar-thumb:hover {
+      background: var(--foreground-dim);
     }
 
     .whitelist-empty {
       text-align: center;
-      color: color-mix(in oklab, CanvasText, transparent 40%);
-      font-size: 12px;
-      padding: 10px;
-      font-style: italic;
+      color: var(--foreground-dim);
+      font-size: 11px;
+      padding: 12px;
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px dashed var(--card-border);
+      border-radius: var(--radius-sm);
     }
 
     .whitelist-item {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      padding: 8px 10px;
-      background: color-mix(in oklab, Canvas, CanvasText 4%);
-      border: 1px solid color-mix(in oklab, CanvasText, transparent 85%);
-      border-radius: 6px;
+      padding: 6px 10px;
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: var(--radius-sm);
       margin-bottom: 6px;
-      font-size: 12px;
+      font-size: 11px;
+      transition: var(--transition-fast);
     }
 
-    .whitelist-item:last-child {
-      margin-bottom: 0;
+    .whitelist-item:hover {
+      border-color: var(--card-border-hover);
     }
 
-    .whitelist-domain {
-      font-weight: 500;
-      color: CanvasText;
+    .whitelist-info {
       flex: 1;
+      min-width: 0;
+      margin-right: 6px;
+    }
+
+    .whitelist-info strong {
+      display: block;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      color: var(--foreground);
     }
 
     .whitelist-type {
-      font-size: 10px;
-      padding: 2px 6px;
-      border-radius: 10px;
-      margin-right: 8px;
-    }
-
-    .whitelist-type.temp {
-      background: color-mix(in oklab, #FF9800, transparent 80%);
-      color: #E65100;
-    }
-
-    .whitelist-type.permanent {
-      background: color-mix(in oklab, #2575fc, transparent 80%);
-      color: #1e5fcf;
+      font-size: 9px;
+      color: var(--foreground-muted);
+      margin-top: 1px;
     }
 
     .whitelist-remove {
-      background: none;
-      border: none;
-      color: #f44336;
+      background: transparent;
+      border: 1px solid transparent;
+      color: var(--destructive);
       cursor: pointer;
-      font-size: 14px;
-      padding: 2px;
-      border-radius: 3px;
-      transition: background 0.2s ease;
+      font-size: 10px;
+      font-weight: 600;
+      padding: 2px 6px;
+      border-radius: 4px;
+      transition: var(--transition-fast);
     }
 
     .whitelist-remove:hover {
-      background: color-mix(in oklab, #f44336, transparent 85%);
+      background: rgba(239, 68, 68, 0.1);
+      border-color: rgba(239, 68, 68, 0.2);
     }
 
-    /* Modal styles */
+    /* Modal / Overlay (Glassmorphism) */
     .hidden { display: none !important; }
+
     .modal-overlay {
       position: fixed;
       inset: 0;
-      background: color-mix(in oklab, CanvasText, transparent 85%);
+      background: rgba(5, 5, 8, 0.75);
+      backdrop-filter: blur(8px);
       display: flex;
       align-items: center;
       justify-content: center;
       z-index: 9999;
+      animation: fadeIn 0.2s ease-out;
     }
+
     .modal {
-      width: 100%;
-      max-width: 260px;
-      background: Canvas;
-      color: CanvasText;
-      border: 1px solid color-mix(in oklab, CanvasText, transparent 80%);
-      border-radius: 10px;
-      box-shadow: 0 10px 24px rgba(0,0,0,0.25);
-      padding: 12px;
+      width: 270px;
+      background: rgba(15, 23, 42, 0.9);
+      border: 1px solid var(--card-border-hover);
+      border-radius: var(--radius);
+      box-shadow: 0 15px 30px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+      padding: 16px;
+      animation: scaleUp 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
     }
+
     .modal-title {
-      font-weight: 600;
+      font-weight: 700;
+      font-size: 14px;
       margin-bottom: 6px;
+      color: var(--foreground);
     }
+
     .modal-desc {
-      font-size: 12px;
-      color: color-mix(in oklab, CanvasText, transparent 30%);
-      margin-bottom: 10px;
+      font-size: 11px;
+      color: var(--foreground-muted);
+      margin-bottom: 12px;
+      line-height: 1.4;
     }
+
     .modal-field {
       display: flex;
       align-items: center;
       gap: 6px;
       margin-bottom: 8px;
     }
+
     .modal-field input {
       flex: 1;
       padding: 8px 10px;
-      border: 1px solid color-mix(in oklab, CanvasText, transparent 70%);
-      border-radius: 6px;
-      background: Canvas;
-      color: CanvasText;
+      border: 1px solid var(--card-border);
+      border-radius: var(--radius-sm);
+      background: rgba(15, 23, 42, 0.6);
+      color: var(--foreground);
+      font-size: 13px;
+      letter-spacing: 0.1em;
     }
+
+    .modal-field input:focus {
+      outline: none;
+      border-color: var(--primary);
+      box-shadow: 0 0 0 2px var(--primary-glow);
+    }
+
     .eye-btn {
-      border: 1px solid color-mix(in oklab, CanvasText, transparent 70%);
-      background: Canvas;
-      color: CanvasText;
-      border-radius: 6px;
-      padding: 6px 8px;
+      border: 1px solid var(--card-border);
+      background: var(--secondary);
+      color: var(--foreground-muted);
+      border-radius: var(--radius-sm);
+      padding: 8px 10px;
       cursor: pointer;
-    }
-    .modal-error {
-      min-height: 16px;
       font-size: 12px;
-      color: #dc2626;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: var(--transition-fast);
+    }
+
+    .eye-btn:hover {
+      background: var(--secondary-hover);
+      color: var(--foreground);
+    }
+
+    .modal-error {
+      min-height: 14px;
+      font-size: 10px;
+      font-weight: 600;
+      color: var(--destructive);
       margin-bottom: 8px;
     }
-    .modal-actions { display:flex; gap:8px; justify-content:flex-end; }
-    .btn-primary {
-      background: #2575fc;
-      color: white;
-      border-color: #1e5fcf;
+
+    .modal-actions {
+      display: flex;
+      gap: 8px;
+      justify-content: flex-end;
     }
-    /* Duration modal extras */
-    .chip-group { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:8px; }
+
+    .btn-primary {
+      background: var(--primary);
+      color: var(--primary-foreground);
+      border-color: var(--primary);
+    }
+
+    .btn-primary:hover {
+      background: var(--primary-hover);
+      box-shadow: 0 0 10px var(--primary-glow);
+    }
+
+    /* Duration Modal Specifics */
+    .chip-group {
+      display: flex;
+      gap: 4px;
+      flex-wrap: wrap;
+      margin-bottom: 10px;
+    }
+
     .chip {
       padding: 6px 10px;
-      border: 1px solid color-mix(in oklab, CanvasText, transparent 70%);
-      border-radius: 16px;
-      background: Canvas;
-      color: CanvasText;
-      font-size: 12px;
+      border: 1px solid var(--card-border);
+      border-radius: 30px;
+      background: rgba(255, 255, 255, 0.04);
+      color: var(--foreground-muted);
+      font-size: 11px;
+      font-weight: 600;
       cursor: pointer;
+      transition: var(--transition-fast);
     }
-    .chip.selected { background:#2575fc; color:white; border-color:#1e5fcf; }
-    .modal-note { font-size: 11px; color: color-mix(in oklab, CanvasText, transparent 40%); margin-top: 4px; }
+
+    .chip:hover {
+      background: rgba(255, 255, 255, 0.08);
+      color: var(--foreground);
+    }
+
+    .chip.selected {
+      background: var(--primary);
+      color: var(--primary-foreground);
+      border-color: var(--primary);
+      box-shadow: 0 0 8px var(--primary-glow);
+    }
+
+    .modal-note {
+      font-size: 9px;
+      color: var(--foreground-dim);
+      margin-top: 6px;
+      text-align: right;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+
+    @keyframes scaleUp {
+      from { transform: scale(0.95); opacity: 0; }
+      to { transform: scale(1); opacity: 1; }
+    }
   </style>
 </head>
 <body>
-  <div class="header">
-    <div class="icon">🛡️</div>
-    <div class="title">BlockNSFW</div>
-  </div>
+  <div class="container">
+    <!-- Header -->
+    <div class="header">
+      <div class="header-logo">
+        <svg class="icon-shield" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+        </svg>
+        <span class="title">BlockNSFW</span>
+      </div>
+      <span class="status-badge on">V1.6</span>
+    </div>
 
-  <div class="status" id="status">Loading...</div>
+    <!-- Active Status element (updated dynamically) -->
+    <div class="status" id="status">Loading...</div>
 
-  <div class="toggle-section">
-    <div class="toggle-row">
-      <div class="toggle-label">Block adult content</div>
-      <div class="toggle-switch" id="toggle">
-        <div class="toggle-slider"></div>
+    <!-- Toggle Section -->
+    <div class="toggle-section">
+      <!-- Main Toggle -->
+      <div class="toggle-row">
+        <div class="toggle-label-container">
+          <span class="toggle-label">Filter Explicit Content</span>
+          <span class="toggle-desc">Intelligent real-time blocking</span>
+        </div>
+        <div class="toggle-switch" id="toggle">
+          <div class="toggle-slider"></div>
+        </div>
+      </div>
+      
+      <!-- Unblock current site toggle (hidden dynamically) -->
+      <div class="toggle-row" id="unblock-row" style="display: none;">
+        <div class="toggle-label-container">
+          <span class="toggle-label">Unblock this website</span>
+          <span class="toggle-desc">Exclude current tab domain</span>
+        </div>
+        <div class="toggle-switch" id="unblock-toggle">
+          <div class="toggle-slider"></div>
+        </div>
+      </div>
+
+      <!-- SafeSearch Toggle -->
+      <div class="toggle-row">
+        <div class="toggle-label-container">
+          <span class="toggle-label">Enhanced SafeSearch</span>
+          <span class="toggle-desc">Force search engine safety</span>
+        </div>
+        <div class="toggle-switch" id="safesearch-toggle">
+          <div class="toggle-slider"></div>
+        </div>
       </div>
     </div>
-    <div class="toggle-row" id="unblock-row" style="display: none;margin-top: 5px">
-      <div class="toggle-label">Unblock this site</div>
-      <div class="toggle-switch" id="unblock-toggle">
-        <div class="toggle-slider"></div>
+
+    <!-- Stats Node Grid -->
+    <div class="stats">
+      <div class="stat-card">
+        <div class="stat-value" id="blocked-today">0</div>
+        <div class="stat-label">Blocked Today</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value" id="blocked-total">0</div>
+        <div class="stat-label">Total Blocks</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value" id="images-filtered">0</div>
+        <div class="stat-label">Images Filtered</div>
       </div>
     </div>
-    <div class="toggle-row" style="margin-top: 5px">
-      <div class="toggle-label">Enhanced SafeSearch</div>
-      <div class="toggle-switch" id="safesearch-toggle">
-        <div class="toggle-slider"></div>
+
+    <!-- Action Buttons Grid -->
+    <div class="actions-grid">
+      <a href="#" class="btn" id="settings">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="3"></circle>
+          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+        </svg>
+        Settings
+      </a>
+      <a href="#" class="btn" id="stats-btn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="18" y1="20" x2="18" y2="10"></line>
+          <line x1="12" y1="20" x2="12" y2="4"></line>
+          <line x1="6" y1="20" x2="6" y2="14"></line>
+        </svg>
+        Stats Dashboard
+      </a>
+      <a href="#" class="btn" id="audit-log">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+          <polyline points="14 2 14 8 20 8"></polyline>
+          <line x1="16" y1="13" x2="8" y2="13"></line>
+          <line x1="16" y1="17" x2="8" y2="17"></line>
+          <polyline points="10 9 9 9 8 9"></polyline>
+        </svg>
+        Audit Log
+      </a>
+      <a href="https://buymeacoffee.com/monolab.co" target="_blank" class="btn btn-coffee" id="coffee-btn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width:13px; height:13px;">
+          <path d="M18 8h1a4 4 0 0 1 0 8h-1"></path>
+          <path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"></path>
+          <line x1="6" y1="1" x2="6" y2="4"></line>
+          <line x1="10" y1="1" x2="10" y2="4"></line>
+          <line x1="14" y1="1" x2="14" y2="4"></line>
+        </svg>
+        Buy Me a Coffee
+      </a>
+    </div>
+
+    <!-- Whitelist Management section (popup face whitelisting) -->
+    <div class="whitelist-section">
+      <div class="whitelist-header-row">
+        <div class="whitelist-title">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+          </svg>
+          Whitelist Domain
+        </div>
       </div>
-    </div>
-  </div>
-
-  <div class="stats">
-    <div class="stat-row">
-      <div class="stat-label">Sites blocked today</div>
-      <div class="stat-value" id="blocked-today">0</div>
-    </div>
-    <div class="stat-row">
-      <div class="stat-label">Total blocked</div>
-      <div class="stat-value" id="blocked-total">0</div>
-    </div>
-    <div class="stat-row">
-      <div class="stat-label">Images filtered</div>
-      <div class="stat-value" id="images-filtered">0</div>
-    </div>
-  </div>
-
-  <div class="actions">
-    <a href="#" class="btn" id="settings">Settings</a>
-    <a href="#" class="btn" id="stats-btn">📊 Stats</a>
-  </div>
-
-  <div class="actions" style="margin-top: 8px;">
-    <a href="#" class="btn" id="audit-log">📋 Audit Log</a>
-    <a href="https://buymeacoffee.com/monolab.co" target="_blank" class="btn btn-coffee" id="coffee-btn">☕ Coffee</a>
-  </div>
-
-  <!-- Whitelist Section -->
-  <div class="section whitelist-section">
-    <h3>🤍 Whitelist</h3>
-    <div class="whitelist-add">
-      <input type="text" id="whitelist-input" placeholder="Enter domain (e.g., example.com)" />
-      <div class="whitelist-buttons">
-        <button id="add-whitelist" class="btn-perm">Whitelist</button>
-        <button id="add-whitelist-temp-15" class="btn-temp">15m</button>
-        <button id="add-whitelist-temp-60" class="btn-temp">1h</button>
+      <div class="whitelist-add">
+        <div class="whitelist-input-container">
+          <input type="text" id="whitelist-input" placeholder="Enter domain (e.g., example.com)" />
+        </div>
+        <div class="whitelist-buttons">
+          <button id="add-whitelist" class="btn-perm">Whitelist</button>
+          <button id="add-whitelist-temp-15" class="btn-temp">15m</button>
+          <button id="add-whitelist-temp-60" class="btn-temp">1h</button>
+        </div>
       </div>
-    </div>
-    <div class="whitelist-list" id="whitelist-list">
-      <div class="whitelist-empty">No whitelisted sites</div>
+      <div class="whitelist-list" id="whitelist-list">
+        <div class="whitelist-empty">No whitelisted sites</div>
+      </div>
     </div>
   </div>
 
@@ -452,11 +832,16 @@
       <div class="modal-title" id="pin-modal-title">Enter PIN</div>
       <div class="modal-desc" id="pin-modal-desc">Enter PIN to continue.</div>
       <div class="modal-field" id="pin-field">
-        <input type="password" id="pin-input" inputmode="numeric" autocomplete="off" placeholder="••••" />
-        <button id="pin-toggle" class="eye-btn" title="Show/Hide">👁</button>
+        <input type="password" id="pin-input" inputmode="numeric" autocomplete="off" placeholder="••••" maxlength="8" />
+        <button id="pin-toggle" class="eye-btn" title="Show/Hide">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+            <circle cx="12" cy="12" r="3"></circle>
+          </svg>
+        </button>
       </div>
       <div class="modal-field hidden" id="pin-confirm-field">
-        <input type="password" id="pin-input-confirm" inputmode="numeric" autocomplete="off" placeholder="Confirm PIN" />
+        <input type="password" id="pin-input-confirm" inputmode="numeric" autocomplete="off" placeholder="Confirm PIN" maxlength="8" />
       </div>
       <div class="modal-error" id="pin-error"></div>
       <div class="modal-actions">

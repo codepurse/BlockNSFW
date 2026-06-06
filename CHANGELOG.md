@@ -2,7 +2,7 @@
 
 All notable project changes should be documented here going forward.
 
-## [Unreleased]
+## [1.6.1] - 2026-06-06
 
 Non-English adult-site blocking improvements. No algorithm-breaking changes;
 all existing English blocking still works.

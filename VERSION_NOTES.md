@@ -1,5 +1,5 @@
 
-## What's New (Unreleased)
+## What's New (1.6.1) - 2026-06-06
 - IDN / punycode exact-domain coverage: the runtime `isLikelyDomain()`
   regex no longer silently drops `xn--` prefixed hostnames, so all
   93 punycode entries already in `data/HOSTS.txt` are now retained
