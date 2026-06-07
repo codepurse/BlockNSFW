@@ -15,7 +15,7 @@ DOMAIN_RE = re.compile(r'^(?=.{1,253}$)([a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-
 
 
 def normalize_domain(domain: str) -> str | None:
-    """Normalize a domain: lowercase, strip www., validate, decode punycode."""
+    """Normalize a domain: lowercase, strip www., validate."""
     if not domain:
         return None
     domain = domain.strip().lower()
@@ -63,7 +63,8 @@ def parse_plain_format(text: str) -> list[str]:
 def fetch_feed(url: str, fmt: str) -> list[str]:
     """Fetch and parse a remote feed."""
     try:
-        with urllib.request.urlopen(url, timeout=30) as response:
+        req = urllib.request.Request(url, headers={'User-Agent': 'BlockNSFW-Curation/1.0'})
+        with urllib.request.urlopen(req, timeout=30) as response:
             text = response.read().decode('utf-8', errors='ignore')
     except Exception as e:
         print(f"[warn] Failed to fetch {url}: {e}")
@@ -93,6 +94,9 @@ def load_whitelist() -> set[str]:
         return set()
     domains = set()
     for line in path.read_text(encoding='utf-8', errors='ignore').splitlines():
+        line = line.strip()
+        if not line or line.startswith('#'):
+            continue
         normalized = normalize_domain(line)
         if normalized:
             domains.add(normalized)
@@ -108,11 +112,12 @@ def load_user_reports() -> list[str]:
     for report_file in reports_dir.glob('*.json'):
         try:
             data = json.loads(report_file.read_text(encoding='utf-8'))
-            for item in data if isinstance(data, list) else [data]:
+            items = data if isinstance(data, list) else [data]
+            for item in items:
                 d = normalize_domain(item.get('domain', ''))
                 if d:
                     domains.append(d)
-        except (json.JSONDecodeError, KeyError) as e:
+        except (json.JSONDecodeError, KeyError, TypeError) as e:
             print(f"[warn] Failed to parse {report_file}: {e}")
     return domains
 
@@ -139,6 +144,8 @@ if __name__ == '__main__':
     print(f"Ingested {len(candidates)} candidate domains")
     sources: dict[str, int] = {}
     for _, src in candidates:
-        sources[src] = sources.get(src, 0) + 1
+        # Shorten URL for display
+        short = src if len(src) < 60 else src[:57] + "..."
+        sources[short] = sources.get(short, 0) + 1
     for src, count in sources.items():
         print(f"  {src}: {count}")
