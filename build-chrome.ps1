@@ -17,7 +17,10 @@ $OutDir      = Join-Path $ScriptDir "dist\chrome"
 $ManifestSrc = Join-Path $SrcDir "manifest.json"
 $ManifestDst = Join-Path $OutDir "manifest.json"
 
-$RuntimeFolders = @("icons")
+$RuntimeFolders = @(
+    "icons",
+    "shared"
+)
 $RuntimeFiles   = @(
     "background.js",
     "content.js",

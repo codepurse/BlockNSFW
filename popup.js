@@ -606,12 +606,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     e.preventDefault();
     openSettings();
   });
-  $('audit-log').addEventListener('click', (e) => {
-    e.preventDefault();
-    browserAPI.runtime.openOptionsPage ? 
-      browserAPI.tabs.create({ url: browserAPI.runtime.getURL('audit.html') }) :
-      window.open(browserAPI.runtime.getURL('audit.html'), '_blank');
-  });
   $('stats-btn').addEventListener('click', (e) => {
     e.preventDefault();
     browserAPI.runtime.openOptionsPage ? 

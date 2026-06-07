@@ -1,0 +1,47 @@
+name: ML Domain Curation
+
+on:
+  schedule:
+    - cron: '0 0 * * 0'  # Weekly on Sunday midnight UTC
+  workflow_dispatch:       # Manual trigger
+
+permissions:
+  contents: write
+
+jobs:
+  curate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Run curation pipeline
+        run: |
+          python scripts/curation/pipeline.py --dry-run > /tmp/dryrun.log 2>&1 || true
+          cat /tmp/dryrun.log
+          python scripts/curation/pipeline.py
+
+      - name: Commit changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/HOSTS.txt data/REVIEW_QUEUE.md blocklist.json
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "chore(curation): auto-update blocklist [$(date -u +%Y-%m-%d)]"
+            git push
+          fi
+
+      - name: Create PR for review items
+        if: always()
+        run: |
+          # If review queue is non-empty, the maintainer will create a PR via the
+          # GitHub UI to review REVIEW_QUEUE.md. The auto-commit only contains
+          # high-confidence domains.
+          echo "Review queue: data/REVIEW_QUEUE.md (open a PR to review if non-empty)"
