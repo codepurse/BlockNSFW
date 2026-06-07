@@ -193,19 +193,19 @@ def score_domain(domain: str) -> tuple[float, dict]:
         features['similarity'] * config.WEIGHT_SIMILARITY
     )
 
-    # Trust a single strong signal: any one feature being very strong is enough
-    # to classify the domain as adult. This handles the case where a strong
-    # keyword, TLD, or typosquat alone should produce a high score, even when
-    # the weighted sum is modest.
-    strongest = max(
-        features['keyword'],
-        features['tld'],
-        features['structure'],
-        features['similarity'],
-    )
-    single_signal = strongest * 0.8
-
-    total = max(weighted, single_signal)
+    # A strong keyword match is a direct signal that the domain itself hosts
+    # adult content, so it earns auto-merge. High similarity alone only means
+    # the domain co-occurs in adult feeds (CDNs, analytics, accidental
+    # neighbors) and is not sufficient evidence to classify a domain as adult.
+    if features['keyword'] >= 0.9:
+        # Strong keyword (e.g. 'porn', 'xxx', 'hentai'): trust it.
+        total = max(weighted, 0.9)
+    elif features['keyword'] >= 0.5:
+        # Multilingual or weaker keyword: review level, not auto-merge.
+        total = max(weighted, features['keyword'] * 0.9)
+    else:
+        # No keyword signal: rely on the weighted sum, which will be low.
+        total = weighted
 
     # Apply safety penalty (for any partial-safety scoring in the future)
     total -= features['safety'] * config.WEIGHT_SAFETY_PENALTY
