@@ -124,19 +124,68 @@ def score_structure(domain: str) -> float:
     return min(score, 1.0)
 
 
+_SIMILARITY_SAMPLE = None
+_SIMILARITY_SAMPLE_PRECOMPUTED = None
+
+def get_similarity_sample() -> list[str]:
+    global _SIMILARITY_SAMPLE
+    if _SIMILARITY_SAMPLE is None:
+        existing = ingest.load_existing_hosts()
+        if existing:
+            _SIMILARITY_SAMPLE = list(existing)[:500]
+        else:
+            _SIMILARITY_SAMPLE = []
+    return _SIMILARITY_SAMPLE
+
+
+def get_similarity_sample_precomputed() -> list[tuple[str, set[str], int]]:
+    global _SIMILARITY_SAMPLE_PRECOMPUTED
+    if _SIMILARITY_SAMPLE_PRECOMPUTED is None:
+        sample = get_similarity_sample()
+        precomputed = []
+        for blocked in sample:
+            blocked_label = _extract_core_label(blocked)
+            if len(blocked_label) >= 3:
+                grams = {blocked_label[i:i + 3] for i in range(len(blocked_label) - 3 + 1)}
+            else:
+                grams = set()
+            precomputed.append((blocked_label, grams, len(grams)))
+        _SIMILARITY_SAMPLE_PRECOMPUTED = precomputed
+    return _SIMILARITY_SAMPLE_PRECOMPUTED
+
+
 def score_similarity(domain: str) -> float:
     """Score based on similarity to known adult brands (0-1)."""
     label = _extract_core_label(domain)
 
+    # Precompute n-grams of label
+    if len(label) >= 3:
+        grams_label = {label[i:i + 3] for i in range(len(label) - 3 + 1)}
+    else:
+        return 0.0
+
+    len_label = len(grams_label)
+    if len_label == 0:
+        return 0.0
+
     # Check n-gram overlap with existing blocklist
-    existing = ingest.load_existing_hosts()
-    if not existing:
+    sample_precomputed = get_similarity_sample_precomputed()
+    if not sample_precomputed:
         return 0.0
 
     max_overlap = 0.0
-    for blocked in list(existing)[:500]:  # sample for performance
-        blocked_label = _extract_core_label(blocked)
-        overlap = _ngram_overlap(label, blocked_label)
+    for blocked_label, grams_blocked, len_blocked in sample_precomputed:
+        if len_blocked == 0:
+            continue
+
+        # Quick upper bound check: max possible overlap is min(len_label, len_blocked) / max(len_label, len_blocked)
+        if min(len_label, len_blocked) / max(len_label, len_blocked) <= max_overlap:
+            continue
+
+        intersection_len = len(grams_label & grams_blocked)
+        union_len = len_label + len_blocked - intersection_len
+        overlap = intersection_len / union_len if union_len else 0.0
+
         if overlap > max_overlap:
             max_overlap = overlap
         if max_overlap >= 0.7:
@@ -173,17 +222,41 @@ def score_safety(domain: str) -> float:
 
 def score_domain(domain: str) -> tuple[float, dict]:
     """Compute final 0-1 score for a domain. Returns (score, feature_dict)."""
-    features = {
-        'keyword': score_keyword(domain),
-        'tld': score_tld(domain),
-        'structure': score_structure(domain),
-        'similarity': score_similarity(domain),
-        'safety': score_safety(domain),
-    }
+    # Check safety first
+    safety = score_safety(domain)
+    if safety >= 1.0:
+        return 0.0, {
+            'keyword': 0.0,
+            'tld': 0.0,
+            'structure': 0.0,
+            'similarity': 0.0,
+            'safety': 1.0,
+        }
 
-    # Whitelist or safe token forces zero
-    if features['safety'] >= 1.0:
-        return 0.0, features
+    keyword = score_keyword(domain)
+    tld = score_tld(domain)
+    structure = score_structure(domain)
+
+    # If keyword < 0.5 and partial_score < 0.25, similarity can never push it above 0.50 (REVIEW_THRESHOLD)
+    partial_score = (
+        keyword * config.WEIGHT_KEYWORD +
+        tld * config.WEIGHT_TLD +
+        structure * config.WEIGHT_STRUCTURE
+    )
+
+    if keyword < 0.5 and partial_score < 0.25:
+        # Guaranteed to be rejected, skip expensive similarity check
+        similarity = 0.0
+    else:
+        similarity = score_similarity(domain)
+
+    features = {
+        'keyword': keyword,
+        'tld': tld,
+        'structure': structure,
+        'similarity': similarity,
+        'safety': safety,
+    }
 
     # Weighted sum of features
     weighted = (

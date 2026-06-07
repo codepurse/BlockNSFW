@@ -108,7 +108,7 @@ EXTERNAL_FEEDS = [
         'format': 'hosts',
     },
     {
-        'url': 'https://raw.githubusercontent.com/chadmayfield/pihole-blocklists/master/lists/porn.txt',
+        'url': 'https://raw.githubusercontent.com/blocklistproject/Lists/master/alt-version/porn-nl.txt',
         'format': 'plain',
     },
 ]

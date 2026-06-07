@@ -1,5 +1,6 @@
 """Ingest candidate domains from external feeds and user reports."""
 
+import functools
 import json
 import re
 import urllib.request
@@ -79,6 +80,7 @@ def fetch_feed(url: str, fmt: str) -> list[str]:
         return []
 
 
+@functools.lru_cache(maxsize=1)
 def load_existing_hosts() -> set[str]:
     """Load domains already in HOSTS.txt."""
     path = Path(config.HOSTS_FILE)
@@ -87,6 +89,7 @@ def load_existing_hosts() -> set[str]:
     return set(parse_hosts_format(path.read_text(encoding='utf-8', errors='ignore')))
 
 
+@functools.lru_cache(maxsize=1)
 def load_whitelist() -> set[str]:
     """Load whitelisted domains."""
     path = Path(config.WHITELIST_FILE)

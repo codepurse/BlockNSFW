@@ -14,3 +14,9 @@ Desktop.ini
 *.tmp
 *.temp
 *.bak
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
