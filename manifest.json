@@ -54,7 +54,12 @@
         "stats.js",
         "icons/icon-16.png",
         "icons/icon-48.png",
-        "icons/icon-128.png"
+        "icons/icon-128.png",
+        "classify.worker.js",
+        "vendor/tfjs/tf.min.js",
+        "vendor/nsfwjs/nsfwjs.min.js",
+        "nsfwjs/model.json",
+        "nsfwjs/group1-shard1of1.bin"
       ],
       "matches": ["<all_urls>"]
     }
