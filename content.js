@@ -3178,6 +3178,12 @@ function observeImage(img) {
   // For images that pass quick check, use IntersectionObserver for deeper analysis
   if (!imageObserver) setupIntersectionObserver();
   try { imageObserver.observe(img); } catch (_) {}
+
+  if (typeof window.AIImageBlocker !== 'undefined' &&
+      window.AIImageBlocker &&
+      typeof window.AIImageBlocker.onImageVisible === 'function') {
+    window.AIImageBlocker.onImageVisible(img);
+  }
 }
 
 // Quick synchronous check for obvious adult content in URL
