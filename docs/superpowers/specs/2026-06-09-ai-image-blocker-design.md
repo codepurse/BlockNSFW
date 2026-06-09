@@ -83,7 +83,7 @@ What is missing is the **in-page** layer: an adult site can still serve innocuou
                       ▼
 ┌──────────────────────────────────────────────────────────────────────┐
 │  Bundled NSFW.js model (MobileNet v2)                                │
-│  nsfwjs/model.json + 9 weight shards                                 │
+│  nsfwjs/model.json + 1 weight shard                                  │
 └──────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -342,11 +342,11 @@ Injected via a `<style>` element with id `pblocker-ai-blocker-styles` in the pag
 | `vendor/tfjs/tf.min.js` | **new** | Vendored `@tensorflow/tfjs` minified build |
 | `vendor/nsfwjs/nsfwjs.min.js` | **new** | Vendored `nsfwjs` package |
 | `nsfwjs/model.json` | **new** | MobileNet v2 model topology |
-| `nsfwjs/group1-shard{1..9}of9.bin` | **new** | Model weight shards |
+| `nsfwjs/group1-shard1of1.bin` | **new** | Model weight shard (~2.6 MB) |
 | `tests/ai-image-blocker.test.js` | **new** | Unit tests for `shouldSkipImage`, verdict mapping, LRU eviction |
 | `tests/smoke.test.js` | edit | +3 smoke checks (settings default, model URL 200, worker construct) |
 
-Total package size delta: ≈ 5.3 MB (tfjs 1.1 MB + nsfwjs 0.3 MB + model 3.9 MB), of which 3.9 MB is the model. Acceptable for a v1.7.0 release.
+Total package size delta: ≈ 6.8 MB (tfjs 1.4 MB + nsfwjs 2.7 MB + model 2.7 MB). Acceptable for a v1.7.0 release.
 
 ---
 

@@ -28,7 +28,7 @@
 - Create: `vendor/tfjs/tf.min.js` (copied from npm package)
 - Create: `vendor/nsfwjs/nsfwjs.min.js` (copied from npm package)
 - Create: `nsfwjs/model.json`
-- Create: `nsfwjs/group1-shard1of9.bin` … `nsfwjs/group1-shard9of9.bin`
+- Create: `nsfwjs/group1-shard1of1.bin` (downloaded from the nsfwjs GitHub `models/mobilenet_v2/` directory — single-shard layout)
 
 - [ ] **Step 1: Install the npm packages into a temporary location**
 
@@ -57,20 +57,24 @@ cp .vendor-staging/node_modules/nsfwjs/dist/nsfwjs.min.js vendor/nsfwjs/nsfwjs.m
 ls -la vendor/nsfwjs/nsfwjs.min.js
 ```
 
-Expected: a single file, ~5–10 KB.
+Expected: a single file, ~2.7 MB. (The spec originally estimated 5–10 KB based on older nsfwjs versions; the 4.2.1 UMD bundle is significantly larger because it inlines some utilities.)
 
-- [ ] **Step 4: Copy the bundled NSFW.js model**
+- [ ] **Step 4: Download the bundled NSFW.js model**
+
+The MobileNet v2 model in nsfwjs 4.2.1 is a single-shard file (`group1-shard1of1`, ~2.6 MB). The most reliable way to vendor it is to download the raw files from the nsfwjs GitHub repo, because the npm package's internal layout is version-dependent.
 
 ```bash
 mkdir -p nsfwjs
-cp .vendor-staging/node_modules/nsfwjs/example/nsfwjs/model.json nsfwjs/model.json
-for i in 1 2 3 4 5 6 7 8 9; do
-  cp .vendor-staging/node_modules/nsfwjs/example/nsfwjs/group1-shard${i}of9.bin nsfwjs/group1-shard${i}of9.bin
-done
+curl -L -o nsfwjs/model.json https://raw.githubusercontent.com/infinitered/nsfwjs/master/models/mobilenet_v2/model.json
+curl -L -o nsfwjs/group1-shard1of1.bin https://raw.githubusercontent.com/infinitered/nsfwjs/master/models/mobilenet_v2/group1-shard1of1
 ls -la nsfwjs/
 ```
 
-Expected: `model.json` (≈2 KB) + 9 `.bin` files (≈430 KB each, total ≈3.9 MB).
+Expected: `model.json` (~129 KB) + `group1-shard1of1.bin` (~2.6 MB), for ~2.7 MB total.
+
+(PowerShell note: `curl` may be aliased to `Invoke-WebRequest`. If `curl -L -o` doesn't work, use `Invoke-WebRequest -Uri <url> -OutFile <path>`. Verify the resulting file size matches — a 0-byte or HTML error page means curl failed.)
+
+(Fallback: if curl/Invoke-WebRequest fails (no internet, GitHub blocked), try the npm package. The nsfwjs 4.2.1 bundled model lives at `dist/cjs/models/mobilenet_v2/model.min.js` + `dist/cjs/models/mobilenet_v2/group1-shard1of1.min.js` — but these are base64-wrapped and would need an `nsfwjs.loadFromBundle()` call instead of `nsfwjs.load()`. **Prefer the GitHub path**; only fall back if curl fails, and report the network issue.)
 
 - [ ] **Step 5: Add `vendor/` and `nsfwjs/` to `.gitignore` exclusions (override) and verify**
 
@@ -94,7 +98,7 @@ rm -rf .vendor-staging
 - [ ] **Step 7: Smoke check — every file is non-empty**
 
 ```bash
-for f in vendor/tfjs/tf.min.js vendor/nsfwjs/nsfwjs.min.js nsfwjs/model.json nsfwjs/group1-shard1of9.bin nsfwjs/group1-shard9of9.bin; do
+for f in vendor/tfjs/tf.min.js vendor/nsfwjs/nsfwjs.min.js nsfwjs/model.json nsfwjs/group1-shard1of1.bin; do
   test -s "$f" || { echo "EMPTY: $f"; exit 1; }
 done
 echo "all vendor files present"
@@ -1041,15 +1045,8 @@ Edit the `resources` array in `web_accessible_resources[0]`. Append:
 "vendor/tfjs/tf.min.js",
 "vendor/nsfwjs/nsfwjs.min.js",
 "nsfwjs/model.json",
-"nsfwjs/group1-shard1of9.bin",
-"nsfwjs/group1-shard2of9.bin",
-"nsfwjs/group1-shard3of9.bin",
-"nsfwjs/group1-shard4of9.bin",
-"nsfwjs/group1-shard5of9.bin",
-"nsfwjs/group1-shard6of9.bin",
-"nsfwjs/group1-shard7of9.bin",
-"nsfwjs/group1-shard8of9.bin",
-"nsfwjs/group1-shard9of9.bin"
+"nsfwjs/group1-shard1of1.bin"
+]
 ```
 
 - [ ] **Step 4: Mirror the same edits in `manifest.firefox.json`**
@@ -1068,7 +1065,7 @@ Expected: `manifest.json OK` and (optionally) `manifest.firefox.json OK`.
 - [ ] **Step 6: Verify every new `web_accessible_resources` file exists on disk**
 
 ```bash
-for p in classify.worker.js vendor/tfjs/tf.min.js vendor/nsfwjs/nsfwjs.min.js nsfwjs/model.json nsfwjs/group1-shard1of9.bin nsfwjs/group1-shard9of9.bin; do
+for p in classify.worker.js vendor/tfjs/tf.min.js vendor/nsfwjs/nsfwjs.min.js nsfwjs/model.json nsfwjs/group1-shard1of1.bin; do
   test -f "$p" || { echo "MISSING: $p"; exit 1; }
 done
 echo "all manifest resources present"
