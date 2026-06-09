@@ -1289,15 +1289,7 @@ test('manifest.json lists all 12 new web_accessible_resources', () => {
     'vendor/tfjs/tf.min.js',
     'vendor/nsfwjs/nsfwjs.min.js',
     'nsfwjs/model.json',
-    'nsfwjs/group1-shard1of9.bin',
-    'nsfwjs/group1-shard2of9.bin',
-    'nsfwjs/group1-shard3of9.bin',
-    'nsfwjs/group1-shard4of9.bin',
-    'nsfwjs/group1-shard5of9.bin',
-    'nsfwjs/group1-shard6of9.bin',
-    'nsfwjs/group1-shard7of9.bin',
-    'nsfwjs/group1-shard8of9.bin',
-    'nsfwjs/group1-shard9of9.bin',
+    'nsfwjs/group1-shard1of1.bin',
   ]) {
     assert.ok(war.includes(required), `manifest must list ${required}`);
   }
