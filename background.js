@@ -83,6 +83,7 @@ const DEFAULT_STATS = {
   blockedCount: 0,
   websiteBlockedCount: 0,
   imageBlockedCount: 0,
+  aiImageBlockedCount: 0,
   searchResultBlockedCount: 0,
   lastBlocked: null,
   lastWebsiteBlocked: null,
@@ -771,6 +772,9 @@ async function updateStats(type = 'blocked', details = {}) {
       case 'image_filtered':
         newStats.imageBlockedCount++;
         break;
+      case 'image_ai_filtered':
+        newStats.aiImageBlockedCount++;
+        break;
       case 'search_result_filtered':
         newStats.searchResultBlockedCount++;
         break;
@@ -794,6 +798,9 @@ async function updateStats(type = 'blocked', details = {}) {
         break;
       case 'image_filtered':
         newDailyStats.imageBlocked++;
+        break;
+      case 'image_ai_filtered':
+        newDailyStats.imageAiBlocked = (newDailyStats.imageAiBlocked || 0) + 1;
         break;
       case 'search_result_filtered':
         newDailyStats.searchResultBlocked++;
@@ -1373,6 +1380,15 @@ browserAPI.runtime.onMessage.addListener((message, sender, sendResponse) => {
     try {
       const url = typeof message.url === 'string' ? message.url : (typeof sender?.url === 'string' ? sender.url : '');
       if (url) logBlockedPage(url, 'Image filtered');
+    } catch (_) {}
+    sendResponse({ success: true });
+  } else if (message.type === 'image_ai_filtered') {
+    updateStats('image_ai_filtered');
+    try {
+      const url = typeof message.url === 'string'
+        ? message.url
+        : (typeof sender !== 'undefined' && sender && sender.url ? sender.url : '');
+      if (url) logBlockedPage(url, 'AI image filtered');
     } catch (_) {}
     sendResponse({ success: true });
   } else if (message.type === 'website_blocked') {
