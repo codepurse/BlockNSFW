@@ -38,6 +38,8 @@
       "js": [
         "shared/hostname.js",
         "shared/host-keywords.js",
+        "ai-image-blocker-core.js",
+        "ai-image-blocker.js",
         "content.js"
       ],
       "run_at": "document_start"
