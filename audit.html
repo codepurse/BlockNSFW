@@ -6,66 +6,62 @@
   <title>Audit Log - BlockNSFW</title>
   <style>
     :root {
-      /* Enhanced Dark Theme Colors */
-      --background: #0a0a0f;
-      --background-gradient: linear-gradient(135deg, #0a0a0f 0%, #121218 100%);
-      --foreground: #f8fafc;
-      --foreground-muted: #94a3b8;
-      --foreground-dim: #64748b;
-      
+      /* Clean Modern Dark — single indigo accent (matches options.html) */
+      --background: #0b0c10;
+      --background-gradient: linear-gradient(180deg, #0c0d12 0%, #0a0b0e 100%);
+      --surface: #14161c;
+      --surface-2: #1a1d24;
+      --foreground: #f2f3f5;
+      --foreground-muted: #a4abb8;
+      --foreground-dim: #6b727f;
+
       /* Card Design */
-      --card-bg: rgba(15, 23, 42, 0.8);
-      --card-border: rgba(51, 65, 85, 0.3);
-      --card-border-hover: rgba(99, 102, 241, 0.5);
-      --card-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-      --card-shadow-hover: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
-      
-      /* Primary Accent Colors */
+      --card-bg: #14161c;
+      --card-border: rgba(255, 255, 255, 0.07);
+      --card-border-hover: rgba(255, 255, 255, 0.14);
+      --card-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+      --card-shadow-hover: 0 6px 20px rgba(0, 0, 0, 0.40);
+
+      /* Primary Accent (indigo) */
       --primary: #6366f1;
-      --primary-hover: #4f46e5;
-      --primary-glow: rgba(99, 102, 241, 0.3);
+      --primary-hover: #818cf8;
+      --primary-glow: rgba(99, 102, 241, 0.22);
+      --primary-soft: rgba(99, 102, 241, 0.12);
       --primary-foreground: #ffffff;
-      
+
       /* Secondary Elements */
-      --secondary: #1e293b;
-      --secondary-hover: #334155;
-      --secondary-foreground: #f1f5f9;
-      
+      --secondary: #1d2027;
+      --secondary-hover: #262a33;
+      --secondary-foreground: #e6e8ec;
+
       /* Input Elements */
-      --input-bg: rgba(15, 23, 42, 0.6);
-      --input-border: rgba(51, 65, 85, 0.4);
-      --input-border-focus: rgba(99, 102, 241, 0.8);
-      --input-shadow-focus: 0 0 0 3px rgba(99, 102, 241, 0.1);
-      
+      --input-bg: #0f1116;
+      --input-border: rgba(255, 255, 255, 0.10);
+      --input-border-focus: var(--primary);
+      --input-shadow-focus: 0 0 0 3px rgba(99, 102, 241, 0.25);
+
       /* Status Colors */
-      --success: #10b981;
-      --success-color: #10b981;
+      --success: #22c55e;
+      --success-color: #22c55e;
       --warning: #f59e0b;
       --warning-color: #f59e0b;
       --error: #ef4444;
       --error-color: #ef4444;
-      --info: #3b82f6;
-      --info-color: #3b82f6;
+      --info: #6366f1;
+      --info-color: #6366f1;
       --destructive: #ef4444;
       --destructive-hover: #dc2626;
-      
+
       /* Typography */
       --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
       --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-      
-      /* Spacing & Sizing */
-      --radius: 12px;
-      --radius-sm: 8px;
-      --radius-lg: 16px;
-      --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-      --transition-fast: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
-    }
 
-    /* Dark mode enhancements */
-    @media (prefers-color-scheme: dark) {
-      :root {
-        --card-bg: rgba(15, 23, 42, 0.9);
-      }
+      /* Spacing & Sizing */
+      --radius: 10px;
+      --radius-sm: 8px;
+      --radius-lg: 14px;
+      --transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+      --transition-fast: all 0.12s cubic-bezier(0.4, 0, 0.2, 1);
     }
 
     * {
@@ -90,30 +86,11 @@
       margin: 1rem auto 1rem auto;
       max-width: 960px;
       position: relative;
-      background: linear-gradient(135deg, var(--card-bg) 0%, rgba(99, 102, 241, 0.05) 100%);
+      background: var(--card-bg);
       border: 1px solid var(--card-border);
-      border-radius: var(--radius);
+      border-radius: var(--radius-lg);
       padding: 1.5rem;
-      backdrop-filter: blur(10px);
       box-shadow: var(--card-shadow);
-      transition: var(--transition);
-    }
-
-    .header:hover {
-      transform: translateY(-1px);
-      box-shadow: var(--card-shadow-hover);
-      border-color: var(--card-border-hover);
-    }
-
-    .header::before {
-      content: '';
-      position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      height: 1px;
-      background: linear-gradient(90deg, transparent, var(--primary), transparent);
-      opacity: 0.5;
     }
 
     .header-content {
@@ -130,48 +107,21 @@
     }
 
     .header-icon {
-      width: 48px;
-      height: 48px;
-      background: linear-gradient(135deg, var(--primary) 0%, var(--primary-hover) 100%);
+      width: 44px;
+      height: 44px;
+      background: var(--primary);
       border-radius: var(--radius);
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 1.5rem;
-      box-shadow: 0 4px 12px var(--primary-glow);
+      font-size: 1.375rem;
       flex-shrink: 0;
-      position: relative;
-      overflow: hidden;
-    }
-
-    .header-icon::before {
-      content: '';
-      position: absolute;
-      top: -50%;
-      left: -50%;
-      width: 200%;
-      height: 200%;
-      background: linear-gradient(45deg, transparent, rgba(255, 255, 255, 0.1), transparent);
-      transform: rotate(45deg);
-      transition: var(--transition);
-    }
-
-    .header:hover .header-icon::before {
-      animation: shine 1.5s ease-in-out;
-    }
-
-    @keyframes shine {
-      0% { transform: translateX(-100%) translateY(-100%) rotate(45deg); }
-      100% { transform: translateX(100%) translateY(100%) rotate(45deg); }
     }
 
     .header-title-section h1 {
-      font-size: 1.5rem;
-      font-weight: 600;
-      background: linear-gradient(135deg, var(--foreground) 0%, var(--primary) 100%);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      background-clip: text;
+      font-size: 1.4rem;
+      font-weight: 650;
+      color: var(--foreground);
       margin-bottom: 0.25rem;
       letter-spacing: -0.02em;
     }
@@ -358,32 +308,10 @@
       box-shadow: none;
     }
 
-    .button::before {
-      content: '';
-      position: absolute;
-      top: 0;
-      left: -100%;
-      width: 100%;
-      height: 100%;
-      background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
-      transition: var(--transition);
-    }
-
     .button:hover {
-      background: var(--card-bg);
+      background: var(--secondary-hover);
       color: var(--foreground);
-      border-color: var(--primary);
-      transform: translateY(-1px);
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-    }
-
-    .button:hover::before {
-      left: 100%;
-    }
-
-    .button:active {
-      transform: translateY(0);
-      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+      border-color: var(--card-border-hover);
     }
 
     .button:disabled {
@@ -420,16 +348,14 @@
     }
 
     .button-danger {
-      background: linear-gradient(135deg, var(--error) 0%, var(--destructive-hover) 100%);
+      background: var(--destructive);
       color: white;
-      border-color: var(--error);
-      box-shadow: 0 2px 4px rgba(239, 68, 68, 0.3);
+      border-color: var(--destructive);
     }
 
     .button-danger:hover {
-      background: linear-gradient(135deg, var(--destructive-hover) 0%, var(--error) 100%);
+      background: var(--destructive-hover);
       border-color: var(--destructive-hover);
-      box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
     }
 
     /* Responsive Design */
@@ -562,20 +488,7 @@
       overflow: hidden;
     }
 
-    .card::before {
-      content: '';
-      position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      height: 1px;
-      background: linear-gradient(90deg, transparent, var(--primary), transparent);
-      opacity: 0.3;
-    }
-
     .card:hover {
-      transform: translateY(-2px);
-      box-shadow: var(--card-shadow-hover);
       border-color: var(--card-border-hover);
     }
 
@@ -633,20 +546,7 @@
       overflow: hidden;
     }
 
-    .stat-card::before {
-      content: '';
-      position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      height: 1px;
-      background: linear-gradient(90deg, transparent, var(--primary), transparent);
-      opacity: 0.3;
-    }
-
     .stat-card:hover {
-      transform: translateY(-1px);
-      box-shadow: var(--card-shadow-hover);
       border-color: var(--card-border-hover);
     }
 
