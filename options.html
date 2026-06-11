@@ -6,60 +6,64 @@
   <title>BlockNSFW Settings</title>
   <style>
     :root {
-      /* Enhanced Dark Theme Colors */
-      --background: #0a0a0f;
-      --background-gradient: linear-gradient(135deg, #0a0a0f 0%, #121218 100%);
-      --foreground: #f8fafc;
-      --foreground-muted: #94a3b8;
-      --foreground-dim: #64748b;
-      
+      /* ===== Clean Modern Dark — single indigo accent ===== */
+
+      /* Surfaces */
+      --background: #0b0c10;
+      --background-gradient: linear-gradient(180deg, #0c0d12 0%, #0a0b0e 100%);
+      --surface: #14161c;
+      --surface-2: #1a1d24;
+      --foreground: #f2f3f5;
+      --foreground-muted: #a4abb8;
+      --foreground-dim: #868e9e;
+
       /* Card Design */
-      --card-bg: rgba(15, 23, 42, 0.8);
-      --card-border: rgba(51, 65, 85, 0.3);
-      --card-border-hover: rgba(99, 102, 241, 0.5);
-      --card-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-      --card-shadow-hover: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
-      
-      /* Primary Accent Colors */
+      --card-bg: #14161c;
+      --card-border: rgba(255, 255, 255, 0.07);
+      --card-border-hover: rgba(255, 255, 255, 0.14);
+      --card-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+      --card-shadow-hover: 0 6px 20px rgba(0, 0, 0, 0.40);
+
+      /* Primary Accent (indigo) */
       --primary: #6366f1;
-      --primary-hover: #4f46e5;
-      --primary-glow: rgba(99, 102, 241, 0.3);
+      --primary-hover: #818cf8;
+      --primary-glow: rgba(99, 102, 241, 0.22);
+      --primary-soft: rgba(99, 102, 241, 0.12);
       --primary-foreground: #ffffff;
-      
+
       /* Secondary Elements */
-      --secondary: #1e293b;
-      --secondary-hover: #334155;
-      --secondary-foreground: #f1f5f9;
-      
+      --secondary: #1d2027;
+      --secondary-hover: #262a33;
+      --secondary-foreground: #e6e8ec;
+
       /* Input Elements */
-      --input-bg: rgba(15, 23, 42, 0.6);
-      --input-border: rgba(51, 65, 85, 0.4);
-      --input-border-focus: rgba(99, 102, 241, 0.8);
-      --input-shadow-focus: 0 0 0 3px rgba(99, 102, 241, 0.1);
-      
+      --input-bg: #0f1116;
+      --input-border: rgba(255, 255, 255, 0.10);
+      --input-border-focus: var(--primary);
+      --input-shadow-focus: 0 0 0 3px rgba(99, 102, 241, 0.25);
+
       /* Status Colors */
-      --success: #10b981;
+      --success: #22c55e;
       --warning: #f59e0b;
       --destructive: #ef4444;
       --destructive-hover: #dc2626;
-      
+
+      /* Toast aliases (referenced by options.js) */
+      --success-color: #22c55e;
+      --error-color: #ef4444;
+      --warning-color: #f59e0b;
+      --info-color: #6366f1;
+
       /* Typography */
       --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
       --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-      
-      /* Spacing & Sizing */
-      --radius: 12px;
-      --radius-sm: 8px;
-      --radius-lg: 16px;
-      --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-      --transition-fast: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
-    }
 
-    /* Dark mode enhancements */
-    @media (prefers-color-scheme: dark) {
-      :root {
-        --card-bg: rgba(15, 23, 42, 0.9);
-      }
+      /* Spacing & Sizing */
+      --radius: 10px;
+      --radius-sm: 8px;
+      --radius-lg: 14px;
+      --transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+      --transition-fast: all 0.12s cubic-bezier(0.4, 0, 0.2, 1);
     }
 
     * {
@@ -89,32 +93,13 @@
 
     /* Header Section */
     .header {
-      margin-bottom: 2rem;
+      margin-bottom: 1.5rem;
       position: relative;
-      background: linear-gradient(135deg, var(--card-bg) 0%, rgba(99, 102, 241, 0.05) 100%);
+      background: var(--card-bg);
       border: 1px solid var(--card-border);
-      border-radius: var(--radius);
+      border-radius: var(--radius-lg);
       padding: 1.5rem;
-      backdrop-filter: blur(10px);
       box-shadow: var(--card-shadow);
-      transition: var(--transition);
-    }
-
-    .header:hover {
-      transform: translateY(-1px);
-      box-shadow: var(--card-shadow-hover);
-      border-color: var(--card-border-hover);
-    }
-
-    .header::before {
-      content: '';
-      position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      height: 1px;
-      background: linear-gradient(90deg, transparent, var(--primary), transparent);
-      opacity: 0.5;
     }
 
     .header-content {
@@ -132,39 +117,15 @@
     }
 
     .header-icon {
-      width: 48px;
-      height: 48px;
-      background: linear-gradient(135deg, var(--primary) 0%, var(--primary-hover) 100%);
+      width: 44px;
+      height: 44px;
+      background: var(--primary);
       border-radius: var(--radius);
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 1.5rem;
-      box-shadow: 0 4px 12px var(--primary-glow);
+      font-size: 1.375rem;
       flex-shrink: 0;
-      position: relative;
-      overflow: hidden;
-    }
-
-    .header-icon::before {
-      content: '';
-      position: absolute;
-      top: -50%;
-      left: -50%;
-      width: 200%;
-      height: 200%;
-      background: linear-gradient(45deg, transparent, rgba(255, 255, 255, 0.1), transparent);
-      transform: rotate(45deg);
-      transition: var(--transition);
-    }
-
-    .header:hover .header-icon::before {
-      animation: shine 1.5s ease-in-out;
-    }
-
-    @keyframes shine {
-      0% { transform: translateX(-100%) translateY(-100%) rotate(45deg); }
-      100% { transform: translateX(100%) translateY(100%) rotate(45deg); }
     }
 
     /* Toast Notification Animations */
@@ -191,12 +152,9 @@
     }
 
     .header-title-section h1 {
-      font-size: 1.5rem;
-      font-weight: 600;
-      background: linear-gradient(135deg, var(--foreground) 0%, var(--primary) 100%);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      background-clip: text;
+      font-size: 1.4rem;
+      font-weight: 650;
+      color: var(--foreground);
       margin-bottom: 0.25rem;
       letter-spacing: -0.02em;
     }
@@ -218,68 +176,58 @@
     }
 
     .coffee-button {
-      background: linear-gradient(135deg, #ffdd00, #fbb034);
-      color: #000 !important;
+      background: rgba(245, 158, 11, 0.12);
+      color: #fbbf24 !important;
       text-decoration: none;
-      padding: 0.25rem 0.75rem;
-      border-radius: 50px;
+      padding: 0.375rem 0.875rem;
+      border-radius: var(--radius-sm);
       font-weight: 600;
       font-size: 0.8rem;
-      border: 1px solid #e6b800;
-      transition: all 0.3s ease;
-      box-shadow: 0 2px 8px rgba(251, 176, 52, 0.3);
+      border: 1px solid rgba(245, 158, 11, 0.3);
+      transition: var(--transition-fast);
       display: flex;
       align-items: center;
-      gap: 0.25rem;
+      gap: 0.375rem;
       white-space: nowrap;
     }
 
     .coffee-button:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 6px 20px rgba(251, 176, 52, 0.4);
-      background: linear-gradient(135deg, #ffd700, #ffaa00);
-    }
-
-    .coffee-button:active {
-      transform: translateY(0);
-      box-shadow: 0 2px 10px rgba(251, 176, 52, 0.3);
+      background: rgba(245, 158, 11, 0.18);
+      border-color: rgba(245, 158, 11, 0.5);
     }
 
     .stats-button {
-      background: linear-gradient(135deg, #6366f1, #4f46e5);
-      color: #fff !important;
+      background: var(--primary);
+      color: var(--primary-foreground) !important;
       text-decoration: none;
-      padding: 0.25rem 0.75rem;
-      border-radius: 50px;
+      padding: 0.375rem 0.875rem;
+      border-radius: var(--radius-sm);
       font-weight: 600;
       font-size: 0.8rem;
-      border: 1px solid #4338ca;
-      transition: all 0.3s ease;
-      box-shadow: 0 2px 8px rgba(99, 102, 241, 0.3);
+      border: 1px solid var(--primary);
+      transition: var(--transition-fast);
       display: flex;
       align-items: center;
-      gap: 0.25rem;
+      gap: 0.375rem;
       white-space: nowrap;
       margin-right: 0.5rem;
     }
 
     .stats-button:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 6px 20px rgba(99, 102, 241, 0.4);
-      background: linear-gradient(135deg, #818cf8, #6366f1);
+      background: var(--primary-hover);
+      border-color: var(--primary-hover);
     }
 
     .github-button {
-      background: linear-gradient(135deg, #2d333b, #1a1e22);
-      color: #fff !important;
+      background: var(--secondary);
+      color: var(--secondary-foreground) !important;
       text-decoration: none;
       padding: 0.5rem 1rem;
-      border-radius: 50px;
+      border-radius: var(--radius-sm);
       font-weight: 600;
       font-size: 0.85rem;
-      border: 1px solid #444c56;
-      transition: all 0.3s ease;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+      border: 1px solid var(--card-border);
+      transition: var(--transition-fast);
       display: inline-flex;
       align-items: center;
       gap: 0.5rem;
@@ -287,14 +235,8 @@
     }
 
     .github-button:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
-      background: linear-gradient(135deg, #444c56, #2d333b);
-    }
-
-    .github-button:active {
-      transform: translateY(0);
-      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+      background: var(--secondary-hover);
+      border-color: var(--card-border-hover);
     }
 
     .open-source-banner {
@@ -314,27 +256,10 @@
       display: flex;
       align-items: center;
       gap: 1rem;
-      background: rgba(99, 102, 241, 0.1);
+      background: var(--primary-soft);
       padding: 0.75rem 1rem;
       border-radius: var(--radius);
       border: 1px solid rgba(99, 102, 241, 0.2);
-      position: relative;
-      overflow: hidden;
-    }
-
-    .header-stats::before {
-      content: '';
-      position: absolute;
-      top: 0;
-      left: -100%;
-      width: 100%;
-      height: 100%;
-      background: linear-gradient(90deg, transparent, rgba(99, 102, 241, 0.1), transparent);
-      transition: left 0.6s ease;
-    }
-
-    .header:hover .header-stats::before {
-      left: 100%;
     }
 
     .status-indicator {
@@ -387,10 +312,9 @@
       background: var(--card-bg);
       border: 1px solid var(--card-border);
       border-radius: var(--radius);
-      padding: 1.25rem;
+      padding: 1.25rem 1.375rem;
       margin-bottom: 0.875rem;
-      transition: var(--transition);
-      backdrop-filter: blur(10px);
+      transition: var(--transition-fast);
       box-shadow: var(--card-shadow);
       position: relative;
       overflow: hidden;
@@ -409,8 +333,6 @@
     }
 
     .card:hover {
-      transform: translateY(-2px);
-      box-shadow: var(--card-shadow-hover);
       border-color: var(--card-border-hover);
     }
 
@@ -476,11 +398,12 @@
       border-bottom: none;
     }
 
-    .switch-container:hover {
-      background: rgba(99, 102, 241, 0.05);
-      margin: 0 -1rem;
-      padding: 0.75rem 1.5rem;
-      border-radius: var(--radius);
+    .switch-container {
+      border-radius: var(--radius-sm);
+    }
+
+    .switch-container:hover .label {
+      color: var(--primary-hover);
     }
 
     .switch-label {
@@ -545,7 +468,6 @@
 
     input:checked + .slider {
       background: var(--primary);
-      box-shadow: 0 0 20px var(--primary-glow);
     }
 
     input:checked + .slider::before {
@@ -580,7 +502,6 @@
       outline: none;
       border-color: var(--input-border-focus);
       box-shadow: var(--input-shadow-focus);
-      transform: translateY(-1px);
     }
 
     .input::placeholder {
@@ -608,7 +529,6 @@
       outline: none;
       border-color: var(--input-border-focus);
       box-shadow: var(--input-shadow-focus);
-      transform: translateY(-1px);
     }
 
     .textarea::placeholder {
@@ -624,41 +544,24 @@
       padding: 0.625rem 1.125rem;
       font-size: 0.875rem;
       font-weight: 500;
-      border-radius: var(--radius);
-      border: 1px solid transparent;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--card-border);
       background: var(--secondary);
       color: var(--secondary-foreground);
       cursor: pointer;
       transition: var(--transition-fast);
       white-space: nowrap;
       position: relative;
-      overflow: hidden;
-    }
-
-    .button::before {
-      content: '';
-      position: absolute;
-      top: 0;
-      left: -100%;
-      width: 100%;
-      height: 100%;
-      background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent);
-      transition: left 0.6s ease;
-    }
-
-    .button:hover::before {
-      left: 100%;
     }
 
     .button:hover {
       background: var(--secondary-hover);
-      transform: translateY(-1px);
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+      border-color: var(--card-border-hover);
     }
 
-    .button:focus {
+    .button:focus-visible {
       outline: none;
-      box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
+      box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.35);
     }
 
     .button-primary {
@@ -670,19 +573,18 @@
     .button-primary:hover {
       background: var(--primary-hover);
       border-color: var(--primary-hover);
-      box-shadow: 0 4px 20px var(--primary-glow);
     }
 
     .button-destructive {
-      background: var(--destructive);
-      color: white;
-      border-color: var(--destructive);
+      background: transparent;
+      color: var(--destructive);
+      border-color: rgba(239, 68, 68, 0.4);
     }
 
     .button-destructive:hover {
-      background: var(--destructive-hover);
-      border-color: var(--destructive-hover);
-      box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
+      background: rgba(239, 68, 68, 0.12);
+      border-color: var(--destructive);
+      color: var(--destructive);
     }
 
     .button-sm {
@@ -720,8 +622,9 @@
       margin-top: 0.875rem;
       padding: 0.875rem 1rem;
       border-radius: var(--radius-sm);
-      border: 1px solid rgba(16, 185, 129, 0.35);
-      background: linear-gradient(135deg, rgba(16, 185, 129, 0.12), rgba(99, 102, 241, 0.08));
+      border: 1px solid var(--card-border);
+      border-left: 3px solid var(--primary);
+      background: var(--surface-2);
       color: var(--foreground);
     }
 
@@ -729,7 +632,7 @@
       font-size: 0.9rem;
       font-weight: 600;
       margin-bottom: 0.35rem;
-      color: #6ee7b7;
+      color: var(--foreground);
     }
 
     .info-box-text {
@@ -743,11 +646,11 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 0.875rem 1rem;
+      padding: 0.75rem 1rem;
       background: var(--input-bg);
-      border: 2px solid var(--input-border);
-      border-radius: var(--radius);
-      margin-bottom: 0.75rem;
+      border: 1px solid var(--input-border);
+      border-radius: var(--radius-sm);
+      margin-bottom: 0.5rem;
       transition: var(--transition-fast);
       animation: slideIn 0.3s ease-out;
     }
@@ -769,8 +672,6 @@
 
     .whitelist-item:hover {
       border-color: var(--primary);
-      transform: translateY(-1px);
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
     }
 
     .whitelist-domain {
@@ -782,12 +683,12 @@
 
     .whitelist-empty {
       text-align: center;
-      padding: 3rem 2rem;
+      padding: 2.5rem 2rem;
       color: var(--foreground-dim);
       font-size: 0.95rem;
       background: var(--input-bg);
-      border: 2px dashed var(--input-border);
-      border-radius: var(--radius);
+      border: 1px dashed var(--input-border);
+      border-radius: var(--radius-sm);
       transition: var(--transition-fast);
     }
 
@@ -897,12 +798,7 @@
       }
 
       .card {
-        padding: 1.25rem;
-      }
-
-      .switch-container:hover {
-        margin: 0 -0.75rem;
-        padding: 0.75rem;
+        padding: 1.125rem;
       }
     }
 
@@ -1404,43 +1300,13 @@
 
     /* Featured Card — "New Feature" subtle treatment */
     .card-featured {
-      border: 1px solid rgba(6, 182, 212, 0.25);
+      border: 1px solid rgba(99, 102, 241, 0.3);
       background:
-        linear-gradient(135deg, #0c1627, #0f172a, #111a2e) padding-box,
-        linear-gradient(90deg, rgba(6, 182, 212, 0.25), rgba(99, 102, 241, 0.2), rgba(6, 182, 212, 0.25)) border-box;
-      background-size: 100% 100%, 300% 100%;
-      animation: border-gradient-flow 10s ease infinite;
-    }
-
-    .card-featured::before {
-      opacity: 0.6;
-      background: linear-gradient(
-        90deg,
-        transparent,
-        rgba(6, 182, 212, 0.5),
-        rgba(99, 102, 241, 0.4),
-        transparent
-      );
+        linear-gradient(135deg, rgba(99, 102, 241, 0.06), var(--card-bg) 60%);
     }
 
     .card-featured:hover {
-      border-color: rgba(6, 182, 212, 0.4);
-      box-shadow:
-        var(--card-shadow-hover),
-        0 0 20px rgba(6, 182, 212, 0.08);
-    }
-
-    .card-featured:hover::before {
-      opacity: 1;
-    }
-
-    .card-featured .card-title::before {
-      background: linear-gradient(180deg, #06b6d4, #6366f1);
-    }
-
-    @keyframes border-gradient-flow {
-      0%, 100% { background-position: 0 0, 0% 50%; }
-      50% { background-position: 0 0, 100% 50%; }
+      border-color: rgba(99, 102, 241, 0.5);
     }
 
     /* "NEW" badge */
@@ -1452,23 +1318,13 @@
       font-weight: 700;
       text-transform: uppercase;
       letter-spacing: 0.08em;
-      padding: 0.175rem 0.5rem;
+      padding: 0.2rem 0.5rem;
       border-radius: 999px;
-      background: linear-gradient(135deg, rgba(6, 182, 212, 0.2), rgba(99, 102, 241, 0.15));
-      border: 1px solid rgba(6, 182, 212, 0.4);
-      color: #22d3ee;
+      background: var(--primary-soft);
+      border: 1px solid rgba(99, 102, 241, 0.4);
+      color: var(--primary-hover);
       line-height: 1;
-      animation: badge-pulse 3s ease-in-out infinite;
       flex-shrink: 0;
-    }
-
-    @keyframes badge-pulse {
-      0%, 100% {
-        box-shadow: 0 0 4px rgba(6, 182, 212, 0.15);
-      }
-      50% {
-        box-shadow: 0 0 12px rgba(6, 182, 212, 0.3);
-      }
     }
 
     /* Message from the Dev */
@@ -1532,67 +1388,240 @@
       color: var(--foreground-dim);
       font-style: italic;
     }
+
+    /* ===== App Layout: sidebar + grouped sections ===== */
+    .app {
+      max-width: 1160px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: 232px minmax(0, 1fr);
+      gap: 2rem;
+      padding: 1.75rem 1.5rem 4rem;
+      align-items: start;
+    }
+
+    .sidebar {
+      position: sticky;
+      top: 1.75rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1.25rem;
+    }
+
+    .sidebar-brand {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 0 0.25rem;
+    }
+    .sidebar-brand .header-icon { width: 38px; height: 38px; font-size: 1.2rem; }
+    .sidebar-brand-text h1 {
+      font-size: 1rem;
+      font-weight: 650;
+      letter-spacing: -0.01em;
+      color: var(--foreground);
+      line-height: 1.2;
+    }
+    .sidebar-brand-text p {
+      font-size: 0.72rem;
+      color: var(--foreground-dim);
+      margin: 0;
+    }
+
+    .nav { display: flex; flex-direction: column; gap: 0.125rem; }
+    .nav-link {
+      display: flex;
+      align-items: center;
+      gap: 0.625rem;
+      padding: 0.5rem 0.75rem;
+      border-radius: var(--radius-sm);
+      color: var(--foreground-muted);
+      font-size: 0.875rem;
+      font-weight: 500;
+      text-decoration: none;
+      cursor: pointer;
+      border: 1px solid transparent;
+      transition: var(--transition-fast);
+      user-select: none;
+    }
+    .nav-link:hover { background: var(--surface-2); color: var(--foreground); }
+    .nav-link.active {
+      background: var(--primary-soft);
+      color: var(--primary-hover);
+      border-color: rgba(99, 102, 241, 0.25);
+    }
+    .nav-icon {
+      width: 18px;
+      height: 18px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+    .nav-icon svg { width: 16px; height: 16px; display: block; }
+
+    .sidebar-footer {
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+      padding-top: 1rem;
+      border-top: 1px solid var(--card-border);
+    }
+    .sidebar-action {
+      display: flex;
+      align-items: center;
+      gap: 0.625rem;
+      padding: 0.5rem 0.75rem;
+      border-radius: var(--radius-sm);
+      color: var(--foreground-muted);
+      font-size: 0.85rem;
+      font-weight: 500;
+      text-decoration: none;
+      transition: var(--transition-fast);
+    }
+    .sidebar-action:hover { background: var(--surface-2); color: var(--foreground); }
+    .sidebar-action-coffee {
+      margin-top: 0.375rem;
+      color: #fbbf24;
+      background: rgba(245, 158, 11, 0.10);
+      border: 1px solid rgba(245, 158, 11, 0.28);
+    }
+    .sidebar-action-coffee:hover {
+      color: #fbbf24;
+      background: rgba(245, 158, 11, 0.18);
+      border-color: rgba(245, 158, 11, 0.5);
+    }
+
+    .main { min-width: 0; }
+
+    .section { scroll-margin-top: 1.5rem; }
+    .section + .section { margin-top: 2rem; }
+    .section-head { margin-bottom: 0.875rem; padding-left: 0.125rem; }
+    .section-title {
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      font-weight: 700;
+      color: var(--foreground-dim);
+      margin: 0;
+    }
+    .section-desc {
+      font-size: 0.85rem;
+      color: var(--foreground-muted);
+      margin: 0.25rem 0 0;
+    }
+
+    /* Custom select arrow */
+    select.input {
+      appearance: none;
+      -webkit-appearance: none;
+      background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23a4abb8' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>");
+      background-repeat: no-repeat;
+      background-position: right 0.75rem center;
+      padding-right: 2.25rem;
+    }
+
+    @media (max-width: 880px) {
+      .app {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 1.25rem;
+        padding: 1.25rem 1rem 3rem;
+      }
+      .sidebar {
+        position: static;
+        min-width: 0;
+        gap: 1rem;
+      }
+      .nav {
+        flex-direction: row;
+        flex-wrap: wrap;
+        gap: 0.375rem;
+      }
+      .nav-link {
+        white-space: nowrap;
+        background: var(--surface-2);
+        padding: 0.4rem 0.75rem;
+      }
+      .nav-icon { display: none; }
+      .sidebar-footer {
+        flex-direction: row;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        border-top: 1px solid var(--card-border);
+        padding-top: 1rem;
+      }
+      .sidebar-action { padding: 0.4rem 0.75rem; }
+      .sidebar-action-coffee { margin-top: 0; }
+      .section + .section { margin-top: 1.5rem; }
+    }
+
+    @media (max-width: 420px) {
+      .header-actions,
+      .button-group { width: 100%; }
+      .button-group .button { flex: 1; }
+    }
+
+    /* Collapsible "Message from the Dev" */
+    .dev-teaser {
+      font-size: 0.9rem;
+      line-height: 1.8;
+      color: var(--foreground-muted);
+      margin: 0;
+    }
+    .dev-teaser strong { color: var(--foreground); font-weight: 600; }
+    .dev-details { margin: 0; }
+    .dev-details > summary {
+      list-style: none;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      width: fit-content;
+      margin-top: 0.625rem;
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: var(--primary-hover);
+      transition: var(--transition-fast);
+    }
+    .dev-details > summary::-webkit-details-marker { display: none; }
+    .dev-details > summary::after { content: "Read more  ▾"; }
+    .dev-details[open] > summary::after { content: "Show less  ▴"; }
+    .dev-details > summary:hover { color: var(--primary); }
+    .dev-details .dev-message-body { margin-top: 0.75rem; }
   </style>
 </head>
 <body>
-  <div class="container">
-    <div class="header fade-in">
-      <div class="header-content">
-        <div class="header-main">
-          <div class="header-icon">🛡️</div>
-          <div class="header-title-section">
-            <h1>BlockNSFW – Porn & Adult Content Filter</h1>
-            <p class="header-subtitle">Enterprise-grade content filtering & privacy protection</p>
-          </div>
-          <div class="header-actions">
-            <a href="stats.html" class="stats-button">
-              📊 Statistics
-            </a>
-            <a href="https://buymeacoffee.com/monolab.co" target="_blank" class="coffee-button">
-              ☕ Buy Me a Coffee
-            </a>
-          </div>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="sidebar-brand">
+        <div class="header-icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg>
         </div>
-
-      </div>
-      <p class="header-description">
-        Configure advanced content filtering, manage blocklists, and customize privacy controls with military-grade security. 
-        All processing happens locally on your device for maximum privacy protection.
-      </p>
-    </div>
-
-    <div class="card dev-message fade-in">
-      <div class="card-header">
-        <h2 class="card-title">Message from the Dev</h2>
-      </div>
-      <div class="dev-message-body">
-        <p>More advanced features are coming soon — this is just the start.</p>
-        <p><strong>This app will always stay 100% free.</strong> I will never add monetization because I don't want money to become a reason for anyone to go back to old habits.</p>
-        <p>We're in this together. If the app misses a website, please report it so we can keep improving and help each other stay strong.</p>
-        <p>And from my heart, thank you to everyone who supported this project on Buy Me a Coffee. Your kindness keeps this mission alive and helps me keep building for people who truly need it.</p>
-        <p>Thank you as well to everyone who reported sites. Because of your reports, we have already blocked 322 out of 412 reported sites, and some of the remaining sites are still under review.</p>
-      </div>
-      <div class="dev-message-signature">
-        — The BlockNSFW Developer
-      </div>
-    </div>
-
-    <div class="card fade-in" id="open-source-card">
-      <div class="card-header">
-        <h2 class="card-title">🌐 Open Source</h2>
-        <div class="card-description">
-          <div class="open-source-banner">
-            <p>BlockNSFW is now open source! Star the repo, file a bug, suggest a feature, or send a PR &mdash; every contribution makes the project better.</p>
-            <a href="https://github.com/codepurse/BlockNSFW" target="_blank" rel="noopener noreferrer" class="github-button">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                <path d="M12 .5C5.65.5.5 5.65.5 12c0 5.08 3.29 9.39 7.86 10.92.58.1.79-.25.79-.56 0-.28-.01-1.02-.02-2-3.2.7-3.88-1.54-3.88-1.54-.52-1.32-1.27-1.67-1.27-1.67-1.04-.71.08-.7.08-.7 1.15.08 1.76 1.18 1.76 1.18 1.02 1.75 2.68 1.24 3.34.95.1-.74.4-1.24.73-1.53-2.55-.29-5.24-1.28-5.24-5.69 0-1.26.45-2.29 1.19-3.1-.12-.29-.52-1.47.11-3.06 0 0 .97-.31 3.18 1.18a11 11 0 0 1 5.79 0c2.21-1.49 3.18-1.18 3.18-1.18.63 1.59.23 2.77.11 3.06.74.81 1.19 1.84 1.19 3.1 0 4.42-2.69 5.39-5.25 5.68.41.36.78 1.05.78 2.12 0 1.53-.01 2.76-.01 3.13 0 .31.21.67.8.56 4.57-1.53 7.85-5.84 7.85-10.92C23.5 5.65 18.35.5 12 .5z"/>
-              </svg>
-              View on GitHub
-            </a>
-          </div>
+        <div class="sidebar-brand-text">
+          <h1>BlockNSFW</h1>
+          <p>Content filter &amp; privacy</p>
         </div>
       </div>
-    </div>
+      <nav class="nav" aria-label="Settings sections">
+        <a class="nav-link" href="#section-welcome" data-target="section-welcome"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2.6l1.7 5.1 5.1 1.7-5.1 1.7L12 16.2l-1.7-5.1L5.2 9.4l5.1-1.7z"/><path d="M5 15.5l.8 2.3 2.3.8-2.3.8L5 21.7l-.8-2.3L1.9 18.6l2.3-.8z"/></svg></span><span>Welcome</span></a>
+        <a class="nav-link" href="#section-protection" data-target="section-protection"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg></span><span>Protection</span></a>
+        <a class="nav-link" href="#section-customization" data-target="section-customization"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="2" y1="14" x2="6" y2="14"/><line x1="10" y1="8" x2="14" y2="8"/><line x1="18" y1="16" x2="22" y2="16"/></svg></span><span>Customization</span></a>
+        <a class="nav-link" href="#section-security" data-target="section-security"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></span><span>Security</span></a>
+        <a class="nav-link" href="#section-community" data-target="section-community"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg></span><span>Community</span></a>
+        <a class="nav-link" href="#section-about" data-target="section-about"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></span><span>About</span></a>
+      </nav>
+      <div class="sidebar-footer">
+        <a href="stats.html" class="sidebar-action"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg></span><span>Statistics</span></a>
+        <a href="https://github.com/codepurse/BlockNSFW" target="_blank" rel="noopener noreferrer" class="sidebar-action"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .5C5.65.5.5 5.65.5 12c0 5.08 3.29 9.39 7.86 10.92.58.1.79-.25.79-.56 0-.28-.01-1.02-.02-2-3.2.7-3.88-1.54-3.88-1.54-.52-1.32-1.27-1.67-1.27-1.67-1.04-.71.08-.7.08-.7 1.15.08 1.76 1.18 1.76 1.18 1.02 1.75 2.68 1.24 3.34.95.1-.74.4-1.24.73-1.53-2.55-.29-5.24-1.28-5.24-5.69 0-1.26.45-2.29 1.19-3.1-.12-.29-.52-1.47.11-3.06 0 0 .97-.31 3.18 1.18a11 11 0 0 1 5.79 0c2.21-1.49 3.18-1.18 3.18-1.18.63 1.59.23 2.77.11 3.06.74.81 1.19 1.84 1.19 3.1 0 4.42-2.69 5.39-5.25 5.68.41.36.78 1.05.78 2.12 0 1.53-.01 2.76-.01 3.13 0 .31.21.67.8.56 4.57-1.53 7.85-5.84 7.85-10.92C23.5 5.65 18.35.5 12 .5z"/></svg></span><span>GitHub</span></a>
+        <a href="https://buymeacoffee.com/monolab.co" target="_blank" class="sidebar-action sidebar-action-coffee"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 8h1a4 4 0 0 1 0 8h-1"/><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/><line x1="6" y1="2" x2="6" y2="4"/><line x1="10" y1="2" x2="10" y2="4"/><line x1="14" y1="2" x2="14" y2="4"/></svg></span><span>Buy Me a Coffee</span></a>
+      </div>
+    </aside>
+
+    <main class="main">
+      <section class="section" id="section-welcome">
+        <div class="section-head">
+          <h2 class="section-title">Welcome</h2>
+          <p class="section-desc">What’s new in BlockNSFW, and a note from the developer.</p>
+        </div>
 
     <div class="card fade-in" id="whats-new-card">
       <div class="card-header">
@@ -1602,12 +1631,39 @@
             <li><strong>AI Text Protection (multilingual)</strong> — A new on-device AI reads the page's text to catch adult sites the keyword and blocklist filters miss — especially non-English ones (Russian, Chinese, Korean, Thai, Arabic, and more). It blocks pages it's confident about, and teams up with the image AI to catch borderline ones. Nothing leaves your device.</li>
             <li><strong>AI Image Protection</strong> — A new on-device AI looks at the actual picture to block adult images, even when nothing in the web address gives them away. Everything stays on your device — your images are never uploaded.</li>
             <li><strong>Instant blocking</strong> — Flagged images are now hidden the moment they're checked, so adult content no longer flashes on screen before it's blocked.</li>
-            <li><strong>Cleaner blocked images</strong> — Blocked images are replaced with a tidy “Blocked by NSFW” placeholder instead of being blurred.</li>
-            <li><strong>Detection strictness</strong> — Choose Relaxed, Balanced, or Strict to control how aggressively images are filtered.</li>
+            <li><strong>IDN / Punycode Coverage</strong> — Internationalized adult mirrors with <strong>xn--</strong> hostnames now load and block as designed.</li>
+            <li><strong>Non-English Hostname Filter</strong> — Adult-hostword coverage for Chinese, Korean, Russian, Arabic, and Thai hostnames (e.g. <strong>色情.com</strong>, <strong>야동.com</strong>, <strong>порно.org</strong>).</li>
+            <li><strong>Smarter Bundled Blocklist</strong> — Regenerated and synced with the runtime parser, so offline installs get the same coverage.</li>
           </ul>
         </div>
       </div>
     </div>
+
+    <div class="card dev-message fade-in">
+      <div class="card-header">
+        <h2 class="card-title">Message from the Dev</h2>
+      </div>
+      <p class="dev-teaser">More advanced features are coming soon — this is just the start. <strong>This app will always stay 100% free.</strong></p>
+      <details class="dev-details" open>
+        <summary aria-label="Read the full message from the developer"></summary>
+        <div class="dev-message-body">
+          <p>I will never add monetization because I don't want money to become a reason for anyone to go back to old habits.</p>
+          <p>We're in this together. If the app misses a website, please report it so we can keep improving and help each other stay strong.</p>
+          <p>And from my heart, thank you to everyone who supported this project on Buy Me a Coffee. Your kindness keeps this mission alive and helps me keep building for people who truly need it.</p>
+          <p>Thank you as well to everyone who reported sites. Because of your reports, we have already blocked 322 out of 412 reported sites, and some of the remaining sites are still under review.</p>
+        </div>
+        <div class="dev-message-signature">
+          — The BlockNSFW Developer
+        </div>
+      </details>
+    </div>
+      </section>
+
+      <section class="section" id="section-protection">
+        <div class="section-head">
+          <h2 class="section-title">Protection</h2>
+          <p class="section-desc">Core blocking, DNS-level filtering, and safe search.</p>
+        </div>
 
     <div class="card fade-in">
       <div class="card-header">
@@ -1633,27 +1689,12 @@
       </div>
     </div>
 
-    <div class="card card-featured fade-in" id="ai-image-blocker-card">
+    <div class="card fade-in">
       <div class="card-header">
-        <h2 class="card-title">🖼 Image Protection</h2>
-        <p class="card-description">
-          Two layers work together to keep explicit images off your screen.
-          Keyword filtering is instant and catches the obvious; AI detection
-          catches the rest by looking at the actual image.
-        </p>
+        <h2 class="card-title">Image Filtering Level</h2>
+        <p class="card-description">Choose how aggressively images are filtered to reduce false positives while keeping protection where you want it.</p>
       </div>
-
-      <!-- Layer 1: keyword / URL heuristics -->
-      <div style="font-weight: 600; font-size: 0.95rem; margin: 0.5rem 0 0.5rem; color: var(--foreground);">
-        ① Keyword &amp; URL filtering
-        <span style="font-weight: 400; color: var(--foreground-muted);">— instant, no performance cost</span>
-      </div>
-      <p class="card-description" style="margin-top: 0;">
-        Blocks images by their web address, filename, and surrounding text.
-        Fast and free, but can't see the picture itself.
-      </p>
       <div class="form-group">
-        <label class="pin-input-label" for="image-filter-level">Filtering level</label>
         <select class="input" id="image-filter-level">
           <option value="strict">Strict - Maximum protection (current behavior)</option>
           <option value="moderate">Moderate - Balanced filtering</option>
@@ -1663,25 +1704,22 @@
           Most aggressive filtering. Best protection, but may hide more borderline images.
         </div>
       </div>
+    </div>
 
-      <div style="border-top: 1px solid rgba(148, 163, 184, 0.18); margin: 1.5rem 0 1.25rem;"></div>
-
-      <!-- Layer 2: on-device AI pixel classification -->
-      <div style="font-weight: 600; font-size: 0.95rem; margin: 0 0 0.5rem; color: var(--foreground);">
-        ② AI content detection <span class="badge-new">New</span>
-        <span style="font-weight: 400; color: var(--foreground-muted);">— catches what keywords miss</span>
+    <div class="card card-featured fade-in" id="ai-image-blocker-card">
+      <div class="card-header">
+        <h2 class="card-title">🛡 AI Content Detection <span class="badge-new">New</span></h2>
+        <p class="card-description">
+          On-device AI that looks at the actual image and reads the page text to
+          catch adult content keyword and blocklist filters miss — including
+          non-English sites. Everything runs on your device; nothing is uploaded.
+        </p>
       </div>
-      <p class="card-description" style="margin-top: 0;">
-        Looks at the actual picture to catch explicit images that keyword
-        filtering can't spot. Everything happens on your device — your images
-        are never uploaded or sent anywhere.
-      </p>
+
       <div class="switch-container">
         <div class="switch-label">
           <span class="label">Enable AI Image Blocker</span>
-          <span class="description">
-            Replaces any flagged image with a "Blocked by NSFW" placeholder.
-          </span>
+          <span class="description">Replaces any flagged image with a "Blocked by NSFW" placeholder.</span>
         </div>
         <label class="switch">
           <input type="checkbox" id="ai-image-blocker" />
@@ -1692,42 +1730,29 @@
         <span class="status-badge" id="ai-image-blocker-status">🖼 AI Blocker: Active</span>
       </div>
       <div class="form-group" style="margin-top: 1rem;">
-        <label class="pin-input-label" for="ai-strictness">Detection strictness</label>
+        <label class="pin-input-label" for="ai-strictness">Image detection strictness</label>
         <select class="input" id="ai-strictness">
           <option value="relaxed">Relaxed - Block only clearly explicit images</option>
           <option value="balanced">Balanced - Recommended default</option>
           <option value="strict">Strict - Catch borderline content (more false positives)</option>
         </select>
         <div class="pin-hint" id="ai-strictness-detail" style="margin-top: 0.5rem;">
-          Balanced filtering — blocks clear adult content while letting most
-          safe images through.
+          Balanced filtering — blocks clear adult content while letting most safe images through.
         </div>
-      </div>
-      <div class="info-box" style="margin-top: .875rem">
-        <div class="info-box-title">How it works</div>
-        <p class="info-box-text">
-          The model is bundled with the extension and runs in a dedicated
-          Web Worker so it never blocks the page. First scan after install
-          loads the model (~2 s one-time cost). Trusted image domains
-          (Steam, YouTube, Reddit, Imgur, etc.) are skipped.
-        </p>
       </div>
 
       <hr style="margin: 1.5rem 0; border: none; border-top: 1px solid var(--border, #e5e7eb);" />
 
       <h3 class="card-title" style="font-size: 1.05rem;">AI Text Blocker</h3>
       <p class="card-description">
-        Reads the page's text with a tiny multilingual model to catch adult
-        sites the keyword and blocklist filters miss — especially non-English
-        ones. Runs fully on your device; nothing is uploaded.
+        Reads the page's text with a tiny multilingual model to catch adult sites the
+        keyword and blocklist filters miss — especially non-English ones. Runs fully on
+        your device; nothing is uploaded.
       </p>
       <div class="switch-container">
         <div class="switch-label">
           <span class="label">Enable AI Text Blocker</span>
-          <span class="description">
-            Redirects pages whose text is confidently adult. Also blocks
-            borderline pages when the AI Image Blocker flagged images on them.
-          </span>
+          <span class="description">Redirects pages whose text is confidently adult. Also blocks borderline pages when the AI Image Blocker flagged images on them.</span>
         </div>
         <label class="switch">
           <input type="checkbox" id="ai-text-blocker" />
@@ -1738,84 +1763,24 @@
         <span class="status-badge" id="ai-text-blocker-status">📝 AI Text Blocker: Active</span>
       </div>
       <div class="form-group" style="margin-top: 1rem;">
-        <label class="pin-input-label" for="ai-text-strictness">Detection strictness</label>
+        <label class="pin-input-label" for="ai-text-strictness">Text detection strictness</label>
         <select class="input" id="ai-text-strictness">
           <option value="relaxed">Relaxed - Block only very clearly adult pages</option>
           <option value="balanced">Balanced - Recommended default</option>
           <option value="strict">Strict - Catch borderline pages (more false positives)</option>
         </select>
         <div class="pin-hint" id="ai-text-strictness-detail" style="margin-top: 0.5rem;">
-          Balanced filtering — blocks pages the model is confident about while
-          letting benign multilingual pages through.
+          Balanced filtering — blocks pages the model is confident about while letting benign multilingual pages through.
         </div>
       </div>
       <div class="info-box" style="margin-top: .875rem">
         <div class="info-box-title">How it works</div>
         <p class="info-box-text">
-          A ~150 KB linear model bundled with the extension scores the page
-          text in milliseconds. Whole-page blocking uses a conservative
-          threshold; a lower threshold applies only when the image blocker also
-          flagged content on the page.
+          Both models are bundled with the extension and run on your device. The image
+          model runs in a dedicated Web Worker; the ~150 KB text model scores the page in
+          milliseconds. Whole-page text blocking uses a conservative threshold, with a
+          lower threshold when the image blocker also flags content on the page.
         </p>
-      </div>
-    </div>
-
-    <div class="card fade-in" id="community-reports-card">
-      <div class="card-header">
-        <h2 class="card-title">Community Reports</h2>
-        <p class="card-description">
-          Suggest websites that should be blocked or report ones that were missed. 
-          No account needed — your privacy is fully protected.
-        </p>
-      </div>
-
-      <div class="form-group">
-        <label class="pin-input-label" for="report-url">Website URL</label>
-        <input type="url" class="input" id="report-url" placeholder="https://example.com" autocomplete="off" required pattern="^(https?:\/\/)?([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}([\/?#].*)?$" title="Enter a valid website URL, e.g. https://example.com" />
-        <div class="pin-hint" style="margin-top: 0.5rem;">
-          Reports are grouped by domain (e.g., <span class="code">youtube.com</span>). Different page paths on the same domain count as one report.
-        </div>
-      </div>
-
-      <div class="form-group">
-        <label class="pin-input-label" for="report-type">Report Type</label>
-        <select class="input" id="report-type">
-          <option value="" disabled selected>-- Please select a report type --</option>
-          <option value="should_block">🚫 This site should be blocked</option>
-          <option value="incorrectly_blocked">✅ This site was incorrectly blocked</option>
-        </select>
-        <div class="info-box" style="margin-top: 0.75rem;">
-          <div class="info-box-title">⚠ Please verify your selection</div>
-          <p class="info-box-text">
-            <strong style="color: var(--destructive);">🚫 "Should be blocked"</strong> — Use this only if the site contains adult, explicit, or inappropriate content.<br>
-            <strong style="color: var(--success);">✅ "Incorrectly blocked"</strong> — Use this if a safe, legitimate site was blocked by mistake.
-          </p>
-        </div>
-      </div>
-
-      <div class="form-group" id="report-category-group">
-        <label class="pin-input-label" for="report-category">Category</label>
-        <select class="input" id="report-category">
-          <option value="adult">Adult / NSFW Content</option>
-          <option value="gambling">Gambling</option>
-          <option value="violence">Violence / Gore</option>
-          <option value="other">Other</option>
-        </select>
-      </div>
-
-      <div class="form-group">
-        <label class="pin-input-label" for="report-notes">Additional Notes (optional)</label>
-        <textarea class="textarea" id="report-notes" placeholder="Any additional context..." maxlength="500" autocomplete="off" style="min-height: 80px;"></textarea>
-        <div class="pin-hint" id="report-notes-counter" style="margin-top: 0.375rem; text-align: right;">0 / 500</div>
-      </div>
-
-      <div class="button-group" style="align-items: center;">
-        <button class="button button-primary" id="submit-report">Submit Report</button>
-        <span id="report-cooldown" style="font-size: 0.8rem; color: var(--foreground-dim);"></span>
-      </div>
-
-      <div class="pin-hint" id="report-status" style="margin-top: 0.75rem;">
-        Reports are reviewed and may be added to the default blocklist in future updates.
       </div>
     </div>
 
@@ -1924,6 +1889,13 @@
         </p>
       </div>
     </div>
+      </section>
+
+      <section class="section" id="section-customization">
+        <div class="section-head">
+          <h2 class="section-title">Customization</h2>
+          <p class="section-desc">Tailor the blocked page, keywords, and your allow-lists.</p>
+        </div>
 
     <div class="card fade-in">
       <div class="card-header">
@@ -1985,73 +1957,6 @@
 
       <div class="button-group">
         <button class="button" id="reset-blocked-page-settings">Reset to Default</button>
-      </div>
-    </div>
-
-    <div class="card fade-in">
-      <div class="card-header">
-        <h2 class="card-title">PIN Protection</h2>
-        <p class="card-description">Secure your settings with military-grade PIN protection to prevent unauthorized changes</p>
-      </div>
-      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem;">
-        <span class="status-badge" id="pin-status">🔒 PIN: Not set</span>
-        <div class="button-group" style="margin-top: 0;">
-          <button class="button button-sm" id="set-pin">Set PIN</button>
-          <button class="button button-sm button-destructive" id="clear-pin">Clear PIN</button>
-        </div>
-      </div>
-    </div>
-
-    <div class="card fade-in">
-      <div class="card-header">
-        <h2 class="card-title">Incognito Mode</h2>
-        <p class="card-description">Allow the extension to run in Incognito (private) windows. Chrome requires you to enable this on the extension's details page.</p>
-      </div>
-
-      <div class="switch-container">
-        <div class="switch-label">
-          <span class="label">Allow in Incognito</span>
-          <span class="description">Manage permission for private browsing windows</span>
-        </div>
-        <label class="switch">
-          <input type="checkbox" id="allow-incognito" />
-          <span class="slider"></span>
-        </label>
-      </div>
-
-      <div style="margin-top: 1rem; display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: center;">
-        <span class="status-badge" id="incognito-status">🟡 Incognito: Checking…</span>
-        <a class="button button-sm" id="open-incognito-settings" href="#" target="_blank" rel="noreferrer noopener">
-          Open Extensions Page
-        </a>
-      </div>
-
-      <div class="pin-hint" style="margin-top: 0.5rem;">
-        Chrome/Edge require you to toggle "Allow in incognito" on the extension's details page. We'll try to open it for you.
-      </div>
-    </div>
-
-    <div class="grid grid-cols-2 fade-in">
-      <div class="card">
-        <div class="card-header">
-          <h2 class="card-title">Smart Detection</h2>
-          <p class="card-description">Enable advanced keyword detection with contextual analysis for comprehensive content coverage</p>
-        </div>
-        <label class="switch">
-          <input type="checkbox" id="smart" />
-          <span class="slider"></span>
-        </label>
-      </div>
-
-      <div class="card">
-        <div class="card-header">
-          <h2 class="card-title">Debug Mode</h2>
-          <p class="card-description">Enable advanced logging and diagnostics for troubleshooting</p>
-        </div>
-        <label class="switch">
-          <input type="checkbox" id="debug-mode" />
-          <span class="slider"></span>
-        </label>
       </div>
     </div>
 
@@ -2134,11 +2039,182 @@ another-site.org/adult/*"></textarea>
       </div>
       <input type="file" id="whitelist-file" accept=".json" style="display: none;" />
     </div>
+      </section>
 
-    <div class="footer fade-in">
-      <p>🔒 BlockNSFW runs entirely locally. Your browsing data never leaves your device.</p>
-      <p style="margin-top: 0.75rem; font-size: 0.8125rem;">Built with privacy-first architecture and enterprise-grade security</p>
+      <section class="section" id="section-security">
+        <div class="section-head">
+          <h2 class="section-title">Security</h2>
+          <p class="section-desc">Lock down your settings and control private-window behavior.</p>
+        </div>
+
+    <div class="card fade-in">
+      <div class="card-header">
+        <h2 class="card-title">PIN Protection</h2>
+        <p class="card-description">PIN-protect your settings so they can't be changed without your code.</p>
+      </div>
+      <div style="display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; flex-wrap: wrap;">
+        <span class="status-badge" id="pin-status">🔒 PIN: Not set</span>
+        <div class="button-group" style="margin-top: 0;">
+          <button class="button button-sm" id="set-pin">Set PIN</button>
+          <button class="button button-sm button-destructive" id="clear-pin">Clear PIN</button>
+        </div>
+      </div>
     </div>
+
+    <div class="card fade-in">
+      <div class="card-header">
+        <h2 class="card-title">Incognito Mode</h2>
+        <p class="card-description">Allow the extension to run in Incognito (private) windows. Chrome requires you to enable this on the extension's details page.</p>
+      </div>
+
+      <div class="switch-container">
+        <div class="switch-label">
+          <span class="label">Allow in Incognito</span>
+          <span class="description">Manage permission for private browsing windows</span>
+        </div>
+        <label class="switch">
+          <input type="checkbox" id="allow-incognito" />
+          <span class="slider"></span>
+        </label>
+      </div>
+
+      <div style="margin-top: 1rem; display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: center;">
+        <span class="status-badge" id="incognito-status">🟡 Incognito: Checking…</span>
+        <a class="button button-sm" id="open-incognito-settings" href="#" target="_blank" rel="noreferrer noopener">
+          Open Extensions Page
+        </a>
+      </div>
+
+      <div class="pin-hint" style="margin-top: 0.5rem;">
+        Chrome/Edge require you to toggle "Allow in incognito" on the extension's details page. We'll try to open it for you.
+      </div>
+    </div>
+
+    <div class="grid grid-cols-2 fade-in">
+      <div class="card">
+        <div class="switch-container" style="border-bottom: none; padding: 0;">
+          <div class="switch-label">
+            <span class="label">Smart Detection</span>
+            <span class="description">Advanced keyword detection with contextual analysis for broader content coverage</span>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="smart" />
+            <span class="slider"></span>
+          </label>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="switch-container" style="border-bottom: none; padding: 0;">
+          <div class="switch-label">
+            <span class="label">Debug Mode</span>
+            <span class="description">Verbose logging and diagnostics for troubleshooting</span>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="debug-mode" />
+            <span class="slider"></span>
+          </label>
+        </div>
+      </div>
+    </div>
+      </section>
+
+      <section class="section" id="section-community">
+        <div class="section-head">
+          <h2 class="section-title">Community</h2>
+          <p class="section-desc">Help improve the blocklist — report missed or wrongly blocked sites.</p>
+        </div>
+
+    <div class="card fade-in" id="community-reports-card">
+      <div class="card-header">
+        <h2 class="card-title">Community Reports</h2>
+        <p class="card-description">
+          Suggest websites that should be blocked or report ones that were missed.
+          No account needed — your privacy is fully protected.
+        </p>
+      </div>
+
+      <div class="form-group">
+        <label class="pin-input-label" for="report-url">Website URL</label>
+        <input type="url" class="input" id="report-url" placeholder="https://example.com" autocomplete="off" required pattern="^(https?:\/\/)?([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}([\/?#].*)?$" title="Enter a valid website URL, e.g. https://example.com" />
+        <div class="pin-hint" style="margin-top: 0.5rem;">
+          Reports are grouped by domain (e.g., <span class="code">youtube.com</span>). Different page paths on the same domain count as one report.
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="pin-input-label" for="report-type">Report Type</label>
+        <select class="input" id="report-type">
+          <option value="" disabled selected>-- Please select a report type --</option>
+          <option value="should_block">🚫 This site should be blocked</option>
+          <option value="incorrectly_blocked">✅ This site was incorrectly blocked</option>
+        </select>
+        <div class="info-box" style="margin-top: 0.75rem;">
+          <div class="info-box-title">⚠ Please verify your selection</div>
+          <p class="info-box-text">
+            <strong style="color: var(--destructive);">🚫 "Should be blocked"</strong> — Use this only if the site contains adult, explicit, or inappropriate content.<br>
+            <strong style="color: var(--success);">✅ "Incorrectly blocked"</strong> — Use this if a safe, legitimate site was blocked by mistake.
+          </p>
+        </div>
+      </div>
+
+      <div class="form-group" id="report-category-group">
+        <label class="pin-input-label" for="report-category">Category</label>
+        <select class="input" id="report-category">
+          <option value="adult">Adult / NSFW Content</option>
+          <option value="gambling">Gambling</option>
+          <option value="violence">Violence / Gore</option>
+          <option value="other">Other</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label class="pin-input-label" for="report-notes">Additional Notes (optional)</label>
+        <textarea class="textarea" id="report-notes" placeholder="Any additional context..." maxlength="500" autocomplete="off" style="min-height: 80px;"></textarea>
+        <div class="pin-hint" id="report-notes-counter" style="margin-top: 0.375rem; text-align: right;">0 / 500</div>
+      </div>
+
+      <div class="button-group" style="align-items: center;">
+        <button class="button button-primary" id="submit-report">Submit Report</button>
+        <span id="report-cooldown" style="font-size: 0.8rem; color: var(--foreground-dim);"></span>
+      </div>
+
+      <div class="pin-hint" id="report-status" style="margin-top: 0.75rem;">
+        Reports are reviewed and may be added to the default blocklist in future updates.
+      </div>
+    </div>
+      </section>
+
+      <section class="section" id="section-about">
+        <div class="section-head">
+          <h2 class="section-title">About</h2>
+          <p class="section-desc">The source code behind BlockNSFW.</p>
+        </div>
+
+    <div class="card fade-in" id="open-source-card">
+      <div class="card-header">
+        <h2 class="card-title">🌐 Open Source</h2>
+        <div class="card-description">
+          <div class="open-source-banner">
+            <p>BlockNSFW is now open source! Star the repo, file a bug, suggest a feature, or send a PR &mdash; every contribution makes the project better.</p>
+            <a href="https://github.com/codepurse/BlockNSFW" target="_blank" rel="noopener noreferrer" class="github-button">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <path d="M12 .5C5.65.5.5 5.65.5 12c0 5.08 3.29 9.39 7.86 10.92.58.1.79-.25.79-.56 0-.28-.01-1.02-.02-2-3.2.7-3.88-1.54-3.88-1.54-.52-1.32-1.27-1.67-1.27-1.67-1.04-.71.08-.7.08-.7 1.15.08 1.76 1.18 1.76 1.18 1.02 1.75 2.68 1.24 3.34.95.1-.74.4-1.24.73-1.53-2.55-.29-5.24-1.28-5.24-5.69 0-1.26.45-2.29 1.19-3.1-.12-.29-.52-1.47.11-3.06 0 0 .97-.31 3.18 1.18a11 11 0 0 1 5.79 0c2.21-1.49 3.18-1.18 3.18-1.18.63 1.59.23 2.77.11 3.06.74.81 1.19 1.84 1.19 3.1 0 4.42-2.69 5.39-5.25 5.68.41.36.78 1.05.78 2.12 0 1.53-.01 2.76-.01 3.13 0 .31.21.67.8.56 4.57-1.53 7.85-5.84 7.85-10.92C23.5 5.65 18.35.5 12 .5z"/>
+              </svg>
+              View on GitHub
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+
+      </section>
+
+      <div class="footer fade-in">
+        <p>🔒 BlockNSFW runs entirely locally. Your browsing data never leaves your device.</p>
+        <p style="margin-top: 0.75rem; font-size: 0.8125rem;">Open source and free, always — built with a privacy-first architecture.</p>
+      </div>
+    </main>
   </div>
 
   <!-- Commitment Gate Modal -->
@@ -2207,5 +2283,35 @@ another-site.org/adult/*"></textarea>
 
   <script src="appwrite-client.js"></script>
   <script src="options.js"></script>
+  <script>
+    (function () {
+      var links = Array.prototype.slice.call(document.querySelectorAll('.nav-link[data-target]'));
+      if (!links.length) return;
+      var byId = {};
+      links.forEach(function (l) { byId[l.dataset.target] = l; });
+      links.forEach(function (l) {
+        l.addEventListener('click', function (e) {
+          e.preventDefault();
+          var el = document.getElementById(l.dataset.target);
+          if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        });
+      });
+      var sections = links
+        .map(function (l) { return document.getElementById(l.dataset.target); })
+        .filter(Boolean);
+      if ('IntersectionObserver' in window) {
+        var obs = new IntersectionObserver(function (entries) {
+          entries.forEach(function (en) {
+            if (en.isIntersecting) {
+              links.forEach(function (x) { x.classList.remove('active'); });
+              if (byId[en.target.id]) byId[en.target.id].classList.add('active');
+            }
+          });
+        }, { rootMargin: '-15% 0px -75% 0px', threshold: 0 });
+        sections.forEach(function (s) { obs.observe(s); });
+      }
+      links[0].classList.add('active');
+    })();
+  </script>
 </body>
 </html>
