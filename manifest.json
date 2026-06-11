@@ -38,9 +38,12 @@
       "js": [
         "shared/hostname.js",
         "shared/host-keywords.js",
+        "shared/text-classifier-core.js",
+        "ai-image-blocker-core.js",
+        "ai-image-blocker.js",
         "content.js"
       ],
-      "run_at": "document_start"
+      "run_at": "document_idle"
     }
   ],
   "web_accessible_resources": [
@@ -54,11 +57,17 @@
         "stats.js",
         "icons/icon-16.png",
         "icons/icon-48.png",
-        "icons/icon-128.png"
+        "icons/icon-128.png",
+        "nsfwjs/model.json",
+        "nsfwjs/group1-shard1of1.bin",
+        "text-model.json"
       ],
       "matches": ["<all_urls>"]
     }
   ],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self';"
+  },
   "minimum_chrome_version": "88",
   "browser_specific_settings": {
     "gecko": {

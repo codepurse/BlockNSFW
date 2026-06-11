@@ -1628,6 +1628,9 @@
         <h2 class="card-title">What’s New</h2>
         <div class="card-description">
           <ul style="margin: 0; padding-left: 1.1rem">
+            <li><strong>AI Text Protection (multilingual)</strong> — A new on-device AI reads the page's text to catch adult sites the keyword and blocklist filters miss — especially non-English ones (Russian, Chinese, Korean, Thai, Arabic, and more). It blocks pages it's confident about, and teams up with the image AI to catch borderline ones. Nothing leaves your device.</li>
+            <li><strong>AI Image Protection</strong> — A new on-device AI looks at the actual picture to block adult images, even when nothing in the web address gives them away. Everything stays on your device — your images are never uploaded.</li>
+            <li><strong>Instant blocking</strong> — Flagged images are now hidden the moment they're checked, so adult content no longer flashes on screen before it's blocked.</li>
             <li><strong>IDN / Punycode Coverage</strong> — Internationalized adult mirrors with <strong>xn--</strong> hostnames now load and block as designed.</li>
             <li><strong>Non-English Hostname Filter</strong> — Adult-hostword coverage for Chinese, Korean, Russian, Arabic, and Thai hostnames (e.g. <strong>色情.com</strong>, <strong>야동.com</strong>, <strong>порно.org</strong>).</li>
             <li><strong>Smarter Bundled Blocklist</strong> — Regenerated and synced with the runtime parser, so offline installs get the same coverage.</li>
@@ -1700,6 +1703,84 @@
         <div class="pin-hint" id="image-filter-level-detail" style="margin-top: 0.5rem;">
           Most aggressive filtering. Best protection, but may hide more borderline images.
         </div>
+      </div>
+    </div>
+
+    <div class="card card-featured fade-in" id="ai-image-blocker-card">
+      <div class="card-header">
+        <h2 class="card-title">🛡 AI Content Detection <span class="badge-new">New</span></h2>
+        <p class="card-description">
+          On-device AI that looks at the actual image and reads the page text to
+          catch adult content keyword and blocklist filters miss — including
+          non-English sites. Everything runs on your device; nothing is uploaded.
+        </p>
+      </div>
+
+      <div class="switch-container">
+        <div class="switch-label">
+          <span class="label">Enable AI Image Blocker</span>
+          <span class="description">Replaces any flagged image with a "Blocked by NSFW" placeholder.</span>
+        </div>
+        <label class="switch">
+          <input type="checkbox" id="ai-image-blocker" />
+          <span class="slider"></span>
+        </label>
+      </div>
+      <div style="margin-top: 1rem; display: flex; gap: .75rem; flex-wrap: wrap; align-items: center;">
+        <span class="status-badge" id="ai-image-blocker-status">🖼 AI Blocker: Active</span>
+      </div>
+      <div class="form-group" style="margin-top: 1rem;">
+        <label class="pin-input-label" for="ai-strictness">Image detection strictness</label>
+        <select class="input" id="ai-strictness">
+          <option value="relaxed">Relaxed - Block only clearly explicit images</option>
+          <option value="balanced">Balanced - Recommended default</option>
+          <option value="strict">Strict - Catch borderline content (more false positives)</option>
+        </select>
+        <div class="pin-hint" id="ai-strictness-detail" style="margin-top: 0.5rem;">
+          Balanced filtering — blocks clear adult content while letting most safe images through.
+        </div>
+      </div>
+
+      <hr style="margin: 1.5rem 0; border: none; border-top: 1px solid var(--border, #e5e7eb);" />
+
+      <h3 class="card-title" style="font-size: 1.05rem;">AI Text Blocker</h3>
+      <p class="card-description">
+        Reads the page's text with a tiny multilingual model to catch adult sites the
+        keyword and blocklist filters miss — especially non-English ones. Runs fully on
+        your device; nothing is uploaded.
+      </p>
+      <div class="switch-container">
+        <div class="switch-label">
+          <span class="label">Enable AI Text Blocker</span>
+          <span class="description">Redirects pages whose text is confidently adult. Also blocks borderline pages when the AI Image Blocker flagged images on them.</span>
+        </div>
+        <label class="switch">
+          <input type="checkbox" id="ai-text-blocker" />
+          <span class="slider"></span>
+        </label>
+      </div>
+      <div style="margin-top: 1rem; display: flex; gap: .75rem; flex-wrap: wrap; align-items: center;">
+        <span class="status-badge" id="ai-text-blocker-status">📝 AI Text Blocker: Active</span>
+      </div>
+      <div class="form-group" style="margin-top: 1rem;">
+        <label class="pin-input-label" for="ai-text-strictness">Text detection strictness</label>
+        <select class="input" id="ai-text-strictness">
+          <option value="relaxed">Relaxed - Block only very clearly adult pages</option>
+          <option value="balanced">Balanced - Recommended default</option>
+          <option value="strict">Strict - Catch borderline pages (more false positives)</option>
+        </select>
+        <div class="pin-hint" id="ai-text-strictness-detail" style="margin-top: 0.5rem;">
+          Balanced filtering — blocks pages the model is confident about while letting benign multilingual pages through.
+        </div>
+      </div>
+      <div class="info-box" style="margin-top: .875rem">
+        <div class="info-box-title">How it works</div>
+        <p class="info-box-text">
+          Both models are bundled with the extension and run on your device. The image
+          model runs in a dedicated Web Worker; the ~150 KB text model scores the page in
+          milliseconds. Whole-page text blocking uses a conservative threshold, with a
+          lower threshold when the image blocker also flags content on the page.
+        </p>
       </div>
     </div>
 

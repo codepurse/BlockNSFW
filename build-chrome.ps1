@@ -19,11 +19,16 @@ $ManifestDst = Join-Path $OutDir "manifest.json"
 
 $RuntimeFolders = @(
     "icons",
-    "shared"
+    "shared",
+    "vendor",
+    "nsfwjs"
 )
 $RuntimeFiles   = @(
     "background.js",
     "content.js",
+    "ai-image-blocker-core.js",
+    "ai-image-blocker.js",
+    "classify.worker.js",
     "popup.html",
     "popup.js",
     "options.html",
@@ -36,6 +41,7 @@ $RuntimeFiles   = @(
     "stats.js",
     "appwrite-client.js",
     "blocklist.json",
+    "text-model.json",
     "LICENSE"
 )
 
@@ -52,9 +58,7 @@ Write-Host "==> Copying runtime folders" -ForegroundColor Cyan
 foreach ($folder in $RuntimeFolders) {
     $src = Join-Path $SrcDir $folder
     if (Test-Path $src) {
-        $dst = Join-Path $OutDir $folder
-        New-Item -ItemType Directory -Path $dst -Force | Out-Null
-        Copy-Item -Path (Join-Path $src "*") -Destination $dst -Recurse -Force
+        Copy-Item -Path $src -Destination $OutDir -Recurse -Force
     }
 }
 
@@ -63,6 +67,22 @@ foreach ($file in $RuntimeFiles) {
     $src = Join-Path $SrcDir $file
     if (Test-Path $src) {
         Copy-Item -Path $src -Destination (Join-Path $OutDir $file) -Force
+    }
+}
+
+$RequiredAssets = @(
+    "vendor\tfjs\tf.es2017.js",
+    "vendor\nsfwjs\nsfwjs.runtime.js",
+    "nsfwjs\model.json",
+    "nsfwjs\group1-shard1of1.bin",
+    "text-model.json"
+)
+
+Write-Host "==> Verifying AI runtime assets" -ForegroundColor Cyan
+foreach ($asset in $RequiredAssets) {
+    $assetPath = Join-Path $OutDir $asset
+    if (-not (Test-Path $assetPath)) {
+        throw "Missing required asset in Chrome build: $asset"
     }
 }
 

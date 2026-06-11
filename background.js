@@ -14,6 +14,148 @@ try {
   // still work via ADULT_HOST_KEYWORDS.
 }
 
+// --- AI Image Blocker: TF.js + NSFW.js-compatible runtime in the SW ----------
+// The service worker owns the model so host-page CSP never applies to the
+// classifier runtime.
+let _aiModel = null;
+let _aiModelPromise = null;
+let _aiModelFailed = false;
+let _aiRuntimeLoaded = false;
+let _aiRuntimeLoadError = '';
+let _aiModelLastError = '';
+let _aiModelLastFailureAt = 0;
+const AI_MODEL_RETRY_COOLDOWN_MS = 5000;
+const AI_MODEL_INPUT_SIZE = 224;
+
+function getAiModelErrorMessage(error) {
+  return String(error && error.message || error || 'unknown error');
+}
+
+function getAiModelRetryAfterMs(now = Date.now()) {
+  if (!_aiModelFailed || !_aiModelLastFailureAt) return 0;
+  const remaining = AI_MODEL_RETRY_COOLDOWN_MS - (now - _aiModelLastFailureAt);
+  return remaining > 0 ? remaining : 0;
+}
+
+function syncAiRuntimeStateFromGlobals() {
+  if (typeof self === 'undefined') return;
+  if (typeof self.tf !== 'undefined' && typeof self.nsfwjs !== 'undefined') {
+    _aiRuntimeLoaded = true;
+    _aiRuntimeLoadError = '';
+  }
+}
+
+function preloadAiRuntime() {
+  if (typeof self === 'undefined' || typeof self.importScripts !== 'function') {
+    return;
+  }
+  try {
+    self.importScripts('vendor/tfjs/tf.es2017.js', 'vendor/nsfwjs/nsfwjs.runtime.js');
+    syncAiRuntimeStateFromGlobals();
+    if (!_aiRuntimeLoaded) {
+      if (typeof self.tf === 'undefined') {
+        _aiRuntimeLoadError = 'failed to preload AI runtime: tfjs not available after preload';
+      } else if (typeof self.nsfwjs === 'undefined') {
+        _aiRuntimeLoadError = 'failed to preload AI runtime: nsfwjs not available after preload';
+      }
+    }
+  } catch (err) {
+    _aiRuntimeLoaded = false;
+    _aiRuntimeLoadError = `failed to import AI runtime: ${getAiModelErrorMessage(err)}`;
+  }
+}
+
+preloadAiRuntime();
+
+async function ensureAiRuntimeLoaded() {
+  syncAiRuntimeStateFromGlobals();
+  if (_aiRuntimeLoaded) return;
+  if (_aiRuntimeLoadError) {
+    throw new Error(_aiRuntimeLoadError);
+  }
+  throw new Error('AI runtime was not preloaded');
+}
+
+async function loadAiModel(options = {}) {
+  const forceRetry = options && options.forceRetry === true;
+  if (_aiModel) return _aiModel;
+  if (_aiModelPromise) return _aiModelPromise;
+  const retryAfterMs = getAiModelRetryAfterMs();
+  if (_aiModelFailed && !forceRetry && retryAfterMs > 0) {
+    const suffix = _aiModelLastError ? `: ${_aiModelLastError}` : '';
+    throw new Error(`AI model cooling down after failure${suffix}`);
+  }
+  _aiModelPromise = (async () => {
+    try {
+      await ensureAiRuntimeLoaded();
+      const tfLike = self.tf || null;
+      if (tfLike && typeof tfLike.setBackend === 'function') {
+        let backendSet = false;
+        for (const backend of ['webgl', 'cpu']) {
+          try {
+            await tfLike.setBackend(backend);
+            backendSet = true;
+            break;
+          } catch (_) {}
+        }
+        if (!backendSet && typeof tfLike.ready === 'function') {
+          try { await tfLike.ready(); } catch (_) {}
+        }
+      }
+      if (tfLike && typeof tfLike.ready === 'function') {
+        try { await tfLike.ready(); } catch (_) {}
+      }
+      _aiModel = await self.nsfwjs.load(browserAPI.runtime.getURL('nsfwjs/'));
+      _aiModelFailed = false;
+      _aiModelLastError = '';
+      _aiModelLastFailureAt = 0;
+      console.log('[BlockNSFW] AI Image Blocker model loaded.');
+      return _aiModel;
+    } catch (err) {
+      _aiModel = null;
+      _aiModelFailed = true;
+      _aiModelLastError = getAiModelErrorMessage(err);
+      _aiModelLastFailureAt = Date.now();
+      console.warn('[BlockNSFW] Failed to load NSFW model in SW:',
+        _aiModelLastError);
+      throw new Error(_aiModelLastError);
+    } finally {
+      _aiModelPromise = null;
+    }
+  })();
+  return _aiModelPromise;
+}
+
+async function classifyImageBytes(blobOrArrayBuffer) {
+  const model = await loadAiModel();
+  let bitmap;
+  const bitmapOptions = {
+    resizeWidth: AI_MODEL_INPUT_SIZE,
+    resizeHeight: AI_MODEL_INPUT_SIZE,
+    resizeQuality: 'high'
+  };
+  if (blobOrArrayBuffer instanceof ArrayBuffer ||
+      ArrayBuffer.isView(blobOrArrayBuffer)) {
+    const blob = new Blob([blobOrArrayBuffer]);
+    try {
+      bitmap = await createImageBitmap(blob, bitmapOptions);
+    } catch (_) {
+      bitmap = await createImageBitmap(blob);
+    }
+  } else {
+    try {
+      bitmap = await createImageBitmap(blobOrArrayBuffer, bitmapOptions);
+    } catch (_) {
+      bitmap = await createImageBitmap(blobOrArrayBuffer);
+    }
+  }
+  const predictions = await model.classify(bitmap);
+  try { bitmap.close(); } catch (_) {}
+  const scores = {};
+  for (const p of predictions) scores[p.className] = p.probability;
+  return scores;
+}
+
 // Storage keys
 const SETTINGS_KEY = 'pblocker_settings';
 const BLOCKED_STATS_KEY = 'pblocker_stats';
@@ -39,6 +181,9 @@ const DEFAULT_SETTINGS = {
   safeSearchEnabled: true,
   facebookReelsEnabled: false,
   instagramReelsEnabled: false,
+  aiImageBlocker: true,
+  aiTextBlocker: true,
+  aiTextStrictness: 'balanced',
 };
 
 // Default trusted domains for images (gaming, social media, e-commerce platforms)
@@ -83,6 +228,7 @@ const DEFAULT_STATS = {
   blockedCount: 0,
   websiteBlockedCount: 0,
   imageBlockedCount: 0,
+  aiImageBlockedCount: 0,
   searchResultBlockedCount: 0,
   lastBlocked: null,
   lastWebsiteBlocked: null,
@@ -771,6 +917,9 @@ async function updateStats(type = 'blocked', details = {}) {
       case 'image_filtered':
         newStats.imageBlockedCount++;
         break;
+      case 'image_ai_filtered':
+        newStats.aiImageBlockedCount++;
+        break;
       case 'search_result_filtered':
         newStats.searchResultBlockedCount++;
         break;
@@ -794,6 +943,9 @@ async function updateStats(type = 'blocked', details = {}) {
         break;
       case 'image_filtered':
         newDailyStats.imageBlocked++;
+        break;
+      case 'image_ai_filtered':
+        newDailyStats.imageAiBlocked = (newDailyStats.imageAiBlocked || 0) + 1;
         break;
       case 'search_result_filtered':
         newDailyStats.searchResultBlocked++;
@@ -1375,6 +1527,15 @@ browserAPI.runtime.onMessage.addListener((message, sender, sendResponse) => {
       if (url) logBlockedPage(url, 'Image filtered');
     } catch (_) {}
     sendResponse({ success: true });
+  } else if (message.type === 'image_ai_filtered') {
+    updateStats('image_ai_filtered');
+    try {
+      const url = typeof message.url === 'string'
+        ? message.url
+        : (typeof sender !== 'undefined' && sender && sender.url ? sender.url : '');
+      if (url) logBlockedPage(url, 'AI image filtered');
+    } catch (_) {}
+    sendResponse({ success: true });
   } else if (message.type === 'website_blocked') {
     updateStats('website_blocked', {
       url: message.url,
@@ -1449,6 +1610,43 @@ browserAPI.runtime.onMessage.addListener((message, sender, sendResponse) => {
         sendResponse({ success: true, meta: blockResult.meta, count: blockResult.domains?.length || 0 });
       } catch (error) {
         sendResponse({ success: false, error: error.message });
+      }
+    })();
+    return true;
+  } else if (message.type === 'ai_classify_image' && (message.data || message.src)) {
+    (async () => {
+      try {
+        let blob;
+        if (message.data) {
+          const arr = message.data;
+          blob = new Blob([arr instanceof ArrayBuffer ? arr : new Uint8Array(arr)],
+            { type: message.mimeType || 'image/jpeg' });
+        } else {
+          const resp = await fetch(message.src, {
+            credentials: 'omit',
+            cache: 'force-cache',
+          });
+          if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+          blob = await resp.blob();
+        }
+        const scores = await classifyImageBytes(blob);
+        sendResponse({ success: true, scores });
+      } catch (error) {
+        sendResponse({ success: false, error: error.message || String(error) });
+      }
+    })();
+    return true;
+  } else if (message.type === 'ai_ping_model') {
+    (async () => {
+      try {
+        await loadAiModel({ forceRetry: message.forceRetry === true });
+        sendResponse({ ready: true });
+      } catch (error) {
+        sendResponse({
+          ready: false,
+          error: error.message || String(error),
+          retryAfterMs: getAiModelRetryAfterMs()
+        });
       }
     })();
     return true;

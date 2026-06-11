@@ -1,0 +1,141 @@
+# Seed NEGATIVE snippets for the AI Text Blocker bootstrap corpus.
+#
+# Benign multilingual page-text samples PLUS deliberate "hard negatives":
+# sentences containing words that overlap with adult vocabulary but are clearly
+# safe (sex education, breast cancer, chicken breast, nude lipstick, analysis,
+# Essex/Sussex, classic literature). These teach the model to NOT block benign
+# pages, which is the main lever on false positives.
+#
+# Format: "## xx" sets language; "#" comment; one snippet per line.
+
+## en
+Welcome to our online store with free shipping on all orders this week.
+Read the latest technology news and product reviews from our editorial team.
+The recipe calls for two cups of flour, one egg, and a pinch of salt.
+Our customer support team is available twenty four hours a day.
+Learn Python programming with these beginner friendly tutorials.
+The quarterly financial report shows steady revenue growth this year.
+Book your hotel room early to get the best seasonal discount.
+This documentary explores the history of ancient civilizations.
+Sex education in schools helps teenagers make informed and healthy choices.
+Breast cancer awareness month encourages regular medical screening.
+This chicken breast recipe is quick, healthy, and easy to prepare.
+The nude lipstick shade is perfect for a natural everyday makeup look.
+Adult education classes for the community start next semester.
+We offer a wide range of adult bicycle helmets in every size.
+The data analysis revealed a strong correlation between the two variables.
+Essex and Sussex are counties in the south east of England.
+The naked truth about climate change is in this peer reviewed study.
+She gave a frank and honest interview about her career in medicine.
+Players scored three goals in the second half of the championship match.
+Our skincare cream uses natural ingredients for sensitive skin.
+
+## en-hard
+# Hard negatives: ambiguous tokens (nude, naked, adult, sex, escort, breast,
+# strip) in unambiguously SAFE contexts. These directly counter false positives
+# on the char n-grams shared with adult vocabulary, so they are listed densely.
+The nude lipstick shade is perfect for a natural everyday makeup look.
+A nude lipstick and matte makeup palette for a soft natural look.
+The nude eyeshadow and blush set suits a everyday cosmetic routine.
+Try this nude manicure with a glossy nude nail polish finish.
+These nude heels match almost any outfit and dress color.
+The nude tone foundation blends well with fair skin.
+She wore an elegant nude colored dress to the gallery opening.
+Our nude palette eyeshadow set is back in stock this season.
+The artist studied figure drawing and classical nude sketches in art school.
+The naked truth about our finances is in the annual report.
+You can see the comet with the naked eye on a clear night.
+Naked DSL is a broadband line sold without a phone plan.
+The adult education center offers evening language and math classes.
+Adult learners can enroll in the part time accounting course.
+This is an adult sized bicycle helmet certified for safety.
+The adult ticket includes museum entry and the guided tour.
+Sex and gender are distinct concepts in this sociology textbook.
+Sex education in schools helps teenagers make informed choices.
+The biologist explained how temperature determines the sex of the hatchlings.
+The military escort accompanied the convoy to the base.
+A police escort guided the marathon runners through downtown.
+Grill the chicken breast for six minutes on each side.
+Breast cancer screening is recommended for women over forty.
+The strip mall on Main Street has a new coffee shop.
+He read the comic strip in the Sunday newspaper.
+We installed an LED strip light under the kitchen cabinet.
+Essex and Sussex are counties in the south east of England.
+The data analysis revealed a strong correlation between variables.
+
+## es
+Bienvenido a nuestra tienda en línea con envío gratis esta semana.
+Lee las últimas noticias de tecnología y reseñas de productos.
+La educación sexual ayuda a los jóvenes a tomar decisiones saludables.
+Esta receta de pollo es rápida, saludable y fácil de preparar.
+El informe financiero muestra un crecimiento constante este año.
+Aprende programación con estos tutoriales para principiantes.
+
+## pt
+Bem vindo à nossa loja online com frete grátis nesta semana.
+Leia as últimas notícias de tecnologia e análises de produtos.
+A educação sexual ajuda os jovens a tomar decisões saudáveis.
+Esta receita de frango é rápida, saudável e fácil de preparar.
+
+## ru
+Добро пожаловать в наш интернет магазин с бесплатной доставкой.
+Читайте последние новости технологий и обзоры товаров.
+Половое воспитание помогает подросткам принимать здоровые решения.
+Этот рецепт курицы быстрый, полезный и простой в приготовлении.
+Анализ данных показал сильную связь между двумя переменными.
+
+## de
+Willkommen in unserem Onlineshop mit kostenlosem Versand diese Woche.
+Lesen Sie die neuesten Technologienachrichten und Produktbewertungen.
+Sexualkunde hilft Jugendlichen, gesunde Entscheidungen zu treffen.
+Dieses Hähnchenrezept ist schnell, gesund und einfach zuzubereiten.
+
+## fr
+Bienvenue dans notre boutique en ligne avec livraison gratuite cette semaine.
+Lisez les dernières actualités technologiques et les avis sur les produits.
+L éducation sexuelle aide les jeunes à faire des choix sains.
+Cette recette de poulet est rapide, saine et facile à préparer.
+
+## it
+Benvenuto nel nostro negozio online con spedizione gratuita questa settimana.
+Leggi le ultime notizie di tecnologia e le recensioni dei prodotti.
+L educazione sessuale aiuta i giovani a fare scelte sane.
+
+## zh
+欢迎光临我们的网上商店，本周全场免运费。
+阅读最新的科技新闻和产品评测。
+性教育帮助青少年做出健康的选择。
+这道鸡胸肉食谱快捷健康又容易制作。
+数据分析显示两个变量之间存在很强的相关性。
+
+## ja
+当オンラインストアへようこそ。今週は全品送料無料です。
+最新のテクノロジーニュースと製品レビューをお読みください。
+性教育は若者が健康的な選択をするのに役立ちます。
+この鶏むね肉のレシピは手早く健康的で簡単です。
+
+## ko
+저희 온라인 상점에 오신 것을 환영합니다 이번 주 무료 배송입니다.
+최신 기술 뉴스와 제품 리뷰를 읽어보세요.
+성교육은 청소년이 건강한 선택을 하도록 돕습니다.
+이 닭가슴살 요리법은 빠르고 건강하며 만들기 쉽습니다.
+
+## th
+ยินดีต้อนรับสู่ร้านค้าออนไลน์ของเรา สัปดาห์นี้ส่งฟรีทุกออเดอร์
+อ่านข่าวเทคโนโลยีล่าสุดและรีวิวสินค้า
+เพศศึกษาช่วยให้วัยรุ่นตัดสินใจอย่างมีสุขภาพดี
+
+## ar
+مرحبا بكم في متجرنا الإلكتروني مع شحن مجاني هذا الأسبوع.
+اقرأ أحدث أخبار التكنولوجيا ومراجعات المنتجات.
+التربية الجنسية تساعد المراهقين على اتخاذ قرارات صحية.
+
+## hi
+हमारे ऑनलाइन स्टोर में आपका स्वागत है इस सप्ताह मुफ्त शिपिंग।
+नवीनतम तकनीकी समाचार और उत्पाद समीक्षाएं पढ़ें।
+यौन शिक्षा किशोरों को स्वस्थ निर्णय लेने में मदद करती है।
+
+## id
+Selamat datang di toko online kami dengan gratis ongkir minggu ini.
+Baca berita teknologi terbaru dan ulasan produk.
+Pendidikan seks membantu remaja membuat keputusan yang sehat.
