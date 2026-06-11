@@ -1,10 +1,18 @@
-// ES-module Web Worker. Owns the tfjs + nsfwjs lifecycle and the model.
+// Classic Web Worker (importScripts for better Chrome extension compatibility).
+// Owns the tfjs + nsfwjs lifecycle and the model.
 // Receives Transferable ImageBitmaps from the content script and replies
 // with a scores object (or an error string) keyed by the caller-supplied
 // requestId.
 
-import * as tf from './vendor/tfjs/tf.min.js';
-import * as nsfwjs from './vendor/nsfwjs/nsfwjs.min.js';
+try {
+  importScripts(
+    chrome.runtime.getURL('vendor/tfjs/tf.min.js'),
+    chrome.runtime.getURL('vendor/nsfwjs/nsfwjs.min.js')
+  );
+} catch (e) {
+  self.postMessage({ type: 'import_error', error: String(e) });
+  throw e;
+}
 
 let model = null;
 let modelLoadAttempted = false;

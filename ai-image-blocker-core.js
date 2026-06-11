@@ -11,20 +11,35 @@ const MIN_NATURAL_DIMENSION = 64;
 const BLOCKED_CLASS = 'pblocker-ai-blocked';
 
 // Score → verdict.
-//   Porn + Hentai >= 0.50  → block  (explicit imagery; model is confident)
-//   Sexy         >= 0.70   → block  (suggestive; model is noisier, higher bar)
-function verdictFor(scores) {
+//   Porn + Hentai >= 0.50  → block  (combined explicit signal)
+//   Sexy         >= 0.70   → block  (suggestive but non-explicit; higher bar
+//                                     so swimwear/fashion/fitness pass)
+//
+// NOTE: NSFW.js's "Drawing" and "Neutral" are *safe* classes. A high Drawing
+// score means "confidently a safe illustration", not "hentai" — hentai scores
+// high on the Hentai class instead. So Drawing must never trigger a block, or
+// ordinary cartoons, logos, and diagrams get filtered.
+//
+// Thresholds are overridable via the `thresholds` argument so users can
+// tune strictness in the options page.
+const DEFAULT_THRESHOLDS = {
+  pornHentai: 0.50,
+  sexy: 0.70
+};
+
+function verdictFor(scores, thresholds) {
   if (!scores) return 'allow';
+  const t = { ...DEFAULT_THRESHOLDS, ...(thresholds || {}) };
   const pornHentai = (scores.Porn || 0) + (scores.Hentai || 0);
-  if (pornHentai >= 0.50) return 'block';
-  if ((scores.Sexy || 0) >= 0.70) return 'block';
+  if (pornHentai >= t.pornHentai) return 'block';
+  if ((scores.Sexy || 0) >= t.sexy) return 'block';
   return 'allow';
 }
 
 // First-party check using simple suffix matching (not the Public Suffix List).
-//   imageHost === pageHost
-//   imageHost ends with '.' + pageHost
-//   pageHost  ends with '.' + imageHost
+// Kept as a helper because other call sites may still need registrable-host
+// comparisons, but same-origin images must not be skipped by the AI blocker:
+// many adult/self-hosted sites serve explicit media from their own domain.
 function firstPartyMatch(imageHost, pageHost) {
   if (!imageHost || !pageHost) return false;
   if (imageHost === pageHost) return true;
@@ -38,7 +53,7 @@ function firstPartyMatch(imageHost, pageHost) {
 //   { aiImageBlocker: boolean, degraded?: boolean, trustedDomains: Set<string>,
 //     pageHost?: string, lru?: Map<string, any> }
 // `img` shape (plain object, not necessarily HTMLImageElement):
-//   { src, currentSrc, naturalWidth, naturalHeight, offsetParent, hostname }
+//   { src, currentSrc, naturalWidth, naturalHeight, complete, offsetParent, hostname }
 function shouldSkipImage(img, opts) {
   if (!opts || opts.aiImageBlocker === false) return true;
   if (opts.degraded) return true;
@@ -47,15 +62,17 @@ function shouldSkipImage(img, opts) {
   if (!src) return true;
   if (src.startsWith('data:') || src.startsWith('blob:')) return true;
 
-  if (img.naturalWidth != null && img.naturalWidth < MIN_NATURAL_DIMENSION) return true;
-  if (img.naturalHeight != null && img.naturalHeight < MIN_NATURAL_DIMENSION) return true;
+  // Only skip for tiny dimensions, never for unloaded (naturalWidth == 0) images.
+  if (img.naturalWidth > 0 && img.naturalWidth < MIN_NATURAL_DIMENSION) return true;
+  if (img.naturalHeight > 0 && img.naturalHeight < MIN_NATURAL_DIMENSION) return true;
 
-  if (img.offsetParent == null) return true;
+  // Hidden / not-rendered elements (display:none, detached) report a null
+  // offsetParent — nothing is on screen to filter, so skip. `undefined` means
+  // the caller supplied no visibility info, so analyze to be safe.
+  if (img.offsetParent === null) return true;
 
   const host = (img.hostname || '').toLowerCase();
   if (host && opts.trustedDomains && opts.trustedDomains.has(host)) return true;
-
-  if (host && opts.pageHost && firstPartyMatch(host, opts.pageHost.toLowerCase())) return true;
 
   if (opts.lru && opts.lru.has(src)) return true;
 

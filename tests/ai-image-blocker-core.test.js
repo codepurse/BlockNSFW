@@ -130,9 +130,9 @@ test('shouldSkipImage: trusted domain → skip', () => {
   assert.equal(ctx.shouldSkipImage(makeImg({ hostname: 'i.imgur.com' }), { aiImageBlocker: true, trustedDomains: new Set(['i.imgur.com']) }), true);
 });
 
-test('shouldSkipImage: first-party → skip', () => {
+test('shouldSkipImage: first-party should still be analyzed', () => {
   const ctx = loadCore();
-  assert.equal(ctx.shouldSkipImage(makeImg({ hostname: 'example.com' }), { aiImageBlocker: true, trustedDomains: new Set(), pageHost: 'example.com' }), true);
+  assert.equal(ctx.shouldSkipImage(makeImg({ hostname: 'example.com' }), { aiImageBlocker: true, trustedDomains: new Set(), pageHost: 'example.com' }), false);
 });
 
 test('shouldSkipImage: too small (width) → skip', () => {

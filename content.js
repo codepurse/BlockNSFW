@@ -277,6 +277,17 @@ let instagramReelsEnabled = false;
 let blockedPageType = 'default'; // 'default', 'custom', 'plain_html'
 let customBlockedPageUrl = ''; // URL for custom blocked page
 let plainBlockedPageHtml = '';
+
+// AI Text Blocker (multilingual hashed char-n-gram classifier). The model is a
+// pure-JS linear model in shared/text-classifier-core.js (global TextClassifier),
+// loaded from text-model.json. No TF.js / no eval -> safe in the content script.
+let aiTextBlocker = true;
+let aiTextStrictness = 'balanced';
+let textModel = null;
+let textModelReady = false;
+let textModelLoading = false;
+let textModelFailed = false; // give up after one failed load; never retry-hammer
+let textScanPending = false; // a scan wanted to run before the model finished loading
 const FACEBOOK_REELS_STYLE_ID = 'pblocker-facebook-reels-style';
 const INSTAGRAM_REELS_STYLE_ID = 'pblocker-instagram-reels-style';
 
@@ -1026,6 +1037,8 @@ function getBlockedReasonLabel(reasonKey) {
       return 'Blocked by metadata scan';
     case 'page_text_scan':
       return 'Blocked by page text scan';
+    case 'ai_text_scan':
+      return 'Blocked by AI text classifier';
     case 'search_query':
       return 'Blocked explicit search query';
     case 'reddit_nsfw':
@@ -1245,6 +1258,32 @@ function debounce(func, delay) {
   };
 }
 
+// Map a user-facing strictness preset to verdictFor() thresholds. Keep these
+// in sync with the labels in options.js (getAiStrictnessMeta). Lower numbers =
+// more aggressive (blocks more). `balanced` is the default.
+function getAiThresholds(level) {
+  switch (String(level || '').toLowerCase()) {
+    case 'relaxed': return { pornHentai: 0.70, sexy: 0.85 };
+    case 'strict':  return { pornHentai: 0.35, sexy: 0.55 };
+    case 'balanced':
+    default:        return { pornHentai: 0.50, sexy: 0.70 };
+  }
+}
+
+// AI Text Blocker thresholds. `block` = redirect on text alone (high
+// confidence). `fuse` = lower bar that only redirects when the AI image blocker
+// also flagged >=1 image on the page (corroborating evidence). Whole-page
+// blocking has a higher false-positive cost than image blocking, so `block`
+// stays conservative.
+function getAiTextThresholds(level) {
+  switch (String(level || '').toLowerCase()) {
+    case 'relaxed': return { block: 0.96, fuse: 0.75 };
+    case 'strict':  return { block: 0.80, fuse: 0.50 };
+    case 'balanced':
+    default:        return { block: 0.90, fuse: 0.60 };
+  }
+}
+
 // Settings and data loading
 async function loadSettings() {
   try {
@@ -1265,7 +1304,11 @@ async function loadSettings() {
       customBlockedPageUrl: '',
       plainBlockedPageHtml: '',
       facebookReelsEnabled: false,
-      instagramReelsEnabled: false
+      instagramReelsEnabled: false,
+      aiImageBlocker: true,
+      aiStrictness: 'balanced',
+      aiTextBlocker: true,
+      aiTextStrictness: 'balanced'
     };
     
     // Handle temporary disable with auto-revert
@@ -1290,7 +1333,9 @@ async function loadSettings() {
     debugMode = settings.debugMode === true;
     facebookReelsEnabled = settings.facebookReelsEnabled === true;
     instagramReelsEnabled = settings.instagramReelsEnabled === true;
-    
+    aiTextBlocker = settings.aiTextBlocker !== false;
+    aiTextStrictness = settings.aiTextStrictness || 'balanced';
+
     // Store custom blocked page settings globally for access during blocking
     blockedPageType = settings.blockedPageType || 'default';
     customBlockedPageUrl = settings.customBlockedPageUrl || '';
@@ -1299,6 +1344,22 @@ async function loadSettings() {
     // Load default blocklist
     await loadBlocklist();
     
+    // Initialize AI image blocker if available
+    if (typeof window.AIImageBlocker !== 'undefined' &&
+        window.AIImageBlocker &&
+        typeof window.AIImageBlocker.init === 'function') {
+      window.AIImageBlocker.init({
+        ...settings,
+        enabled: isEnabled,
+        aiThresholds: getAiThresholds(settings.aiStrictness)
+      });
+    }
+
+    // Warm up the AI text classifier model so the first page scan is instant.
+    if (isEnabled && aiTextBlocker) {
+      ensureTextModelLoaded();
+    }
+
     log('Settings loaded', { isEnabled, useSmartBlocking, imageFilterLevel });
   } catch (error) {
     log('Error loading settings:', error);
@@ -1643,6 +1704,112 @@ function checkPageBodyText() {
     }
   }
 
+  return false;
+}
+
+// ---------------------------------------------------------------------------
+// AI Text Blocker: page-level multilingual classifier scan.
+// Loads the linear model lazily, scores combined title+meta+body text, and
+// redirects on a confident verdict (or a moderate verdict corroborated by AI
+// image blocks on the same page).
+// ---------------------------------------------------------------------------
+const AI_TEXT_META_SELECTORS = [
+  'meta[name="title"]',
+  'meta[property="og:title"]',
+  'meta[name="twitter:title"]',
+  'meta[name="description"]',
+  'meta[property="og:description"]',
+  'meta[name="twitter:description"]',
+  'meta[name="keywords"]'
+];
+
+function ensureTextModelLoaded() {
+  if (textModelReady || textModelLoading || textModelFailed) return;
+  if (typeof TextClassifier === 'undefined') { textModelFailed = true; return; }
+  textModelLoading = true;
+  let loaded = false;
+  fetch(browserAPI.runtime.getURL('text-model.json'))
+    .then(res => (res && res.ok) ? res.json() : null)
+    .then(json => {
+      const m = json ? TextClassifier.loadModel(json) : null;
+      if (m) {
+        textModel = m;
+        textModelReady = true;
+        loaded = true;
+        log('AI Text Blocker model ready', { version: m.version, weights: m.weights.size });
+      }
+    })
+    .catch(err => { log('AI Text Blocker model load failed:', err && err.message || err); })
+    .finally(() => {
+      textModelLoading = false;
+      if (!loaded) textModelFailed = true; // fail open; do not retry every scan
+      else if (textScanPending) runDeferredTextScan();
+    });
+}
+
+// Re-run the scan once the model finishes loading, if one was requested while
+// it was still loading. Re-checks gates (whitelist is async).
+function runDeferredTextScan() {
+  textScanPending = false;
+  if (!isEnabled || blockedTriggered || !aiTextBlocker) return;
+  isCurrentPageWhitelisted()
+    .then(wl => { if (!wl) checkPageTextWithModel(); })
+    .catch(() => {});
+}
+
+function gatherTextForModel() {
+  const parts = [];
+  if (document.title) parts.push(document.title);
+  try {
+    document.querySelectorAll(AI_TEXT_META_SELECTORS.join(',')).forEach(meta => {
+      const content = meta.getAttribute('content');
+      if (content) parts.push(content);
+    });
+  } catch (_) {}
+  const lines = getPageTextLinesForScan();
+  if (lines.length > 0) parts.push(lines.join(' '));
+  let text = parts.join(' ');
+  if (text.length > MAX_TEXT_LENGTH) text = text.slice(0, MAX_TEXT_LENGTH);
+  return text;
+}
+
+function checkPageTextWithModel() {
+  if (blockedTriggered) return false;
+  if (!isEnabled || !aiTextBlocker) return false;
+  if (getSearchEngine()) return false;        // users need to search
+  if (isExtensionStorePage()) return false;
+  if (typeof TextClassifier === 'undefined' || !document.body) return false;
+
+  if (!textModelReady || !textModel) {
+    textScanPending = true;
+    ensureTextModelLoaded();
+    return false;
+  }
+
+  const text = gatherTextForModel();
+  if (!text) return false;
+
+  let prob;
+  try {
+    prob = TextClassifier.scoreText(text, textModel);
+  } catch (_) {
+    return false; // fail open
+  }
+  if (typeof prob !== 'number' || prob < 0) return false;
+
+  const thresholds = getAiTextThresholds(aiTextStrictness);
+  const imageBlockCount = (globalThis.__pblockerAIImageBlockCount | 0);
+  const verdict = TextClassifier.verdictForText(prob, thresholds, imageBlockCount);
+
+  if (verdict === 'block' || verdict === 'fuse-block') {
+    const reason = verdict === 'fuse-block'
+      ? `AI text+image classifier flagged this page (text score ${prob.toFixed(2)}, ${imageBlockCount} image(s) blocked)`
+      : `AI text classifier flagged this page (score ${prob.toFixed(2)})`;
+    log(reason);
+    notifyBackground('website_blocked', { reason, title: document.title });
+    redirectToBlockedPage('ai_text_scan');
+    return true;
+  }
   return false;
 }
 
@@ -2577,6 +2744,7 @@ function restoreBlockedMediaElements() {
     delete element.dataset.pblockerType;
     delete element.dataset.pblockerOriginalDisplay;
     delete element.dataset.pblockerObserved;
+    delete element.dataset.pblockerObservedSrc;
     delete element.dataset.pblockerBlockId;
   });
 }
@@ -3145,6 +3313,37 @@ function maybeBlockImage(img) {
   }
 }
 
+const IMAGE_OBSERVER_ROOT_MARGIN_PX = 1400;
+const IMAGE_EARLY_ANALYSIS_MARGIN_PX = 900;
+
+function isImageNearViewport(img, marginPx = IMAGE_EARLY_ANALYSIS_MARGIN_PX) {
+  try {
+    if (!img || typeof img.getBoundingClientRect !== 'function') return false;
+    const rect = img.getBoundingClientRect();
+    const viewportHeight = window.innerHeight || document.documentElement.clientHeight || 0;
+    const viewportWidth = window.innerWidth || document.documentElement.clientWidth || 0;
+    if (viewportHeight <= 0 || viewportWidth <= 0) return false;
+    if (rect.bottom < -marginPx) return false;
+    if (rect.top > viewportHeight + marginPx) return false;
+    if (rect.right < 0 || rect.left > viewportWidth) return false;
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
+function prewarmImageAnalysis(img) {
+  if (!isEnabled || !isImageNearViewport(img)) return false;
+  maybeBlockImage(img);
+  if (img.dataset.pblockerHidden === 'true') return true;
+  if (typeof window.AIImageBlocker !== 'undefined' &&
+      window.AIImageBlocker &&
+      typeof window.AIImageBlocker.onImageVisible === 'function') {
+    window.AIImageBlocker.onImageVisible(img);
+  }
+  return true;
+}
+
 function setupIntersectionObserver() {
   if (imageObserver) {
     try { imageObserver.disconnect(); } catch (_) {}
@@ -3154,17 +3353,38 @@ function setupIntersectionObserver() {
     for (const entry of entries) {
       const img = entry.target;
       if (entry.isIntersecting) {
+        if (!isEnabled) {
+          imageObserver.unobserve(img);
+          continue;
+        }
         // Re-check when visible (src/srcset may have changed lazily)
         maybeBlockImage(img);
+        if (img.dataset.pblockerHidden !== 'true' &&
+            typeof window.AIImageBlocker !== 'undefined' &&
+            window.AIImageBlocker &&
+            typeof window.AIImageBlocker.onImageVisible === 'function') {
+          window.AIImageBlocker.onImageVisible(img);
+        }
         imageObserver.unobserve(img);
       }
     }
-  }, { root: null, rootMargin: '0px 0px 400px 0px', threshold: 0.1 });
+  }, { root: null, rootMargin: `0px 0px ${IMAGE_OBSERVER_ROOT_MARGIN_PX}px 0px`, threshold: 0.1 });
 }
 
 function observeImage(img) {
-  if (!img || img.dataset.pblockerObserved === 'true') return;
+  if (!img || !isEnabled) return;
+  const effectiveUrl = getEffectiveImageUrl(img);
+  const previousObservedSrc = img.dataset.pblockerObservedSrc || '';
+  if (img.dataset.pblockerObserved === 'true' && previousObservedSrc === effectiveUrl) return;
+  if (previousObservedSrc && previousObservedSrc !== effectiveUrl && img.classList) {
+    img.classList.remove('pblocker-ai-blocked');
+  }
   img.dataset.pblockerObserved = 'true';
+  if (effectiveUrl) {
+    img.dataset.pblockerObservedSrc = effectiveUrl;
+  } else {
+    delete img.dataset.pblockerObservedSrc;
+  }
   
   // CRITICAL FIX: Check image URL immediately (before it loads/displays)
   // Don't wait for IntersectionObserver - block bad URLs instantly
@@ -3178,11 +3398,8 @@ function observeImage(img) {
   // For images that pass quick check, use IntersectionObserver for deeper analysis
   if (!imageObserver) setupIntersectionObserver();
   try { imageObserver.observe(img); } catch (_) {}
-
-  if (typeof window.AIImageBlocker !== 'undefined' &&
-      window.AIImageBlocker &&
-      typeof window.AIImageBlocker.onImageVisible === 'function') {
-    window.AIImageBlocker.onImageVisible(img);
+  if (prewarmImageAnalysis(img)) {
+    try { imageObserver.unobserve(img); } catch (_) {}
   }
 }
 
@@ -3406,7 +3623,12 @@ async function processContent() {
     if (checkPageBodyText()) {
       return;
     }
-    
+    // AI text classifier (multilingual) — catches non-English adult pages the
+    // keyword/blocklist scans miss; fuses with AI image-block evidence.
+    if (checkPageTextWithModel()) {
+      return;
+    }
+
   } catch (error) {
     log('Error processing content:', error);
   } finally {
@@ -3440,7 +3662,8 @@ const debouncedPageTextScan = debounce(async () => {
   if (!isEnabled || blockedTriggered) return;
   const whitelisted = await isCurrentPageWhitelisted();
   if (whitelisted) return;
-  checkPageBodyText();
+  if (checkPageBodyText()) return;
+  checkPageTextWithModel();
 }, DEBOUNCE_DELAY);
 
 // Incremental processor for newly added search result containers

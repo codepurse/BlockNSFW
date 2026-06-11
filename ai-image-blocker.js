@@ -1,88 +1,144 @@
-// AI Image Blocker — content-script controller.
-// Boots a Web Worker that runs NSFW.js / MobileNet v2 and routes every
-// visible <img> through it. Verdict: 'block' → add .pblocker-ai-blocked
-// class. Verdict: 'allow' → no-op. Results are cached in a session-scoped
-// LRU mirrored to chrome.storage.session. The pure logic lives in
-// ai-image-blocker-core.js (loaded earlier in manifest.json order).
+// AI Image Blocker — content script (SW-delegated).
+// The model lives in the service worker so TF.js (which uses Function() /
+// eval during compilation) is not subject to the host page's CSP. Content
+// script sends image URLs to the SW; the SW fetches, classifies, and returns
+// scores. verdictFor() lives in ai-image-blocker-core.js
+// (plain JS, no eval) which is loaded before this script in the manifest.
 
 (function () {
   'use strict';
-
-  // Refuse to run on extension / browser-internal pages.
-  if (typeof window === 'undefined') return;
-  const scheme = (window.location && window.location.protocol) || '';
-  if (scheme === 'chrome-extension:' || scheme === 'moz-extension:' ||
-      scheme === 'about:' || scheme === 'devtools:') {
-    return;
-  }
 
   const MAX_INFLIGHT = 4;
   const MAX_CACHE_ENTRIES = 2000;
   const CACHE_KEY = 'pblocker_ai_image_cache_v1';
   const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
-  const STORAGE_FLUSH_IDLE_MS = 5000;
   const STYLE_ID = 'pblocker-ai-blocker-styles';
+  const MODEL_PING_TIMEOUT_MS = 60000;
+  const CLASSIFY_TIMEOUT_MS = 60000;
+  const MODEL_RETRY_DELAY_MS = 5000;
+
+  const PLACEHOLDER_CLASS = 'pblocker-ai-placeholder';
+  const PENDING_CLASS = 'pblocker-ai-pending';
 
   const state = {
-    worker: null,
+    modelReady: false,
+    modelFailed: false,
+    modelPingInFlight: false,
+    modelRetryTimer: null,
     inflight: new Map(),
     pendingQueue: [],
-    nextRequestId: 1,
-    modelReady: false,
-    modelReadyPromise: null,
-    modelReadyResolve: null,
+    queuedImages: new WeakSet(),
     lru: new Map(),
-    aiBlockerDegraded: false,
-    degradeToastShown: false,
-    settings: null,
-    trustedDomains: new Set(),
-    pageHost: (window.location && window.location.hostname || '').toLowerCase(),
-    storageFlushTimer: null,
+    placeholders: new WeakMap(),
+    settings: null
   };
-
-  function showDegradeToast() {
-    if (state.degradeToastShown) return;
-    state.degradeToastShown = true;
-    // Reuse the existing toast pattern from content.js if available.
-    // Fall back to a simple console warning if the global is missing.
-    if (typeof window.pblockerShowToast === 'function') {
-      window.pblockerShowToast('AI Image Blocker unavailable — model failed to load.', 6000);
-    } else {
-      console.warn('[BlockNSFW] AI Image Blocker unavailable — model failed to load.');
-    }
-  }
 
   function injectStyles() {
     if (document.getElementById(STYLE_ID)) return;
     const el = document.createElement('style');
     el.id = STYLE_ID;
     el.textContent =
+      // The flagged <img> is hidden (not blurred) and replaced by the
+      // purple placeholder below, mirroring the keyword blocker's fallback.
       '.pblocker-ai-blocked {' +
-        'filter: blur(50px) !important;' +
-        'pointer-events: none !important;' +
-        'user-select: none !important;' +
-        '-webkit-user-drag: none !important;' +
+        'display: none !important;' +
+      '}' +
+      // While a candidate image is being classified it is hidden up-front so
+      // adult content never paints. `visibility: hidden` keeps its layout box
+      // (no page jump); a clear verdict reveals it, a block swaps in the
+      // placeholder. This is the "block-first, reveal-on-safe" strategy.
+      '.' + PENDING_CLASS + ' {' +
+        'visibility: hidden !important;' +
+      '}' +
+      '.' + PLACEHOLDER_CLASS + ' {' +
+        'display: flex !important;' +
+        'flex-direction: column;' +
+        'align-items: center;' +
+        'justify-content: center;' +
+        'box-sizing: border-box;' +
+        'min-width: 80px;' +
+        'min-height: 80px;' +
+        'padding: 8px;' +
+        'border-radius: 6px;' +
+        'background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);' +
+        'color: #fff;' +
+        'font-family: system-ui, -apple-system, sans-serif;' +
+        'font-size: 12px;' +
+        'font-weight: 600;' +
+        'line-height: 1.3;' +
+        'text-align: center;' +
+        'overflow: hidden;' +
+        'pointer-events: none;' +
+        'user-select: none;' +
+      '}' +
+      '.' + PLACEHOLDER_CLASS + ' .pblocker-ai-placeholder-icon {' +
+        'font-size: 20px;' +
+        'margin-bottom: 4px;' +
       '}';
     (document.head || document.documentElement).appendChild(el);
   }
 
-  function scheduleStorageFlush() {
-    if (state.storageFlushTimer != null) return;
-    const flush = () => {
-      state.storageFlushTimer = null;
+  function buildPlaceholder(img) {
+    const ph = document.createElement('div');
+    ph.className = PLACEHOLDER_CLASS;
+
+    // Preserve the rendered footprint so the page layout does not jump.
+    const rect = img.getBoundingClientRect();
+    const width = rect.width || img.clientWidth ||
+      parseInt(img.getAttribute('width'), 10) || img.naturalWidth || 0;
+    const height = rect.height || img.clientHeight ||
+      parseInt(img.getAttribute('height'), 10) || img.naturalHeight || 0;
+    if (width) ph.style.width = width + 'px';
+    if (height) ph.style.height = height + 'px';
+
+    const icon = document.createElement('div');
+    icon.className = 'pblocker-ai-placeholder-icon';
+    icon.textContent = '🛡️';
+    ph.appendChild(icon);
+
+    const label = document.createElement('div');
+    // Shrink the wording for tiny thumbnails.
+    label.textContent = (width > 0 && width < 120) ? 'Blocked' : 'Blocked by NSFW';
+    ph.appendChild(label);
+
+    return ph;
+  }
+
+  function removePlaceholder(img) {
+    const ph = state.placeholders.get(img);
+    if (ph && ph.parentNode) ph.parentNode.removeChild(ph);
+    state.placeholders.delete(img);
+  }
+
+  // Hide a candidate the moment it is queued for classification so adult
+  // content never paints. Skipped if it is already blocked (placeholder shown).
+  function markPending(img) {
+    if (!img || !img.classList) return;
+    if (img.classList.contains('pblocker-ai-blocked')) return;
+    img.classList.add(PENDING_CLASS);
+  }
+
+  function clearPending(img) {
+    if (!img || !img.classList) return;
+    img.classList.remove(PENDING_CLASS);
+  }
+
+  // Reveal everything still awaiting a verdict. Used when the model is
+  // unavailable so the page is never left permanently broken.
+  function revealAllPending() {
+    try {
+      document.querySelectorAll('.' + PENDING_CLASS).forEach((img) => {
+        img.classList.remove(PENDING_CLASS);
+      });
+    } catch (_) {}
+  }
+
+  function flushCacheToStorage() {
+    try {
       const obj = {};
       for (const [k, v] of state.lru) obj[k] = v;
-      try {
-        chrome.storage.session.set({ [CACHE_KEY]: obj }).catch(() => {
-          // Quota exceeded or session ended — fall back to in-memory only.
-        });
-      } catch (_) { /* session storage unavailable */ }
-    };
-    const ric = (typeof window.requestIdleCallback === 'function')
-      ? window.requestIdleCallback : (cb) => setTimeout(cb, 0);
-    ric(() => {
-      state.storageFlushTimer = setTimeout(flush, STORAGE_FLUSH_IDLE_MS);
-    });
+      chrome.storage.session.set({ [CACHE_KEY]: obj }).catch(() => {});
+    } catch (_) {}
   }
 
   function loadCacheFromStorage() {
@@ -99,165 +155,375 @@
           state.lru.set(src, entry);
         }
       });
-    } catch (_) { /* ignore */ }
+    } catch (_) {}
   }
 
-  function buildTrustedDomainSet() {
-    const set = new Set();
-    const globalList = (window.DEFAULT_TRUSTED_IMAGE_DOMAINS) || [];
-    for (const d of globalList) set.add(String(d).toLowerCase());
-    const userList = (state.settings && state.settings.trustedImageDomains) || [];
-    for (const d of userList) set.add(String(d).toLowerCase());
-    return set;
+  function setWithCap(key, value) {
+    if (state.lru.has(key)) {
+      state.lru.set(key, value);
+      return;
+    }
+    if (state.lru.size >= MAX_CACHE_ENTRIES) {
+      const oldest = state.lru.keys().next().value;
+      state.lru.delete(oldest);
+    }
+    state.lru.set(key, value);
+  }
+
+  async function waitForImageLoad(img) {
+    if (img.complete && img.naturalWidth > 0) return true;
+    return new Promise((resolve) => {
+      let done = false;
+      const cleanup = () => {
+        img.removeEventListener('load', onLoad);
+        img.removeEventListener('error', onError);
+        clearTimeout(timer);
+      };
+      const onLoad = () => {
+        if (done) return;
+        done = true;
+        cleanup();
+        resolve(true);
+      };
+      const onError = () => {
+        if (done) return;
+        done = true;
+        cleanup();
+        resolve(false);
+      };
+      const timer = setTimeout(() => {
+        if (done) return;
+        done = true;
+        cleanup();
+        resolve(false);
+      }, 8000);
+      img.addEventListener('load', onLoad);
+      img.addEventListener('error', onError);
+    });
   }
 
   function applyVerdict(img, verdict, scores) {
     if (!img || !img.classList) return;
+    const alreadyBlocked = img.classList.contains('pblocker-ai-blocked');
     if (verdict === 'block') {
-      img.classList.add(BLOCKED_CLASS);
-      try {
-        chrome.runtime.sendMessage({
-          type: 'image_ai_filtered',
-          url: window.location.href,
-          src: img.currentSrc || img.src,
-          scores,
-        });
-      } catch (_) { /* context invalidated */ }
-    }
-  }
-
-  function handleClassified(requestId, payload) {
-    const pending = state.inflight.get(requestId);
-    if (!pending) return;
-    state.inflight.delete(requestId);
-    if (payload && payload.error) {
-      // Per-image failure — drop quietly, the image renders normally.
+      if (!alreadyBlocked) {
+        // Build the placeholder from the image's geometry (its layout box is
+        // still intact under `visibility: hidden`), then swap the pending hide
+        // for the blocked state and drop the placeholder in its place.
+        const ph = buildPlaceholder(img);
+        clearPending(img);
+        img.classList.add('pblocker-ai-blocked');
+        state.placeholders.set(img, ph);
+        if (img.parentNode) img.parentNode.insertBefore(ph, img.nextSibling);
+        // Page-level counter read by content.js's AI text blocker as a fusion
+        // signal (moderate text score + >=1 blocked image -> block the page).
+        try {
+          globalThis.__pblockerAIImageBlockCount =
+            (globalThis.__pblockerAIImageBlockCount | 0) + 1;
+        } catch (_) {}
+        try {
+          chrome.runtime.sendMessage({
+            type: 'image_ai_filtered',
+            url: window.location.href,
+            src: img.currentSrc || img.src,
+            scores
+          });
+        } catch (_) {}
+      }
       return;
     }
-    const scores = payload && payload.scores;
-    const verdict = verdictFor(scores);
-    setWithCap(state.lru, pending.src, { scores, verdict, ts: Date.now() }, MAX_CACHE_ENTRIES);
-    applyVerdict(pending.img, verdict, scores);
-    scheduleStorageFlush();
-    drainQueue();
+    // Cleared as safe: reveal it and tear down any prior blocked state.
+    clearPending(img);
+    if (alreadyBlocked) {
+      img.classList.remove('pblocker-ai-blocked');
+      removePlaceholder(img);
+    }
   }
 
   function drainQueue() {
     while (state.pendingQueue.length > 0 && state.inflight.size < MAX_INFLIGHT) {
       const next = state.pendingQueue.shift();
-      sendForClassification(next);
+      state.queuedImages.delete(next);
+      classifyImage(next);
     }
   }
 
-  function sendForClassification(img) {
-    if (!img || state.aiBlockerDegraded) return;
-    const src = img.currentSrc || img.src;
-    if (!src) return;
-    if (state.inflight.size >= MAX_INFLIGHT) {
-      state.pendingQueue.push(img);
-      return;
-    }
-    let bitmap;
+  function isAiActive() {
+    return !!(state.settings &&
+      state.settings.enabled !== false &&
+      state.settings.aiImageBlocker !== false);
+  }
+
+  function clearAIBlockedImages() {
     try {
-      bitmap = createImageBitmap(img);
-    } catch (err) {
-      // Tainted canvas, decode failure, etc.
-      return;
-    }
-    const requestId = state.nextRequestId++;
-    state.inflight.set(requestId, { img, src });
-    Promise.resolve(bitmap)
-      .then((b) => {
-        state.worker.postMessage({ type: 'classify', requestId, src, bitmap: b }, [b]);
-      })
-      .catch(() => {
-        state.inflight.delete(requestId);
+      document.querySelectorAll('.pblocker-ai-blocked').forEach((img) => {
+        img.classList.remove('pblocker-ai-blocked');
+        removePlaceholder(img);
       });
+      // Sweep any placeholders whose <img> reference was already lost.
+      document.querySelectorAll('.' + PLACEHOLDER_CLASS).forEach((ph) => {
+        if (ph.parentNode) ph.parentNode.removeChild(ph);
+      });
+      // Reveal anything that was hidden awaiting a verdict.
+      revealAllPending();
+    } catch (_) {}
   }
 
-  function setupWorker() {
-    try {
-      state.worker = new Worker(chrome.runtime.getURL('classify.worker.js'), { type: 'module' });
-    } catch (err) {
-      state.aiBlockerDegraded = true;
-      showDegradeToast();
+  function clearModelRetryTimer() {
+    if (!state.modelRetryTimer) return;
+    clearTimeout(state.modelRetryTimer);
+    state.modelRetryTimer = null;
+  }
+
+  function scheduleModelRetry(delayMs) {
+    if (!isAiActive() ||
+        state.modelReady ||
+        state.modelPingInFlight ||
+        state.modelRetryTimer) {
       return;
     }
-    state.modelReadyPromise = new Promise((resolve) => { state.modelReadyResolve = resolve; });
+    const parsedDelay = Number(delayMs);
+    const waitMs = Number.isFinite(parsedDelay)
+      ? Math.max(0, parsedDelay)
+      : MODEL_RETRY_DELAY_MS;
+    state.modelRetryTimer = setTimeout(() => {
+      state.modelRetryTimer = null;
+      pingModel(true);
+    }, waitMs);
+  }
 
-    state.worker.addEventListener('message', (e) => {
-      const data = e.data || {};
-      if (data.type === 'model_ready') {
-        state.modelReady = true;
-        if (state.modelReadyResolve) state.modelReadyResolve();
+  function enqueueImage(img) {
+    if (!img || state.queuedImages.has(img)) return;
+    state.queuedImages.add(img);
+    state.pendingQueue.push(img);
+  }
+
+  function sendRuntimeMessage(message, timeoutMs, timeoutLabel) {
+    return new Promise((resolve, reject) => {
+      let settled = false;
+      const timer = setTimeout(() => {
+        if (settled) return;
+        settled = true;
+        reject(new Error(timeoutLabel));
+      }, timeoutMs);
+
+      try {
+        chrome.runtime.sendMessage(message, (response) => {
+          if (settled) return;
+          settled = true;
+          clearTimeout(timer);
+          const runtimeError = chrome.runtime && chrome.runtime.lastError;
+          if (runtimeError) {
+            reject(new Error(runtimeError.message || String(runtimeError)));
+            return;
+          }
+          resolve(response);
+        });
+      } catch (err) {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        reject(err);
+      }
+    });
+  }
+
+  async function sendClassifyToSW(src) {
+    // Send just URL; service worker fetches + classifies with extension
+    // permissions so page CSP and hotlink restrictions do not block us.
+    const res = await sendRuntimeMessage(
+      { type: 'ai_classify_image', src },
+      CLASSIFY_TIMEOUT_MS,
+      'classify timeout'
+    );
+    if (!res || !res.success) {
+      throw new Error(res && res.error ? res.error : 'classify failed');
+    }
+    return res.scores;
+  }
+
+  function getOrStartClassification(src) {
+    if (state.inflight.has(src)) return state.inflight.get(src);
+    const promise = (async () => {
+      try {
+        return await sendClassifyToSW(src);
+      } finally {
+        state.inflight.delete(src);
         drainQueue();
-        return;
       }
-      if (data.type === 'model_error') {
-        state.aiBlockerDegraded = true;
-        showDegradeToast();
-        return;
-      }
-      if (data.type === 'worker_error') {
-        // The worker died; re-spawn on the next call.
-        try { state.worker.terminate(); } catch (_) {}
-        state.worker = null;
-        state.modelReady = false;
-        // Best-effort re-spawn: schedule for next tick.
-        setTimeout(setupWorker, 0);
-        return;
-      }
-      if (data.type === 'classified') {
-        handleClassified(data.requestId, data);
-      }
-    });
+    })();
+    state.inflight.set(src, promise);
+    return promise;
+  }
 
-    state.worker.addEventListener('error', () => {
-      try { state.worker && state.terminate && state.worker.terminate(); } catch (_) {}
-      state.worker = null;
-      state.modelReady = false;
-      setTimeout(setupWorker, 0);
-    });
+  async function classifyImage(img) {
+    if (!img) {
+      drainQueue();
+      return;
+    }
+    if (!isAiActive()) {
+      state.pendingQueue.length = 0;
+      state.queuedImages = new WeakSet();
+      return;
+    }
+
+    const src = img.currentSrc || img.src;
+    if (!src) {
+      drainQueue();
+      return;
+    }
+
+    // Hide up-front so the image never paints while we wait for a verdict.
+    // applyVerdict() (cached or fresh) and the catch below all clear it.
+    markPending(img);
+
+    if (!state.modelReady) {
+      enqueueImage(img);
+      if (!state.modelPingInFlight) scheduleModelRetry();
+      return;
+    }
+
+    const cached = state.lru.get(src);
+    if (cached && (Date.now() - cached.ts) < CACHE_TTL_MS) {
+      applyVerdict(img, cached.verdict, cached.scores);
+      drainQueue();
+      return;
+    }
+    if (!state.inflight.has(src) && state.inflight.size >= MAX_INFLIGHT) {
+      enqueueImage(img);
+      return;
+    }
+
+    try {
+      const scores = await getOrStartClassification(src);
+      if (!isAiActive()) {
+        applyVerdict(img, 'allow');
+        return;
+      }
+      const thresholds = (state.settings && state.settings.aiThresholds) || null;
+      const verdict = verdictFor(scores, thresholds);
+      setWithCap(src, { scores, verdict, ts: Date.now() });
+      applyVerdict(img, verdict, scores);
+      flushCacheToStorage();
+    } catch (_) {
+      // Classification failed (CORS, network, SW error) - reveal the image
+      // rather than leaving it hidden forever.
+      clearPending(img);
+    }
   }
 
   function onImageVisible(img) {
-    if (!state.settings || state.settings.aiImageBlocker === false) return;
-    if (state.aiBlockerDegraded) return;
+    if (!isAiActive()) return;
+
     const src = img.currentSrc || img.src;
     if (!src) return;
-    // Build a plain object so the core helper doesn't need a real <img>.
-    const imgShape = {
-      src: img.src,
-      currentSrc: img.currentSrc,
-      naturalWidth: img.naturalWidth,
-      naturalHeight: img.naturalHeight,
-      offsetParent: img.offsetParent,
-      hostname: hostnameOf(src),
-    };
-    const opts = {
-      aiImageBlocker: true,
-      degraded: state.aiBlockerDegraded,
-      trustedDomains: state.trustedDomains,
-      pageHost: state.pageHost,
-      lru: state.lru,
-    };
-    if (shouldSkipImage(imgShape, opts)) return;
-    sendForClassification(img);
+    const minDimension = typeof MIN_NATURAL_DIMENSION === 'number'
+      ? MIN_NATURAL_DIMENSION
+      : 64;
+    if (img.naturalWidth > 0 && img.naturalWidth < minDimension) return;
+    if (img.naturalHeight > 0 && img.naturalHeight < minDimension) return;
+
+    const hostname = (() => {
+      try { return new URL(src).hostname.toLowerCase(); } catch (_) { return ''; }
+    })();
+
+    if (src.startsWith('data:') || src.startsWith('blob:')) return;
+
+    const pageHost = (window.location && window.location.hostname || '').toLowerCase();
+    if (hostname && pageHost) {
+      if (hostname === pageHost) return;
+      if (hostname.endsWith('.' + pageHost)) return;
+      if (pageHost.endsWith('.' + hostname)) return;
+    }
+
+    const trustedDomains = (state.settings && state.settings.trustedImageDomains) || [];
+    if (trustedDomains.length > 0 && hostname) {
+      for (const d of trustedDomains) {
+        const td = String(d).toLowerCase();
+        if (hostname === td || hostname.endsWith('.' + td)) return;
+      }
+    }
+
+    const cached = state.lru.get(src);
+    if (cached && (Date.now() - cached.ts) < CACHE_TTL_MS) {
+      applyVerdict(img, cached.verdict, cached.scores);
+      return;
+    }
+
+    classifyImage(img);
   }
 
-  function hostnameOf(url) {
-    try { return new URL(url).hostname.toLowerCase(); } catch (_) { return ''; }
+  async function pingModel(forceRetry = false) {
+    if (!isAiActive()) {
+      state.modelReady = false;
+      state.modelFailed = false;
+      clearModelRetryTimer();
+      return;
+    }
+    if (state.modelPingInFlight) return;
+    state.modelPingInFlight = true;
+    try {
+      const result = await sendRuntimeMessage(
+        { type: 'ai_ping_model', forceRetry },
+        MODEL_PING_TIMEOUT_MS,
+        'ping timeout'
+      );
+      if (!isAiActive()) {
+        state.modelReady = false;
+        state.modelFailed = false;
+        clearModelRetryTimer();
+        return;
+      }
+      if (result && result.ready) {
+        state.modelReady = true;
+        state.modelFailed = false;
+        clearModelRetryTimer();
+        console.log('[BlockNSFW] AI Image Blocker ready.');
+        drainQueue();
+      } else {
+        state.modelReady = false;
+        state.modelFailed = true;
+        console.warn('[BlockNSFW] AI model unavailable:',
+          result && result.error || 'unknown');
+        // Don't leave candidates hidden while the model is down. Queued
+        // images stay in pendingQueue and are re-hidden when a retry succeeds.
+        revealAllPending();
+        scheduleModelRetry(result && result.retryAfterMs);
+      }
+    } catch (err) {
+      state.modelReady = false;
+      state.modelFailed = true;
+      console.warn('[BlockNSFW] AI model init failed:', err && err.message || err);
+      revealAllPending();
+      scheduleModelRetry();
+    } finally {
+      state.modelPingInFlight = false;
+    }
   }
 
-  // Expose the public surface consumed by content.js.
   window.AIImageBlocker = {
     init(settings) {
       state.settings = settings || state.settings || {};
-      state.trustedDomains = buildTrustedDomainSet();
-      if (!state.worker) setupWorker();
       if (state.lru.size === 0) loadCacheFromStorage();
       injectStyles();
+      clearModelRetryTimer();
+      if (!isAiActive()) {
+        state.modelReady = false;
+        state.modelFailed = false;
+        state.pendingQueue.length = 0;
+        state.queuedImages = new WeakSet();
+        clearAIBlockedImages();
+        return;
+      }
+      if (!state.modelReady) {
+        state.modelFailed = false;
+        setTimeout(() => pingModel(false), 50);
+      } else {
+        drainQueue();
+      }
     },
     onImageVisible,
+    isReady() { return state.modelReady; },
+    isDegraded() { return state.modelFailed; }
   };
 })();

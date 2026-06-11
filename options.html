@@ -1599,9 +1599,11 @@
         <h2 class="card-title">What’s New</h2>
         <div class="card-description">
           <ul style="margin: 0; padding-left: 1.1rem">
-            <li><strong>IDN / Punycode Coverage</strong> — Hostnames with <strong>xn--</strong> prefixes (internationalized adult mirrors) are no longer silently dropped at runtime. They now load and block as designed.</li>
-            <li><strong>Non-English Hostname Filter</strong> — High-confidence adult-hostword coverage for Chinese, Korean, Russian, Arabic, and Thai hostnames (e.g. <strong>色情.com</strong>, <strong>야동.com</strong>, <strong>порно.org</strong>).</li>
-            <li><strong>Smarter Bundled Blocklist</strong> — The packaged fallback blocklist has been regenerated and synced with the runtime parser, so offline installs get the same exact-domain coverage.</li>
+            <li><strong>AI Text Protection (multilingual)</strong> — A new on-device AI reads the page's text to catch adult sites the keyword and blocklist filters miss — especially non-English ones (Russian, Chinese, Korean, Thai, Arabic, and more). It blocks pages it's confident about, and teams up with the image AI to catch borderline ones. Nothing leaves your device.</li>
+            <li><strong>AI Image Protection</strong> — A new on-device AI looks at the actual picture to block adult images, even when nothing in the web address gives them away. Everything stays on your device — your images are never uploaded.</li>
+            <li><strong>Instant blocking</strong> — Flagged images are now hidden the moment they're checked, so adult content no longer flashes on screen before it's blocked.</li>
+            <li><strong>Cleaner blocked images</strong> — Blocked images are replaced with a tidy “Blocked by NSFW” placeholder instead of being blurred.</li>
+            <li><strong>Detection strictness</strong> — Choose Relaxed, Balanced, or Strict to control how aggressively images are filtered.</li>
           </ul>
         </div>
       </div>
@@ -1628,6 +1630,133 @@
           📊 View Audit Log
         </a>
         <button class="button button-primary" id="refresh-blocklist" style="text-decoration: none; color: inherit;">🔄 Refresh Blocklist</button>
+      </div>
+    </div>
+
+    <div class="card card-featured fade-in" id="ai-image-blocker-card">
+      <div class="card-header">
+        <h2 class="card-title">🖼 Image Protection</h2>
+        <p class="card-description">
+          Two layers work together to keep explicit images off your screen.
+          Keyword filtering is instant and catches the obvious; AI detection
+          catches the rest by looking at the actual image.
+        </p>
+      </div>
+
+      <!-- Layer 1: keyword / URL heuristics -->
+      <div style="font-weight: 600; font-size: 0.95rem; margin: 0.5rem 0 0.5rem; color: var(--foreground);">
+        ① Keyword &amp; URL filtering
+        <span style="font-weight: 400; color: var(--foreground-muted);">— instant, no performance cost</span>
+      </div>
+      <p class="card-description" style="margin-top: 0;">
+        Blocks images by their web address, filename, and surrounding text.
+        Fast and free, but can't see the picture itself.
+      </p>
+      <div class="form-group">
+        <label class="pin-input-label" for="image-filter-level">Filtering level</label>
+        <select class="input" id="image-filter-level">
+          <option value="strict">Strict - Maximum protection (current behavior)</option>
+          <option value="moderate">Moderate - Balanced filtering</option>
+          <option value="lenient">Lenient - Block only clearly explicit images</option>
+        </select>
+        <div class="pin-hint" id="image-filter-level-detail" style="margin-top: 0.5rem;">
+          Most aggressive filtering. Best protection, but may hide more borderline images.
+        </div>
+      </div>
+
+      <div style="border-top: 1px solid rgba(148, 163, 184, 0.18); margin: 1.5rem 0 1.25rem;"></div>
+
+      <!-- Layer 2: on-device AI pixel classification -->
+      <div style="font-weight: 600; font-size: 0.95rem; margin: 0 0 0.5rem; color: var(--foreground);">
+        ② AI content detection <span class="badge-new">New</span>
+        <span style="font-weight: 400; color: var(--foreground-muted);">— catches what keywords miss</span>
+      </div>
+      <p class="card-description" style="margin-top: 0;">
+        Looks at the actual picture to catch explicit images that keyword
+        filtering can't spot. Everything happens on your device — your images
+        are never uploaded or sent anywhere.
+      </p>
+      <div class="switch-container">
+        <div class="switch-label">
+          <span class="label">Enable AI Image Blocker</span>
+          <span class="description">
+            Replaces any flagged image with a "Blocked by NSFW" placeholder.
+          </span>
+        </div>
+        <label class="switch">
+          <input type="checkbox" id="ai-image-blocker" />
+          <span class="slider"></span>
+        </label>
+      </div>
+      <div style="margin-top: 1rem; display: flex; gap: .75rem; flex-wrap: wrap; align-items: center;">
+        <span class="status-badge" id="ai-image-blocker-status">🖼 AI Blocker: Active</span>
+      </div>
+      <div class="form-group" style="margin-top: 1rem;">
+        <label class="pin-input-label" for="ai-strictness">Detection strictness</label>
+        <select class="input" id="ai-strictness">
+          <option value="relaxed">Relaxed - Block only clearly explicit images</option>
+          <option value="balanced">Balanced - Recommended default</option>
+          <option value="strict">Strict - Catch borderline content (more false positives)</option>
+        </select>
+        <div class="pin-hint" id="ai-strictness-detail" style="margin-top: 0.5rem;">
+          Balanced filtering — blocks clear adult content while letting most
+          safe images through.
+        </div>
+      </div>
+      <div class="info-box" style="margin-top: .875rem">
+        <div class="info-box-title">How it works</div>
+        <p class="info-box-text">
+          The model is bundled with the extension and runs in a dedicated
+          Web Worker so it never blocks the page. First scan after install
+          loads the model (~2 s one-time cost). Trusted image domains
+          (Steam, YouTube, Reddit, Imgur, etc.) are skipped.
+        </p>
+      </div>
+
+      <hr style="margin: 1.5rem 0; border: none; border-top: 1px solid var(--border, #e5e7eb);" />
+
+      <h3 class="card-title" style="font-size: 1.05rem;">AI Text Blocker</h3>
+      <p class="card-description">
+        Reads the page's text with a tiny multilingual model to catch adult
+        sites the keyword and blocklist filters miss — especially non-English
+        ones. Runs fully on your device; nothing is uploaded.
+      </p>
+      <div class="switch-container">
+        <div class="switch-label">
+          <span class="label">Enable AI Text Blocker</span>
+          <span class="description">
+            Redirects pages whose text is confidently adult. Also blocks
+            borderline pages when the AI Image Blocker flagged images on them.
+          </span>
+        </div>
+        <label class="switch">
+          <input type="checkbox" id="ai-text-blocker" />
+          <span class="slider"></span>
+        </label>
+      </div>
+      <div style="margin-top: 1rem; display: flex; gap: .75rem; flex-wrap: wrap; align-items: center;">
+        <span class="status-badge" id="ai-text-blocker-status">📝 AI Text Blocker: Active</span>
+      </div>
+      <div class="form-group" style="margin-top: 1rem;">
+        <label class="pin-input-label" for="ai-text-strictness">Detection strictness</label>
+        <select class="input" id="ai-text-strictness">
+          <option value="relaxed">Relaxed - Block only very clearly adult pages</option>
+          <option value="balanced">Balanced - Recommended default</option>
+          <option value="strict">Strict - Catch borderline pages (more false positives)</option>
+        </select>
+        <div class="pin-hint" id="ai-text-strictness-detail" style="margin-top: 0.5rem;">
+          Balanced filtering — blocks pages the model is confident about while
+          letting benign multilingual pages through.
+        </div>
+      </div>
+      <div class="info-box" style="margin-top: .875rem">
+        <div class="info-box-title">How it works</div>
+        <p class="info-box-text">
+          A ~150 KB linear model bundled with the extension scores the page
+          text in milliseconds. Whole-page blocking uses a conservative
+          threshold; a lower threshold applies only when the image blocker also
+          flagged content on the page.
+        </p>
       </div>
     </div>
 
@@ -1687,23 +1816,6 @@
 
       <div class="pin-hint" id="report-status" style="margin-top: 0.75rem;">
         Reports are reviewed and may be added to the default blocklist in future updates.
-      </div>
-    </div>
-
-    <div class="card fade-in">
-      <div class="card-header">
-        <h2 class="card-title">Image Filtering Level</h2>
-        <p class="card-description">Choose how aggressively images are filtered to reduce false positives while keeping protection where you want it.</p>
-      </div>
-      <div class="form-group">
-        <select class="input" id="image-filter-level">
-          <option value="strict">Strict - Maximum protection (current behavior)</option>
-          <option value="moderate">Moderate - Balanced filtering</option>
-          <option value="lenient">Lenient - Block only clearly explicit images</option>
-        </select>
-        <div class="pin-hint" id="image-filter-level-detail" style="margin-top: 0.5rem;">
-          Most aggressive filtering. Best protection, but may hide more borderline images.
-        </div>
       </div>
     </div>
 
