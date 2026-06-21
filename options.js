@@ -21,9 +21,10 @@ const DEFAULT_SETTINGS = {
   safeSearchEnabled: true,
   facebookReelsEnabled: false,
   instagramReelsEnabled: false,
-  aiImageBlocker: true,
+  aiImageBlocker: false,
+  aiImageScanAllSites: true,
   aiStrictness: 'balanced',
-  aiTextBlocker: true,
+  aiTextBlocker: false,
   aiTextStrictness: 'balanced',
 };
 
@@ -895,6 +896,10 @@ async function render() {
       aiImageBlockerBadge.style.color = '';
     }
   }
+  const aiImageScanAllToggle = $('ai-image-scan-all');
+  if (aiImageScanAllToggle) {
+    aiImageScanAllToggle.checked = settings.aiImageScanAllSites !== false;
+  }
   const aiStrictness = normalizeAiStrictness(settings.aiStrictness);
   const aiStrictnessSelect = $('ai-strictness');
   if (aiStrictnessSelect) {
@@ -1390,6 +1395,24 @@ async function init() {
         }
       }
       settings.aiImageBlocker = e.target.checked;
+      await setSettings(settings);
+      await render();
+    });
+  }
+
+  const aiImageScanAllEl = $('ai-image-scan-all');
+  if (aiImageScanAllEl) {
+    aiImageScanAllEl.addEventListener('change', async (e) => {
+      const settings = await getSettings();
+      // Turning this off narrows coverage, so gate it behind the PIN if set.
+      if (settings.aiImageScanAllSites !== false && !e.target.checked) {
+        const ok = await requirePINIfSet('limit AI image scanning to third-party images');
+        if (!ok) {
+          e.target.checked = true;
+          return;
+        }
+      }
+      settings.aiImageScanAllSites = e.target.checked;
       await setSettings(settings);
       await render();
     });

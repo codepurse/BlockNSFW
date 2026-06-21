@@ -342,6 +342,16 @@
     return res.scores;
   }
 
+  // Recompute the verdict from cached *scores* using the CURRENT thresholds, so
+  // changing strictness (or the default thresholds) takes effect immediately for
+  // already-classified images instead of being frozen by the 24h cache.
+  function verdictFromCache(cached) {
+    if (cached && cached.scores) {
+      return verdictFor(cached.scores, (state.settings && state.settings.aiThresholds) || null);
+    }
+    return cached ? cached.verdict : 'allow';
+  }
+
   function getOrStartClassification(src) {
     if (state.inflight.has(src)) return state.inflight.get(src);
     const promise = (async () => {
@@ -385,7 +395,7 @@
 
     const cached = state.lru.get(src);
     if (cached && (Date.now() - cached.ts) < CACHE_TTL_MS) {
-      applyVerdict(img, cached.verdict, cached.scores);
+      applyVerdict(img, verdictFromCache(cached), cached.scores);
       drainQueue();
       return;
     }
@@ -429,8 +439,13 @@
 
     if (src.startsWith('data:') || src.startsWith('blob:')) return;
 
+    // By default the AI filter scans images from ALL origins — including the
+    // site you are on — so adult sites (which serve their own images) are
+    // covered, not just third-party images embedded elsewhere. Set
+    // aiImageScanAllSites:false to restore the lighter "third-party only" mode.
+    const scanAllSites = !state.settings || state.settings.aiImageScanAllSites !== false;
     const pageHost = (window.location && window.location.hostname || '').toLowerCase();
-    if (hostname && pageHost) {
+    if (!scanAllSites && hostname && pageHost) {
       if (hostname === pageHost) return;
       if (hostname.endsWith('.' + pageHost)) return;
       if (pageHost.endsWith('.' + hostname)) return;
@@ -446,7 +461,7 @@
 
     const cached = state.lru.get(src);
     if (cached && (Date.now() - cached.ts) < CACHE_TTL_MS) {
-      applyVerdict(img, cached.verdict, cached.scores);
+      applyVerdict(img, verdictFromCache(cached), cached.scores);
       return;
     }
 
@@ -478,7 +493,8 @@
         state.modelReady = true;
         state.modelFailed = false;
         clearModelRetryTimer();
-        console.log('[BlockNSFW] AI Image Blocker ready.');
+        console.log('[BlockNSFW] AI Image Blocker ready' +
+          (result.backend ? ' (backend: ' + result.backend + ')' : '') + '.');
         drainQueue();
       } else {
         state.modelReady = false;

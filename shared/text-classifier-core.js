@@ -209,6 +209,56 @@
     return 'allow';
   }
 
+  // ---- Explainability -------------------------------------------------------
+  // Because this is a *linear* model, every feature's push toward "adult" is
+  // exactly weight x count, so the decision is fully attributable. This returns
+  // the words in `text` that, on their own, most push the model toward "adult"
+  // — so the blocked page can show the user *what text* drove the block.
+  //
+  // Each word is scored IN ISOLATION: extractFeatures(word) reproduces the same
+  // unigram + character n-grams the model saw for that word (the char n-grams
+  // are typically ~90% of the signal, so a word-unigram-only view is misleading
+  // and pads the list with near-zero noise words). The bias is excluded — it is
+  // a constant, not attributable to any word. Words below `minShare` of the top
+  // driver are dropped so we never surface words the model is indifferent to.
+  //
+  // Returns [{ feature, contribution }] sorted descending, positive only, at
+  // most `topK` entries. Note: char-n-gram hashing means a substring can carry a
+  // word (the "Scunthorpe" effect); this is an explanation aid, not a 2nd model.
+  function topContributors(text, model, topK, minShare) {
+    if (!model || !model.weights) return [];
+    var norm = normalizeForClassifier(text);
+    if (!norm) return [];
+    var k = topK > 0 ? topK : 5;
+    var share = typeof minShare === 'number' ? minShare : 0.15;
+
+    var words = norm.split(' ');
+    var seen = new Map(); // word -> isolated contribution (computed once)
+    var out = [];
+    for (var i = 0; i < words.length; i++) {
+      var word = words[i];
+      if (!word || seen.has(word)) continue;
+      // How far this word alone moves the log-odds (bias excluded).
+      var feats = extractFeatures(word, model);
+      var c = 0;
+      feats.forEach(function (count, bucket) {
+        var w = model.weights.get(bucket);
+        if (w) c += w * count;
+      });
+      seen.set(word, c);
+      if (c > 0) out.push({ feature: word, contribution: c });
+    }
+
+    out.sort(function (a, b) { return b.contribution - a.contribution; });
+    // Drop trailing noise: keep only words that are a real fraction of the top.
+    if (out.length > 0) {
+      var floor = out[0].contribution * share;
+      out = out.filter(function (e) { return e.contribution >= floor; });
+    }
+    if (out.length > k) out.length = k;
+    return out;
+  }
+
   var exported = {
     DEFAULT_DIM: DEFAULT_DIM,
     DEFAULT_NGRAM_MIN: DEFAULT_NGRAM_MIN,
@@ -221,7 +271,8 @@
     extractFeatures: extractFeatures,
     loadModel: loadModel,
     scoreText: scoreText,
-    verdictForText: verdictForText
+    verdictForText: verdictForText,
+    topContributors: topContributors
   };
 
   if (typeof module !== 'undefined' && module.exports) {

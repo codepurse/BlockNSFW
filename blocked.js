@@ -8,6 +8,8 @@ function getParam(name) {
 const url = getParam('url') || 'Unknown URL';
 const reason = getParam('reason') || '';
 const mode = getParam('mode') || '';
+const matched = getParam('matched') || '';
+const score = getParam('score') || '';
 
 function getReasonMeta(reasonCode) {
   switch (reasonCode) {
@@ -55,6 +57,18 @@ function getReasonMeta(reasonCode) {
         detail: 'Blocked by metadata scan',
         message: 'This page was blocked because its title or metadata matched your adult-content filters.'
       };
+    case 'page_text_scan':
+      return {
+        sourceLabel: 'Page Text Filter',
+        detail: 'Blocked by page text scan',
+        message: 'This page was blocked because its visible text repeatedly matched explicit-content keywords.'
+      };
+    case 'ai_text_scan':
+      return {
+        sourceLabel: 'AI Text Scan',
+        detail: 'Blocked by AI text scan',
+        message: 'This page was blocked because the on-device AI text classifier judged its content to be adult/explicit.'
+      };
     case 'blocked':
     case 'content':
     case 'local_filter':
@@ -90,10 +104,52 @@ if (subtitleEl && reasonMeta.sourceLabel) {
 }
 
 if (reason && urlEl) {
+  const container = urlEl.parentNode;
+  // Insert new nodes right after `anchor`, advancing it so they stay in order.
+  let anchor = urlEl;
+  const insertAfterAnchor = (node) => {
+    container.insertBefore(node, anchor.nextSibling);
+    anchor = node;
+  };
+
   const reasonEl = document.createElement('p');
   reasonEl.className = 'muted';
   reasonEl.textContent = 'Reason: ' + reasonMeta.detail;
-  urlEl.parentNode.insertBefore(reasonEl, urlEl.nextSibling);
+  insertAfterAnchor(reasonEl);
+
+  // The AI text scan reports a confidence score in [0,1]; show it as a percent.
+  const scorePct = score ? Math.round(parseFloat(score) * 100) : NaN;
+  if (!Number.isNaN(scorePct)) {
+    const conf = document.createElement('p');
+    conf.className = 'muted';
+    conf.textContent = `AI confidence: ${scorePct}%`;
+    insertAfterAnchor(conf);
+  }
+
+  // Show the specific text that triggered the block.
+  const matchedTerms = matched
+    ? matched.split(',').map(t => t.trim()).filter(Boolean)
+    : [];
+
+  if (matchedTerms.length > 0) {
+    const label = document.createElement('div');
+    label.className = 'blocked-url-label';
+    label.style.marginTop = '1rem';
+    label.textContent = reason === 'ai_text_scan'
+      ? 'Words that most influenced the AI'
+      : 'Detected text';
+    insertAfterAnchor(label);
+
+    const chips = document.createElement('div');
+    chips.className = 'matched-terms';
+    matchedTerms.forEach(term => {
+      const chip = document.createElement('span');
+      chip.className = 'matched-term';
+      chip.textContent = term;
+      chips.appendChild(chip);
+    });
+    insertAfterAnchor(chips);
+  }
 }
 
 if (mode === 'plain_html') {

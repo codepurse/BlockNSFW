@@ -6,7 +6,8 @@
   "permissions": [
     "storage",
     "activeTab",
-    "declarativeNetRequestWithHostAccess"
+    "declarativeNetRequestWithHostAccess",
+    "offscreen"
   ],
   "host_permissions": [
     "<all_urls>"

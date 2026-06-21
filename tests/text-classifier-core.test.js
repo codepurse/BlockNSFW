@@ -170,6 +170,83 @@ test('scoreText (seed model): adult clears block bar, benign stays below fuse ba
   }
 });
 
+test('scoreText (seed model): false-positive classes stay below the block bar', () => {
+  // Regression guard for the over-eager-bias bug: numbers, dates, nav/UI text,
+  // multilingual everyday benign, and pages that merely *mention* nsfw among
+  // real content used to score ~0.9+ because the model defaulted to "adult".
+  // These NOVEL strings (not in the seed corpus) must now stay benign.
+  const TC = loadCore();
+  const json = loadModelJson();
+  assert.ok(json, 'text-model.json must exist (run --bootstrap)');
+  const model = TC.loadModel(json);
+  const BLOCK = 0.90;
+  const FUSE = 0.60;
+
+  // Must not reach the fuse bar at all (clearly benign).
+  const cleanBenign = [
+    'april 16 español',
+    'may 23 2026',
+    'showing page 4 of 19 results',
+    'inicia sesión o crea tu cuenta gratis',          // Spanish login
+    'je vais au cinéma avec mes amis ce soir',        // French
+    '주말에 가족과 함께 공원에서 산책했어요',            // Korean
+    '今週末は友達と図書館で勉強します',                  // Japanese
+    'this forum thread reviews movies and music some links may be nsfw so browse carefully',
+  ];
+  for (const t of cleanBenign) {
+    const p = TC.scoreText(t, model);
+    assert.ok(p < FUSE, `expected benign <${FUSE} for ${JSON.stringify(t)}, got ${p.toFixed(3)}`);
+  }
+
+  // A real page that merely *mentions* nsfw among normal content must stay
+  // benign — only pages dominated by the adult tag should flag.
+  const incidentalNsfw =
+    'welcome to the community forum here we discuss films books cooking and travel ' +
+    'a few user posts may be marked nsfw so please use discretion when browsing the archive';
+  assert.ok(
+    TC.scoreText(incidentalNsfw, model) < FUSE,
+    `incidental nsfw in benign content should stay below ${FUSE}`
+  );
+});
+
+test('topContributors: returns [] when model is missing', () => {
+  const TC = loadCore();
+  // Length check, not deepEqual: the array crosses the vm realm boundary so its
+  // prototype differs from the host's, which trips deepStrictEqual.
+  assert.equal(TC.topContributors('free porn video', null).length, 0);
+});
+
+test('topContributors: empty / benign text yields no positive drivers', () => {
+  const TC = loadCore();
+  const json = loadModelJson();
+  assert.ok(json, 'text-model.json must exist (run --bootstrap)');
+  const model = TC.loadModel(json);
+  assert.equal(TC.topContributors('', model).length, 0);
+  // A benign sentence should not surface obvious adult tokens as drivers.
+  const benign = TC.topContributors('chicken breast recipe healthy and easy', model, 6);
+  assert.equal(typeof benign.length, 'number');
+  assert.ok(!benign.map(t => t.feature).includes('porn'));
+});
+
+test('topContributors (seed model): surfaces the words that drove the block', () => {
+  const TC = loadCore();
+  const json = loadModelJson();
+  assert.ok(json, 'text-model.json must exist (run --bootstrap)');
+  const model = TC.loadModel(json);
+
+  const text = 'watch free porn video hd';
+  const top = TC.topContributors(text, model, 6);
+  assert.ok(top.length > 0, 'adult text should yield at least one driver');
+  // Results are sorted by contribution, descending and positive.
+  for (let i = 1; i < top.length; i++) {
+    assert.ok(top[i - 1].contribution >= top[i].contribution, 'must be sorted desc');
+  }
+  assert.ok(top.every(t => t.contribution > 0), 'only positive drivers returned');
+  // The obvious adult token should be among the top drivers.
+  const features = top.map(t => t.feature);
+  assert.ok(features.includes('porn'), `expected 'porn' in drivers, got ${JSON.stringify(features)}`);
+});
+
 test('verdictForText: block / fuse-block / allow logic', () => {
   const TC = loadCore();
   const thr = { block: 0.9, fuse: 0.6 };

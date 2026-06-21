@@ -40,24 +40,24 @@ test('verdictFor: high Hentai blocks', () => {
   assert.equal(ctx.verdictFor({ Porn: 0.10, Hentai: 0.85, Sexy: 0.03, Drawing: 0.01, Neutral: 0.01 }), 'block');
 });
 
-test('verdictFor: Porn + Hentai just at 0.50 blocks', () => {
+test('verdictFor: Porn + Hentai at 0.60 blocks', () => {
   const ctx = loadCore();
-  assert.equal(ctx.verdictFor({ Porn: 0.30, Hentai: 0.20, Sexy: 0.40, Drawing: 0.05, Neutral: 0.05 }), 'block');
+  assert.equal(ctx.verdictFor({ Porn: 0.35, Hentai: 0.25, Sexy: 0.20, Drawing: 0.10, Neutral: 0.10 }), 'block');
 });
 
-test('verdictFor: Porn + Hentai just below 0.50 allows even with high Sexy', () => {
+test('verdictFor: Porn + Hentai just below 0.60 allows even with high Sexy', () => {
   const ctx = loadCore();
-  assert.equal(ctx.verdictFor({ Porn: 0.20, Hentai: 0.20, Sexy: 0.69, Drawing: 0.05, Neutral: 0.06 }), 'allow');
+  assert.equal(ctx.verdictFor({ Porn: 0.25, Hentai: 0.30, Sexy: 0.85, Drawing: 0.05, Neutral: 0.05 }), 'allow');
 });
 
-test('verdictFor: Sexy exactly at 0.70 blocks', () => {
+test('verdictFor: Sexy at 0.90 blocks', () => {
   const ctx = loadCore();
-  assert.equal(ctx.verdictFor({ Porn: 0.05, Hentai: 0.05, Sexy: 0.70, Drawing: 0.10, Neutral: 0.10 }), 'block');
+  assert.equal(ctx.verdictFor({ Porn: 0.04, Hentai: 0.03, Sexy: 0.90, Drawing: 0.02, Neutral: 0.01 }), 'block');
 });
 
-test('verdictFor: Sexy 0.69 allows', () => {
+test('verdictFor: high-but-not-extreme Sexy (0.85) allows — avoids benign-photo false positives', () => {
   const ctx = loadCore();
-  assert.equal(ctx.verdictFor({ Porn: 0.05, Hentai: 0.05, Sexy: 0.69, Drawing: 0.10, Neutral: 0.11 }), 'allow');
+  assert.equal(ctx.verdictFor({ Porn: 0.05, Hentai: 0.05, Sexy: 0.85, Drawing: 0.03, Neutral: 0.02 }), 'allow');
 });
 
 test('verdictFor: all-Neutral allows', () => {
