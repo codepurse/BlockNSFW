@@ -21,6 +21,11 @@ const DEFAULT_SETTINGS = {
   safeSearchEnabled: true,
   facebookReelsEnabled: false,
   instagramReelsEnabled: false,
+  aiImageBlocker: false,
+  aiImageScanAllSites: true,
+  aiStrictness: 'balanced',
+  aiTextBlocker: false,
+  aiTextStrictness: 'balanced',
 };
 
 function $(id) { return document.getElementById(id); }
@@ -51,133 +56,53 @@ function getImageFilterLevelMeta(level) {
   };
 }
 
-function getExtensionVersion() {
-  try {
-    const manifest = browserAPI.runtime.getManifest();
-    return manifest && typeof manifest.version === 'string' ? manifest.version : '';
-  } catch (_) {
-    return '';
-  }
+function normalizeAiStrictness(level) {
+  const value = String(level || '').toLowerCase();
+  if (value === 'relaxed' || value === 'strict') return value;
+  return 'balanced';
 }
 
-function stripMarkdown(text) {
-  return String(text || '').replaceAll('**', '').trim();
-}
-
-function parseVersionNotes(mdText) {
-  const text = String(mdText || '');
-  const lines = text.split(/\r?\n/);
-  const sections = [];
-  let current = null;
-
-  for (const line of lines) {
-    if (line.startsWith('# Version ')) {
-      if (current) sections.push(current);
-      const versionPart = line.slice('# Version '.length).trim();
-      const version = versionPart.split(' - ')[0].trim();
-      current = { version, title: stripMarkdown(line.replace(/^#\s+/, '')), lines: [] };
-      continue;
-    }
-    if (!current) continue;
-    current.lines.push(line);
+function getAiStrictnessMeta(level) {
+  const normalized = normalizeAiStrictness(level);
+  if (normalized === 'relaxed') {
+    return {
+      label: 'Relaxed',
+      detail: 'Blocks only clearly explicit images. Fewest false positives.'
+    };
   }
-
-  if (!current) {
-    const fallbackLines = lines.filter((line) => line.trim().length > 0);
-    if (fallbackLines.length > 0) {
-      sections.push({
-        version: '',
-        title: 'What\'s New',
-        lines: fallbackLines,
-      });
-    }
-    return sections;
+  if (normalized === 'strict') {
+    return {
+      label: 'Strict',
+      detail: 'Also catches borderline/suggestive images. May hide some safe content.'
+    };
   }
-
-  if (current) sections.push(current);
-  return sections;
-}
-
-function renderWhatsNewSection(container, section) {
-  container.textContent = '';
-
-  if (!section) {
-    const empty = document.createElement('div');
-    empty.style.cssText = 'color: var(--foreground-muted); font-size: 13px;';
-    empty.textContent = 'No release notes available yet.';
-    container.appendChild(empty);
-    return;
-  }
-
-  const title = document.createElement('div');
-  title.style.cssText = 'font-weight: 600; color: var(--foreground);';
-  title.textContent = section.title;
-  container.appendChild(title);
-
-  let currentList = null;
-  const ensureList = () => {
-    if (currentList) return currentList;
-    currentList = document.createElement('ul');
-    currentList.style.cssText = 'margin: 0 0 0 18px; padding: 0; color: var(--foreground-muted);';
-    container.appendChild(currentList);
-    return currentList;
+  return {
+    label: 'Balanced',
+    detail: 'Balanced filtering — blocks clear adult content while letting most safe images through.'
   };
-
-  for (const raw of section.lines) {
-    const line = stripMarkdown(raw);
-    if (!line) continue;
-    if (line === '---') break;
-
-    if (line.startsWith('## ') || line.startsWith('### ')) {
-      currentList = null;
-      const h = document.createElement('div');
-      h.style.cssText = 'margin-top: 8px; font-weight: 600; color: var(--foreground);';
-      h.textContent = line.replace(/^#{2,3}\s+/, '');
-      container.appendChild(h);
-      continue;
-    }
-
-    const bulletMatch = raw.match(/^\s*-\s+(.*)$/);
-    if (bulletMatch) {
-      const li = document.createElement('li');
-      li.style.cssText = 'margin: 6px 0;';
-      li.textContent = stripMarkdown(bulletMatch[1]);
-      ensureList().appendChild(li);
-      continue;
-    }
-
-    currentList = null;
-    const p = document.createElement('div');
-    p.style.cssText = 'color: var(--foreground-muted); font-size: 13px;';
-    p.textContent = line;
-    container.appendChild(p);
-  }
 }
 
-async function loadWhatsNew() {
-  const version = getExtensionVersion();
-  const content = $('whats-new-content');
-  if (!content) return;
-
-  let notesText = '';
-  try {
-    const url = browserAPI.runtime.getURL('VERSION_NOTES.md');
-    const resp = await fetch(url);
-    if (resp.ok) {
-      notesText = await resp.text();
-    }
-  } catch (_) {}
-
-  const sections = parseVersionNotes(notesText);
-  let selected = null;
-  if (version) {
-    selected = sections.find((s) => s.version === version) || null;
+// AI Text Blocker shares the relaxed/balanced/strict scale with the image
+// blocker (normalizeAiStrictness), but the copy describes whole-page text
+// blocking.
+function getAiTextStrictnessMeta(level) {
+  const normalized = normalizeAiStrictness(level);
+  if (normalized === 'relaxed') {
+    return {
+      label: 'Relaxed',
+      detail: 'Blocks only pages the model is very confident are adult. Fewest false positives.'
+    };
   }
-  if (!selected) {
-    selected = sections.length > 0 ? sections[0] : null;
+  if (normalized === 'strict') {
+    return {
+      label: 'Strict',
+      detail: 'Also blocks borderline pages. May occasionally block benign text-heavy pages.'
+    };
   }
-
-  renderWhatsNewSection(content, selected);
+  return {
+    label: 'Balanced',
+    detail: 'Balanced filtering — blocks confident pages while letting benign multilingual pages through.'
+  };
 }
 
 // Toast Notification System
@@ -848,8 +773,6 @@ async function render() {
   const stats = await getStats();
   const pin = await getPIN();
 
-  await loadWhatsNew();
-
   $('enabled').checked = !!settings.enabled;
   $('smart').checked = !!settings.useSmartBlocking;
   $('debug-mode').checked = !!settings.debugMode;
@@ -951,6 +874,69 @@ async function render() {
       igReelsBadge.style.borderColor = '';
       igReelsBadge.style.color = '';
     }
+  }
+
+  // Render AI Image Blocker
+  const aiImageBlockerOn = settings.aiImageBlocker !== false;
+  const aiImageBlockerToggle = $('ai-image-blocker');
+  if (aiImageBlockerToggle) {
+    aiImageBlockerToggle.checked = aiImageBlockerOn;
+  }
+  const aiImageBlockerBadge = $('ai-image-blocker-status');
+  if (aiImageBlockerBadge) {
+    if (aiImageBlockerOn) {
+      aiImageBlockerBadge.textContent = '🖼 AI Blocker: Active';
+      aiImageBlockerBadge.style.background = 'rgba(16, 185, 129, 0.1)';
+      aiImageBlockerBadge.style.borderColor = 'rgba(16, 185, 129, 0.2)';
+      aiImageBlockerBadge.style.color = 'var(--success)';
+    } else {
+      aiImageBlockerBadge.textContent = '🖼 AI Blocker: Off';
+      aiImageBlockerBadge.style.background = '';
+      aiImageBlockerBadge.style.borderColor = '';
+      aiImageBlockerBadge.style.color = '';
+    }
+  }
+  const aiImageScanAllToggle = $('ai-image-scan-all');
+  if (aiImageScanAllToggle) {
+    aiImageScanAllToggle.checked = settings.aiImageScanAllSites !== false;
+  }
+  const aiStrictness = normalizeAiStrictness(settings.aiStrictness);
+  const aiStrictnessSelect = $('ai-strictness');
+  if (aiStrictnessSelect) {
+    aiStrictnessSelect.value = aiStrictness;
+  }
+  const aiStrictnessDetail = $('ai-strictness-detail');
+  if (aiStrictnessDetail) {
+    aiStrictnessDetail.textContent = getAiStrictnessMeta(aiStrictness).detail;
+  }
+
+  const aiTextBlockerOn = settings.aiTextBlocker !== false;
+  const aiTextBlockerToggle = $('ai-text-blocker');
+  if (aiTextBlockerToggle) {
+    aiTextBlockerToggle.checked = aiTextBlockerOn;
+  }
+  const aiTextBlockerBadge = $('ai-text-blocker-status');
+  if (aiTextBlockerBadge) {
+    if (aiTextBlockerOn) {
+      aiTextBlockerBadge.textContent = '📝 AI Text Blocker: Active';
+      aiTextBlockerBadge.style.background = 'rgba(16, 185, 129, 0.1)';
+      aiTextBlockerBadge.style.borderColor = 'rgba(16, 185, 129, 0.2)';
+      aiTextBlockerBadge.style.color = 'var(--success)';
+    } else {
+      aiTextBlockerBadge.textContent = '📝 AI Text Blocker: Off';
+      aiTextBlockerBadge.style.background = '';
+      aiTextBlockerBadge.style.borderColor = '';
+      aiTextBlockerBadge.style.color = '';
+    }
+  }
+  const aiTextStrictness = normalizeAiStrictness(settings.aiTextStrictness);
+  const aiTextStrictnessSelect = $('ai-text-strictness');
+  if (aiTextStrictnessSelect) {
+    aiTextStrictnessSelect.value = aiTextStrictness;
+  }
+  const aiTextStrictnessDetail = $('ai-text-strictness-detail');
+  if (aiTextStrictnessDetail) {
+    aiTextStrictnessDetail.textContent = getAiTextStrictnessMeta(aiTextStrictness).detail;
   }
 
   // Render custom blocked page settings
@@ -1280,6 +1266,36 @@ async function init() {
     });
   }
 
+  const aiStrictnessEl = $('ai-strictness');
+  if (aiStrictnessEl) {
+    aiStrictnessEl.addEventListener('change', async (e) => {
+      const settings = await getSettings();
+      settings.aiStrictness = normalizeAiStrictness(e.target.value);
+      await setSettings(settings);
+      const detail = $('ai-strictness-detail');
+      if (detail) {
+        detail.textContent = getAiStrictnessMeta(settings.aiStrictness).detail;
+      }
+      // Drop cached verdicts so the new thresholds apply without a restart.
+      try { await browserAPI.storage.session.remove('pblocker_ai_image_cache_v1'); } catch (_) {}
+      showToast(`AI strictness set to ${getAiStrictnessMeta(settings.aiStrictness).label}`, 'success');
+    });
+  }
+
+  const aiTextStrictnessEl = $('ai-text-strictness');
+  if (aiTextStrictnessEl) {
+    aiTextStrictnessEl.addEventListener('change', async (e) => {
+      const settings = await getSettings();
+      settings.aiTextStrictness = normalizeAiStrictness(e.target.value);
+      await setSettings(settings);
+      const detail = $('ai-text-strictness-detail');
+      if (detail) {
+        detail.textContent = getAiTextStrictnessMeta(settings.aiTextStrictness).detail;
+      }
+      showToast(`AI text strictness set to ${getAiTextStrictnessMeta(settings.aiTextStrictness).label}`, 'success');
+    });
+  }
+
   // DNS Protection toggle
   const dnsFilterToggle = $('dns-filter-enabled');
   if (dnsFilterToggle) {
@@ -1364,6 +1380,58 @@ async function init() {
           : 'Instagram Reels blocking disabled',
         e.target.checked ? 'success' : 'info'
       );
+    });
+  }
+
+  const aiImageBlockerEl = $('ai-image-blocker');
+  if (aiImageBlockerEl) {
+    aiImageBlockerEl.addEventListener('change', async (e) => {
+      const settings = await getSettings();
+      if (settings.aiImageBlocker !== false && !e.target.checked) {
+        const ok = await requirePINIfSet('turn off AI image blocker');
+        if (!ok) {
+          e.target.checked = true;
+          return;
+        }
+      }
+      settings.aiImageBlocker = e.target.checked;
+      await setSettings(settings);
+      await render();
+    });
+  }
+
+  const aiImageScanAllEl = $('ai-image-scan-all');
+  if (aiImageScanAllEl) {
+    aiImageScanAllEl.addEventListener('change', async (e) => {
+      const settings = await getSettings();
+      // Turning this off narrows coverage, so gate it behind the PIN if set.
+      if (settings.aiImageScanAllSites !== false && !e.target.checked) {
+        const ok = await requirePINIfSet('limit AI image scanning to third-party images');
+        if (!ok) {
+          e.target.checked = true;
+          return;
+        }
+      }
+      settings.aiImageScanAllSites = e.target.checked;
+      await setSettings(settings);
+      await render();
+    });
+  }
+
+  const aiTextBlockerEl = $('ai-text-blocker');
+  if (aiTextBlockerEl) {
+    aiTextBlockerEl.addEventListener('change', async (e) => {
+      const settings = await getSettings();
+      if (settings.aiTextBlocker !== false && !e.target.checked) {
+        const ok = await requirePINIfSet('turn off AI text blocker');
+        if (!ok) {
+          e.target.checked = true;
+          return;
+        }
+      }
+      settings.aiTextBlocker = e.target.checked;
+      await setSettings(settings);
+      await render();
     });
   }
 
@@ -1621,6 +1689,8 @@ async function init() {
     settings.useSmartBlocking = $('smart').checked;
     settings.debugMode = $('debug-mode').checked;
     settings.imageFilterLevel = normalizeImageFilterLevel($('image-filter-level') ? $('image-filter-level').value : settings.imageFilterLevel);
+    settings.aiStrictness = normalizeAiStrictness($('ai-strictness') ? $('ai-strictness').value : settings.aiStrictness);
+    settings.aiTextStrictness = normalizeAiStrictness($('ai-text-strictness') ? $('ai-text-strictness').value : settings.aiTextStrictness);
     settings.customPatterns = nextCustomPatterns;
     const customKeywords = $('custom-keywords');
     if (customKeywords) settings.customKeywordList = serializePatterns(customKeywords.value);
@@ -1750,6 +1820,7 @@ async function init() {
       customKeywordList: [],
       trustedImageDomains: [],
       debugMode: false,
+      aiStrictness: 'balanced',
     });
     await render();
   });

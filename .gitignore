@@ -15,6 +15,10 @@ Desktop.ini
 *.temp
 *.bak
 
+# Scratch / inspection dirs (downloaded tarballs, extracted package source)
+.tmp-*/
+*.tgz
+
 # Python
 __pycache__/
 *.pyc

@@ -14,6 +14,215 @@ try {
   // still work via ADULT_HOST_KEYWORDS.
 }
 
+// --- AI Image Blocker: TF.js + NSFW.js-compatible runtime in the SW ----------
+// The service worker owns the model so host-page CSP never applies to the
+// classifier runtime.
+let _aiModel = null;
+let _aiModelPromise = null;
+let _aiModelFailed = false;
+let _aiRuntimeLoaded = false;
+let _aiRuntimeLoadError = '';
+let _aiModelLastError = '';
+let _aiModelLastFailureAt = 0;
+const AI_MODEL_RETRY_COOLDOWN_MS = 5000;
+const AI_MODEL_INPUT_SIZE = 224;
+
+function getAiModelErrorMessage(error) {
+  return String(error && error.message || error || 'unknown error');
+}
+
+function getAiModelRetryAfterMs(now = Date.now()) {
+  if (!_aiModelFailed || !_aiModelLastFailureAt) return 0;
+  const remaining = AI_MODEL_RETRY_COOLDOWN_MS - (now - _aiModelLastFailureAt);
+  return remaining > 0 ? remaining : 0;
+}
+
+function syncAiRuntimeStateFromGlobals() {
+  if (typeof self === 'undefined') return;
+  if (typeof self.tf !== 'undefined' && typeof self.nsfwjs !== 'undefined') {
+    _aiRuntimeLoaded = true;
+    _aiRuntimeLoadError = '';
+  }
+}
+
+function preloadAiRuntime() {
+  if (typeof self === 'undefined' || typeof self.importScripts !== 'function') {
+    return;
+  }
+  try {
+    self.importScripts('vendor/tfjs/tf.es2017.js', 'vendor/nsfwjs/nsfwjs.runtime.js');
+    syncAiRuntimeStateFromGlobals();
+    if (!_aiRuntimeLoaded) {
+      if (typeof self.tf === 'undefined') {
+        _aiRuntimeLoadError = 'failed to preload AI runtime: tfjs not available after preload';
+      } else if (typeof self.nsfwjs === 'undefined') {
+        _aiRuntimeLoadError = 'failed to preload AI runtime: nsfwjs not available after preload';
+      }
+    }
+  } catch (err) {
+    _aiRuntimeLoaded = false;
+    _aiRuntimeLoadError = `failed to import AI runtime: ${getAiModelErrorMessage(err)}`;
+  }
+}
+
+preloadAiRuntime();
+
+async function ensureAiRuntimeLoaded() {
+  syncAiRuntimeStateFromGlobals();
+  if (_aiRuntimeLoaded) return;
+  if (_aiRuntimeLoadError) {
+    throw new Error(_aiRuntimeLoadError);
+  }
+  throw new Error('AI runtime was not preloaded');
+}
+
+async function loadAiModel(options = {}) {
+  const forceRetry = options && options.forceRetry === true;
+  if (_aiModel) return _aiModel;
+  if (_aiModelPromise) return _aiModelPromise;
+  const retryAfterMs = getAiModelRetryAfterMs();
+  if (_aiModelFailed && !forceRetry && retryAfterMs > 0) {
+    const suffix = _aiModelLastError ? `: ${_aiModelLastError}` : '';
+    throw new Error(`AI model cooling down after failure${suffix}`);
+  }
+  _aiModelPromise = (async () => {
+    try {
+      await ensureAiRuntimeLoaded();
+      const tfLike = self.tf || null;
+      if (tfLike && typeof tfLike.setBackend === 'function') {
+        let backendSet = false;
+        for (const backend of ['webgl', 'cpu']) {
+          try {
+            await tfLike.setBackend(backend);
+            backendSet = true;
+            break;
+          } catch (_) {}
+        }
+        if (!backendSet && typeof tfLike.ready === 'function') {
+          try { await tfLike.ready(); } catch (_) {}
+        }
+      }
+      if (tfLike && typeof tfLike.ready === 'function') {
+        try { await tfLike.ready(); } catch (_) {}
+      }
+      // Default MobileNetV2 is a layers model; nsfwjs.runtime.js (the CSP-safe
+      // build used here) only supports layers models, so load without options.
+      _aiModel = await self.nsfwjs.load(browserAPI.runtime.getURL('nsfwjs/'));
+      _aiModelFailed = false;
+      _aiModelLastError = '';
+      _aiModelLastFailureAt = 0;
+      console.log('[BlockNSFW] AI Image Blocker model loaded.');
+      return _aiModel;
+    } catch (err) {
+      _aiModel = null;
+      _aiModelFailed = true;
+      _aiModelLastError = getAiModelErrorMessage(err);
+      _aiModelLastFailureAt = Date.now();
+      console.warn('[BlockNSFW] Failed to load NSFW model in SW:',
+        _aiModelLastError);
+      throw new Error(_aiModelLastError);
+    } finally {
+      _aiModelPromise = null;
+    }
+  })();
+  return _aiModelPromise;
+}
+
+async function classifyImageBytes(blobOrArrayBuffer) {
+  const model = await loadAiModel();
+  let bitmap;
+  const bitmapOptions = {
+    resizeWidth: AI_MODEL_INPUT_SIZE,
+    resizeHeight: AI_MODEL_INPUT_SIZE,
+    resizeQuality: 'high'
+  };
+  if (blobOrArrayBuffer instanceof ArrayBuffer ||
+      ArrayBuffer.isView(blobOrArrayBuffer)) {
+    const blob = new Blob([blobOrArrayBuffer]);
+    try {
+      bitmap = await createImageBitmap(blob, bitmapOptions);
+    } catch (_) {
+      bitmap = await createImageBitmap(blob);
+    }
+  } else {
+    try {
+      bitmap = await createImageBitmap(blobOrArrayBuffer, bitmapOptions);
+    } catch (_) {
+      bitmap = await createImageBitmap(blobOrArrayBuffer);
+    }
+  }
+  const predictions = await model.classify(bitmap);
+  try { bitmap.close(); } catch (_) {}
+  const scores = {};
+  for (const p of predictions) scores[p.className] = p.probability;
+  return scores;
+}
+
+// ============================================
+// OFFSCREEN DOCUMENT (fast path: WebGL on GPU)
+// ============================================
+// The MV3 service worker has no WebGL and is killed on idle, so running TF.js
+// there means CPU inference + repeated model reloads (slow). Chrome 109+ offers
+// an offscreen document: a persistent DOM context WITH a WebGL context. We run
+// the model there and relay classify/ping requests to it. When chrome.offscreen
+// is unavailable (older Chrome, Firefox) we fall back to the in-SW path below.
+const OFFSCREEN_URL = 'offscreen.html';
+let _offscreenCreating = null;
+
+function offscreenAvailable() {
+  return typeof chrome !== 'undefined' && !!(chrome.offscreen && chrome.offscreen.createDocument);
+}
+
+async function hasOffscreenDocument() {
+  try {
+    if (chrome.runtime && typeof chrome.runtime.getContexts === 'function') {
+      const ctxs = await chrome.runtime.getContexts({ contextTypes: ['OFFSCREEN_DOCUMENT'] });
+      return Array.isArray(ctxs) && ctxs.length > 0;
+    }
+  } catch (_) {}
+  return false;
+}
+
+async function ensureOffscreenDocument() {
+  if (!offscreenAvailable()) return false;
+  if (await hasOffscreenDocument()) return true;
+  if (_offscreenCreating) { try { await _offscreenCreating; } catch (_) {} return true; }
+  _offscreenCreating = chrome.offscreen.createDocument({
+    url: OFFSCREEN_URL,
+    reasons: ['BLOBS'],
+    justification: 'Run the on-device NSFW image classifier (TensorFlow.js + WebGL) off the main thread for speed.'
+  });
+  try {
+    await _offscreenCreating;
+  } catch (err) {
+    // A concurrent create (race) is fine — the document now exists. Re-throw
+    // anything else.
+    if (!String(err && err.message || err).toLowerCase().includes('single offscreen')) {
+      _offscreenCreating = null;
+      throw err;
+    }
+  }
+  _offscreenCreating = null;
+  return true;
+}
+
+function sendToOffscreen(payload, timeoutMs) {
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const timer = setTimeout(() => {
+      if (!settled) { settled = true; reject(new Error('offscreen timeout')); }
+    }, timeoutMs || 20000);
+    browserAPI.runtime.sendMessage({ target: 'offscreen-ai', ...payload }, (res) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      const lastErr = browserAPI.runtime.lastError;
+      if (lastErr) return reject(new Error(lastErr.message || String(lastErr)));
+      resolve(res);
+    });
+  });
+}
+
 // Storage keys
 const SETTINGS_KEY = 'pblocker_settings';
 const BLOCKED_STATS_KEY = 'pblocker_stats';
@@ -39,6 +248,10 @@ const DEFAULT_SETTINGS = {
   safeSearchEnabled: true,
   facebookReelsEnabled: false,
   instagramReelsEnabled: false,
+  aiImageBlocker: false, // Beta — opt-in (off on fresh install)
+  aiImageScanAllSites: true, // when AI image blocker is on, scan 1st-party too
+  aiTextBlocker: false, // Beta — opt-in (off on fresh install)
+  aiTextStrictness: 'balanced',
 };
 
 // Default trusted domains for images (gaming, social media, e-commerce platforms)
@@ -83,6 +296,7 @@ const DEFAULT_STATS = {
   blockedCount: 0,
   websiteBlockedCount: 0,
   imageBlockedCount: 0,
+  aiImageBlockedCount: 0,
   searchResultBlockedCount: 0,
   lastBlocked: null,
   lastWebsiteBlocked: null,
@@ -771,6 +985,9 @@ async function updateStats(type = 'blocked', details = {}) {
       case 'image_filtered':
         newStats.imageBlockedCount++;
         break;
+      case 'image_ai_filtered':
+        newStats.aiImageBlockedCount++;
+        break;
       case 'search_result_filtered':
         newStats.searchResultBlockedCount++;
         break;
@@ -794,6 +1011,9 @@ async function updateStats(type = 'blocked', details = {}) {
         break;
       case 'image_filtered':
         newDailyStats.imageBlocked++;
+        break;
+      case 'image_ai_filtered':
+        newDailyStats.imageAiBlocked = (newDailyStats.imageAiBlocked || 0) + 1;
         break;
       case 'search_result_filtered':
         newDailyStats.searchResultBlocked++;
@@ -1368,11 +1588,22 @@ async function handleBlock(urlStr, type = 'blocked', reason = 'Pattern match') {
 
 // Message listener for content script communications
 browserAPI.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  // Messages addressed to the offscreen document are handled there, not here.
+  if (message && message.target === 'offscreen-ai') return false;
   if (message.type === 'image_filtered') {
     updateStats('image_filtered');
     try {
       const url = typeof message.url === 'string' ? message.url : (typeof sender?.url === 'string' ? sender.url : '');
       if (url) logBlockedPage(url, 'Image filtered');
+    } catch (_) {}
+    sendResponse({ success: true });
+  } else if (message.type === 'image_ai_filtered') {
+    updateStats('image_ai_filtered');
+    try {
+      const url = typeof message.url === 'string'
+        ? message.url
+        : (typeof sender !== 'undefined' && sender && sender.url ? sender.url : '');
+      if (url) logBlockedPage(url, 'AI image filtered');
     } catch (_) {}
     sendResponse({ success: true });
   } else if (message.type === 'website_blocked') {
@@ -1449,6 +1680,76 @@ browserAPI.runtime.onMessage.addListener((message, sender, sendResponse) => {
         sendResponse({ success: true, meta: blockResult.meta, count: blockResult.domains?.length || 0 });
       } catch (error) {
         sendResponse({ success: false, error: error.message });
+      }
+    })();
+    return true;
+  } else if (message.type === 'ai_classify_image' && (message.data || message.src)) {
+    (async () => {
+      // Fast path: classify in the offscreen document on WebGL (GPU). If it
+      // fails for any reason, fall back to the service-worker path so images
+      // still get blocked (just slower).
+      if (message.src && offscreenAvailable()) {
+        try {
+          await ensureOffscreenDocument();
+          const res = await sendToOffscreen({ op: 'classify', src: message.src });
+          if (!res || !res.success) {
+            throw new Error(res && res.error ? res.error : 'offscreen classify failed');
+          }
+          sendResponse({ success: true, scores: res.scores });
+          return;
+        } catch (offErr) {
+          console.warn('[BlockNSFW] offscreen classify failed, falling back to SW:',
+            offErr && offErr.message || offErr);
+        }
+      }
+      // Service-worker fallback (older Chrome/Firefox, or offscreen failure).
+      try {
+        let blob;
+        if (message.data) {
+          const arr = message.data;
+          blob = new Blob([arr instanceof ArrayBuffer ? arr : new Uint8Array(arr)],
+            { type: message.mimeType || 'image/jpeg' });
+        } else {
+          const resp = await fetch(message.src, {
+            credentials: 'omit',
+            cache: 'force-cache',
+          });
+          if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+          blob = await resp.blob();
+        }
+        const scores = await classifyImageBytes(blob);
+        sendResponse({ success: true, scores });
+      } catch (error) {
+        console.warn('[BlockNSFW] SW classify failed:', error && error.message || error);
+        sendResponse({ success: false, error: error.message || String(error) });
+      }
+    })();
+    return true;
+  } else if (message.type === 'ai_ping_model') {
+    (async () => {
+      // Warm up the offscreen model when available; fall back to the SW model.
+      if (offscreenAvailable()) {
+        try {
+          await ensureOffscreenDocument();
+          const res = await sendToOffscreen(
+            { op: 'ping', forceRetry: message.forceRetry === true }, 30000);
+          if (res && res.ready) { sendResponse({ ready: true, backend: res.backend }); return; }
+          throw new Error(res && res.error ? res.error : 'offscreen model not ready');
+        } catch (offErr) {
+          console.warn('[BlockNSFW] offscreen model ping failed, falling back to SW:',
+            offErr && offErr.message || offErr);
+        }
+      }
+      try {
+        await loadAiModel({ forceRetry: message.forceRetry === true });
+        sendResponse({ ready: true, backend: 'service-worker' });
+      } catch (error) {
+        console.warn('[BlockNSFW] SW model load failed:', error && error.message || error);
+        sendResponse({
+          ready: false,
+          error: error.message || String(error),
+          retryAfterMs: getAiModelRetryAfterMs()
+        });
       }
     })();
     return true;

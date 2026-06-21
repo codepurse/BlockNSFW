@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>BlockNSFW AI worker</title>
+</head>
+<body>
+  <!--
+    Offscreen document: hosts the NSFW.js image classifier on the WebGL (GPU)
+    backend. Unlike the MV3 service worker, an offscreen document has a DOM and
+    a WebGL context, and it persists (it is not killed on idle), so the model
+    loads once and inference is GPU-fast. Scripts are loaded as extension
+    resources (script-src 'self'), so no CSP relaxation is needed.
+  -->
+  <!--
+    Use the CSP-safe builds (same as the service worker). The *.min.js builds
+    use eval()/new Function() which the extension CSP (script-src 'self'
+    'wasm-unsafe-eval', no 'unsafe-eval') blocks, leaving a half-initialised
+    `tf` whose tf.ready() is undefined. The es2017 / runtime builds avoid eval.
+  -->
+  <script src="vendor/tfjs/tf.es2017.js"></script>
+  <script src="vendor/nsfwjs/nsfwjs.runtime.js"></script>
+  <script src="offscreen.js"></script>
+</body>
+</html>

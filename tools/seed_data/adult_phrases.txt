@@ -1,0 +1,217 @@
+# Seed POSITIVE phrases for the AI Text Blocker bootstrap corpus.
+#
+# These are adult-industry-specific terms/phrases used to train the seed
+# model (tools/train_text_classifier.py --bootstrap). They mirror and extend
+# the curated MULTILINGUAL_ADULT_KEYWORDS in content.js. The trainer embeds
+# each phrase into varied templates + obfuscation variants so the model learns
+# their character n-grams, not just exact strings.
+#
+# Format:
+#   - Lines beginning with "## " set the current language code (for per-language
+#     eval). Lines beginning with "#" are comments. Blank lines ignored.
+#   - One phrase per line otherwise.
+#
+# CURATION: prefer adult-specific multi-token phrases. Single ambiguous tokens
+# (sex, nude, adult) are intentionally kept as part of clearly-adult bigrams
+# here; their benign uses live in benign_snippets.txt as hard negatives so the
+# model learns the difference.
+
+## en
+porn
+porno
+pornography
+hardcore porn
+free porn
+porn video
+porn videos
+porn tube
+sex video
+sex videos
+live sex
+sex cam
+sex chat
+adult video
+adult videos
+xxx video
+hentai
+nsfw content
+nude photos
+naked girls
+camgirl
+webcam girls
+blowjob video
+anal sex
+milf porn
+teen porn
+xvideos
+xhamster
+xnxx
+redtube
+youporn
+brazzers
+chaturbate
+onlyfans leaks
+bongacams
+spankbang
+watch porn online
+free sex videos
+explicit adult content
+
+## es
+porno gratis
+porno español
+pornografía
+videos porno
+peliculas porno
+sexo en vivo
+videos de sexo
+cámara sexual
+
+## pt
+pornô grátis
+pornografia
+porno brasileiro
+videos porno
+filme pornô
+sexo ao vivo
+
+## ru
+порно
+порнуха
+порнушка
+порнография
+порновидео
+порнофильм
+порно онлайн
+секс видео
+секс фото
+секс чат
+анальный секс
+хентай
+смотреть порно
+
+## de
+pornofilm
+pornofilme
+pornos kostenlos
+porno kostenlos
+gratis porno
+geile titten
+nackte frauen
+sex videos
+
+## fr
+porno gratuit
+film porno
+porno français
+films pornos
+sexe en direct
+vidéos porno
+
+## it
+porno gratis
+film porno
+porno italiano
+video porno
+sesso in diretta
+
+## pl
+porno za darmo
+ostre porno
+darmowe porno
+filmy porno
+
+## tr
+porno izle
+sikiş izle
+türk porno
+türk sikiş
+seks izle
+
+## nl
+gratis porno
+porno films
+seks video
+
+## zh
+色情
+情色
+成人片
+成人影片
+成人视频
+成人网站
+黄色网站
+三级片
+无码视频
+av女优
+裸聊直播
+约炮平台
+
+## ja
+エロ動画
+エロ画像
+アダルト動画
+アダルトビデオ
+ポルノ動画
+ポルノ画像
+セックス動画
+ハメ撮り
+無修正動画
+av女優
+
+## ko
+야동
+야설
+성인사이트
+성인동영상
+성인비디오
+포르노
+한국야동
+일본야동
+벗방
+
+## th
+หนังโป๊
+หนังโป
+คลิปโป๊
+คลิปหลุด
+โป๊เปลือย
+หนังเอ๊ก
+
+## vi
+phim sex
+phim người lớn
+phim sex viet
+phim khiêu dâm
+
+## id
+video bokep
+film bokep
+bokep indo
+bokep jepang
+situs bokep
+
+## hi
+सेक्सी वीडियो
+देसी सेक्स
+सेक्स वीडियो
+पॉर्न वीडियो
+अश्लील वीडियो
+
+## ar
+افلام سكس
+افلام إباحية
+سكس عربي
+مقاطع سكس
+فيديو سكس
+
+## translit
+# Latin transliterations common in foreign-language adult domains/text.
+bokep
+yadong
+sikis
+seks bokep
+phim sex viet nam
+desi sex
+arab sex
+turk porno izle
