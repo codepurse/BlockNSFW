@@ -557,14 +557,10 @@ function openSettings() {
   window.close();
 }
 
+// Domain validation lives in shared/validate-domain.js (loaded before this
+// script in popup.html) so the popup and options page stay in sync.
 function validateDomain(domain) {
-  // Remove protocol and www if present
-  domain = domain.replace(/^https?:\/\//, '').replace(/^www\./, '');
-  // Remove trailing slash and path
-  domain = domain.split('/')[0];
-  // Basic domain validation
-  const domainRegex = /^[a-zA-Z0-9][a-zA-Z0-9-]{0,61}[a-zA-Z0-9]?\.[a-zA-Z]{2,}$/;
-  return domainRegex.test(domain) ? domain : null;
+  return self.DomainValidate.validateDomain(domain);
 }
 
 async function handleAddWhitelist(type) {

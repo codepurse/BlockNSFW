@@ -714,11 +714,10 @@ async function cleanExpiredWhitelist() {
   return cleaned;
 }
 
+// Domain validation lives in shared/validate-domain.js (loaded before this
+// script in options.html) so the popup and options page stay in sync.
 function validateDomain(domain) {
-  domain = domain.replace(/^https?:\/\//, '').replace(/^www\./, '');
-  domain = domain.split('/')[0];
-  const domainRegex = /^[a-zA-Z0-9][a-zA-Z0-9-]{0,61}[a-zA-Z0-9]?\.[a-zA-Z]{2,}$/;
-  return domainRegex.test(domain) ? domain : null;
+  return self.DomainValidate.validateDomain(domain);
 }
 
 async function renderWhitelist() {
