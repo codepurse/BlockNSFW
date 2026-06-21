@@ -677,16 +677,31 @@ function hostMatchesDomain(host, domain) {
   return h === d || h.endsWith('.' + d);
 }
 
-function getBlockedRedirectUrl(targetUrl, reason, settings) {
+function getBlockedRedirectUrl(targetUrl, reason, settings, detail) {
   const pageType = (settings && settings.blockedPageType) ? settings.blockedPageType : blockedPageType;
   const customUrl = (settings && typeof settings.customBlockedPageUrl === 'string') ? settings.customBlockedPageUrl : customBlockedPageUrl;
   const plainHtml = (settings && typeof settings.plainBlockedPageHtml === 'string') ? settings.plainBlockedPageHtml : plainBlockedPageHtml;
+
+  // Optional context so the blocked page can show *why* it triggered:
+  //   detail.matched -> term(s) the block keyed on (keyword list, or the words
+  //                     that most influenced the AI classifier)
+  //   detail.score   -> AI classifier probability in [0,1]
+  detail = detail || {};
+  const matchedList = Array.isArray(detail.matched) ? detail.matched : (detail.matched ? [detail.matched] : []);
+  let extraParams = '';
+  if (matchedList.length > 0) {
+    extraParams += '&matched=' + encodeURIComponent(matchedList.join(', '));
+  }
+  if (typeof detail.score === 'number' && isFinite(detail.score)) {
+    extraParams += '&score=' + encodeURIComponent(detail.score.toFixed(2));
+  }
 
   if (pageType === 'custom' && customUrl) {
     return customUrl +
       (customUrl.includes('?') ? '&' : '?') +
       'url=' + encodeURIComponent(targetUrl) +
-      '&reason=' + encodeURIComponent(reason);
+      '&reason=' + encodeURIComponent(reason) +
+      extraParams;
   }
 
   const base = browserAPI.runtime.getURL('blocked.html');
@@ -694,12 +709,14 @@ function getBlockedRedirectUrl(targetUrl, reason, settings) {
     return base +
       '?mode=plain_html' +
       '&url=' + encodeURIComponent(targetUrl) +
-      '&reason=' + encodeURIComponent(reason);
+      '&reason=' + encodeURIComponent(reason) +
+      extraParams;
   }
 
   return base +
     '?url=' + encodeURIComponent(targetUrl) +
-    '&reason=' + encodeURIComponent(reason);
+    '&reason=' + encodeURIComponent(reason) +
+    extraParams;
 }
 
 // Optimized trie structure with pre-compilation for maximum performance
@@ -1263,10 +1280,10 @@ function debounce(func, delay) {
 // more aggressive (blocks more). `balanced` is the default.
 function getAiThresholds(level) {
   switch (String(level || '').toLowerCase()) {
-    case 'relaxed': return { pornHentai: 0.70, sexy: 0.85 };
-    case 'strict':  return { pornHentai: 0.35, sexy: 0.55 };
+    case 'relaxed': return { pornHentai: 0.80, sexy: 0.97 };
+    case 'strict':  return { pornHentai: 0.45, sexy: 0.80 };
     case 'balanced':
-    default:        return { pornHentai: 0.50, sexy: 0.70 };
+    default:        return { pornHentai: 0.60, sexy: 0.90 };
   }
 }
 
@@ -1305,9 +1322,10 @@ async function loadSettings() {
       plainBlockedPageHtml: '',
       facebookReelsEnabled: false,
       instagramReelsEnabled: false,
-      aiImageBlocker: true,
+      aiImageBlocker: false,
+      aiImageScanAllSites: true,
       aiStrictness: 'balanced',
-      aiTextBlocker: true,
+      aiTextBlocker: false,
       aiTextStrictness: 'balanced'
     };
     
@@ -1699,7 +1717,7 @@ function checkPageBodyText() {
         reason,
         title: document.title
       });
-      redirectToBlockedPage('page_text_scan');
+      redirectToBlockedPage('page_text_scan', { matched: keywordSummary });
       return true;
     }
   }
@@ -1802,12 +1820,22 @@ function checkPageTextWithModel() {
   const verdict = TextClassifier.verdictForText(prob, thresholds, imageBlockCount);
 
   if (verdict === 'block' || verdict === 'fuse-block') {
+    // Explain the verdict: pull the words on the page that pushed the linear
+    // model's score up the most, so the blocked page can show *what text*
+    // triggered it. Best-effort — never let this throw out of a block.
+    let triggers = [];
+    try {
+      if (typeof TextClassifier.topContributors === 'function') {
+        triggers = TextClassifier.topContributors(text, textModel, 6).map(t => t.feature);
+      }
+    } catch (_) {}
+    const triggerNote = triggers.length > 0 ? ` [top signals: ${triggers.join(', ')}]` : '';
     const reason = verdict === 'fuse-block'
-      ? `AI text+image classifier flagged this page (text score ${prob.toFixed(2)}, ${imageBlockCount} image(s) blocked)`
-      : `AI text classifier flagged this page (score ${prob.toFixed(2)})`;
+      ? `AI text+image classifier flagged this page (text score ${prob.toFixed(2)}, ${imageBlockCount} image(s) blocked)${triggerNote}`
+      : `AI text classifier flagged this page (score ${prob.toFixed(2)})${triggerNote}`;
     log(reason);
     notifyBackground('website_blocked', { reason, title: document.title });
-    redirectToBlockedPage('ai_text_scan');
+    redirectToBlockedPage('ai_text_scan', { matched: triggers, score: prob });
     return true;
   }
   return false;
@@ -3636,7 +3664,7 @@ async function processContent() {
   }
 }
 
-function redirectToBlockedPage(reason = 'content') {
+function redirectToBlockedPage(reason = 'content', detail) {
   if (blockedTriggered) return;
   blockedTriggered = true;
   try { window.stop(); } catch (_) {}
@@ -3644,7 +3672,7 @@ function redirectToBlockedPage(reason = 'content') {
   if (imageObserver) { try { imageObserver.disconnect(); } catch (_) {} }
   if (mediaObserver) { try { mediaObserver.disconnect(); } catch (_) {} }
 
-  const blockedUrl = getBlockedRedirectUrl(window.location.href, reason, null);
+  const blockedUrl = getBlockedRedirectUrl(window.location.href, reason, null, detail);
   
   // Notify background about the block
   notifyBackground('website_blocked', {

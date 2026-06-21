@@ -1327,6 +1327,39 @@
       flex-shrink: 0;
     }
 
+    /* "BETA" badge — amber to signal experimental */
+    .badge-beta {
+      display: inline-flex;
+      align-items: center;
+      font-size: 0.625rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      padding: 0.2rem 0.5rem;
+      border-radius: 999px;
+      background: rgba(245, 158, 11, 0.12);
+      border: 1px solid rgba(245, 158, 11, 0.4);
+      color: #fbbf24;
+      line-height: 1;
+      flex-shrink: 0;
+    }
+
+    /* Beta caution notice (experimental feature; may produce false positives) */
+    .beta-notice {
+      display: flex;
+      gap: 0.625rem;
+      align-items: flex-start;
+      margin-bottom: 1.25rem;
+      padding: 0.75rem 0.875rem;
+      border-radius: var(--radius-sm);
+      background: rgba(245, 158, 11, 0.08);
+      border: 1px solid rgba(245, 158, 11, 0.22);
+      border-left: 3px solid var(--warning);
+    }
+    .beta-notice-icon { font-size: 1rem; line-height: 1.45; flex-shrink: 0; }
+    .beta-notice-text { font-size: 0.83rem; color: var(--foreground-muted); line-height: 1.55; }
+    .beta-notice-text strong { color: var(--foreground); font-weight: 600; }
+
     /* Message from the Dev */
     .dev-message {
       background: linear-gradient(
@@ -1708,12 +1741,22 @@
 
     <div class="card card-featured fade-in" id="ai-image-blocker-card">
       <div class="card-header">
-        <h2 class="card-title">🛡 AI Content Detection <span class="badge-new">New</span></h2>
+        <h2 class="card-title">🛡 AI Content Detection <span class="badge-beta">Beta</span></h2>
         <p class="card-description">
           On-device AI that looks at the actual image and reads the page text to
           catch adult content keyword and blocklist filters miss — including
           non-English sites. Everything runs on your device; nothing is uploaded.
         </p>
+      </div>
+
+      <div class="beta-notice">
+        <span class="beta-notice-icon">⚠️</span>
+        <span class="beta-notice-text">
+          <strong>Beta feature.</strong> The AI image and text scanners are still
+          being tuned, so they can occasionally <strong>block non-adult images</strong>
+          or pages by mistake. Both are <strong>off by default</strong> — turn them on
+          below to try them, and adjust the strictness if you see false positives.
+        </span>
       </div>
 
       <div class="switch-container">
@@ -1739,6 +1782,17 @@
         <div class="pin-hint" id="ai-strictness-detail" style="margin-top: 0.5rem;">
           Balanced filtering — blocks clear adult content while letting most safe images through.
         </div>
+      </div>
+
+      <div class="switch-container">
+        <div class="switch-label">
+          <span class="label">Scan images on every site</span>
+          <span class="description">Also checks the current site's own images, not just third-party ones — needed to catch adult sites that host their own images. Turn off to only scan embedded third-party images (lighter).</span>
+        </div>
+        <label class="switch">
+          <input type="checkbox" id="ai-image-scan-all" />
+          <span class="slider"></span>
+        </label>
       </div>
 
       <hr style="margin: 1.5rem 0; border: none; border-top: 1px solid var(--border, #e5e7eb);" />

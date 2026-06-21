@@ -11,9 +11,14 @@ const MIN_NATURAL_DIMENSION = 64;
 const BLOCKED_CLASS = 'pblocker-ai-blocked';
 
 // Score → verdict.
-//   Porn + Hentai >= 0.50  → block  (combined explicit signal)
-//   Sexy         >= 0.70   → block  (suggestive but non-explicit; higher bar
-//                                     so swimwear/fashion/fitness pass)
+//   Porn + Hentai >= 0.60  → block  (combined explicit signal)
+//   Sexy         >= 0.90   → block  (suggestive but non-explicit)
+//
+// IMPORTANT: NSFW.js's "Sexy" class is very trigger-happy — ordinary photos of
+// people, fashion, fitness, beaches and portraits routinely score 0.6-0.8 Sexy.
+// The Sexy bar is therefore deliberately high (0.90) to avoid blocking benign
+// images; the reliable explicit signal is Porn+Hentai. Lowering these trades
+// fewer misses for more false positives (that's what the "strict" preset does).
 //
 // NOTE: NSFW.js's "Drawing" and "Neutral" are *safe* classes. A high Drawing
 // score means "confidently a safe illustration", not "hentai" — hentai scores
@@ -23,8 +28,8 @@ const BLOCKED_CLASS = 'pblocker-ai-blocked';
 // Thresholds are overridable via the `thresholds` argument so users can
 // tune strictness in the options page.
 const DEFAULT_THRESHOLDS = {
-  pornHentai: 0.50,
-  sexy: 0.70
+  pornHentai: 0.60,
+  sexy: 0.90
 };
 
 function verdictFor(scores, thresholds) {

@@ -32,7 +32,10 @@ async function ensureModel() {
       await tf.setBackend('cpu');
     }
     await tf.ready();
-    model = await nsfwjs.load(chrome.runtime.getURL('nsfwjs/'));
+    // MobileNetV2Mid is a tfjs *graph* model (higher accuracy than the default
+    // quantized MobileNetV2), so it must be loaded with { type: 'graph' }.
+    // Input is still 224x224 / 5 classes, so no preprocessing change is needed.
+    model = await nsfwjs.load(chrome.runtime.getURL('nsfwjs/'), { type: 'graph' });
     self.postMessage({ type: 'model_ready' });
     return model;
   } catch (err) {

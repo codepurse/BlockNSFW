@@ -29,6 +29,8 @@ $RuntimeFiles   = @(
     "ai-image-blocker-core.js",
     "ai-image-blocker.js",
     "classify.worker.js",
+    "offscreen.html",
+    "offscreen.js",
     "popup.html",
     "popup.js",
     "options.html",

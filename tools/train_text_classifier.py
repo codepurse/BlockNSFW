@@ -149,6 +149,54 @@ def obfuscate(phrase):
     return variants
 
 
+# Synthetic hard negatives. The seed lexicon has no numbers, dates, prices,
+# navigation/UI boilerplate, or short fragments, so any page made mostly of
+# those used to fall back to the (high) bias and be flagged as adult — the
+# "nsfw april 16 español" false-positive class. These teach the model that such
+# content is neutral so it stops leaning on the bias.
+NUMERIC_NEGATIVES = [
+    "16", "42", "7", "100", "365", "1999", "2024", "2025",
+    "1 2 3 4 5", "12 34 56 78", "0 1 2 3 4 5 6 7 8 9",
+    "april 16", "april 16 2024", "16 april 2024", "january 1 2025",
+    "31 december 2023", "monday 5 may", "friday the 13th",
+    "page 16", "page 16 of 32", "chapter 7", "section 3 2 1",
+    "12 30 pm", "10 00 am", "9 99", "19 99", "1 299 00",
+    "version 2 1 0", "no 7", "step 1 step 2 step 3",
+    "january february march april may june july august",
+    "september october november december",
+    "monday tuesday wednesday thursday friday saturday sunday",
+]
+NAV_NEGATIVES = [
+    "home about contact", "sign in sign up", "log in register",
+    "next previous page", "read more", "click here to continue",
+    "terms of service privacy policy", "menu search login",
+    "page not found error 404", "loading please wait",
+    "subscribe to our newsletter", "share tweet like follow",
+    "back to top", "view all results", "add to cart checkout",
+    "search results for your query", "filter sort by relevance",
+    "copyright all rights reserved", "cookie settings accept decline",
+    "download the app on your phone", "create an account today",
+    "forgot your password reset it", "edit profile settings logout",
+    "comments replies sort newest", "show more show less",
+]
+SHORT_NEGATIVES = [
+    "hello", "welcome", "thank you", "good morning", "okay", "yes no maybe",
+    "hello world", "about us", "contact us", "frequently asked questions",
+    "how to get started", "learn more today", "join the community",
+]
+
+
+def synthetic_hard_negatives():
+    out = []
+    for t in NUMERIC_NEGATIVES:
+        out.append((t, "num"))
+    for t in NAV_NEGATIVES:
+        out.append((t, "nav"))
+    for t in SHORT_NEGATIVES:
+        out.append((t, "short"))
+    return out
+
+
 def build_bootstrap_corpus(seed=1234):
     rng = random.Random(seed)
     samples = []  # (text, label, lang)
@@ -165,6 +213,19 @@ def build_bootstrap_corpus(seed=1234):
     for snippet, lang in snippets:
         for tpl in NEGATIVE_TEMPLATES:
             samples.append((tpl.format(s=snippet), 0, lang))
+
+    # Hard negatives (numbers/dates/nav/short) — see comment above.
+    for text, lang in synthetic_hard_negatives():
+        for tpl in NEGATIVE_TEMPLATES:
+            samples.append((tpl.format(s=text), 0, lang))
+
+    # Short benign fragments cut from real snippets: the positives are short
+    # phrases, so without short negatives the model learns "short text -> adult".
+    for snippet, lang in snippets:
+        words = snippet.split()
+        if len(words) >= 4:
+            samples.append((" ".join(words[:3]), 0, lang))
+            samples.append((" ".join(words[-3:]), 0, lang))
 
     # Mix benign snippets into longer "pages" to resemble real negative pages.
     benign_texts = [s for s, _ in snippets]
@@ -243,16 +304,41 @@ def train(samples, epochs=12, lr=0.25, l2=1e-6, seed=42, verbose=True):
 
 
 # --------------------------------------------------------------------------
-# Evaluation
+# Calibration
 # --------------------------------------------------------------------------
-def predict_prob(text, weights, bias):
+def predict_z(text, weights, bias):
     feats = features_for(text)
     z = bias
     for b, c in feats.items():
         w = weights.get(b)
         if w:
             z += w * c
-    return sigmoid(z)
+    return z
+
+
+def calibrate_bias(samples, weights, bias, target_prob=0.5, neg_percentile=0.98):
+    """Recenter the bias so that `neg_percentile` of NEGATIVE samples score below
+    `target_prob`. SGD with a short, length-asymmetric corpus tends to park a
+    large positive bias (so anything without learned benign features defaults to
+    'adult'). This is a Platt-style shift of the decision boundary only — it does
+    not touch feature weights, so relative ranking is unchanged; it just fixes
+    where the global threshold sits. Returns the adjusted bias."""
+    neg_z = sorted(predict_z(t, weights, bias) for (t, y, _l) in samples if y == 0)
+    if not neg_z:
+        return bias
+    idx = min(len(neg_z) - 1, max(0, int(neg_percentile * len(neg_z))))
+    z_at_p = neg_z[idx]
+    # want sigmoid(z_at_p + delta) = target_prob
+    logit_target = math.log(target_prob / (1.0 - target_prob))
+    delta = logit_target - z_at_p
+    return bias + delta
+
+
+# --------------------------------------------------------------------------
+# Evaluation
+# --------------------------------------------------------------------------
+def predict_prob(text, weights, bias):
+    return sigmoid(predict_z(text, weights, bias))
 
 
 def evaluate(samples, weights, bias, threshold=0.5):
@@ -383,6 +469,12 @@ def main(argv=None):
     ap.add_argument("--epochs", type=int, default=12)
     ap.add_argument("--lr", type=float, default=0.25)
     ap.add_argument("--l2", type=float, default=1e-6)
+    ap.add_argument("--no-calibrate", action="store_true",
+                    help="Skip post-training bias calibration (not recommended).")
+    ap.add_argument("--cal-neg-percentile", type=float, default=0.98,
+                    help="Fraction of negatives to keep below --cal-target-prob.")
+    ap.add_argument("--cal-target-prob", type=float, default=0.5,
+                    help="Probability the calibrated negative percentile maps to.")
     ap.add_argument("--keep-top", type=int, default=60000,
                     help="Keep at most this many largest-magnitude weights.")
     ap.add_argument("--val-split", type=float, default=0.15)
@@ -419,6 +511,17 @@ def main(argv=None):
 
     weights, bias = train(train_set, epochs=args.epochs, lr=args.lr,
                           l2=args.l2, seed=args.seed)
+
+    if not args.no_calibrate:
+        raw_bias = bias
+        # Calibrate on the held-out split when available, else the training set.
+        cal_set = val or train_set
+        bias = calibrate_bias(cal_set, weights, bias,
+                              target_prob=args.cal_target_prob,
+                              neg_percentile=args.cal_neg_percentile)
+        print(f"Calibrated bias: {raw_bias:.3f} -> {bias:.3f} "
+              f"(neg p{int(args.cal_neg_percentile * 100)} -> p={args.cal_target_prob})",
+              file=sys.stderr)
 
     eval_set = val or train_set
     overall, per_lang = evaluate(eval_set, weights, bias, threshold=0.5)

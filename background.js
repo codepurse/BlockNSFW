@@ -105,6 +105,8 @@ async function loadAiModel(options = {}) {
       if (tfLike && typeof tfLike.ready === 'function') {
         try { await tfLike.ready(); } catch (_) {}
       }
+      // Default MobileNetV2 is a layers model; nsfwjs.runtime.js (the CSP-safe
+      // build used here) only supports layers models, so load without options.
       _aiModel = await self.nsfwjs.load(browserAPI.runtime.getURL('nsfwjs/'));
       _aiModelFailed = false;
       _aiModelLastError = '';
@@ -156,6 +158,71 @@ async function classifyImageBytes(blobOrArrayBuffer) {
   return scores;
 }
 
+// ============================================
+// OFFSCREEN DOCUMENT (fast path: WebGL on GPU)
+// ============================================
+// The MV3 service worker has no WebGL and is killed on idle, so running TF.js
+// there means CPU inference + repeated model reloads (slow). Chrome 109+ offers
+// an offscreen document: a persistent DOM context WITH a WebGL context. We run
+// the model there and relay classify/ping requests to it. When chrome.offscreen
+// is unavailable (older Chrome, Firefox) we fall back to the in-SW path below.
+const OFFSCREEN_URL = 'offscreen.html';
+let _offscreenCreating = null;
+
+function offscreenAvailable() {
+  return typeof chrome !== 'undefined' && !!(chrome.offscreen && chrome.offscreen.createDocument);
+}
+
+async function hasOffscreenDocument() {
+  try {
+    if (chrome.runtime && typeof chrome.runtime.getContexts === 'function') {
+      const ctxs = await chrome.runtime.getContexts({ contextTypes: ['OFFSCREEN_DOCUMENT'] });
+      return Array.isArray(ctxs) && ctxs.length > 0;
+    }
+  } catch (_) {}
+  return false;
+}
+
+async function ensureOffscreenDocument() {
+  if (!offscreenAvailable()) return false;
+  if (await hasOffscreenDocument()) return true;
+  if (_offscreenCreating) { try { await _offscreenCreating; } catch (_) {} return true; }
+  _offscreenCreating = chrome.offscreen.createDocument({
+    url: OFFSCREEN_URL,
+    reasons: ['BLOBS'],
+    justification: 'Run the on-device NSFW image classifier (TensorFlow.js + WebGL) off the main thread for speed.'
+  });
+  try {
+    await _offscreenCreating;
+  } catch (err) {
+    // A concurrent create (race) is fine — the document now exists. Re-throw
+    // anything else.
+    if (!String(err && err.message || err).toLowerCase().includes('single offscreen')) {
+      _offscreenCreating = null;
+      throw err;
+    }
+  }
+  _offscreenCreating = null;
+  return true;
+}
+
+function sendToOffscreen(payload, timeoutMs) {
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const timer = setTimeout(() => {
+      if (!settled) { settled = true; reject(new Error('offscreen timeout')); }
+    }, timeoutMs || 20000);
+    browserAPI.runtime.sendMessage({ target: 'offscreen-ai', ...payload }, (res) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      const lastErr = browserAPI.runtime.lastError;
+      if (lastErr) return reject(new Error(lastErr.message || String(lastErr)));
+      resolve(res);
+    });
+  });
+}
+
 // Storage keys
 const SETTINGS_KEY = 'pblocker_settings';
 const BLOCKED_STATS_KEY = 'pblocker_stats';
@@ -181,8 +248,9 @@ const DEFAULT_SETTINGS = {
   safeSearchEnabled: true,
   facebookReelsEnabled: false,
   instagramReelsEnabled: false,
-  aiImageBlocker: true,
-  aiTextBlocker: true,
+  aiImageBlocker: false, // Beta — opt-in (off on fresh install)
+  aiImageScanAllSites: true, // when AI image blocker is on, scan 1st-party too
+  aiTextBlocker: false, // Beta — opt-in (off on fresh install)
   aiTextStrictness: 'balanced',
 };
 
@@ -1520,6 +1588,8 @@ async function handleBlock(urlStr, type = 'blocked', reason = 'Pattern match') {
 
 // Message listener for content script communications
 browserAPI.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  // Messages addressed to the offscreen document are handled there, not here.
+  if (message && message.target === 'offscreen-ai') return false;
   if (message.type === 'image_filtered') {
     updateStats('image_filtered');
     try {
@@ -1615,6 +1685,24 @@ browserAPI.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   } else if (message.type === 'ai_classify_image' && (message.data || message.src)) {
     (async () => {
+      // Fast path: classify in the offscreen document on WebGL (GPU). If it
+      // fails for any reason, fall back to the service-worker path so images
+      // still get blocked (just slower).
+      if (message.src && offscreenAvailable()) {
+        try {
+          await ensureOffscreenDocument();
+          const res = await sendToOffscreen({ op: 'classify', src: message.src });
+          if (!res || !res.success) {
+            throw new Error(res && res.error ? res.error : 'offscreen classify failed');
+          }
+          sendResponse({ success: true, scores: res.scores });
+          return;
+        } catch (offErr) {
+          console.warn('[BlockNSFW] offscreen classify failed, falling back to SW:',
+            offErr && offErr.message || offErr);
+        }
+      }
+      // Service-worker fallback (older Chrome/Firefox, or offscreen failure).
       try {
         let blob;
         if (message.data) {
@@ -1632,16 +1720,31 @@ browserAPI.runtime.onMessage.addListener((message, sender, sendResponse) => {
         const scores = await classifyImageBytes(blob);
         sendResponse({ success: true, scores });
       } catch (error) {
+        console.warn('[BlockNSFW] SW classify failed:', error && error.message || error);
         sendResponse({ success: false, error: error.message || String(error) });
       }
     })();
     return true;
   } else if (message.type === 'ai_ping_model') {
     (async () => {
+      // Warm up the offscreen model when available; fall back to the SW model.
+      if (offscreenAvailable()) {
+        try {
+          await ensureOffscreenDocument();
+          const res = await sendToOffscreen(
+            { op: 'ping', forceRetry: message.forceRetry === true }, 30000);
+          if (res && res.ready) { sendResponse({ ready: true, backend: res.backend }); return; }
+          throw new Error(res && res.error ? res.error : 'offscreen model not ready');
+        } catch (offErr) {
+          console.warn('[BlockNSFW] offscreen model ping failed, falling back to SW:',
+            offErr && offErr.message || offErr);
+        }
+      }
       try {
         await loadAiModel({ forceRetry: message.forceRetry === true });
-        sendResponse({ ready: true });
+        sendResponse({ ready: true, backend: 'service-worker' });
       } catch (error) {
+        console.warn('[BlockNSFW] SW model load failed:', error && error.message || error);
         sendResponse({
           ready: false,
           error: error.message || String(error),
