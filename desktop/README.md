@@ -8,6 +8,11 @@ small status window.
 It does **no** content blocking itself — that all stays in the extension. This
 app just plants and guards the browser "force-install" enterprise policy.
 
+It runs on **Windows** (registry + Service Control Manager) and **Linux**
+(managed policy files + systemd). The OS-specific code is selected automatically
+at build time by Go build tags (`*_windows.go` / `*_linux.go`), so it's one app,
+not two — see the **Linux** section below.
+
 > Why this works: a browser extension can't prevent its own uninstall, but a
 > privileged process *above* the browser can force-install it via policy, which
 > greys out the Remove/Disable buttons. See `../docs/pc-version.md` for the full
@@ -23,8 +28,10 @@ app just plants and guards the browser "force-install" enterprise policy.
 | 4a | **Password-gated** uninstall (set-password, gated install/uninstall) | ✅ done |
 | 4b | **Installer** (Inno Setup wizard + consent + password page) | ✅ done (unsigned until cert) |
 | 5 | Status **UI** window (Wails, day-to-day screen from the mockup) | ✅ done |
+| 6 | **Temporary disable/enable** toggle + polish (fixed window, app icon) | ✅ done |
+| 7 | **Linux** port (managed-policy files + systemd) | 🟡 code-complete; engine compile-verified, UI/scripts need a Linux box |
 
-## Prerequisites (all via winget)
+## Prerequisites — Windows build (via winget)
 
 - **Go 1.23+** — `winget install GoLang.Go`
 - **Node.js LTS** — `winget install OpenJS.NodeJS.LTS` (Wails uses it for the status UI)
@@ -32,7 +39,7 @@ app just plants and guards the browser "force-install" enterprise policy.
 - **Inno Setup 6** — `winget install JRSoftware.InnoSetup` (builds the installer)
 - WebView2 runtime (already on Windows 11)
 
-## Build everything (release artifacts)
+## Build everything — Windows (release artifacts)
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File desktop\build.ps1
@@ -47,6 +54,25 @@ Runs the tests, then builds all three artifacts into `desktop\release\`:
 | `BlockNSFW-Guard-Setup.exe` | installer that bundles both + creates shortcuts |
 
 Go core only: `go -C desktop test ./...` then `go -C desktop build ./cmd/guard`.
+
+## Install the app (end users — Windows)
+
+Run `desktop\release\BlockNSFW-Guard-Setup.exe`. It shows a consent page, asks
+you to **set an uninstall password** (give it to the parent / accountability
+partner, *not* the person being filtered), installs + starts the guard service,
+locks the browsers, and creates a **BlockNSFW Protection** shortcut.
+
+To **update** an installed copy: uninstall first (Settings → Apps → *BlockNSFW
+Guard* → Uninstall → enter the password), then run the new setup. Installing
+over a running install fails because the service holds `guard.exe` open.
+
+### Status window (day-to-day)
+
+`blocknsfw-status.exe` shows whether protection is **Active / Paused / Inactive**,
+how many browsers are locked, and the service state. To pause or resume, type the
+password and click **Disable protection** / **Enable protection** — each pops a
+Windows **UAC** prompt, and the guard re-verifies the password itself, so the
+button can't be bypassed from the UI. The window is read-only otherwise.
 
 ## Try it (Windows, Administrator shell required)
 
@@ -105,6 +131,56 @@ as malware, so this layer makes code signing mandatory before distribution.
 
 Config comes from `../shared/extension-ids.json` (found automatically by walking
 up from the working directory). Override with `guard -config <path> apply`.
+
+## Linux
+
+The same app builds for Linux. The engine swaps the Windows registry + Service
+Control Manager for **managed policy files + systemd**, selected automatically by
+Go build tags. The `guard` engine is compile-verified; the Wails status UI and
+the packaging scripts still need to be built and run **on a Linux machine** —
+Wails links gtk/webkit, so it can't be cross-compiled from Windows.
+
+**Prerequisites (Debian/Ubuntu):**
+
+```sh
+sudo apt install build-essential libgtk-3-dev libwebkit2gtk-4.1-dev
+# plus Go 1.25+ and the Wails CLI:
+go install github.com/wailsapp/wails/v2/cmd/wails@latest
+```
+
+**Build, install, uninstall:**
+
+```sh
+bash desktop/build-linux.sh               # -> desktop/release-linux/{guard, blocknsfw-status, extension-ids.json}
+sudo desktop/installer/linux/install.sh   # copy to /opt/blocknsfw + register the systemd service (sets the password)
+sudo desktop/installer/linux/uninstall.sh # password-gated removal
+```
+
+The CLI is identical to Windows (`guard apply|verify|remove|install-service|
+disable|enable|start|stop|run`), just run with `sudo` instead of an elevated
+shell. The status UI elevates via **pkexec** (PolicyKit) instead of UAC.
+
+**Where things live on Linux:**
+
+| Thing | Location |
+|-------|----------|
+| Binaries | `/opt/blocknsfw/` |
+| Chromium force-install | `/etc/opt/chrome/policies/managed/blocknsfw.json` (also `/etc/opt/edge/...`, `/etc/brave/...`) |
+| Firefox force-install | `/etc/firefox/policies/policies.json` |
+| Guard state (disabled flag + password hash) | `/etc/blocknsfw/state.json` |
+| Service | systemd unit `BlockNSFWGuard.service` |
+
+**Linux caveats:**
+
+- **snap / flatpak browsers** (e.g. Ubuntu's default Firefox) are sandboxed and
+  ignore `/etc/.../policies/managed` — the lock only takes effect on natively
+  installed (`.deb` / `.rpm`) browsers.
+- Tamper-resistance is weaker than on Windows: `root` can stop the service and
+  delete the policy files. It's effective against a **standard (non-admin) user**
+  — the real target — but not against someone with `sudo`.
+- Real-time tamper watching isn't wired up on Linux yet; the 30s backstop
+  re-apply covers it. macOS is not started (needs an Apple Developer account +
+  notarization).
 
 ## Per-browser setup (extension-ids.json)
 
