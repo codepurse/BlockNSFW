@@ -1422,6 +1422,56 @@
       font-style: italic;
     }
 
+    /* ===== Desktop Guard — compact highlight inside "What's New" ===== */
+    .dg-callout {
+      position: relative;
+      margin-bottom: 1rem;
+      padding: 0.85rem 1rem;
+      border-radius: var(--radius-sm);
+      background:
+        radial-gradient(130% 180% at 0% 0%, rgba(99, 102, 241, 0.16), transparent 60%),
+        var(--surface-2);
+      border: 1px solid rgba(99, 102, 241, 0.28);
+      overflow: hidden;
+    }
+    /* animated accent rail along the top edge */
+    .dg-callout::after {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 2px;
+      background: linear-gradient(90deg, transparent, var(--primary), #2575fc, var(--primary), transparent);
+      background-size: 200% 100%;
+      animation: dg-slide 3.5s linear infinite;
+    }
+    @keyframes dg-slide {
+      from { background-position: 0 0; }
+      to   { background-position: 200% 0; }
+    }
+    .dg-callout-head { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.4rem; }
+    /* small, gently pulsing shield */
+    .dg-callout-icon {
+      width: 30px; height: 30px; flex-shrink: 0;
+      border-radius: 9px;
+      display: flex; align-items: center; justify-content: center;
+      color: #fff;
+      background: linear-gradient(135deg, var(--primary), #2575fc);
+      animation: dg-pulse 2.6s ease-in-out infinite;
+    }
+    .dg-callout-icon svg { width: 17px; height: 17px; }
+    @keyframes dg-pulse {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.40); }
+      50%      { box-shadow: 0 0 0 7px rgba(99, 102, 241, 0); }
+    }
+    .dg-callout-title { font-weight: 600; color: var(--foreground); font-size: 0.92rem; letter-spacing: -0.01em; }
+    .dg-callout-text { margin: 0; font-size: 0.86rem; color: var(--foreground-muted); line-height: 1.55; }
+    .dg-callout-text strong { color: var(--foreground); font-weight: 600; }
+    .dg-callout-link { color: var(--primary-hover); text-decoration: none; font-weight: 600; white-space: nowrap; }
+    .dg-callout-link:hover { text-decoration: underline; }
+    @media (prefers-reduced-motion: reduce) {
+      .dg-callout::after, .dg-callout-icon { animation: none; }
+    }
+
     /* ===== App Layout: sidebar + grouped sections ===== */
     .app {
       max-width: 1160px;
@@ -1660,6 +1710,15 @@
       <div class="card-header">
         <h2 class="card-title">What’s New</h2>
         <div class="card-description">
+          <div class="dg-callout">
+            <div class="dg-callout-head">
+              <span class="dg-callout-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><rect x="9.2" y="11" width="5.6" height="4.6" rx="1"/><path d="M10 11V9.5a2 2 0 0 1 4 0V11"/></svg></span>
+              <span class="dg-callout-title">Desktop Guard — make BlockNSFW uninstall-proof</span>
+              <span class="badge-new">New</span>
+              <span class="badge-beta">Beta</span>
+            </div>
+            <p class="dg-callout-text">A native companion app force-installs the extension so the browser's <em>Remove</em> and <em>Disable</em> buttons are greyed out, and a background service re-applies protection if anything tampers with it. Uninstalling needs a password held by a parent or accountability partner. <strong>Now in beta for Windows &amp; Linux.</strong> <a class="dg-callout-link" href="https://github.com/codepurse/BlockNSFW" target="_blank" rel="noopener">Learn more →</a></p>
+          </div>
           <ul style="margin: 0; padding-left: 1.1rem">
             <li><strong>AI Text Protection (multilingual)</strong> — A new on-device AI reads the page's text to catch adult sites the keyword and blocklist filters miss — especially non-English ones (Russian, Chinese, Korean, Thai, Arabic, and more). It blocks pages it's confident about, and teams up with the image AI to catch borderline ones. Nothing leaves your device.</li>
             <li><strong>AI Image Protection</strong> — A new on-device AI looks at the actual picture to block adult images, even when nothing in the web address gives them away. Everything stays on your device — your images are never uploaded.</li>
