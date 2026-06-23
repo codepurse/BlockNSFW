@@ -1,0 +1,9 @@
+{
+  "name": "blocknsfw-status-frontend",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Static frontend for the BlockNSFW status window (no build step)",
+  "scripts": {
+    "build": "node -e \"process.exit(0)\""
+  }
+}

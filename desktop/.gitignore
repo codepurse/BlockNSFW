@@ -1,0 +1,29 @@
+# Go build output
+/guard.exe
+/guard
+*.exe
+/bin/
+/dist/
+
+# Local config copy placed next to the binary at install time
+/extension-ids.json
+
+# Throwaway test config (real Web Store ID for lock testing)
+/test-ids.json
+
+# Installer build output
+/installer/output/
+
+# Wails status UI build artifacts
+/statusui/build/bin/
+/statusui/frontend/node_modules/
+/statusui/frontend/wailsjs/
+
+# The frontend UI is hand-authored SOURCE (embedded via go:embed), not build
+# output - keep it despite the repo-root "dist/" ignore rule.
+!/statusui/frontend/dist/
+!/statusui/frontend/dist/**
+
+# Release output (built by build.ps1 / build-linux.sh)
+/release/
+/release-linux/

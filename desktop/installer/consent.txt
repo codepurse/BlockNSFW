@@ -1,0 +1,22 @@
+BlockNSFW Guard - what this installs and what it does
+
+BlockNSFW Guard is a parental-control / accountability tool. By installing it you
+acknowledge and agree to the following:
+
+1. This software keeps the BlockNSFW browser extension force-installed in your
+   web browsers using Windows enterprise policy. While it is active, the
+   extension cannot be removed from the browser's normal Remove/Disable buttons.
+
+2. It installs a background Windows service and a watchdog that restart
+   themselves if stopped or killed. This is intentional: it is what prevents the
+   protection from being switched off in a moment of weakness.
+
+3. Removing this software requires the uninstall password set during this setup.
+   That password should be held by the parent or accountability partner, not by
+   the person whose browsing is being filtered.
+
+4. You should install this only on a device you own or administer, or with the
+   clear consent of the device's owner/user. Installing software that resists
+   removal on someone else's device without their knowledge may be unlawful.
+
+If you do not agree, choose "I do not accept" and setup will close.

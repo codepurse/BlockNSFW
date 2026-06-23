@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>BlockNSFW Protection</title>
+<style>
+  :root {
+    --bg: #0e0e11; --surface: #17171c; --surface2: #1f1f26; --border: #2a2a33;
+    --text: #e8e8ec; --muted: #9a9aa6; --faint: #6e6e78;
+    --accent: #6366f1; --accent-dim: #534ab7;
+    --ok: #34d399; --ok-bg: rgba(52,211,153,0.12);
+    --warn: #f59e0b; --warn-bg: rgba(245,158,11,0.12);
+    --danger: #b91c1c; --danger-hi: #dc2626;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+    font-size: 14px; line-height: 1.5; -webkit-user-select: none; user-select: none;
+  }
+  .wrap { padding: 16px; display: flex; flex-direction: column; gap: 14px; }
+  .topbar { display: flex; align-items: center; gap: 10px; }
+  .topbar .name { font-weight: 600; font-size: 14px; }
+  .pill { margin-left: auto; font-size: 11px; font-weight: 600; padding: 3px 10px; border-radius: 999px; }
+  .pill.active { color: var(--ok); background: var(--ok-bg); }
+  .pill.inactive { color: var(--faint); background: var(--surface2); }
+  .pill.paused { color: var(--warn); background: var(--warn-bg); }
+  .hero { display: flex; align-items: center; gap: 14px; }
+  .hero .ring {
+    width: 48px; height: 48px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    background: var(--ok-bg); color: var(--ok); flex-shrink: 0;
+  }
+  .hero.off .ring { background: var(--surface2); color: var(--faint); }
+  .hero.paused .ring { background: var(--warn-bg); color: var(--warn); }
+  .hero h1 { font-size: 17px; font-weight: 600; margin: 0; }
+  .hero p { margin: 0; color: var(--muted); font-size: 13px; }
+  .cards { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; }
+  .card .lbl { font-size: 12px; color: var(--muted); }
+  .card .val { font-size: 20px; font-weight: 600; margin-top: 2px; }
+  .section-title { font-size: 12px; color: var(--faint); text-transform: uppercase; letter-spacing: .04em; }
+  .rows { display: flex; flex-direction: column; gap: 6px; }
+  .row {
+    display: flex; align-items: center; gap: 10px; background: var(--surface);
+    border: 1px solid var(--border); border-radius: 10px; padding: 9px 12px;
+  }
+  .row .bname { font-size: 13px; text-transform: capitalize; }
+  .row .badge { margin-left: auto; font-size: 11px; font-weight: 600; padding: 2px 9px; border-radius: 999px; }
+  .badge.locked { color: var(--ok); background: var(--ok-bg); }
+  .badge.unlocked { color: var(--faint); background: var(--surface2); }
+  .row.absent { opacity: .45; }
+  .lockbox { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 14px; }
+  .lockbox .hint { font-size: 12px; color: var(--muted); margin-bottom: 10px; }
+  .lockrow { display: flex; gap: 8px; }
+  input[type=password] {
+    flex: 1; background: var(--surface2); border: 1px solid var(--border); border-radius: 8px;
+    color: var(--text); padding: 8px 10px; font-size: 13px; outline: none;
+  }
+  input[type=password]:focus { border-color: var(--accent); }
+  button {
+    background: var(--accent-dim); color: #fff; border: none; border-radius: 8px;
+    padding: 8px 14px; font-size: 13px; font-weight: 600; cursor: pointer;
+  }
+  button:hover { background: var(--accent); }
+  button.ghost { background: transparent; border: 1px solid var(--border); color: var(--muted); }
+  button.ghost:hover { background: var(--surface2); color: var(--text); }
+  button.danger { background: var(--danger); }
+  button.danger:hover { background: var(--danger-hi); }
+  button:disabled { opacity: .55; cursor: default; }
+  .msg { font-size: 12px; margin-top: 8px; min-height: 16px; }
+  .msg.ok { color: var(--ok); } .msg.err { color: #f87171; }
+  .foot { display: flex; align-items: center; gap: 10px; color: var(--faint); font-size: 11px; }
+  .foot button { margin-left: auto; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="topbar">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#7f77dd" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+    <span class="name">BlockNSFW Protection</span>
+    <span id="pill" class="pill inactive">…</span>
+  </div>
+
+  <div id="hero" class="hero off">
+    <div class="ring">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/></svg>
+    </div>
+    <div>
+      <h1 id="hero-title">Checking…</h1>
+      <p id="hero-sub">Reading protection status</p>
+    </div>
+  </div>
+
+  <div class="cards">
+    <div class="card"><div class="lbl">Service</div><div class="val" id="svc-val">—</div></div>
+    <div class="card"><div class="lbl">Browsers locked</div><div class="val" id="locked-val">—</div></div>
+  </div>
+
+  <div class="section-title">Browsers</div>
+  <div class="rows" id="rows"></div>
+
+  <div class="lockbox">
+    <div class="hint" id="lock-hint">Turning protection off requires the password held by the parent or accountability partner.</div>
+    <div class="lockrow">
+      <input id="pw" type="password" placeholder="Password" />
+      <button id="action-btn">Disable protection</button>
+    </div>
+    <div id="msg" class="msg"></div>
+  </div>
+
+  <div class="foot">
+    <span id="ver">BlockNSFW Guard</span>
+    <button class="ghost" id="refresh">Refresh</button>
+  </div>
+
+</div>
+
+<script>
+  function bound() { return window.go && window.go.main && window.go.main.App; }
+
+  let current = { serviceRunning: false, disabled: false };
+
+  // The toggle's action is driven by state: disable a running, non-paused guard;
+  // otherwise (paused, stopped, or not installed) the action is to enable it.
+  function nextAction(s) { return (s.serviceRunning && !s.disabled) ? 'disable' : 'enable'; }
+
+  function render(s) {
+    current = s;
+    const active = !!s.serviceRunning;
+    const paused = !!s.disabled;
+
+    const pill = document.getElementById('pill');
+    pill.textContent = paused ? 'Paused' : (active ? 'Active' : 'Inactive');
+    pill.className = 'pill ' + (paused ? 'paused' : (active ? 'active' : 'inactive'));
+
+    const hero = document.getElementById('hero');
+    hero.className = 'hero' + (paused ? ' paused' : (active ? '' : ' off'));
+    document.getElementById('hero-title').textContent =
+      paused ? 'Protection paused' : (active ? 'Protection active' : 'Protection inactive');
+    document.getElementById('hero-sub').textContent =
+      paused ? 'You turned protection off. Enter the password to turn it back on.'
+             : (active ? 'The guard service is running and watching your browsers.'
+                       : 'The guard service is not running.');
+
+    document.getElementById('svc-val').textContent = paused ? 'Paused' : (active ? 'Running' : 'Stopped');
+    document.getElementById('locked-val').textContent = s.lockedCount;
+
+    const btn = document.getElementById('action-btn');
+    const disabling = nextAction(s) === 'disable';
+    btn.textContent = disabling ? 'Disable protection' : 'Enable protection';
+    btn.className = disabling ? 'danger' : '';
+    document.getElementById('lock-hint').textContent = disabling
+      ? 'Turning protection off requires the password held by the parent or accountability partner.'
+      : 'Enter the password to turn protection back on.';
+
+    const rows = document.getElementById('rows');
+    rows.innerHTML = '';
+    (s.browsers || []).forEach(function (b) {
+      const row = document.createElement('div');
+      row.className = 'row' + (b.installed ? '' : ' absent');
+      const name = document.createElement('span');
+      name.className = 'bname';
+      name.textContent = b.kind;
+      const badge = document.createElement('span');
+      if (b.locked) { badge.className = 'badge locked'; badge.textContent = 'Locked'; }
+      else { badge.className = 'badge unlocked'; badge.textContent = b.detail; }
+      row.appendChild(name);
+      row.appendChild(badge);
+      rows.appendChild(row);
+    });
+  }
+
+  async function refresh() {
+    if (!bound()) {
+      document.getElementById('hero-title').textContent = 'Run inside the app';
+      document.getElementById('hero-sub').textContent = 'This window must be launched by BlockNSFW Guard.';
+      return;
+    }
+    render(await window.go.main.App.GetStatus());
+  }
+
+  async function toggle() {
+    const msg = document.getElementById('msg');
+    const btn = document.getElementById('action-btn');
+    const pwEl = document.getElementById('pw');
+    if (!bound()) { return; }
+    const pw = pwEl.value;
+    if (!pw) { msg.className = 'msg err'; msg.textContent = 'Enter the password.'; return; }
+
+    const action = nextAction(current);
+    btn.disabled = true;
+    btn.textContent = action === 'disable' ? 'Disabling…' : 'Enabling…';
+    msg.className = 'msg'; msg.textContent = 'Approve the Windows permission prompt…';
+
+    let res;
+    try {
+      res = action === 'disable'
+        ? await window.go.main.App.Disable(pw)
+        : await window.go.main.App.Enable(pw);
+    } catch (e) {
+      res = { ok: false, message: String(e) };
+    }
+
+    btn.disabled = false;
+    pwEl.value = '';
+    msg.className = 'msg ' + (res.ok ? 'ok' : 'err');
+    msg.textContent = res.message;
+    await refresh();
+  }
+
+  document.getElementById('refresh').addEventListener('click', refresh);
+  document.getElementById('action-btn').addEventListener('click', toggle);
+  document.getElementById('pw').addEventListener('keydown', function (e) { if (e.key === 'Enter') toggle(); });
+  window.addEventListener('DOMContentLoaded', refresh);
+</script>
+</body>
+</html>
