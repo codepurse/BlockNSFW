@@ -17,7 +17,6 @@
   const CLASSIFY_TIMEOUT_MS = 60000;
   const MODEL_RETRY_DELAY_MS = 5000;
 
-  const PLACEHOLDER_CLASS = 'pblocker-ai-placeholder';
   const PENDING_CLASS = 'pblocker-ai-pending';
 
   const state = {
@@ -29,7 +28,6 @@
     pendingQueue: [],
     queuedImages: new WeakSet(),
     lru: new Map(),
-    placeholders: new WeakMap(),
     settings: null
   };
 
@@ -38,80 +36,29 @@
     const el = document.createElement('style');
     el.id = STYLE_ID;
     el.textContent =
-      // The flagged <img> is hidden (not blurred) and replaced by the
-      // purple placeholder below, mirroring the keyword blocker's fallback.
+      // The flagged <img> is kept in place but heavily blurred so the adult
+      // content is unreadable while the page layout stays intact. `clip-path`
+      // contains the blur halo to the element box so it can't bleed over
+      // neighbouring content, and pointer events are disabled so the blurred
+      // image can't be clicked through to its source.
       '.pblocker-ai-blocked {' +
-        'display: none !important;' +
+        'filter: blur(28px) !important;' +
+        'clip-path: inset(0) !important;' +
+        'pointer-events: none !important;' +
+        'user-select: none !important;' +
       '}' +
       // While a candidate image is being classified it is hidden up-front so
       // adult content never paints. `visibility: hidden` keeps its layout box
-      // (no page jump); a clear verdict reveals it, a block swaps in the
-      // placeholder. This is the "block-first, reveal-on-safe" strategy.
+      // (no page jump); a clear verdict reveals it, a block leaves it in place
+      // but blurred. This is the "block-first, reveal-on-safe" strategy.
       '.' + PENDING_CLASS + ' {' +
         'visibility: hidden !important;' +
-      '}' +
-      '.' + PLACEHOLDER_CLASS + ' {' +
-        'display: flex !important;' +
-        'flex-direction: column;' +
-        'align-items: center;' +
-        'justify-content: center;' +
-        'box-sizing: border-box;' +
-        'min-width: 80px;' +
-        'min-height: 80px;' +
-        'padding: 8px;' +
-        'border-radius: 6px;' +
-        'background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);' +
-        'color: #fff;' +
-        'font-family: system-ui, -apple-system, sans-serif;' +
-        'font-size: 12px;' +
-        'font-weight: 600;' +
-        'line-height: 1.3;' +
-        'text-align: center;' +
-        'overflow: hidden;' +
-        'pointer-events: none;' +
-        'user-select: none;' +
-      '}' +
-      '.' + PLACEHOLDER_CLASS + ' .pblocker-ai-placeholder-icon {' +
-        'font-size: 20px;' +
-        'margin-bottom: 4px;' +
       '}';
     (document.head || document.documentElement).appendChild(el);
   }
 
-  function buildPlaceholder(img) {
-    const ph = document.createElement('div');
-    ph.className = PLACEHOLDER_CLASS;
-
-    // Preserve the rendered footprint so the page layout does not jump.
-    const rect = img.getBoundingClientRect();
-    const width = rect.width || img.clientWidth ||
-      parseInt(img.getAttribute('width'), 10) || img.naturalWidth || 0;
-    const height = rect.height || img.clientHeight ||
-      parseInt(img.getAttribute('height'), 10) || img.naturalHeight || 0;
-    if (width) ph.style.width = width + 'px';
-    if (height) ph.style.height = height + 'px';
-
-    const icon = document.createElement('div');
-    icon.className = 'pblocker-ai-placeholder-icon';
-    icon.textContent = '🛡️';
-    ph.appendChild(icon);
-
-    const label = document.createElement('div');
-    // Shrink the wording for tiny thumbnails.
-    label.textContent = (width > 0 && width < 120) ? 'Blocked' : 'Blocked by NSFW';
-    ph.appendChild(label);
-
-    return ph;
-  }
-
-  function removePlaceholder(img) {
-    const ph = state.placeholders.get(img);
-    if (ph && ph.parentNode) ph.parentNode.removeChild(ph);
-    state.placeholders.delete(img);
-  }
-
   // Hide a candidate the moment it is queued for classification so adult
-  // content never paints. Skipped if it is already blocked (placeholder shown).
+  // content never paints. Skipped if it is already blocked (and blurred).
   function markPending(img) {
     if (!img || !img.classList) return;
     if (img.classList.contains('pblocker-ai-blocked')) return;
@@ -207,14 +154,11 @@
     const alreadyBlocked = img.classList.contains('pblocker-ai-blocked');
     if (verdict === 'block') {
       if (!alreadyBlocked) {
-        // Build the placeholder from the image's geometry (its layout box is
-        // still intact under `visibility: hidden`), then swap the pending hide
-        // for the blocked state and drop the placeholder in its place.
-        const ph = buildPlaceholder(img);
+        // Swap the pending hide for the blocked state: the <img> stays in
+        // place (layout box already intact under `visibility: hidden`) and the
+        // blocked class blurs it heavily.
         clearPending(img);
         img.classList.add('pblocker-ai-blocked');
-        state.placeholders.set(img, ph);
-        if (img.parentNode) img.parentNode.insertBefore(ph, img.nextSibling);
         // Page-level counter read by content.js's AI text blocker as a fusion
         // signal (moderate text score + >=1 blocked image -> block the page).
         try {
@@ -232,11 +176,10 @@
       }
       return;
     }
-    // Cleared as safe: reveal it and tear down any prior blocked state.
+    // Cleared as safe: reveal it and remove any prior blur.
     clearPending(img);
     if (alreadyBlocked) {
       img.classList.remove('pblocker-ai-blocked');
-      removePlaceholder(img);
     }
   }
 
@@ -258,11 +201,6 @@
     try {
       document.querySelectorAll('.pblocker-ai-blocked').forEach((img) => {
         img.classList.remove('pblocker-ai-blocked');
-        removePlaceholder(img);
-      });
-      // Sweep any placeholders whose <img> reference was already lost.
-      document.querySelectorAll('.' + PLACEHOLDER_CLASS).forEach((ph) => {
-        if (ph.parentNode) ph.parentNode.removeChild(ph);
       });
       // Reveal anything that was hidden awaiting a verdict.
       revealAllPending();

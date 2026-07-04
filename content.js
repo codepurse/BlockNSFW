@@ -1287,6 +1287,18 @@ function getAiThresholds(level) {
   }
 }
 
+// Minimum-evidence floor for whole-page text blocking. The linear model carries
+// a positive prior (bias ~0.83 -> sigmoid ~0.70), so a content-sparse page — a
+// brand-only title, an un-rendered SPA shell, an image-only page — has too few
+// learned features to overcome it and collapses to a bias-driven "adult" score
+// (~0.70-0.86) that has nothing to do with its actual words. That is exactly the
+// "health"/"navix" false-positive class. Below this many normalized tokens we
+// decline to score the page at all, so the bias can never trigger a block by
+// itself. Genuinely adult short pages are still covered by URL/path keywords,
+// the blocklist, and the AI image scanner. This is a quantity-of-evidence gate:
+// it never looks at *which* words are present, only *how many*.
+const MIN_TEXT_TOKENS_FOR_BLOCK = 12;
+
 // AI Text Blocker thresholds. `block` = redirect on text alone (high
 // confidence). `fuse` = lower bar that only redirects when the AI image blocker
 // also flagged >=1 image on the page (corroborating evidence). Whole-page
@@ -1806,6 +1818,16 @@ function checkPageTextWithModel() {
 
   const text = gatherTextForModel();
   if (!text) return false;
+
+  // Minimum-evidence guard: with too little text the score is driven by the
+  // model's positive prior, not the page's words, so we don't trust it for a
+  // block (text-only or image-fused). See MIN_TEXT_TOKENS_FOR_BLOCK.
+  const normForCount = TextClassifier.normalizeForClassifier(text);
+  const tokenCount = normForCount ? normForCount.split(' ').length : 0;
+  if (tokenCount < MIN_TEXT_TOKENS_FOR_BLOCK) {
+    if (debugMode) log(`AI text scan skipped — only ${tokenCount} token(s), below evidence floor`);
+    return false;
+  }
 
   let prob;
   try {

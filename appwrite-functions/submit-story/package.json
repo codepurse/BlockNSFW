@@ -1,0 +1,9 @@
+{
+  "name": "submit-story",
+  "version": "1.0.0",
+  "description": "BlockNSFW community stories - submit endpoint (Appwrite Function)",
+  "main": "src/index.js",
+  "dependencies": {
+    "node-appwrite": "^14.0.0"
+  }
+}

@@ -154,3 +154,190 @@ const PBlockerReports = (() => {
     },
   };
 })();
+
+/**
+ * BlockNSFW community stories - Appwrite Function client
+ *
+ * Submits anonymous recovery/encouragement stories via an Appwrite Function.
+ * The function writes approved stories into the Appwrite database collection.
+ */
+
+const APPWRITE_STORIES_FUNCTION_URL = 'https://6a3aafbf000d1e70cc28.sgp.appwrite.run';
+
+const STORY_COOLDOWN_KEY = 'pblocker_story_cooldown';
+const STORY_DAILY_KEY = 'pblocker_story_daily';
+const STORY_COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000; // 1 week
+const DAILY_STORY_LIMIT = 1;
+
+const PBlockerStories = (() => {
+  const api = typeof browser === 'undefined' ? chrome : browser;
+
+  return {
+    // Human-friendly remaining time, e.g. "6d 23h", "45m 10s".
+    formatWait(ms) {
+      const total = Math.max(0, Math.ceil(ms / 1000));
+      const d = Math.floor(total / 86400);
+      const h = Math.floor((total % 86400) / 3600);
+      const m = Math.floor((total % 3600) / 60);
+      const s = total % 60;
+      if (d > 0) return `${d}d ${h}h`;
+      if (h > 0) return `${h}h ${m}m`;
+      if (m > 0) return `${m}m ${s}s`;
+      return `${s}s`;
+    },
+
+    async getCooldownRemaining() {
+      const stored = await api.storage.local.get(STORY_COOLDOWN_KEY);
+      const until = stored[STORY_COOLDOWN_KEY] || 0;
+      return Math.max(0, until - Date.now());
+    },
+
+    async setCooldown() {
+      await api.storage.local.set({
+        [STORY_COOLDOWN_KEY]: Date.now() + STORY_COOLDOWN_MS,
+      });
+    },
+
+    async getDailyCount() {
+      const stored = await api.storage.local.get(STORY_DAILY_KEY);
+      const data = stored[STORY_DAILY_KEY] || { date: '', count: 0 };
+      const today = new Date().toISOString().slice(0, 10);
+      if (data.date !== today) return 0;
+      return data.count;
+    },
+
+    async incrementDailyCount() {
+      const today = new Date().toISOString().slice(0, 10);
+      const stored = await api.storage.local.get(STORY_DAILY_KEY);
+      const data = stored[STORY_DAILY_KEY] || { date: '', count: 0 };
+      const count = data.date === today ? data.count + 1 : 1;
+      await api.storage.local.set({
+        [STORY_DAILY_KEY]: { date: today, count },
+      });
+    },
+
+    async getDailyRemaining() {
+      return DAILY_STORY_LIMIT - await this.getDailyCount();
+    },
+
+    isConfigured() {
+      return APPWRITE_STORIES_FUNCTION_URL !== 'YOUR_STORIES_FUNCTION_URL';
+    },
+
+    /**
+     * Fetch a page of approved community stories (newest first).
+     * @param {{ offset?: number, limit?: number }} [opts]
+     * @returns {Promise<{ stories: Array<{ id: string, title: string, content: string, likes: number, createdAt: string }>, total: number }>}
+     */
+    async fetchStories({ offset = 0, limit = 10 } = {}) {
+      if (!this.isConfigured()) {
+        throw new Error('Community stories are not configured yet.');
+      }
+
+      const url = `${APPWRITE_STORIES_FUNCTION_URL}?offset=${offset}&limit=${limit}`;
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: { Accept: 'application/json' },
+      });
+
+      const result = await response.json().catch(() => ({}));
+
+      if (!response.ok || !result.ok) {
+        throw new Error(result.message || 'Failed to load stories.');
+      }
+
+      return {
+        stories: Array.isArray(result.stories) ? result.stories : [],
+        total: Number(result.total) || 0,
+      };
+    },
+
+    /**
+     * Like or unlike a story; returns the updated shared count.
+     * @param {string} storyId
+     * @param {boolean} liked - true to like, false to unlike
+     * @returns {Promise<{ ok: boolean, likes: number }>}
+     */
+    async likeStory(storyId, liked) {
+      if (!this.isConfigured()) {
+        throw new Error('Community stories are not configured yet.');
+      }
+
+      let deviceId = '';
+      try { deviceId = await PBlockerReports.getDeviceId(); } catch (_) {}
+
+      const response = await fetch(APPWRITE_STORIES_FUNCTION_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'like', storyId, like: !!liked, deviceId }),
+      });
+
+      const result = await response.json().catch(() => ({}));
+
+      if (!response.ok || !result.ok) {
+        throw new Error(result.message || 'Failed to update like.');
+      }
+
+      return { ok: true, likes: Number(result.likes) || 0 };
+    },
+
+    /**
+     * Submit a community story via Appwrite Function.
+     * @param {{ title?: string, content: string }} data
+     */
+    async submitStory({ title, content }) {
+      if (!this.isConfigured()) {
+        throw new Error('Community stories are not configured yet.');
+      }
+
+      const cooldown = await this.getCooldownRemaining();
+      if (cooldown > 0) {
+        throw new Error(`You can share one story per week — try again in ${this.formatWait(cooldown)}.`);
+      }
+
+      const dailyCount = await this.getDailyCount();
+      if (dailyCount >= DAILY_STORY_LIMIT) {
+        throw new Error('You can share one story per week. Please try again later.');
+      }
+
+      const cleanContent = String(content || '').trim();
+      if (cleanContent.length < 20) {
+        throw new Error('Story must be at least 20 characters.');
+      }
+      if (cleanContent.length > 2000) {
+        throw new Error('Story must be 2000 characters or less.');
+      }
+
+      const cleanTitle = String(title || '').trim().slice(0, 120);
+
+      const deviceId = await PBlockerReports.getDeviceId();
+
+      let version = '';
+      try { version = api.runtime.getManifest().version; } catch (_) {}
+
+      const response = await fetch(APPWRITE_STORIES_FUNCTION_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: cleanTitle,
+          content: cleanContent,
+          nickname: 'Anonymous',
+          status: 'pending',
+          deviceId,
+          browser: 'chrome',
+          version,
+        }),
+      });
+
+      const result = await response.json().catch(() => ({}));
+
+      if (!response.ok || !result.ok) {
+        throw new Error(result.message || 'Failed to submit story. Please try again.');
+      }
+
+      await this.setCooldown();
+      await this.incrementDailyCount();
+      return result;
+    },
+  };
+})();
