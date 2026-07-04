@@ -63,6 +63,36 @@ We installed an LED strip light under the kitchen cabinet.
 Essex and Sussex are counties in the south east of England.
 The data analysis revealed a strong correlation between variables.
 
+# Hard negatives: ordinary media words (photo, photos, video, videos, gallery,
+# picture, camera, webcam, clip, girls) in unambiguously SAFE contexts. The seed
+# adult phrases use "video/videos/photos" heavily ("porn video", "nude photos"),
+# so without these the model learns plain media words are adult and blocks
+# photography blogs, Google Photos, news sites, etc. Listed densely on purpose.
+Browse our photo gallery of national park landscapes and wildlife.
+Upload your photos to share family memories with relatives and friends.
+These stock photos are free to download for your commercial projects.
+Our wedding photos and video highlights are ready to view online.
+Watch the video tutorial to learn the basic guitar chords step by step.
+The product video shows how to assemble the standing desk in minutes.
+Subscribe to the channel for weekly cooking videos and easy recipes.
+The museum posted a virtual tour video of its newest exhibit.
+Take a photo of the receipt and email it to our support team.
+The camera captured stunning photos of the total solar eclipse.
+Browse home photos and a full video walkthrough of each listing.
+Her travel photos from Japan won first place in the photography contest.
+The harbor webcam shows a live view of the ferry dock and lighthouse.
+The girls soccer team won the regional championship this weekend.
+Edit your photos with these free filters and simple cropping tools.
+This documentary video covers the history of the mountain railway.
+Download the highlight video of last night's basketball game.
+Our gallery features paintings, sculptures, and framed photo prints.
+Add a profile photo and a short bio to complete your account.
+The news article includes several photos and a short video clip.
+Share photos and videos with classmates in the study group chat.
+The science class recorded a video of the volcano model experiment.
+A photo album of the school field trip is posted on the parent portal.
+Find royalty free video clips and background music for your slideshow.
+
 ## es
 Bienvenido a nuestra tienda en línea con envío gratis esta semana.
 Lee las últimas noticias de tecnología y reseñas de productos.
@@ -70,12 +100,21 @@ La educación sexual ayuda a los jóvenes a tomar decisiones saludables.
 Esta receta de pollo es rápida, saludable y fácil de preparar.
 El informe financiero muestra un crecimiento constante este año.
 Aprende programación con estos tutoriales para principiantes.
+Mira el video tutorial para aprender a tocar la guitarra paso a paso.
+Sube tus fotos para compartir recuerdos familiares con tus amigos.
+Nuestra galería de fotos muestra paisajes de parques nacionales.
+Descarga fotos y videos gratuitos para tus proyectos comerciales.
+Las fotos de la boda y el video de los momentos ya están disponibles.
 
 ## pt
 Bem vindo à nossa loja online com frete grátis nesta semana.
 Leia as últimas notícias de tecnologia e análises de produtos.
 A educação sexual ajuda os jovens a tomar decisões saudáveis.
 Esta receita de frango é rápida, saudável e fácil de preparar.
+Assista ao vídeo tutorial para aprender os acordes básicos do violão.
+Envie suas fotos para compartilhar memórias da família com os amigos.
+Nossa galeria de fotos mostra paisagens de parques nacionais.
+Baixe fotos e vídeos gratuitos para os seus projetos comerciais.
 
 ## ru
 Добро пожаловать в наш интернет магазин с бесплатной доставкой.
@@ -139,6 +178,10 @@ L educazione sessuale aiuta i giovani a fare scelte sane.
 Selamat datang di toko online kami dengan gratis ongkir minggu ini.
 Baca berita teknologi terbaru dan ulasan produk.
 Pendidikan seks membantu remaja membuat keputusan yang sehat.
+Tonton video tutorial untuk belajar memasak resep ayam ini.
+Unggah foto liburan keluarga untuk dibagikan kepada teman teman.
+Galeri foto kami menampilkan pemandangan taman nasional.
+Unduh foto dan video gratis untuk proyek komersial Anda.
 
 # --- Expanded multilingual everyday-benign coverage. Mundane topics only
 # (study, food, weather, travel, tech, shopping, sport). Deliberately include

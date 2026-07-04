@@ -1528,6 +1528,18 @@
       user-select: none;
     }
     .nav-link:hover { background: var(--surface-2); color: var(--foreground); }
+    .nav-badge {
+      margin-left: auto;
+      font-size: 0.6rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--primary-foreground);
+      background: var(--primary);
+      padding: 0.1rem 0.35rem;
+      border-radius: 6px;
+      line-height: 1.5;
+    }
     .nav-link.active {
       background: var(--primary-soft);
       color: var(--primary-hover);
@@ -1670,6 +1682,164 @@
     .dev-details[open] > summary::after { content: "Show less  ▴"; }
     .dev-details > summary:hover { color: var(--primary); }
     .dev-details .dev-message-body { margin-top: 0.75rem; }
+    /* Update Available Banner */
+    .update-banner {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 14px 18px;
+      margin: 0 0 22px;
+      background: linear-gradient(135deg, var(--primary-soft), rgba(99, 102, 241, 0.04));
+      border: 1px solid rgba(99, 102, 241, 0.35);
+      border-radius: var(--radius);
+      box-shadow: var(--card-shadow);
+    }
+
+    .update-banner > svg {
+      color: var(--primary);
+      flex-shrink: 0;
+      filter: drop-shadow(0 0 6px var(--primary-glow));
+    }
+
+    .update-banner-text {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .update-banner-title {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--foreground);
+    }
+
+    .update-banner-sub {
+      font-size: 13px;
+      color: var(--foreground-muted);
+      margin-top: 2px;
+    }
+
+    .update-banner-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+
+    .update-banner .btn-update {
+      background: var(--primary);
+      color: var(--primary-foreground);
+      border: 1px solid var(--primary);
+      font-size: 13px;
+      font-weight: 600;
+      padding: 8px 16px;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      text-decoration: none;
+      transition: var(--transition-fast);
+    }
+
+    .update-banner .btn-update:hover {
+      background: var(--primary-hover);
+      box-shadow: 0 0 12px var(--primary-glow);
+    }
+
+    .update-banner .btn-dismiss {
+      background: transparent;
+      border: none;
+      color: var(--foreground-dim);
+      cursor: pointer;
+      font-size: 22px;
+      line-height: 1;
+      padding: 2px 8px;
+      border-radius: 6px;
+      transition: var(--transition-fast);
+    }
+
+    .update-banner .btn-dismiss:hover {
+      color: var(--foreground);
+      background: rgba(255, 255, 255, 0.06);
+    }
+
+    /* Remote Info / Announcement Banner (message fetched from the repo) */
+    .info-banner {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 14px 18px;
+      margin: 0 0 22px;
+      background: linear-gradient(135deg, var(--primary-soft), rgba(99, 102, 241, 0.04));
+      border: 1px solid rgba(99, 102, 241, 0.35);
+      border-radius: var(--radius);
+      box-shadow: var(--card-shadow);
+    }
+
+    .info-banner > svg {
+      color: var(--primary);
+      flex-shrink: 0;
+      filter: drop-shadow(0 0 6px var(--primary-glow));
+    }
+
+    .info-banner-text { flex: 1; min-width: 0; }
+    .info-banner-title { font-size: 15px; font-weight: 700; color: var(--foreground); }
+    .info-banner-sub { font-size: 13px; color: var(--foreground-muted); margin-top: 2px; }
+
+    .info-banner-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+
+    .info-banner .btn-info-link {
+      background: var(--primary);
+      color: var(--primary-foreground);
+      border: 1px solid var(--primary);
+      font-size: 13px;
+      font-weight: 600;
+      padding: 8px 16px;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      text-decoration: none;
+      white-space: nowrap;
+      transition: var(--transition-fast);
+    }
+
+    .info-banner .btn-info-link:hover {
+      background: var(--primary-hover);
+      box-shadow: 0 0 12px var(--primary-glow);
+    }
+
+    .info-banner .btn-dismiss {
+      background: transparent;
+      border: none;
+      color: var(--foreground-dim);
+      cursor: pointer;
+      font-size: 22px;
+      line-height: 1;
+      padding: 2px 8px;
+      border-radius: 6px;
+      transition: var(--transition-fast);
+    }
+
+    .info-banner .btn-dismiss:hover {
+      color: var(--foreground);
+      background: rgba(255, 255, 255, 0.06);
+    }
+
+    /* Type accents override the default (info) indigo look */
+    .info-banner.type-warning {
+      background: linear-gradient(135deg, rgba(245, 158, 11, 0.12), rgba(245, 158, 11, 0.04));
+      border-color: rgba(245, 158, 11, 0.4);
+    }
+    .info-banner.type-warning > svg { color: var(--warning); filter: none; }
+    .info-banner.type-warning .btn-info-link { background: var(--warning); border-color: var(--warning); color: #1a1205; }
+
+    .info-banner.type-success {
+      background: linear-gradient(135deg, rgba(16, 185, 129, 0.12), rgba(16, 185, 129, 0.04));
+      border-color: rgba(16, 185, 129, 0.4);
+    }
+    .info-banner.type-success > svg { color: var(--success); filter: none; }
+    .info-banner.type-success .btn-info-link { background: var(--success); border-color: var(--success); color: #04140d; }
   </style>
 </head>
 <body>
@@ -1690,6 +1860,7 @@
         <a class="nav-link" href="#section-customization" data-target="section-customization"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="2" y1="14" x2="6" y2="14"/><line x1="10" y1="8" x2="14" y2="8"/><line x1="18" y1="16" x2="22" y2="16"/></svg></span><span>Customization</span></a>
         <a class="nav-link" href="#section-security" data-target="section-security"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></span><span>Security</span></a>
         <a class="nav-link" href="#section-community" data-target="section-community"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg></span><span>Community</span></a>
+        <a class="nav-link" href="community.html" title="Open Community Stories"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg></span><span>Stories</span><span class="nav-badge">New</span></a>
         <a class="nav-link" href="#section-about" data-target="section-about"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></span><span>About</span></a>
       </nav>
       <div class="sidebar-footer">
@@ -1700,11 +1871,63 @@
     </aside>
 
     <main class="main">
+      <!-- Update Available Banner (shown dynamically when a newer version exists) -->
+      <div class="update-banner hidden" id="update-banner">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 12a9 9 0 1 1-2.64-6.36"></path>
+          <polyline points="21 3 21 9 15 9"></polyline>
+        </svg>
+        <div class="update-banner-text">
+          <div class="update-banner-title">Update available</div>
+          <div class="update-banner-sub" id="update-banner-sub">A new version of BlockNSFW is ready.</div>
+        </div>
+        <div class="update-banner-actions">
+          <a href="#" target="_blank" rel="noopener noreferrer" class="btn-update" id="update-banner-link">Update now</a>
+          <button class="btn-dismiss" id="update-banner-dismiss" title="Dismiss" aria-label="Dismiss">&times;</button>
+        </div>
+      </div>
+
+      <!-- Remote Info Banner (message fetched from the repo's data/announcement.json) -->
+      <div class="info-banner hidden" id="info-banner" role="status">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <circle cx="12" cy="12" r="10"></circle>
+          <line x1="12" y1="16" x2="12" y2="12"></line>
+          <line x1="12" y1="8" x2="12.01" y2="8"></line>
+        </svg>
+        <div class="info-banner-text">
+          <div class="info-banner-title" id="info-banner-title">Announcement</div>
+          <div class="info-banner-sub" id="info-banner-sub"></div>
+        </div>
+        <div class="info-banner-actions">
+          <a href="#" target="_blank" rel="noopener noreferrer" class="btn-info-link hidden" id="info-banner-link">Learn more</a>
+          <button class="btn-dismiss" id="info-banner-dismiss" title="Dismiss" aria-label="Dismiss">&times;</button>
+        </div>
+      </div>
+
       <section class="section" id="section-welcome">
         <div class="section-head">
           <h2 class="section-title">Welcome</h2>
-          <p class="section-desc">What’s new in BlockNSFW, and a note from the developer.</p>
+          <p class="section-desc">A note from the developer, and what’s new in BlockNSFW.</p>
         </div>
+
+    <div class="card dev-message fade-in">
+      <div class="card-header">
+        <h2 class="card-title">Message from the Dev</h2>
+      </div>
+      <p class="dev-teaser">This is it — we’ve reached another milestone! 🎉 From the bottom of my heart, thank you to everyone who supports and uses this extension. <strong>It’s 100% free, always — no account, everything stays on your device.</strong></p>
+      <details class="dev-details" open>
+        <summary aria-label="Read the full message from the developer"></summary>
+        <div class="dev-message-body">
+          <p>I’m so excited to share a fresh wave of features with you: smarter AI detection that catches even more adult content, and a brand-new desktop version of the app that keeps the extension safe from being uninstalled.</p>
+          <p>We’ve also added a huge number of sites covering both adult and non-adult content. A heartfelt thank you to everyone who took the time to report these sites — and, of course, to the wonderful people who supported me on Buy Me a Coffee. You make all of this possible.</p>
+          <p>Exciting news: the project is now fully open source! If you’d like to request a feature or report an issue, please head over to <a href="https://github.com/codepurse/BlockNSFW/issues" target="_blank" rel="noopener noreferrer">GitHub</a> — I’d love to hear from you.</p>
+          <p>And just like I always promised: this will stay 100% free, forever. No accounts, no sign-ups — everything stays local, right here on your device. Thank you for being part of this journey. 💙</p>
+        </div>
+        <div class="dev-message-signature">
+          — The BlockNSFW Developer
+        </div>
+      </details>
+    </div>
 
     <div class="card fade-in" id="whats-new-card">
       <div class="card-header">
@@ -1720,6 +1943,7 @@
             <p class="dg-callout-text">A native companion app force-installs the extension so the browser's <em>Remove</em> and <em>Disable</em> buttons are greyed out, and a background service re-applies protection if anything tampers with it. Uninstalling needs a password held by a parent or accountability partner. <strong>Now in beta for Windows &amp; Linux.</strong> <a class="dg-callout-link" href="https://github.com/codepurse/BlockNSFW/tree/main/desktop" target="_blank" rel="noopener">Learn more →</a></p>
           </div>
           <ul style="margin: 0; padding-left: 1.1rem">
+            <li><strong>Community Stories</strong> — Anonymous recovery stories from people working through the same struggle. Read what helped others and share your own; every post is reviewed before it appears. <a href="community.html" style="color: var(--primary-hover); font-weight: 600; text-decoration: none;">Open Stories →</a></li>
             <li><strong>AI Text Protection (multilingual)</strong> — A new on-device AI reads the page's text to catch adult sites the keyword and blocklist filters miss — especially non-English ones (Russian, Chinese, Korean, Thai, Arabic, and more). It blocks pages it's confident about, and teams up with the image AI to catch borderline ones. Nothing leaves your device.</li>
             <li><strong>AI Image Protection</strong> — A new on-device AI looks at the actual picture to block adult images, even when nothing in the web address gives them away. Everything stays on your device — your images are never uploaded.</li>
             <li><strong>Instant blocking</strong> — Flagged images are now hidden the moment they're checked, so adult content no longer flashes on screen before it's blocked.</li>
@@ -1729,25 +1953,6 @@
           </ul>
         </div>
       </div>
-    </div>
-
-    <div class="card dev-message fade-in">
-      <div class="card-header">
-        <h2 class="card-title">Message from the Dev</h2>
-      </div>
-      <p class="dev-teaser">More advanced features are coming soon — this is just the start. <strong>This app will always stay 100% free.</strong></p>
-      <details class="dev-details" open>
-        <summary aria-label="Read the full message from the developer"></summary>
-        <div class="dev-message-body">
-          <p>I will never add monetization because I don't want money to become a reason for anyone to go back to old habits.</p>
-          <p>We're in this together. If the app misses a website, please report it so we can keep improving and help each other stay strong.</p>
-          <p>And from my heart, thank you to everyone who supported this project on Buy Me a Coffee. Your kindness keeps this mission alive and helps me keep building for people who truly need it.</p>
-          <p>Thank you as well to everyone who reported sites. Because of your reports, we have already blocked 322 out of 412 reported sites, and some of the remaining sites are still under review.</p>
-        </div>
-        <div class="dev-message-signature">
-          — The BlockNSFW Developer
-        </div>
-      </details>
     </div>
       </section>
 
@@ -1821,7 +2026,7 @@
       <div class="switch-container">
         <div class="switch-label">
           <span class="label">Enable AI Image Blocker</span>
-          <span class="description">Replaces any flagged image with a "Blocked by NSFW" placeholder.</span>
+          <span class="description">Blurs any image the AI flags as adult, right where it sits on the page.</span>
         </div>
         <label class="switch">
           <input type="checkbox" id="ai-image-blocker" />
@@ -1841,6 +2046,16 @@
         <div class="pin-hint" id="ai-strictness-detail" style="margin-top: 0.5rem;">
           Balanced filtering — blocks clear adult content while letting most safe images through.
         </div>
+      </div>
+
+      <div class="info-box" style="margin-top: .875rem">
+        <div class="info-box-title">What happens when an image is flagged</div>
+        <p class="info-box-text">
+          When the AI detects an adult image, it's <strong>blurred in place</strong> so the
+          content is unreadable while the rest of the page keeps working normally. Nothing is
+          removed from the page or uploaded — the blur happens entirely on your device. If the
+          AI later decides an image is safe, the blur is removed automatically.
+        </p>
       </div>
 
       <div class="switch-container">

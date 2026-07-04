@@ -7,6 +7,7 @@ try {
   if (typeof self !== 'undefined' && typeof self.importScripts === 'function') {
     self.importScripts('shared/hostname.js');
     self.importScripts('shared/host-keywords.js');
+    self.importScripts('shared/version-compare.js');
   }
 } catch (_) {
   // shared/hostname.js or shared/host-keywords.js could not be loaded
@@ -531,6 +532,140 @@ const REMOTE_WHITELIST_META_KEY = 'pblocker_remote_whitelist_meta_v1';
 let remoteWhitelistSet = new Set();
 let remoteWhitelistMeta = null;
 let remoteWhitelistPromise = null;
+
+// Update checker. A small version.json lives next to HOSTS.txt/WHITELIST.txt in
+// the maintainer's repo; we fetch it, compare `latest` against the installed
+// manifest version, and stash the verdict in storage so the popup/options page
+// can show an "update available" banner. Self-hosted (not the store APIs) so a
+// single code path works identically on Chrome and Firefox. Bump version.json
+// on each published release.
+const REMOTE_VERSION_URL = 'https://raw.githubusercontent.com/codepurse/BlockNSFW/refs/heads/main/data/version.json';
+const UPDATE_INFO_KEY = 'pblocker_update_info';
+const DEFAULT_UPDATE_URL = 'https://github.com/codepurse/BlockNSFW/releases';
+const UPDATE_CHECK_TTL = 1000 * 60 * 60 * 12; // 12 hours
+let updateCheckPromise = null;
+
+// Prefer the store link for the running browser, falling back to a generic URL.
+// `typeof browser` is the Firefox signal this codebase already uses for the
+// browserAPI shim.
+function pickUpdateUrl(data) {
+  if (!data || typeof data !== 'object') return DEFAULT_UPDATE_URL;
+  const isFirefox = typeof browser !== 'undefined';
+  if (isFirefox && typeof data.firefoxUrl === 'string' && data.firefoxUrl) return data.firefoxUrl;
+  if (!isFirefox && typeof data.chromeUrl === 'string' && data.chromeUrl) return data.chromeUrl;
+  if (typeof data.url === 'string' && data.url) return data.url;
+  return DEFAULT_UPDATE_URL;
+}
+
+// Fetch version.json (TTL-guarded, like the remote blocklist/whitelist) and
+// write { current, latest, updateAvailable, notes, url, checkedAt } to storage.
+// Returns the info object, or null on failure (callers fail silently — a failed
+// check must never block or surface an error to the user).
+async function checkForUpdate(options = {}) {
+  const { forceRefresh = false } = options;
+  if (updateCheckPromise) return updateCheckPromise;
+
+  updateCheckPromise = (async () => {
+    try {
+      const { [UPDATE_INFO_KEY]: cached } = await browserAPI.storage.local.get(UPDATE_INFO_KEY);
+      const isFresh = cached && cached.checkedAt &&
+        (Date.now() - cached.checkedAt) < UPDATE_CHECK_TTL;
+      if (isFresh && !forceRefresh) return cached;
+
+      const current = browserAPI.runtime.getManifest().version;
+      const response = await fetch(REMOTE_VERSION_URL, { cache: 'no-store' });
+      if (!response.ok) throw new Error(`version check failed (${response.status})`);
+      const data = await response.json();
+      const latest = (data && typeof data.latest === 'string') ? data.latest.trim() : '';
+
+      const updateAvailable = !!(latest &&
+        typeof VersionCompare !== 'undefined' &&
+        VersionCompare.isOutdated(current, latest));
+
+      const info = {
+        current,
+        latest: latest || current,
+        updateAvailable,
+        notes: (data && typeof data.notes === 'string') ? data.notes : '',
+        url: pickUpdateUrl(data),
+        checkedAt: Date.now()
+      };
+      await browserAPI.storage.local.set({ [UPDATE_INFO_KEY]: info });
+      if (updateAvailable) {
+        console.log(`BlockNSFW: update available ${current} -> ${latest}`);
+      }
+      return info;
+    } catch (error) {
+      console.warn('BlockNSFW: update check failed', error);
+      return null;
+    } finally {
+      updateCheckPromise = null;
+    }
+  })();
+
+  return updateCheckPromise;
+}
+
+// Announcement banner. A small announcement.json lives next to version.json in
+// the maintainer's repo; we fetch it (TTL-guarded, like the update check) and
+// stash the normalized payload so the options page can render a dismissible info
+// banner. This lets the maintainer broadcast a message (notice, event, tip) by
+// editing a single file in the repo — no store update required. Self-hosted so
+// the same code path works on Chrome and Firefox.
+const REMOTE_ANNOUNCEMENT_URL = 'https://raw.githubusercontent.com/codepurse/BlockNSFW/refs/heads/main/data/announcement.json';
+const ANNOUNCEMENT_INFO_KEY = 'pblocker_announcement_info';
+const ANNOUNCEMENT_CHECK_TTL = 1000 * 60 * 60 * 6; // 6 hours
+let announcementCheckPromise = null;
+
+// Fetch announcement.json (TTL-guarded) and write a sanitized payload to storage.
+// Returns the info object, or null on failure (callers fail silently — a broken
+// announcement fetch must never surface an error to the user).
+async function fetchAnnouncement(options = {}) {
+  const { forceRefresh = false } = options;
+  if (announcementCheckPromise) return announcementCheckPromise;
+
+  announcementCheckPromise = (async () => {
+    try {
+      const { [ANNOUNCEMENT_INFO_KEY]: cached } = await browserAPI.storage.local.get(ANNOUNCEMENT_INFO_KEY);
+      const isFresh = cached && cached.checkedAt &&
+        (Date.now() - cached.checkedAt) < ANNOUNCEMENT_CHECK_TTL;
+      if (isFresh && !forceRefresh) return cached;
+
+      const response = await fetch(REMOTE_ANNOUNCEMENT_URL, { cache: 'no-store' });
+      if (!response.ok) throw new Error(`announcement fetch failed (${response.status})`);
+      const data = await response.json();
+
+      const str = (v) => (typeof v === 'string' ? v.trim() : '');
+      // Only http(s) links pass through — never javascript:/data: schemes. The
+      // options page renders title/message as text (never innerHTML), but we
+      // sanitize the link here so a bad value can't produce a dangerous href.
+      const rawLink = str(data && data.link);
+      const safeLink = /^https?:\/\//i.test(rawLink) ? rawLink : '';
+      const rawType = str(data && data.type).toLowerCase();
+      const type = (rawType === 'warning' || rawType === 'success') ? rawType : 'info';
+
+      const info = {
+        id: str(data && data.id),
+        enabled: !!(data && data.enabled),
+        type,
+        title: str(data && data.title),
+        message: str(data && data.message),
+        link: safeLink,
+        linkText: str(data && data.linkText),
+        checkedAt: Date.now()
+      };
+      await browserAPI.storage.local.set({ [ANNOUNCEMENT_INFO_KEY]: info });
+      return info;
+    } catch (error) {
+      console.warn('BlockNSFW: announcement fetch failed', error);
+      return null;
+    } finally {
+      announcementCheckPromise = null;
+    }
+  })();
+
+  return announcementCheckPromise;
+}
 
 // Cache management functions
 function clearAllCaches() {
@@ -1643,6 +1778,31 @@ browserAPI.runtime.onMessage.addListener((message, sender, sendResponse) => {
       }
     })();
     return true;
+  } else if (message.type === 'get_update_info') {
+    // Popup/options ask for the latest update verdict. Returns the cached info
+    // immediately if fresh, otherwise refreshes (TTL-guarded). `forceRefresh`
+    // backs a manual "check now" action.
+    (async () => {
+      try {
+        const info = await checkForUpdate({ forceRefresh: message.forceRefresh === true });
+        sendResponse({ success: true, info });
+      } catch (error) {
+        sendResponse({ success: false, error: error && error.message });
+      }
+    })();
+    return true;
+  } else if (message.type === 'get_announcement') {
+    // Options page asks for the current announcement. Returns the cached payload
+    // immediately if fresh, otherwise refreshes (TTL-guarded).
+    (async () => {
+      try {
+        const info = await fetchAnnouncement({ forceRefresh: message.forceRefresh === true });
+        sendResponse({ success: true, info });
+      } catch (error) {
+        sendResponse({ success: false, error: error && error.message });
+      }
+    })();
+    return true;
   } else if (message.type === 'check_dns_filter' && typeof message.hostname === 'string') {
     (async () => {
       try {
@@ -1976,6 +2136,8 @@ browserAPI.runtime.onInstalled.addListener(async () => {
     await initializeExtensionStateTracking();
     await updateSafeSearchRules();
     ensureRemoteWhitelistUpToDate().catch(e => console.warn('BlockNSFW: initial whitelist sync failed', e));
+    checkForUpdate().catch(e => console.warn('BlockNSFW: initial update check failed', e));
+    fetchAnnouncement().catch(e => console.warn('BlockNSFW: initial announcement fetch failed', e));
     console.log('BlockNSFW: Extension installed/updated - Manifest V3 compatible');
   } finally {
     markReady();
@@ -1992,6 +2154,8 @@ browserAPI.runtime.onInstalled.addListener(async () => {
     await initializeExtensionStateTracking();
     await updateSafeSearchRules();
     ensureRemoteWhitelistUpToDate().catch(e => console.warn('BlockNSFW: whitelist sync failed', e));
+    checkForUpdate().catch(e => console.warn('BlockNSFW: update check failed', e));
+    fetchAnnouncement().catch(e => console.warn('BlockNSFW: announcement fetch failed', e));
     console.log('BlockNSFW: Service worker initialized for Manifest V3');
   } finally {
     markReady();

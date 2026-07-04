@@ -1,0 +1,561 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Community Stories — BlockNSFW</title>
+  <style>
+    :root {
+      /* ===== Clean Modern Dark — single indigo accent (shared with options) ===== */
+      --background: #0b0c10;
+      --background-gradient: linear-gradient(180deg, #0c0d12 0%, #0a0b0e 100%);
+      --surface: #14161c;
+      --surface-2: #1a1d24;
+      --surface-hover: #171a21;
+      --foreground: #f2f3f5;
+      --foreground-muted: #c2c7d0;
+      --foreground-dim: #868e9e;
+
+      --card-bg: #14161c;
+      --card-border: rgba(255, 255, 255, 0.07);
+      --card-border-hover: rgba(255, 255, 255, 0.16);
+      --card-shadow-hover: 0 10px 28px rgba(0, 0, 0, 0.40);
+
+      --primary: #6366f1;
+      --primary-hover: #818cf8;
+      --primary-soft: rgba(99, 102, 241, 0.14);
+      --primary-foreground: #ffffff;
+
+      --secondary: #1d2027;
+      --secondary-hover: #262a33;
+      --secondary-foreground: #e6e8ec;
+
+      --destructive: #ef4444;
+
+      --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--background);
+      background-image: var(--background-gradient);
+      background-repeat: no-repeat;
+      color: var(--foreground);
+      font-family: var(--font-sans);
+      line-height: 1.55;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .wrap {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 3rem 1rem 5rem;
+    }
+
+    /* ---------- Two-column layout ---------- */
+    .layout { display: flex; align-items: flex-start; gap: 1.5rem; }
+    .col-main { flex: 1; min-width: 0; }
+    .col-side {
+      width: 300px;
+      flex: 0 0 300px;
+      order: -1;            /* sidebar on the left (feed stays first in the DOM) */
+      position: sticky;
+      top: 1.5rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+
+    /* ---------- Feed header ---------- */
+    .feed-header {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      margin-bottom: 1rem;
+    }
+    .page-title {
+      font-size: 1.55rem;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      margin: 0;
+    }
+    .page-count {
+      color: var(--foreground-dim);
+      font-size: 0.82rem;
+      font-weight: 600;
+      margin: 0;
+    }
+    .page-count[hidden] { display: none; }
+    .feed-refresh { margin-left: auto; }
+
+    .icon-btn {
+      flex: 0 0 auto;
+      width: 40px;
+      height: 40px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--secondary);
+      border: 1px solid var(--card-border);
+      border-radius: 10px;
+      color: var(--foreground-muted);
+      cursor: pointer;
+      transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+    }
+    .icon-btn:hover { background: var(--secondary-hover); color: var(--foreground); border-color: var(--card-border-hover); }
+    .icon-btn:disabled { opacity: 0.55; cursor: default; }
+    .icon-btn svg { width: 18px; height: 18px; }
+    .icon-btn.spinning svg { animation: spin 0.8s linear infinite; }
+
+    /* ---------- Composer (tap to share) ---------- */
+    .composer {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      width: 100%;
+      font: inherit;
+      text-align: left;
+      cursor: pointer;
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 14px;
+      padding: 0.7rem 0.8rem;
+      margin-bottom: 1.25rem;
+      text-decoration: none;
+      transition: border-color 0.15s ease, background 0.15s ease;
+    }
+    .composer:hover { border-color: var(--card-border-hover); background: var(--surface-hover); }
+    .composer-avatar {
+      flex: 0 0 auto;
+      width: 38px;
+      height: 38px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, var(--primary), var(--primary-hover));
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      color: #fff;
+      box-shadow: 0 3px 10px rgba(99, 102, 241, 0.30);
+    }
+    .composer-avatar svg { width: 18px; height: 18px; }
+    .composer-input {
+      flex: 1;
+      color: var(--foreground-dim);
+      background: #0f1116;
+      border: 1px solid var(--card-border);
+      border-radius: 999px;
+      padding: 0.6rem 1rem;
+      font-size: 0.92rem;
+    }
+    .composer-cta {
+      flex: 0 0 auto;
+      background: var(--primary);
+      color: var(--primary-foreground);
+      font-weight: 600;
+      font-size: 0.85rem;
+      padding: 0.5rem 1rem;
+      border-radius: 10px;
+    }
+    .composer:hover .composer-cta { background: var(--primary-hover); }
+
+    /* ---------- Sidebar cards ---------- */
+    .side-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 16px;
+      padding: 1.15rem 1.2rem;
+    }
+    .side-title {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.95rem;
+      font-weight: 700;
+      margin: 0 0 0.7rem;
+    }
+    .side-title svg { width: 18px; height: 18px; color: var(--primary-hover); }
+    .side-text {
+      color: var(--foreground-muted);
+      font-size: 0.88rem;
+      line-height: 1.55;
+      margin: 0 0 0.9rem;
+    }
+    .side-tags { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-bottom: 1rem; }
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      background: var(--primary-soft);
+      color: var(--primary-hover);
+      border: 1px solid rgba(99, 102, 241, 0.22);
+      padding: 0.35rem 0.7rem;
+      border-radius: 999px;
+      font-size: 0.78rem;
+      font-weight: 600;
+    }
+    .tag svg { width: 14px; height: 14px; }
+    .side-share {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+      width: 100%;
+      background: var(--primary);
+      color: var(--primary-foreground);
+      border: none;
+      border-radius: 11px;
+      font: inherit;
+      font-weight: 600;
+      font-size: 0.9rem;
+      padding: 0.7rem 1rem;
+      cursor: pointer;
+      box-shadow: 0 4px 14px rgba(99, 102, 241, 0.30);
+      transition: background 0.15s ease;
+    }
+    .side-share:hover { background: var(--primary-hover); }
+    .side-share svg { width: 16px; height: 16px; }
+    .guidelines {
+      margin: 0;
+      padding: 0;
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 0.65rem;
+    }
+    .guidelines li {
+      display: flex;
+      gap: 0.55rem;
+      color: var(--foreground-muted);
+      font-size: 0.85rem;
+      line-height: 1.45;
+    }
+    .guidelines li svg { flex: 0 0 auto; width: 15px; height: 15px; color: var(--primary-hover); margin-top: 0.15rem; }
+
+    /* ---------- Feed ---------- */
+    .feed { display: flex; flex-direction: column; gap: 0.85rem; }
+
+    @keyframes rise {
+      from { opacity: 0; transform: translateY(10px); }
+      to   { opacity: 1; transform: none; }
+    }
+
+    .story {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 16px;
+      padding: 1.15rem 1.25rem;
+      animation: rise 0.4s ease both;
+      transition: border-color 0.18s ease, background 0.18s ease, box-shadow 0.18s ease;
+    }
+    .story:hover {
+      border-color: var(--card-border-hover);
+      background: var(--surface-hover);
+      box-shadow: var(--card-shadow-hover);
+    }
+
+    .story-title {
+      font-size: 1.06rem;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+      margin: 0.1rem 0 0.35rem;
+    }
+
+    .story-body {
+      color: var(--foreground-muted);
+      margin: 0;
+      white-space: pre-wrap;   /* preserve the author's line breaks */
+      word-break: break-word;
+      font-size: 0.95rem;
+    }
+
+    /* ---------- Action bar ---------- */
+    .story-actions {
+      display: flex;
+      gap: 1.4rem;
+      margin-top: 0.95rem;
+    }
+    .act {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      background: transparent;
+      border: none;
+      padding: 0.3rem 0.45rem;
+      margin: -0.3rem 0;
+      border-radius: 8px;
+      color: var(--foreground-dim);
+      font: inherit;
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: color 0.15s ease, background 0.15s ease, transform 0.08s ease;
+    }
+    .act:hover { color: var(--primary-hover); background: var(--primary-soft); }
+    .act:active { transform: scale(0.94); }
+    .act svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 2; }
+    .act-like.liked { color: var(--primary-hover); }
+    .act-like.liked svg { fill: currentColor; }
+
+    /* ---------- States ---------- */
+    .state {
+      text-align: center;
+      color: var(--foreground-dim);
+      padding: 3.5rem 1rem;
+    }
+    .state-icon {
+      width: 52px;
+      height: 52px;
+      margin: 0 auto 1rem;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--primary-soft);
+      color: var(--primary-hover);
+    }
+    .state-icon svg { width: 24px; height: 24px; }
+    .state.error .state-icon { background: rgba(239, 68, 68, 0.12); color: var(--destructive); }
+    .state-title { color: var(--foreground-muted); font-weight: 600; font-size: 1.02rem; margin: 0 0 0.35rem; }
+    .state.error .state-title { color: var(--destructive); }
+
+    .spinner {
+      width: 28px;
+      height: 28px;
+      margin: 0 auto 1rem;
+      border: 3px solid var(--card-border);
+      border-top-color: var(--primary);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ---------- Load more ---------- */
+    .feed-footer { display: flex; justify-content: center; margin-top: 1.25rem; }
+    .load-more {
+      background: var(--secondary);
+      color: var(--secondary-foreground);
+      border: 1px solid var(--card-border);
+      border-radius: 11px;
+      font: inherit;
+      font-weight: 600;
+      font-size: 0.9rem;
+      padding: 0.65rem 1.5rem;
+      cursor: pointer;
+      transition: background 0.15s ease, border-color 0.15s ease;
+    }
+    .load-more:hover { background: var(--secondary-hover); border-color: var(--card-border-hover); }
+    .load-more:disabled { opacity: 0.6; cursor: default; }
+    .feed-end { color: var(--foreground-dim); font-size: 0.85rem; margin: 0; }
+
+    /* ---------- Share modal ---------- */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 50;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 1rem;
+      background: rgba(0, 0, 0, 0.62);
+      animation: fade 0.15s ease;
+    }
+    .modal-overlay[hidden] { display: none; }
+    @keyframes fade { from { opacity: 0; } to { opacity: 1; } }
+
+    .modal {
+      width: 100%;
+      max-width: 520px;
+      background: var(--surface);
+      border: 1px solid var(--card-border);
+      border-radius: 16px;
+      padding: 1.25rem 1.35rem 1.35rem;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+      animation: rise 0.2s ease both;
+    }
+    .modal-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 0.35rem;
+    }
+    .modal-head h2 { font-size: 1.15rem; font-weight: 700; margin: 0; }
+    .modal-note { color: var(--foreground-dim); font-size: 0.85rem; margin: 0 0 1.1rem; }
+
+    .field-label {
+      display: block;
+      font-size: 0.82rem;
+      font-weight: 600;
+      color: var(--foreground-muted);
+      margin: 0 0 0.35rem;
+    }
+    .field-input, .field-textarea {
+      width: 100%;
+      background: #0f1116;
+      border: 1px solid rgba(255, 255, 255, 0.10);
+      border-radius: 10px;
+      color: var(--foreground);
+      font: inherit;
+      font-size: 0.92rem;
+      padding: 0.6rem 0.8rem;
+      margin-bottom: 0.9rem;
+    }
+    .field-textarea { min-height: 150px; resize: vertical; line-height: 1.55; }
+    .field-input:focus, .field-textarea:focus {
+      outline: none;
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.25);
+    }
+    .field-counter { text-align: right; font-size: 0.78rem; color: var(--foreground-dim); margin: -0.6rem 0 1rem; }
+
+    .modal-foot { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; }
+    .modal-status { font-size: 0.82rem; color: var(--foreground-dim); }
+    .modal-status.error { color: var(--destructive); }
+    .modal-status.success { color: #22c55e; }
+
+    .btn-post {
+      flex: 0 0 auto;
+      background: var(--primary);
+      color: var(--primary-foreground);
+      border: none;
+      font: inherit;
+      font-weight: 600;
+      font-size: 0.9rem;
+      padding: 0.6rem 1.2rem;
+      border-radius: 10px;
+      cursor: pointer;
+      transition: background 0.15s ease, opacity 0.15s ease;
+    }
+    .btn-post:hover { background: var(--primary-hover); }
+    .btn-post:disabled { opacity: 0.55; cursor: default; }
+
+    /* ---------- Responsive ---------- */
+    @media (max-width: 860px) {
+      .layout { flex-direction: column; }
+      .col-side { width: auto; flex: none; order: 0; position: static; top: auto; }
+    }
+    @media (max-width: 520px) {
+      .wrap { padding-top: 2.25rem; }
+      .page-title { font-size: 1.4rem; }
+      .story { padding: 1rem; }
+    }
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <div class="layout">
+      <div class="col-main">
+        <header class="feed-header">
+          <h1 class="page-title">Community Stories</h1>
+          <span class="page-count" id="count" hidden></span>
+          <button class="icon-btn feed-refresh" id="refresh-btn" type="button" title="Refresh" aria-label="Refresh stories">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M23 4v6h-6"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+          </button>
+        </header>
+
+        <button class="composer" id="composer-btn" type="button" data-open-share>
+          <span class="composer-avatar">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+          </span>
+          <span class="composer-input">Share your story…</span>
+          <span class="composer-cta">Post</span>
+        </button>
+
+        <div class="feed" id="feed" aria-live="polite">
+          <div class="state" id="loading">
+            <div class="spinner"></div>
+            Loading stories…
+          </div>
+        </div>
+
+        <div class="feed-footer" id="feed-footer"></div>
+      </div>
+
+      <aside class="col-side">
+        <section class="side-card">
+          <h2 class="side-title">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+            About
+          </h2>
+          <p class="side-text">
+            Real, anonymous stories from people overcoming porn and rebuilding their lives.
+            Read what helped others, and share what's helping you — you're not alone.
+          </p>
+          <div class="side-tags">
+            <span class="tag">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+              Anonymous
+            </span>
+            <span class="tag">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+              Reviewed
+            </span>
+            <span class="tag">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 1 0-7.78 7.78L12 21.23l8.84-8.84a5.5 5.5 0 0 0 0-7.78z"/></svg>
+              Supportive
+            </span>
+          </div>
+          <button class="side-share" type="button" data-open-share>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+            Share your story
+          </button>
+        </section>
+
+        <section class="side-card">
+          <h2 class="side-title">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+            Guidelines
+          </h2>
+          <ul class="guidelines">
+            <li>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+              Be kind and supportive — no judgment.
+            </li>
+            <li>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+              Stay anonymous; don't share identifying details.
+            </li>
+            <li>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+              Keep it non-graphic — focus on recovery, not explicit detail.
+            </li>
+            <li>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+              Every post is reviewed before it appears.
+            </li>
+          </ul>
+        </section>
+      </aside>
+    </div>
+  </main>
+
+  <div class="modal-overlay" id="share-modal" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="share-modal-title">
+      <div class="modal-head">
+        <h2 id="share-modal-title">Share your story</h2>
+        <button class="icon-btn" id="share-close" type="button" aria-label="Close">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <p class="modal-note">Anonymous and reviewed before it appears. You can share one story per week.</p>
+
+      <label class="field-label" for="share-title-input">Title (optional)</label>
+      <input class="field-input" id="share-title-input" type="text" maxlength="120" placeholder="e.g., One year clean today" autocomplete="off" />
+
+      <label class="field-label" for="share-content">Your story</label>
+      <textarea class="field-textarea" id="share-content" maxlength="2000" placeholder="Write your story here…"></textarea>
+      <div class="field-counter" id="share-counter">0 / 2000</div>
+
+      <div class="modal-foot">
+        <span class="modal-status" id="share-status"></span>
+        <button class="btn-post" id="share-submit" type="button">Post story</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="appwrite-client.js"></script>
+  <script src="community.js"></script>
+</body>
+</html>

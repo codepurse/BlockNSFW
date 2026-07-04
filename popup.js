@@ -7,6 +7,8 @@ const WHITELIST_KEY = 'pblocker_whitelist';
 const PIN_KEY = 'pblocker_pin';
 const TEMP_DISABLE_UNTIL_KEY = 'pblocker_temp_disable_until';
 const STREAK_START_KEY = 'pblocker_streak_start';
+const UPDATE_INFO_KEY = 'pblocker_update_info';
+const UPDATE_DISMISSED_KEY = 'pblocker_update_dismissed';
 
 function $(id) { return document.getElementById(id); }
 
@@ -591,6 +593,65 @@ async function handleAddWhitelist(type) {
   }
 }
 
+// Show the running version in the header badge (was hardcoded markup).
+function setVersionBadge() {
+  try {
+    const v = browserAPI.runtime.getManifest().version;
+    const badge = $('version-badge');
+    if (badge && v) badge.textContent = 'v' + v;
+  } catch (_) {}
+}
+
+// Show/hide the "update available" banner from the verdict the background wrote
+// to storage. Hidden unless an update exists and the user hasn't dismissed that
+// specific version.
+async function renderUpdateBanner() {
+  const banner = $('update-banner');
+  if (!banner) return;
+  try {
+    const store = await browserAPI.storage.local.get([UPDATE_INFO_KEY, UPDATE_DISMISSED_KEY]);
+    const info = store[UPDATE_INFO_KEY];
+    const dismissed = store[UPDATE_DISMISSED_KEY];
+    const show = info && info.updateAvailable && info.latest && info.latest !== dismissed;
+    if (!show) { banner.classList.add('hidden'); return; }
+
+    const sub = $('update-banner-sub');
+    if (sub) {
+      const notes = (typeof info.notes === 'string' && info.notes.trim())
+        ? ' · ' + info.notes.trim() : '';
+      sub.textContent = `v${info.current} → v${info.latest}${notes}`;
+    }
+    const link = $('update-banner-link');
+    if (link) link.href = info.url || 'https://github.com/codepurse/BlockNSFW/releases';
+    banner.classList.remove('hidden');
+  } catch (_) {
+    banner.classList.add('hidden');
+  }
+}
+
+// Remember which version the user dismissed so the banner stays gone until the
+// next release.
+async function dismissUpdateBanner() {
+  try {
+    const { [UPDATE_INFO_KEY]: info } = await browserAPI.storage.local.get(UPDATE_INFO_KEY);
+    if (info && info.latest) {
+      await browserAPI.storage.local.set({ [UPDATE_DISMISSED_KEY]: info.latest });
+    }
+  } catch (_) {}
+  const banner = $('update-banner');
+  if (banner) banner.classList.add('hidden');
+}
+
+// Ask the background to refresh its update verdict (TTL-guarded). The result
+// lands in storage and re-renders the banner via the onChanged listener.
+function requestUpdateCheck() {
+  try {
+    browserAPI.runtime.sendMessage({ type: 'get_update_info' }, () => {
+      void browserAPI.runtime.lastError; // swallow "no receiver" in edge cases
+    });
+  } catch (_) {}
+}
+
 // Initialize popup
 document.addEventListener('DOMContentLoaded', async () => {
   document.body.classList.add('loading');
@@ -640,16 +701,26 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   }
   
+  // Update-available banner
+  setVersionBadge();
+  const dismissBtn = $('update-banner-dismiss');
+  if (dismissBtn) dismissBtn.addEventListener('click', dismissUpdateBanner);
+  await renderUpdateBanner();
+  requestUpdateCheck();
+
   // Initialize streak tracking if not already started
   await initializeStreak();
 
   // Initial UI update
   await updateUI();
-  
+
   // Listen for storage changes to update UI in real-time
   browserAPI.storage.onChanged.addListener((changes, area) => {
     if (area === 'local' && (changes[SETTINGS_KEY] || changes[BLOCKED_STATS_KEY] || changes[DAILY_STATS_KEY] || changes[WHITELIST_KEY])) {
       updateUI();
+    }
+    if (area === 'local' && (changes[UPDATE_INFO_KEY] || changes[UPDATE_DISMISSED_KEY])) {
+      renderUpdateBanner();
     }
   });
 });

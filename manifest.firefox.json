@@ -12,7 +12,7 @@
     "<all_urls>"
   ],
   "background": {
-    "scripts": ["background.js"]
+    "scripts": ["shared/version-compare.js", "background.js"]
   },
   "icons": {
     "16": "icons/icon-16.png",
@@ -55,6 +55,8 @@
         "audit.js",
         "stats.html",
         "stats.js",
+        "community.html",
+        "community.js",
         "icons/icon-16.png",
         "icons/icon-48.png",
         "icons/icon-128.png",

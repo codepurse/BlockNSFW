@@ -283,6 +283,37 @@
       color: var(--destructive);
     }
 
+    /* Supportive community callout */
+    .support {
+      margin-bottom: 1.75rem;
+      padding: 1.1rem 1.2rem;
+      background: var(--primary-soft);
+      border: 1px solid rgba(99, 102, 241, 0.25);
+      border-radius: var(--radius);
+    }
+    .support-head {
+      display: flex;
+      gap: 0.75rem;
+      align-items: flex-start;
+      margin-bottom: 0.95rem;
+    }
+    .support-icon {
+      flex-shrink: 0;
+      width: 38px;
+      height: 38px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, var(--primary), var(--primary-hover));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #fff;
+      box-shadow: 0 3px 10px rgba(99, 102, 241, 0.3);
+    }
+    .support-icon svg { width: 20px; height: 20px; }
+    .support-title { font-weight: 650; font-size: 0.98rem; color: var(--foreground); margin-bottom: 0.2rem; }
+    .support-text { color: var(--foreground-muted); font-size: 0.88rem; margin: 0; }
+    .support-cta { width: 100%; }
+
     @keyframes fadeIn {
       from { opacity: 0; transform: translateY(16px); }
       to { opacity: 1; transform: translateY(0); }
@@ -330,6 +361,19 @@
 
         <div class="blocked-url-label">Blocked URL</div>
         <div class="blocked-url" id="target-url">(loading...)</div>
+      </div>
+
+      <div class="support">
+        <div class="support-head">
+          <span class="support-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 1 0-7.78 7.78L12 21.23l8.84-8.84a5.5 5.5 0 0 0 0-7.78z"/></svg>
+          </span>
+          <div>
+            <div class="support-title">Struggling right now?</div>
+            <p class="support-text">You're not alone. Read how others in the community got through this — and share your own story when you're ready.</p>
+          </div>
+        </div>
+        <a class="button button-primary support-cta" href="community.html">Read community stories →</a>
       </div>
 
       <div class="blocked-actions">

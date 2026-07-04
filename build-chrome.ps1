@@ -41,6 +41,8 @@ $RuntimeFiles   = @(
     "audit.js",
     "stats.html",
     "stats.js",
+    "community.html",
+    "community.js",
     "appwrite-client.js",
     "blocklist.json",
     "text-model.json",

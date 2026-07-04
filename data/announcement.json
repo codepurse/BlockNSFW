@@ -1,0 +1,10 @@
+{
+  "id": "2026-07-hello",
+  "enabled": true,
+  "type": "info",
+  "title": "Thanks for using BlockNSFW",
+  "message": "This banner is managed remotely — edit data/announcement.json in the repo to broadcast a message to everyone. Set \"enabled\" to false to hide it, or change \"id\" to re-show it after someone dismisses it.",
+  "link": "https://github.com/codepurse/BlockNSFW",
+  "linkText": "View on GitHub",
+  "updatedAt": "2026-07-04"
+}

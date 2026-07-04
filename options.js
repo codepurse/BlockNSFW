@@ -5,6 +5,10 @@ const BLOCKED_STATS_KEY = 'pblocker_stats';
 const WHITELIST_KEY = 'pblocker_whitelist';
 const PIN_KEY = 'pblocker_pin';
 const STREAK_START_KEY = 'pblocker_streak_start';
+const UPDATE_INFO_KEY = 'pblocker_update_info';
+const UPDATE_DISMISSED_KEY = 'pblocker_update_dismissed';
+const ANNOUNCEMENT_INFO_KEY = 'pblocker_announcement_info';
+const ANNOUNCEMENT_DISMISSED_KEY = 'pblocker_announcement_dismissed';
 
 const DEFAULT_SETTINGS = {
   enabled: true,
@@ -1091,8 +1095,130 @@ async function openExtensionsManagePage() {
   return false;
 }
 
+// --- Update-available banner ---------------------------------------------
+// The background service worker fetches version.json, compares it to the
+// installed version, and writes the verdict to UPDATE_INFO_KEY. We just render
+// it and remember dismissals per-version.
+async function renderUpdateBanner() {
+  const banner = $('update-banner');
+  if (!banner) return;
+  try {
+    const store = await browserAPI.storage.local.get([UPDATE_INFO_KEY, UPDATE_DISMISSED_KEY]);
+    const info = store[UPDATE_INFO_KEY];
+    const dismissed = store[UPDATE_DISMISSED_KEY];
+    const show = info && info.updateAvailable && info.latest && info.latest !== dismissed;
+    if (!show) { banner.classList.add('hidden'); return; }
+
+    const sub = $('update-banner-sub');
+    if (sub) {
+      const notes = (typeof info.notes === 'string' && info.notes.trim())
+        ? ' — ' + info.notes.trim() : '';
+      sub.textContent = `You're on v${info.current}. Version v${info.latest} is available${notes}`;
+    }
+    const link = $('update-banner-link');
+    if (link) link.href = info.url || 'https://github.com/codepurse/BlockNSFW/releases';
+    banner.classList.remove('hidden');
+  } catch (_) {
+    banner.classList.add('hidden');
+  }
+}
+
+async function dismissUpdateBanner() {
+  try {
+    const { [UPDATE_INFO_KEY]: info } = await browserAPI.storage.local.get(UPDATE_INFO_KEY);
+    if (info && info.latest) {
+      await browserAPI.storage.local.set({ [UPDATE_DISMISSED_KEY]: info.latest });
+    }
+  } catch (_) {}
+  const banner = $('update-banner');
+  if (banner) banner.classList.add('hidden');
+}
+
+function requestUpdateCheck() {
+  try {
+    browserAPI.runtime.sendMessage({ type: 'get_update_info' }, () => {
+      void browserAPI.runtime.lastError;
+    });
+  } catch (_) {}
+}
+
+// --- Remote info banner ----------------------------------------------------
+// The background worker fetches data/announcement.json from the repo and writes
+// the payload to ANNOUNCEMENT_INFO_KEY. We render it as a dismissible info
+// banner and remember dismissals per announcement id — bump the id in the repo
+// to re-show it after someone has dismissed the previous one.
+async function renderAnnouncementBanner() {
+  const banner = $('info-banner');
+  if (!banner) return;
+  try {
+    const store = await browserAPI.storage.local.get([ANNOUNCEMENT_INFO_KEY, ANNOUNCEMENT_DISMISSED_KEY]);
+    const info = store[ANNOUNCEMENT_INFO_KEY];
+    const dismissed = store[ANNOUNCEMENT_DISMISSED_KEY];
+    const show = info && info.enabled && info.id && info.message && info.id !== dismissed;
+    if (!show) { banner.classList.add('hidden'); return; }
+
+    // Reset then apply the type accent (info | warning | success).
+    banner.classList.remove('type-info', 'type-warning', 'type-success');
+    banner.classList.add(`type-${info.type || 'info'}`);
+
+    const title = $('info-banner-title');
+    if (title) title.textContent = info.title || 'Announcement';
+
+    // Rendered as text (not innerHTML) — the message is remote content.
+    const sub = $('info-banner-sub');
+    if (sub) sub.textContent = info.message;
+
+    const link = $('info-banner-link');
+    if (link) {
+      if (info.link) {
+        link.href = info.link;
+        link.textContent = info.linkText || 'Learn more';
+        link.classList.remove('hidden');
+      } else {
+        link.classList.add('hidden');
+      }
+    }
+    banner.classList.remove('hidden');
+  } catch (_) {
+    banner.classList.add('hidden');
+  }
+}
+
+async function dismissAnnouncementBanner() {
+  try {
+    const { [ANNOUNCEMENT_INFO_KEY]: info } = await browserAPI.storage.local.get(ANNOUNCEMENT_INFO_KEY);
+    if (info && info.id) {
+      await browserAPI.storage.local.set({ [ANNOUNCEMENT_DISMISSED_KEY]: info.id });
+    }
+  } catch (_) {}
+  const banner = $('info-banner');
+  if (banner) banner.classList.add('hidden');
+}
+
+function requestAnnouncement() {
+  try {
+    browserAPI.runtime.sendMessage({ type: 'get_announcement' }, () => {
+      void browserAPI.runtime.lastError;
+      // Re-render once the (possibly refreshed) payload has landed in storage.
+      renderAnnouncementBanner();
+    });
+  } catch (_) {}
+}
+
 async function init() {
   await render();
+
+  // Update-available banner
+  const dismissBtn = $('update-banner-dismiss');
+  if (dismissBtn) dismissBtn.addEventListener('click', dismissUpdateBanner);
+  await renderUpdateBanner();
+  requestUpdateCheck();
+
+  // Remote info/announcement banner
+  const infoDismissBtn = $('info-banner-dismiss');
+  if (infoDismissBtn) infoDismissBtn.addEventListener('click', dismissAnnouncementBanner);
+  await renderAnnouncementBanner();
+  requestAnnouncement();
 
   // Community Reports form handler
   const submitReportBtn = $('submit-report');
@@ -1983,6 +2109,9 @@ async function init() {
   browserAPI.storage.onChanged.addListener((changes, area) => {
     if (area === 'local' && (changes[SETTINGS_KEY] || changes[BLOCKED_STATS_KEY] || changes[WHITELIST_KEY])) {
       render();
+    }
+    if (area === 'local' && (changes[UPDATE_INFO_KEY] || changes[UPDATE_DISMISSED_KEY])) {
+      renderUpdateBanner();
     }
   });
 
