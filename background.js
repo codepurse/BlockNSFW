@@ -2127,7 +2127,7 @@ async function updateSafeSearchRules() {
 }
 
 // Init
-browserAPI.runtime.onInstalled.addListener(async () => {
+browserAPI.runtime.onInstalled.addListener(async (details) => {
   try {
     const settings = await getSettings();
     await setSettings(settings); // ensure defaults saved
@@ -2138,6 +2138,19 @@ browserAPI.runtime.onInstalled.addListener(async () => {
     ensureRemoteWhitelistUpToDate().catch(e => console.warn('BlockNSFW: initial whitelist sync failed', e));
     checkForUpdate().catch(e => console.warn('BlockNSFW: initial update check failed', e));
     fetchAnnouncement().catch(e => console.warn('BlockNSFW: initial announcement fetch failed', e));
+
+    // Fresh install only: open the first-run onboarding wizard once. Updates
+    // keep using the in-page "What's New" card, so we don't nag on every bump.
+    if (details && details.reason === 'install') {
+      try {
+        const flag = await browserAPI.storage.local.get('pblocker_onboarding_completed');
+        if (!flag || !flag.pblocker_onboarding_completed) {
+          await browserAPI.tabs.create({ url: browserAPI.runtime.getURL('onboarding.html') });
+        }
+      } catch (e) {
+        console.warn('BlockNSFW: onboarding open failed', e);
+      }
+    }
     console.log('BlockNSFW: Extension installed/updated - Manifest V3 compatible');
   } finally {
     markReady();

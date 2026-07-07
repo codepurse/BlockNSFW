@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Welcome to BlockNSFW</title>
+  <style>
+    :root {
+      /* Clean Modern Dark — single indigo accent (matches options.html / blocked.html) */
+      --background: #0b0c10;
+      --surface: #14161c;
+      --surface-2: #1a1d24;
+      --foreground: #f2f3f5;
+      --foreground-muted: #a4abb8;
+      --foreground-dim: #868e9e;
+      --card-bg: #14161c;
+      --card-border: rgba(255, 255, 255, 0.07);
+      --card-border-hover: rgba(255, 255, 255, 0.14);
+      --card-shadow: 0 18px 40px rgba(0, 0, 0, 0.45);
+      --primary: #6366f1;
+      --primary-hover: #818cf8;
+      --primary-soft: rgba(99, 102, 241, 0.12);
+      --primary-foreground: #ffffff;
+      --secondary: #1d2027;
+      --secondary-hover: #262a33;
+      --secondary-foreground: #e6e8ec;
+      --input-bg: #0f1116;
+      --input-border: rgba(255, 255, 255, 0.10);
+      --success: #10b981;
+      --success-soft: rgba(16, 185, 129, 0.12);
+      --destructive: #ef4444;
+      --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      --radius: 10px;
+      --radius-sm: 8px;
+      --radius-lg: 14px;
+      --transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: var(--font-sans);
+      background: var(--background);
+      color: var(--foreground);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      line-height: 1.55;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .wizard {
+      width: 100%;
+      max-width: 560px;
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--card-shadow);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .wizard-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 20px 28px;
+      border-bottom: 1px solid var(--card-border);
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 650;
+      font-size: 15px;
+      letter-spacing: -0.01em;
+    }
+    .brand-mark {
+      width: 30px; height: 30px;
+      display: grid; place-items: center;
+      background: var(--primary-soft);
+      border-radius: var(--radius-sm);
+      color: var(--primary-hover);
+    }
+    .brand-mark svg { width: 18px; height: 18px; }
+
+    .dots { display: flex; gap: 7px; }
+    .dot {
+      width: 7px; height: 7px; border-radius: 50%;
+      background: var(--input-border);
+      transition: var(--transition);
+    }
+    .dot.active { background: var(--primary); transform: scale(1.15); }
+    .dot.done { background: var(--success); }
+
+    .wizard-body { padding: 30px 28px 8px; min-height: 320px; }
+
+    .step { display: none; animation: fade 0.25s ease; }
+    .step.active { display: block; }
+    @keyframes fade { from { opacity: 0; transform: translateY(6px);} to { opacity: 1; transform: none; } }
+
+    .step-icon {
+      width: 46px; height: 46px;
+      display: grid; place-items: center;
+      background: var(--primary-soft);
+      color: var(--primary-hover);
+      border-radius: var(--radius);
+      margin-bottom: 16px;
+    }
+    .step-icon svg { width: 24px; height: 24px; }
+
+    h1 { font-size: 21px; font-weight: 680; letter-spacing: -0.02em; margin-bottom: 8px; }
+    .lede { color: var(--foreground-muted); font-size: 14.5px; margin-bottom: 22px; }
+
+    .feature-list { list-style: none; display: flex; flex-direction: column; gap: 12px; margin-bottom: 6px; }
+    .feature-list li { display: flex; gap: 11px; align-items: flex-start; font-size: 14px; color: var(--foreground-muted); }
+    .feature-list .tick {
+      flex: 0 0 auto; width: 20px; height: 20px; border-radius: 50%;
+      background: var(--success-soft); color: var(--success);
+      display: grid; place-items: center; margin-top: 1px;
+    }
+    .feature-list .tick svg { width: 12px; height: 12px; }
+    .feature-list b { color: var(--foreground); font-weight: 600; }
+
+    /* Option rows (toggles) */
+    .opt {
+      display: flex; align-items: flex-start; gap: 14px;
+      padding: 15px 16px;
+      background: var(--surface-2);
+      border: 1px solid var(--card-border);
+      border-radius: var(--radius);
+      margin-bottom: 12px;
+      transition: var(--transition);
+    }
+    .opt:hover { border-color: var(--card-border-hover); }
+    .opt-txt { flex: 1; }
+    .opt-txt .t { font-weight: 600; font-size: 14.5px; }
+    .opt-txt .d { color: var(--foreground-dim); font-size: 13px; margin-top: 2px; }
+
+    /* Switch */
+    .switch { position: relative; flex: 0 0 auto; width: 42px; height: 24px; margin-top: 2px; }
+    .switch input { opacity: 0; width: 0; height: 0; }
+    .slider {
+      position: absolute; inset: 0; cursor: pointer;
+      background: var(--input-bg); border: 1px solid var(--input-border);
+      border-radius: 999px; transition: var(--transition);
+    }
+    .slider::before {
+      content: ""; position: absolute; height: 16px; width: 16px;
+      left: 3px; top: 50%; transform: translateY(-50%);
+      background: var(--foreground-dim); border-radius: 50%; transition: var(--transition);
+    }
+    .switch input:checked + .slider { background: var(--primary); border-color: var(--primary); }
+    .switch input:checked + .slider::before { transform: translate(18px, -50%); background: #fff; }
+
+    label.field { display: block; font-size: 13px; font-weight: 600; color: var(--foreground-muted); margin: 4px 0 7px; }
+
+    select, input[type="password"], input[type="text"] {
+      width: 100%; padding: 11px 13px;
+      background: var(--input-bg); color: var(--foreground);
+      border: 1px solid var(--input-border); border-radius: var(--radius-sm);
+      font-size: 14px; font-family: inherit; transition: var(--transition);
+    }
+    select:focus, input:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-soft); }
+
+    .detail { font-size: 12.5px; color: var(--foreground-dim); margin-top: 8px; min-height: 16px; }
+
+    .pin-row { display: flex; gap: 12px; }
+    .pin-row > div { flex: 1; }
+
+    .note {
+      display: flex; gap: 10px; align-items: flex-start;
+      background: var(--primary-soft); border: 1px solid rgba(99,102,241,0.2);
+      border-radius: var(--radius-sm); padding: 12px 14px;
+      font-size: 13px; color: var(--foreground-muted); margin-top: 18px;
+    }
+    .note svg { flex: 0 0 auto; width: 16px; height: 16px; color: var(--primary-hover); margin-top: 1px; }
+    .note.warn { background: rgba(239,68,68,0.08); border-color: rgba(239,68,68,0.2); }
+    .note.warn svg { color: var(--destructive); }
+
+    .err { color: var(--destructive); font-size: 12.5px; margin-top: 8px; min-height: 16px; }
+
+    .learn-link {
+      display: inline-flex; align-items: center; gap: 6px;
+      color: var(--primary-hover); text-decoration: none; font-weight: 600; font-size: 14px;
+    }
+    .learn-link:hover { text-decoration: underline; }
+
+    /* Footer / buttons */
+    .wizard-foot {
+      display: flex; align-items: center; gap: 10px;
+      padding: 18px 28px 24px;
+    }
+    .wizard-foot[hidden] { display: none; }
+    .spacer { flex: 1; }
+    .btn {
+      padding: 10px 18px; border-radius: var(--radius-sm);
+      font-size: 14px; font-weight: 600; font-family: inherit;
+      border: 1px solid transparent; cursor: pointer; transition: var(--transition);
+    }
+    .btn.primary { background: var(--primary); color: var(--primary-foreground); }
+    .btn.primary:hover { background: var(--primary-hover); }
+    .btn.ghost { background: var(--secondary); color: var(--secondary-foreground); border-color: var(--card-border); }
+    .btn.ghost:hover { background: var(--secondary-hover); }
+    .btn[hidden] { display: none; }
+
+    /* Done screen */
+    .done-wrap { text-align: center; padding: 26px 10px 20px; display: none; }
+    .done-wrap.active { display: block; animation: fade 0.3s ease; }
+    .done-badge {
+      width: 64px; height: 64px; margin: 0 auto 18px;
+      display: grid; place-items: center;
+      background: var(--success-soft); color: var(--success); border-radius: 50%;
+    }
+    .done-badge svg { width: 32px; height: 32px; }
+    .done-actions { display: flex; gap: 10px; justify-content: center; margin-top: 24px; }
+  </style>
+</head>
+<body>
+  <div class="wizard" id="wizard">
+    <div class="wizard-head">
+      <div class="brand">
+        <span class="brand-mark">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+        </span>
+        <span>BlockNSFW</span>
+      </div>
+      <div class="dots" id="dots">
+        <span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="dot"></span>
+      </div>
+    </div>
+
+    <div class="wizard-body">
+      <!-- Step 1: Welcome -->
+      <section class="step" data-step="1">
+        <div class="step-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+        </div>
+        <h1>Welcome to BlockNSFW</h1>
+        <p class="lede">Let's take 30 seconds to switch on the strongest protection. You can change any of this later in Settings.</p>
+        <ul class="feature-list">
+          <li><span class="tick"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></span><span><b>Runs entirely on your device.</b> Pages, images, and text are analysed locally — nothing is uploaded for filtering.</span></li>
+          <li><span class="tick"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></span><span><b>Blocks adult sites instantly</b> using a large curated blocklist plus multilingual keyword filtering.</span></li>
+          <li><span class="tick"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></span><span><b>Optional on-device AI</b> catches explicit images and pages the blocklist misses.</span></li>
+        </ul>
+      </section>
+
+      <!-- Step 2: AI protection -->
+      <section class="step" data-step="2">
+        <div class="step-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v1a3 3 0 0 0-3 3 3 3 0 0 0 0 6 3 3 0 0 0 3 3v1a3 3 0 0 0 6 0v-1a3 3 0 0 0 3-3 3 3 0 0 0 0-6 3 3 0 0 0-3-3V5a3 3 0 0 0-3-3z"/></svg>
+        </div>
+        <h1>Turn on AI protection</h1>
+        <p class="lede">These catch explicit content the domain blocklist can't — including non-English sites. Recommended on.</p>
+
+        <div class="opt">
+          <div class="opt-txt">
+            <div class="t">AI Image Protection</div>
+            <div class="d">Blurs explicit images in place, on any site.</div>
+          </div>
+          <label class="switch"><input type="checkbox" id="ai-image"><span class="slider"></span></label>
+        </div>
+
+        <div class="opt">
+          <div class="opt-txt">
+            <div class="t">AI Text Protection</div>
+            <div class="d">Blocks pages the model judges to be adult, in many languages.</div>
+          </div>
+          <label class="switch"><input type="checkbox" id="ai-text"><span class="slider"></span></label>
+        </div>
+
+        <label class="field" for="strictness">Protection strength</label>
+        <select id="strictness">
+          <option value="relaxed">Relaxed — only clearly explicit content</option>
+          <option value="balanced">Balanced — recommended</option>
+          <option value="strict">Strict — also catches borderline content</option>
+        </select>
+        <div class="detail" id="strictness-detail"></div>
+
+        <div class="note">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          <span>All AI runs on your device. No images or page text ever leave your browser.</span>
+        </div>
+      </section>
+
+      <!-- Step 3: PIN / commitment lock -->
+      <section class="step" data-step="3">
+        <div class="step-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+        </div>
+        <h1>Add a lock</h1>
+        <p class="lede">A PIN adds friction so protection can't be switched off on impulse. Optional — you can skip it.</p>
+
+        <div class="pin-row">
+          <div>
+            <label class="field" for="pin">PIN (min 4 characters)</label>
+            <input type="password" id="pin" autocomplete="new-password" inputmode="numeric" placeholder="••••">
+          </div>
+          <div>
+            <label class="field" for="pin2">Confirm PIN</label>
+            <input type="password" id="pin2" autocomplete="new-password" inputmode="numeric" placeholder="••••">
+          </div>
+        </div>
+        <div class="err" id="pin-err"></div>
+
+        <div class="note warn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+          <span>A PIN is a speed bump, not tamper-proof — it can be cleared by removing the extension. For real uninstall protection, see the next step.</span>
+        </div>
+      </section>
+
+      <!-- Step 4: Desktop Guard -->
+      <section class="step" data-step="4">
+        <div class="step-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+        </div>
+        <h1>Make it stick</h1>
+        <p class="lede">The browser can still be told to remove or disable this extension in two clicks. Desktop Guard closes that gap.</p>
+        <ul class="feature-list">
+          <li><span class="tick"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></span><span>A native companion app <b>greys out the browser's Remove and Disable buttons</b>.</span></li>
+          <li><span class="tick"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></span><span>A background service <b>re-applies protection</b> if anything tampers with it.</span></li>
+          <li><span class="tick"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></span><span>Uninstalling needs a password held by a parent or accountability partner.</span></li>
+        </ul>
+        <div class="note">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+          <span>Now in beta for Windows &amp; Linux. &nbsp;<a class="learn-link" id="dg-link" href="https://github.com/codepurse/extension-guard" target="_blank" rel="noopener">Learn more →</a></span>
+        </div>
+      </section>
+
+      <!-- Done -->
+      <div class="done-wrap" id="done">
+        <div class="done-badge">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
+        </div>
+        <h1>You're protected</h1>
+        <p class="lede" id="done-summary">Your settings are saved.</p>
+        <div class="done-actions">
+          <button class="btn ghost" id="done-close">Done</button>
+          <button class="btn primary" id="done-settings">Open Settings</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="wizard-foot" id="foot">
+      <button class="btn ghost" id="back" hidden>Back</button>
+      <div class="spacer"></div>
+      <button class="btn ghost" id="skip" hidden>Skip for now</button>
+      <button class="btn primary" id="next">Get started</button>
+    </div>
+  </div>
+
+  <script src="onboarding.js"></script>
+</body>
+</html>
