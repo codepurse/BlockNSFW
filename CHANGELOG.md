@@ -2,6 +2,29 @@
 
 All notable project changes should be documented here going forward.
 
+## [1.7.0] - 2026-07-07
+
+### Added
+- First-run onboarding wizard (`onboarding.html` / `onboarding.js`). Opens
+  once on fresh install only (`onInstalled` `reason === 'install'`, guarded by
+  `pblocker_onboarding_completed`). Four steps: welcome / on-device explainer,
+  enable AI image + text protection with a strictness preset, optional PIN /
+  commitment lock, and Desktop Guard uninstall-proofing. Writes the same
+  storage keys the rest of the extension reads (`pblocker_settings`,
+  `pblocker_pin`). A "Re-run setup wizard" link was added to the options
+  Welcome section.
+
+### Fixed
+- Chrome content script ran at `document_idle`, which fired after the page had
+  largely painted and defeated the `instantBlockEarly()` anti-flash early
+  block. Chrome `manifest.json` now uses `run_at: document_start`, matching
+  `manifest.firefox.json` and the content-script design, so blocklisted pages
+  are redirected before they render.
+
+### Removed
+- Bundled desktop guard source (Windows/Linux native companion app). It is now
+  maintained in the standalone `codepurse/extension-guard` repository.
+
 ## [1.6.1] - 2026-06-06
 
 Non-English adult-site blocking improvements. No algorithm-breaking changes;
