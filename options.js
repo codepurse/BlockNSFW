@@ -1197,9 +1197,12 @@ async function dismissAnnouncementBanner() {
 
 function requestAnnouncement() {
   try {
-    browserAPI.runtime.sendMessage({ type: 'get_announcement' }, () => {
+    // forceRefresh bypasses the background's 6h TTL: opening this page always
+    // pulls the latest announcement.json (it's tiny), so edits go live for the
+    // user on their next Settings visit instead of waiting out the cache.
+    browserAPI.runtime.sendMessage({ type: 'get_announcement', forceRefresh: true }, () => {
       void browserAPI.runtime.lastError;
-      // Re-render once the (possibly refreshed) payload has landed in storage.
+      // Re-render once the refreshed payload has landed in storage.
       renderAnnouncementBanner();
     });
   } catch (_) {}

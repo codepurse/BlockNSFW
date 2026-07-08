@@ -546,11 +546,11 @@ const UPDATE_CHECK_TTL = 1000 * 60 * 60 * 12; // 12 hours
 let updateCheckPromise = null;
 
 // Prefer the store link for the running browser, falling back to a generic URL.
-// `typeof browser` is the Firefox signal this codebase already uses for the
-// browserAPI shim.
+// Uses detectBrowserKey() (UA-based) rather than `typeof browser`, which misfires
+// on Chrome — see the note there.
 function pickUpdateUrl(data) {
   if (!data || typeof data !== 'object') return DEFAULT_UPDATE_URL;
-  const isFirefox = typeof browser !== 'undefined';
+  const isFirefox = detectBrowserKey() === 'firefox';
   if (isFirefox && typeof data.firefoxUrl === 'string' && data.firefoxUrl) return data.firefoxUrl;
   if (!isFirefox && typeof data.chromeUrl === 'string' && data.chromeUrl) return data.chromeUrl;
   if (typeof data.url === 'string' && data.url) return data.url;
@@ -617,14 +617,19 @@ const ANNOUNCEMENT_INFO_KEY = 'pblocker_announcement_info';
 const ANNOUNCEMENT_CHECK_TTL = 1000 * 60 * 60 * 6; // 6 hours
 let announcementCheckPromise = null;
 
-// Which store the running browser installs from. `typeof browser` is the Firefox
-// signal this codebase already uses (see pickUpdateUrl); Edge is Chromium but
-// ships its own Add-ons store, so we split it out via the UA. Works in the MV3
-// service worker (WorkerNavigator exposes userAgent).
+// Bucket the running browser from the user agent. We do NOT use `typeof browser`
+// as a Firefox signal: recent Chrome/Chromium also expose a `browser` global, so
+// that test misfires and hands Chrome the Firefox override. The UA is reliable
+// in the MV3 service worker (WorkerNavigator exposes userAgent). Order matters —
+// Edge's UA also contains "Chrome/", so it must be checked first.
 function detectBrowserKey() {
-  if (typeof browser !== 'undefined') return 'firefox';
   const ua = (typeof navigator !== 'undefined' && navigator.userAgent) || '';
-  if (/\bEdg\//.test(ua)) return 'edge';
+  if (/\bEdg(?:e|A|iOS)?\//.test(ua)) return 'edge';
+  if (/\bFirefox\//.test(ua)) return 'firefox';
+  if (/\bChrom(?:e|ium)\//.test(ua)) return 'chrome';
+  // UA unavailable/unrecognized: fall back to the API-shim signal, treating a
+  // `browser` global without Chrome's `chrome.runtime` as Firefox.
+  if (typeof browser !== 'undefined' && !(typeof chrome !== 'undefined' && chrome.runtime)) return 'firefox';
   return 'chrome';
 }
 
