@@ -628,19 +628,52 @@ function detectBrowserKey() {
   return 'chrome';
 }
 
-// Resolve the announcement link for the running browser. When a per-browser
-// `links` map (firefox | chrome | edge) is present, use only this browser's
-// entry — if it's missing we return '' so the banner hides the button rather
-// than routing the user to a different browser's store. When there's no `links`
-// map, the flat `link` is treated as a generic link for every browser (keeps
-// plain single-link announcements working).
-function pickAnnouncementLink(data) {
-  if (!data || typeof data !== 'object') return '';
-  if (data.links && typeof data.links === 'object') {
-    const perBrowser = data.links[detectBrowserKey()];
-    return typeof perBrowser === 'string' ? perBrowser.trim() : '';
+// Author-facing key aliases per bucket, matched case-insensitively so the
+// `browsers` map can say "chrome"/"chromium"/"Chromium" (etc.) interchangeably.
+const BROWSER_KEY_ALIASES = {
+  firefox: ['firefox'],
+  chrome: ['chrome', 'chromium'],
+  edge: ['edge']
+};
+
+// Look up the override object for the running browser in a `browsers` map,
+// tolerant of key casing and the chrome/chromium alias. Returns null when the
+// map is absent or has no entry for this browser.
+function lookupBrowserOverride(browsers) {
+  if (!browsers || typeof browsers !== 'object') return null;
+  const lower = {};
+  for (const k of Object.keys(browsers)) lower[k.toLowerCase()] = browsers[k];
+  for (const alias of (BROWSER_KEY_ALIASES[detectBrowserKey()] || [])) {
+    if (lower[alias] != null) return lower[alias];
   }
-  return typeof data.link === 'string' ? data.link.trim() : '';
+  return null;
+}
+
+// Resolve the announcement for the running browser. A per-browser override in
+// `browsers.<firefox|chrome|edge>` wins over the shared top-level fields, so
+// each browser can have its own title/message/link/linkText/type; any field the
+// override omits falls back to the shared value. `link` is special: when a
+// `browsers` map is present we use ONLY this browser's link (never the shared
+// one) so we can't route a user to another browser's store — a missing/blank
+// link yields '' and the banner hides the button. Without a `browsers` map the
+// shared `link` is treated as a generic link (plain single-link announcements
+// keep working).
+function resolveAnnouncement(data) {
+  const shared = (data && typeof data === 'object') ? data : {};
+  const browsers = (shared.browsers && typeof shared.browsers === 'object') ? shared.browsers : null;
+  const ovRaw = browsers ? lookupBrowserOverride(browsers) : null;
+  const ov = (ovRaw && typeof ovRaw === 'object') ? ovRaw : {};
+
+  const str = (v) => (typeof v === 'string' ? v.trim() : '');
+  const merged = (field) => str(ov[field]) || str(shared[field]);
+
+  return {
+    title: merged('title'),
+    message: merged('message'),
+    linkText: merged('linkText'),
+    type: str(ov.type) || str(shared.type),
+    link: browsers ? str(ov.link) : str(shared.link)
+  };
 }
 
 // Fetch announcement.json (TTL-guarded) and write a sanitized payload to storage.
@@ -662,22 +695,23 @@ async function fetchAnnouncement(options = {}) {
       const data = await response.json();
 
       const str = (v) => (typeof v === 'string' ? v.trim() : '');
+      // Collapse the per-browser payload down to the fields for THIS browser.
+      const resolved = resolveAnnouncement(data);
       // Only http(s) links pass through — never javascript:/data: schemes. The
       // options page renders title/message as text (never innerHTML), but we
       // sanitize the link here so a bad value can't produce a dangerous href.
-      const rawLink = pickAnnouncementLink(data);
-      const safeLink = /^https?:\/\//i.test(rawLink) ? rawLink : '';
-      const rawType = str(data && data.type).toLowerCase();
+      const safeLink = /^https?:\/\//i.test(resolved.link) ? resolved.link : '';
+      const rawType = resolved.type.toLowerCase();
       const type = (rawType === 'warning' || rawType === 'success') ? rawType : 'info';
 
       const info = {
         id: str(data && data.id),
         enabled: !!(data && data.enabled),
         type,
-        title: str(data && data.title),
-        message: str(data && data.message),
+        title: resolved.title,
+        message: resolved.message,
         link: safeLink,
-        linkText: str(data && data.linkText),
+        linkText: resolved.linkText,
         checkedAt: Date.now()
       };
       await browserAPI.storage.local.set({ [ANNOUNCEMENT_INFO_KEY]: info });

@@ -3,10 +3,22 @@
   "enabled": true,
   "type": "success",
   "title": "New from the BlockNSFW dev: Sieve",
-  "message": "I built another free, on-device blocker — Sieve. It filters out scams, phishing, gambling, crypto/MLM schemes, fake shops, and other harmful or distracting content, keeping your browsing clean, safe, and focused. Same promise: no account, no tracking, everything runs locally.",
-  "links": {
-    "firefox": "https://addons.mozilla.org/en-US/firefox/addon/sieve-site-content-blocker/"
-  },
+  "message": "I built another free, on-device blocker — Sieve. It filters out scams, phishing, gambling, crypto/MLM schemes, fake shops, and other harmful or distracting content. Same promise: no account, no tracking, everything runs locally.",
   "linkText": "Check out Sieve",
+  "browsers": {
+    "firefox": {
+      "message": "I built another free, on-device blocker — Sieve. It filters out scams, phishing, gambling, crypto/MLM schemes, fake shops, and more harmful or distracting content. It's live on Firefox now — no account, no tracking, everything runs locally.",
+      "link": "https://addons.mozilla.org/en-US/firefox/addon/sieve-site-content-blocker/",
+      "linkText": "Get Sieve for Firefox"
+    },
+    "chrome": {
+      "message": "I built another free, on-device blocker — Sieve. It filters out scams, phishing, gambling, crypto/MLM schemes, fake shops, and more harmful or distracting content. Coming soon to Chrome — no account, no tracking, everything runs locally.",
+      "link": ""
+    },
+    "edge": {
+      "message": "I built another free, on-device blocker — Sieve. It filters out scams, phishing, gambling, crypto/MLM schemes, fake shops, and more harmful or distracting content. Coming soon to Edge — no account, no tracking, everything runs locally.",
+      "link": ""
+    }
+  },
   "updatedAt": "2026-07-08"
 }
