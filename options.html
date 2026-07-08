@@ -1921,8 +1921,6 @@
         <div class="dev-message-body">
           <p>I’m so excited to share a fresh wave of features with you: smarter AI detection that catches even more adult content, and a brand-new desktop version of the app that keeps the extension safe from being uninstalled.</p>
           <p>We’ve also added a huge number of sites covering both adult and non-adult content. A heartfelt thank you to everyone who took the time to report these sites — and, of course, to the wonderful people who supported me on Buy Me a Coffee. You make all of this possible.</p>
-          <p>Exciting news: the project is now fully open source! If you’d like to request a feature or report an issue, please head over to <a href="https://github.com/codepurse/BlockNSFW/issues" target="_blank" rel="noopener noreferrer">GitHub</a> — I’d love to hear from you.</p>
-          <p>And just like I always promised: this will stay 100% free, forever. No accounts, no sign-ups — everything stays local, right here on your device. Thank you for being part of this journey. 💙</p>
         </div>
         <div class="dev-message-signature">
           — The BlockNSFW Developer
@@ -1948,8 +1946,6 @@
             <li><strong>AI Text Protection (multilingual)</strong> — A new on-device AI reads the page's text to catch adult sites the keyword and blocklist filters miss — especially non-English ones (Russian, Chinese, Korean, Thai, Arabic, and more). It blocks pages it's confident about, and teams up with the image AI to catch borderline ones. Nothing leaves your device.</li>
             <li><strong>AI Image Protection</strong> — A new on-device AI looks at the actual picture to block adult images, even when nothing in the web address gives them away. Everything stays on your device — your images are never uploaded.</li>
             <li><strong>Instant blocking</strong> — Flagged images are now hidden the moment they're checked, so adult content no longer flashes on screen before it's blocked.</li>
-            <li><strong>IDN / Punycode Coverage</strong> — Internationalized adult mirrors with <strong>xn--</strong> hostnames now load and block as designed.</li>
-            <li><strong>Non-English Hostname Filter</strong> — Adult-hostword coverage for Chinese, Korean, Russian, Arabic, and Thai hostnames (e.g. <strong>色情.com</strong>, <strong>야동.com</strong>, <strong>порно.org</strong>).</li>
             <li><strong>Smarter Bundled Blocklist</strong> — Regenerated and synced with the runtime parser, so offline installs get the same coverage.</li>
           </ul>
         </div>
@@ -2072,7 +2068,7 @@
 
       <hr style="margin: 1.5rem 0; border: none; border-top: 1px solid var(--border, #e5e7eb);" />
 
-      <h3 class="card-title" style="font-size: 1.05rem;">AI Text Blocker</h3>
+      <h3 class="card-title" style="font-size: 1.05rem;">AI Text Blocker <span class="badge-beta">Beta</span></h3>
       <p class="card-description">
         Reads the page's text with a tiny multilingual model to catch adult sites the
         keyword and blocklist filters miss — especially non-English ones. Runs fully on
@@ -2102,20 +2098,11 @@
           Balanced filtering — blocks pages the model is confident about while letting benign multilingual pages through.
         </div>
       </div>
-      <div class="info-box" style="margin-top: .875rem">
-        <div class="info-box-title">How it works</div>
-        <p class="info-box-text">
-          Both models are bundled with the extension and run on your device. The image
-          model runs in a dedicated Web Worker; the ~150 KB text model scores the page in
-          milliseconds. Whole-page text blocking uses a conservative threshold, with a
-          lower threshold when the image blocker also flags content on the page.
-        </p>
-      </div>
     </div>
 
     <div class="card card-featured fade-in" id="dns-protection-card">
       <div class="card-header">
-        <h2 class="card-title">DNS Protection <span class="badge-new">New</span></h2>
+        <h2 class="card-title">DNS Protection</h2>
         <p class="card-description">
           Block adult domains at the DNS level using Cloudflare for Families.
           This adds an extra layer of protection by checking domains against
@@ -2140,21 +2127,11 @@
       </div>
 
       <div id="dns-test-result" class="pin-hint" style="margin-top: 0.5rem"></div>
-
-      <div class="info-box" style="margin-top: 0.875rem">
-        <div class="info-box-title">How it works</div>
-        <p class="info-box-text">
-          When enabled, each new domain you visit is checked against
-          Cloudflare's family-safe DNS (1.1.1.3) via DNS-over-HTTPS. Results
-          are cached locally so repeat visits have zero delay. This uses a
-          free public service — no account or API key required.
-        </p>
-      </div>
     </div>
 
     <div class="card card-featured fade-in" id="safe-search-card">
       <div class="card-header">
-        <h2 class="card-title">Search &amp; Social Filters <span class="badge-new">New</span></h2>
+        <h2 class="card-title">Search &amp; Social Filters</h2>
         <p class="card-description">
           Force family-safe results on major search engines. You can also disable
           Facebook Reels and Instagram Reels so reel pages and reel entry points
@@ -2201,22 +2178,6 @@
         <span class="status-badge" id="instagram-reels-status">📵 IG Reels: Off</span>
       </div>
 
-      <div class="info-box" style="margin-top: 0.875rem">
-        <div class="info-box-title">How it works</div>
-        <p class="info-box-text">
-          Uses Chrome's <code>declarativeNetRequest</code> engine to rewrite
-          search URLs (<code>safe=active</code>, <code>adlt=strict</code>, etc.)
-          before the request leaves your browser. YouTube 18+ videos, Facebook Reels and
-          Instagram Reels are blocked locally with an early page redirect plus DOM filtering.
-          Nothing is sent to a third party.
-        </p>
-        <p class="info-box-text" style="margin-top: 0.625rem;">
-          For cookie-backed engines (Qwant, AOL Search, Presearch), BlockNSFW
-          additionally pins the SafeSearch cookie to <em>strict</em> on every
-          response and silently redirects the engine's own settings page back
-          to its home, so the toggle cannot be flipped off from the UI.
-        </p>
-      </div>
     </div>
       </section>
 

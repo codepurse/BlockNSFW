@@ -617,6 +617,32 @@ const ANNOUNCEMENT_INFO_KEY = 'pblocker_announcement_info';
 const ANNOUNCEMENT_CHECK_TTL = 1000 * 60 * 60 * 6; // 6 hours
 let announcementCheckPromise = null;
 
+// Which store the running browser installs from. `typeof browser` is the Firefox
+// signal this codebase already uses (see pickUpdateUrl); Edge is Chromium but
+// ships its own Add-ons store, so we split it out via the UA. Works in the MV3
+// service worker (WorkerNavigator exposes userAgent).
+function detectBrowserKey() {
+  if (typeof browser !== 'undefined') return 'firefox';
+  const ua = (typeof navigator !== 'undefined' && navigator.userAgent) || '';
+  if (/\bEdg\//.test(ua)) return 'edge';
+  return 'chrome';
+}
+
+// Resolve the announcement link for the running browser. When a per-browser
+// `links` map (firefox | chrome | edge) is present, use only this browser's
+// entry — if it's missing we return '' so the banner hides the button rather
+// than routing the user to a different browser's store. When there's no `links`
+// map, the flat `link` is treated as a generic link for every browser (keeps
+// plain single-link announcements working).
+function pickAnnouncementLink(data) {
+  if (!data || typeof data !== 'object') return '';
+  if (data.links && typeof data.links === 'object') {
+    const perBrowser = data.links[detectBrowserKey()];
+    return typeof perBrowser === 'string' ? perBrowser.trim() : '';
+  }
+  return typeof data.link === 'string' ? data.link.trim() : '';
+}
+
 // Fetch announcement.json (TTL-guarded) and write a sanitized payload to storage.
 // Returns the info object, or null on failure (callers fail silently — a broken
 // announcement fetch must never surface an error to the user).
@@ -639,7 +665,7 @@ async function fetchAnnouncement(options = {}) {
       // Only http(s) links pass through — never javascript:/data: schemes. The
       // options page renders title/message as text (never innerHTML), but we
       // sanitize the link here so a bad value can't produce a dangerous href.
-      const rawLink = str(data && data.link);
+      const rawLink = pickAnnouncementLink(data);
       const safeLink = /^https?:\/\//i.test(rawLink) ? rawLink : '';
       const rawType = str(data && data.type).toLowerCase();
       const type = (rawType === 'warning' || rawType === 'success') ? rawType : 'info';
