@@ -13,7 +13,8 @@
     },
     "chrome": {
       "message": "I want to make the internet clean again. So I built Sieve. It's a free, on-device blocker that filters out scams, phishing, gambling, crypto and MLM schemes, fake shops, and other harmful or distracting content. No account. No tracking. Everything runs locally. Coming soon to Chromium browsers.",
-      "link": ""
+      "link": "https://chromewebstore.google.com/detail/sieve-%E2%80%93-content-filter-si/ipdgekalafnmgejbgapendbhdidjgdeg?authuser=0&hl=en",
+      "linkText": "Get Sieve for Chrome"
     },
     "edge": {
       "message": "I want to make the internet clean again. So I built Sieve. It's a free, on-device blocker that filters out scams, phishing, gambling, crypto and MLM schemes, fake shops, and other harmful or distracting content. No account. No tracking. Everything runs locally. Coming soon to Chromium browsers.",
