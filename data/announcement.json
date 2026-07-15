@@ -2,7 +2,7 @@
   "id": "2026-07-sieve",
   "enabled": true,
   "type": "success",
-  "title": "New from the BlockNSFW dev: Sieve",
+  "title": "Making the internet clean again",
   "message": "I built another free, on-device blocker — Sieve. It filters out scams, phishing, gambling, crypto/MLM schemes, fake shops, and other harmful or distracting content. Same promise: no account, no tracking, everything runs locally.",
   "linkText": "Check out Sieve",
   "browsers": {
@@ -12,11 +12,12 @@
       "linkText": "Get Sieve for Firefox"
     },
     "chrome": {
-      "message": "I built another free, on-device blocker — Sieve. It filters out scams, phishing, gambling, crypto/MLM schemes, fake shops, and more harmful or distracting content. Coming soon to Chrome — no account, no tracking, everything runs locally.",
-      "link": ""
+      "message": "I want to make the internet clean again. So I built Sieve. It's a free, on-device blocker that filters out scams, phishing, gambling, crypto and MLM schemes, fake shops, and other harmful or distracting content. No account. No tracking. Everything runs locally. Coming soon to Chromium browsers.",
+      "link": "https://chromewebstore.google.com/detail/sieve-%E2%80%93-content-filter-si/ipdgekalafnmgejbgapendbhdidjgdeg?authuser=0&hl=en",
+      "linkText": "Get Sieve for Chrome"
     },
     "edge": {
-      "message": "I built another free, on-device blocker — Sieve. It filters out scams, phishing, gambling, crypto/MLM schemes, fake shops, and more harmful or distracting content. Coming soon to Edge — no account, no tracking, everything runs locally.",
+      "message": "I want to make the internet clean again. So I built Sieve. It's a free, on-device blocker that filters out scams, phishing, gambling, crypto and MLM schemes, fake shops, and other harmful or distracting content. No account. No tracking. Everything runs locally. Coming soon to Chromium browsers.",
       "link": ""
     }
   },
