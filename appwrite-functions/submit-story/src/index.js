@@ -6,6 +6,7 @@ const SUBMISSION_LIMIT = 1;                 // max stories per device per window
 const WINDOW_MS = 7 * 24 * 60 * 60 * 1000;  // rolling 1-week window
 const DEFAULT_PAGE = 10;                    // approved stories per feed page
 const MAX_PAGE = 50;                        // hard cap per request
+const REPORT_HIDE_THRESHOLD = 3;            // distinct devices needed to auto-hide
 
 function makeDatabases() {
   const client = new Client()
@@ -91,6 +92,35 @@ module.exports = async ({ req, res, log, error }) => {
 
         const updated = await databases.updateDocument(dbId, collId, storyId, { likes, likedBy });
         return res.json({ ok: true, likes: Number(updated.likes) || 0 });
+      }
+
+      // Report a story as inappropriate — deduped per device via reportedBy.
+      // Auto-hidden from the public feed once enough distinct devices flag it,
+      // pending a human review that flips status back to approved or leaves it hidden.
+      if (payload.action === 'report') {
+        const storyId = String(payload.storyId || '');
+        const reporter = String(payload.deviceId || '').slice(0, 64);
+        if (!storyId) {
+          return res.json({ ok: false, message: 'Missing storyId.' }, 400);
+        }
+
+        const doc = await databases.getDocument(dbId, collId, storyId);
+        const reportedBy = Array.isArray(doc.reportedBy) ? doc.reportedBy.slice() : [];
+
+        // A device reporting the same story twice must not inflate the count.
+        if (reporter && !reportedBy.includes(reporter)) {
+          reportedBy.push(reporter);
+        }
+        const reportCount = reportedBy.length;
+
+        const patch = { reportCount, reportedBy };
+        if (reportCount >= REPORT_HIDE_THRESHOLD && doc.status === 'approved') {
+          patch.status = 'hidden';   // drops out of the approved feed for everyone
+        }
+
+        await databases.updateDocument(dbId, collId, storyId, patch);
+        log(`Story reported: ${storyId} (count=${reportCount})`);
+        return res.json({ ok: true });
       }
 
       const { title, content, deviceId, browser, version } = payload;

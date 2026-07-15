@@ -2,6 +2,28 @@
 
 All notable project changes should be documented here going forward.
 
+## [1.7.1] - 2026-07-14
+
+### Fixed
+- Major browsing slowdown on content-heavy and dynamic pages (streaming chat
+  apps, SPAs, infinite scroll), present even with all AI/smart features off. The
+  `content.js` MutationObserver ran heavy work synchronously on every DOM
+  mutation — reading each added node's `textContent` and running three
+  subtree `querySelectorAll` sweeps — which becomes O(n²) as a re-rendering
+  container grows. Media (img/video/iframe) discovery for container nodes is now
+  deferred to a coalesced `requestIdleCallback` batch (directly-added media is
+  still checked instantly), the per-node `textContent` read is removed, and
+  page-text scanning is only scheduled when a text feature is actually enabled.
+- `debounce()` used a single shared module-level timer, so the page-text,
+  search-result and social-post debouncers cancelled each other and only the
+  last-scheduled one ran. Each debounced function now owns its timer, making
+  dynamic-content filtering reliable.
+
+### Changed
+- The MutationObserver now honors the site whitelist (via a cached flag) and
+  bails immediately when the page is blocked or the extension is disabled, so a
+  whitelisted site does no per-mutation work at all.
+
 ## [1.7.0] - 2026-07-07
 
 ### Added

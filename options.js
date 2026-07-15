@@ -32,6 +32,11 @@ const DEFAULT_SETTINGS = {
   aiTextStrictness: 'balanced',
 };
 
+// Tracks whether a plain-HTML blocked page is currently stored. Kept in sync
+// by render()/upload/clear so the toggle handler can decide synchronously
+// (within the click's user-gesture) whether to open the file picker.
+let plainHtmlAvailable = false;
+
 function $(id) { return document.getElementById(id); }
 
 function normalizeImageFilterLevel(level) {
@@ -950,9 +955,10 @@ async function render() {
   $('custom-blocked-page-url').value = settings.customBlockedPageUrl || '';
   $('custom-blocked-page-section').style.display = useCustom ? 'block' : 'none';
   $('plain-blocked-page-section').style.display = usePlain ? 'block' : 'none';
+  plainHtmlAvailable = !!(settings.plainBlockedPageHtml && settings.plainBlockedPageHtml.trim());
   const plainStatus = $('plain-html-status');
   if (plainStatus) {
-    plainStatus.textContent = (settings.plainBlockedPageHtml && settings.plainBlockedPageHtml.trim())
+    plainStatus.textContent = plainHtmlAvailable
       ? 'HTML uploaded and saved'
       : 'No HTML uploaded yet';
   }
@@ -1622,21 +1628,34 @@ async function init() {
     const plainSection = $('plain-blocked-page-section');
     const customToggle = $('use-custom-blocked-page');
     const customSection = $('custom-blocked-page-section');
+    const fileInput = $('plain-blocked-page-file');
     if (e.target.checked) {
       plainSection.style.display = 'block';
       if (customToggle) customToggle.checked = false;
       if (customSection) customSection.style.display = 'none';
+      // No HTML stored yet: open the file picker straight away. This must run
+      // before any await so it stays inside the toggle's user-gesture window,
+      // otherwise the browser blocks the programmatic file dialog.
+      if (!plainHtmlAvailable && fileInput) fileInput.click();
     } else {
       plainSection.style.display = 'none';
     }
 
     const settings = await getSettings();
-    if (e.target.checked && !(settings.plainBlockedPageHtml && settings.plainBlockedPageHtml.trim())) {
-      e.target.checked = false;
-      plainSection.style.display = 'none';
-      showToast('Upload an HTML file first', 'error');
+    const hasHtml = !!(settings.plainBlockedPageHtml && settings.plainBlockedPageHtml.trim());
+    plainHtmlAvailable = hasHtml;
+
+    if (e.target.checked && !hasHtml) {
+      // Toggle stays on and the section stays visible so the picker/button is
+      // reachable, but plain-HTML mode isn't activated until a file is chosen
+      // — the file 'change' handler commits blockedPageType. No toast here:
+      // the open file dialog is the prompt.
+      settings.blockedPageType = 'default';
+      settings.customBlockedPageUrl = '';
+      await setSettings(settings);
       return;
     }
+
     settings.blockedPageType = e.target.checked ? 'plain_html' : 'default';
     if (e.target.checked) {
       settings.customBlockedPageUrl = '';
@@ -1688,6 +1707,7 @@ async function init() {
       settings.plainBlockedPageHtml = text;
       settings.customBlockedPageUrl = '';
       await setSettings(settings);
+      plainHtmlAvailable = true;
       showToast('HTML uploaded and saved', 'success');
     } catch (_) {
       showToast('Failed to read HTML file', 'error');

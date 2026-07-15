@@ -298,12 +298,26 @@ const REDDIT_CACHE_DURATION = 30 * 60 * 1000; // 30 minutes
 // Performance optimization: Debouncing and caching
 const DEBOUNCE_DELAY = 100;
 const BATCH_SIZE = 10;
-let debounceTimer = null;
 let processQueue = [];
 // Incremental processing for search results to avoid full-page reprocessing
 let pendingResults = new Set();
 // Incremental processing for social posts to avoid full-page reprocessing
 let pendingSocial = new Set();
+// Elements whose media (img/video/iframe) discovery is deferred off the
+// synchronous MutationObserver callback and coalesced into an idle batch, so a
+// burst of mutations (e.g. a streaming chat re-rendering its message on every
+// token) can't pin the main thread.
+let pendingMediaNodes = new Set();
+let mediaDiscoveryScheduled = false;
+// True when any page-text feature (keyword "smart blocking" or the AI text
+// classifier) is on. When false we skip all page-text scanning work entirely,
+// including the per-mutation text reads that used to run unconditionally.
+let anyTextFeatureOn = true;
+// Cached result of the (async) whitelist check for the current page, refreshed
+// by processContent. Lets the synchronous MutationObserver honor the whitelist
+// so a user-trusted site is a real escape hatch — no scanning, no per-mutation
+// work — instead of only processContent respecting it.
+let pageWhitelisted = false;
 
 // Adult content detection keywords (used for domain/site name lookups)
 const ADULT_CONTENT_KEYWORDS = [
@@ -1265,13 +1279,18 @@ function log(message, ...args) {
 }
 
 function debounce(func, delay) {
+  // Each debounced function gets its OWN timer. Previously they shared a single
+  // module-level `debounceTimer`, so the page-text scan, search-result and
+  // social-post debouncers kept clearing each other's timers and only the
+  // last-scheduled one ever fired — dynamic-content filtering was unreliable.
+  let timer = null;
   return function executedFunction(...args) {
     const later = () => {
-      clearTimeout(debounceTimer);
+      timer = null;
       func.apply(this, args);
     };
-    clearTimeout(debounceTimer);
-    debounceTimer = setTimeout(later, delay);
+    clearTimeout(timer);
+    timer = setTimeout(later, delay);
   };
 }
 
@@ -1365,6 +1384,7 @@ async function loadSettings() {
     instagramReelsEnabled = settings.instagramReelsEnabled === true;
     aiTextBlocker = settings.aiTextBlocker !== false;
     aiTextStrictness = settings.aiTextStrictness || 'balanced';
+    anyTextFeatureOn = !!(useSmartBlocking || aiTextBlocker);
 
     // Store custom blocked page settings globally for access during blocking
     blockedPageType = settings.blockedPageType || 'default';
@@ -3631,6 +3651,7 @@ async function processContent() {
   enforceInstagramReelsBlock();
   // Respect whitelist and temporary disable
   const whitelisted = await isCurrentPageWhitelisted();
+  pageWhitelisted = whitelisted;
   if (!isEnabled || whitelisted) return;
   
   isProcessing = true;
@@ -3795,6 +3816,41 @@ async function processPendingSocial() {
 
 const debouncedProcessSocial = debounce(processPendingSocial, DEBOUNCE_DELAY);
 
+// Process the queued media elements in a single coalesced idle pass. The
+// expensive part — three subtree querySelectorAll sweeps per node plus the
+// per-image URL/keyword checks in observeImage — is what used to run
+// synchronously inside the mutation callback on every DOM change. Batching it
+// here keeps it off the critical rendering path, and the isConnected guard
+// skips nodes that were added and removed again before we got to them (common
+// in virtualized / streaming UIs).
+function scheduleMediaDiscovery() {
+  if (mediaDiscoveryScheduled) return;
+  mediaDiscoveryScheduled = true;
+  const run = () => {
+    mediaDiscoveryScheduled = false;
+    if (blockedTriggered || !isEnabled || pageWhitelisted) { pendingMediaNodes.clear(); return; }
+    const nodes = pendingMediaNodes;
+    pendingMediaNodes = new Set();
+    for (const el of nodes) {
+      if (!el || el.nodeType !== Node.ELEMENT_NODE || !el.isConnected) continue;
+      if (el.tagName === 'IMG') observeImage(el);
+      else if (el.tagName === 'VIDEO') observeMedia(el);
+      if (el.tagName === 'IFRAME') processIframe(el);
+      const imgs = el.querySelectorAll?.('img');
+      imgs && imgs.forEach(observeImage);
+      const vids = el.querySelectorAll?.('video');
+      vids && vids.forEach(observeMedia);
+      const iframes = el.querySelectorAll?.('iframe');
+      iframes && iframes.forEach(processIframe);
+    }
+  };
+  if (typeof requestIdleCallback === 'function') {
+    requestIdleCallback(run, { timeout: 500 });
+  } else {
+    setTimeout(run, 100);
+  }
+}
+
 // Mutation observer for dynamic content
 function setupMutationObserver() {
   if (observer) {
@@ -3802,9 +3858,15 @@ function setupMutationObserver() {
   }
   
   observer = new MutationObserver((mutations) => {
+    // Cheap early-out: once a page is blocked, the extension is off, or the site
+    // is whitelisted, there is nothing to do — and we must not keep queuing work
+    // on every mutation.
+    if (blockedTriggered || !isEnabled || pageWhitelisted) return;
+
     let scheduleResultsProcess = false;
     let scheduleSocialProcess = false;
     let schedulePageTextScan = false;
+    let scheduleMedia = false;
     const engine = getSearchEngine();
     const containerSelector = engine ? SEARCH_SELECTORS[engine]?.containers : null;
     const socialSite = getSocialSite();
@@ -3816,30 +3878,26 @@ function setupMutationObserver() {
           if (node.nodeType !== Node.ELEMENT_NODE) continue;
           const el = node;
 
-          // Newly added images/videos: observe for visibility-driven classification
-          if (el.tagName === 'IMG') {
-            observeImage(el);
-          } else if (el.tagName === 'VIDEO') {
-            observeMedia(el);
-          }
+          // A directly-added media element is O(1) to check, so do it NOW —
+          // this preserves instant blocking of obvious bad-URL images/videos
+          // (observeImage hides on a synchronous URL/keyword match). It was
+          // never the perf problem; only the subtree *sweeps* of large added
+          // containers were. Descendant discovery for container nodes is still
+          // deferred to a coalesced idle pass (see scheduleMediaDiscovery).
+          if (el.tagName === 'IMG') observeImage(el);
+          else if (el.tagName === 'VIDEO') observeMedia(el);
+          else if (el.tagName === 'IFRAME') processIframe(el);
+          pendingMediaNodes.add(el);
+          scheduleMedia = true;
 
-          // Newly added iframes: scan and hide if adult
-          if (el.tagName === 'IFRAME') {
-            processIframe(el);
-          }
-
-          const addedText = sanitizeTextForScan(el.textContent || '');
-          if (addedText.length >= PAGE_TEXT_SCAN_MIN_LINE_LENGTH) {
+          // A full-page text scan is only worth scheduling when a text feature
+          // is actually enabled. We no longer read el.textContent per node just
+          // to decide this — the debounced scan re-reads the page once anyway,
+          // so reading here (O(subtree), O(n^2) as a streaming message grows)
+          // was pure waste. Flag on any element addition; the debounce coalesces.
+          if (anyTextFeatureOn) {
             schedulePageTextScan = true;
           }
-
-          // Also inspect descendants for IMG/VIDEO/IFRAME if a container node was added
-          const imgs = el.querySelectorAll?.('img');
-          imgs && imgs.forEach(observeImage);
-          const vids = el.querySelectorAll?.('video');
-          vids && vids.forEach(observeMedia);
-          const iframes = el.querySelectorAll?.('iframe');
-          iframes && iframes.forEach(processIframe);
 
           // Tight scope: only schedule incremental processing for search engines
           if (containerSelector) {
@@ -3883,24 +3941,17 @@ function setupMutationObserver() {
         // Check for title/meta changes in head
         if (target.tagName === 'TITLE' || (target.tagName === 'META' && ['title', 'description', 'keywords', 'og:title', 'og:description', 'twitter:title'].includes(target.name || target.getAttribute('property')))) {
           checkPageMetadata();
-          schedulePageTextScan = true;
+          if (anyTextFeatureOn) schedulePageTextScan = true;
         }
-        
-        // Attribute changes on images: src / srcset can flip to adult
-        if (target && target.tagName === 'IMG') {
-          observeImage(target);
-        }
-        // Attribute changes on videos: source/poster updates
-        if (target && target.tagName === 'VIDEO') {
-          observeMedia(target);
-        }
-        if (target && target.tagName === 'SOURCE') {
-          const v = target.closest('video');
-          if (v) observeMedia(v);
-        }
-        // Attribute changes on iframes: src/srcdoc updates
-        if (target && target.tagName === 'IFRAME') {
-          processIframe(target);
+
+        // Attribute changes on media (src/srcset/poster/srcdoc) can flip an
+        // element to adult content — re-check it, but off the synchronous path.
+        if (target && (target.tagName === 'IMG' || target.tagName === 'VIDEO' || target.tagName === 'IFRAME')) {
+          pendingMediaNodes.add(target);
+          scheduleMedia = true;
+        } else if (target && target.tagName === 'SOURCE') {
+          const v = target.closest?.('video');
+          if (v) { pendingMediaNodes.add(v); scheduleMedia = true; }
         }
         // Attribute changes inside a search result: re-check only that container
         if (containerSelector && target && target.closest) {
@@ -3922,6 +3973,9 @@ function setupMutationObserver() {
     }
 
     // Tight scope: prefer incremental result processing over full-page reprocessing
+    if (scheduleMedia) {
+      scheduleMediaDiscovery();
+    }
     if (scheduleResultsProcess) {
       debouncedProcessResults();
     }
