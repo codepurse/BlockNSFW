@@ -52,30 +52,33 @@ async function setWhitelist(whitelist) {
   await browserAPI.storage.local.set({ [WHITELIST_KEY]: whitelist });
 }
 
-async function addToWhitelist(domain, type = 'permanent', expiresMs = null) {
+async function addToWhitelist(domain, type = 'permanent', expiresMs = null, path = null) {
   const whitelist = await getWhitelist();
-  const existingIndex = whitelist.findIndex(item => item.domain === domain);
-  
+  // Entry identity is (domain, path): a whole-domain entry and a path-scoped
+  // entry for the same host coexist, but re-adding the same pair updates it.
+  const existingIndex = whitelist.findIndex(item => item.domain === domain && (item.path || null) === (path || null));
+
   const entry = {
     domain: domain,
+    path: path || null,
     type: type,
     addedAt: Date.now(),
     // If temporary, use provided duration or default to 1 hour
     expiresAt: type === 'temporary' ? Date.now() + (expiresMs || (60 * 60 * 1000)) : null
   };
-  
+
   if (existingIndex >= 0) {
     whitelist[existingIndex] = entry; // Update existing
   } else {
     whitelist.push(entry); // Add new
   }
-  
+
   await setWhitelist(whitelist);
 }
 
-async function removeFromWhitelist(domain) {
+async function removeFromWhitelist(domain, path = null) {
   const whitelist = await getWhitelist();
-  const filtered = whitelist.filter(item => item.domain !== domain);
+  const filtered = whitelist.filter(item => !(item.domain === domain && (item.path || null) === (path || null)));
   await setWhitelist(filtered);
 }
 
@@ -363,7 +366,9 @@ async function isCurrentSiteWhitelisted() {
   if (!domain) return false;
   
   const whitelist = await getWhitelist();
-  return whitelist.some(item => item.domain === domain);
+  // The "unblock this site" toggle is whole-site: it reflects (and toggles) a
+  // whole-domain entry only, so a path-scoped entry doesn't light it up.
+  return whitelist.some(item => item.domain === domain && !item.path);
 }
 
 async function resetStats() {
@@ -400,20 +405,22 @@ async function updateWhitelistDisplay() {
     infoDiv.className = 'whitelist-info';
     
     const domainStrong = document.createElement('strong');
-    domainStrong.textContent = item.domain;
-    
+    // Show the path scope (if any) so "reddit.com" and "reddit.com/r/NoFap"
+    // are distinguishable in the list.
+    domainStrong.textContent = item.path ? item.domain + item.path : item.domain;
+
     const typeDiv = document.createElement('div');
     typeDiv.className = 'whitelist-type';
-    typeDiv.textContent = `Added ${addedDate}`;
-    
+    typeDiv.textContent = item.path ? `Page only · Added ${addedDate}` : `Added ${addedDate}`;
+
     infoDiv.appendChild(domainStrong);
     infoDiv.appendChild(typeDiv);
-    
+
     const removeButton = document.createElement('button');
     removeButton.className = 'whitelist-remove';
     removeButton.textContent = 'Remove';
     removeButton.addEventListener('click', async () => {
-      await removeFromWhitelist(item.domain);
+      await removeFromWhitelist(item.domain, item.path || null);
       await updateWhitelistDisplay();
     });
     
@@ -567,29 +574,31 @@ function validateDomain(domain) {
 
 async function handleAddWhitelist(type) {
   const input = $('whitelist-input');
-  const domain = validateDomain(input.value.trim());
-  
-  if (!domain) {
-    alert('Please enter a valid domain (e.g., example.com)');
+  // Accepts a bare domain or a domain + path (e.g. reddit.com/r/NoFap) so a
+  // user can allow one section of an otherwise-blocked site.
+  const parsed = self.DomainValidate.parseWhitelistInput(input.value.trim());
+
+  if (!parsed) {
+    alert('Please enter a valid domain or page (e.g., example.com or example.com/r/Name)');
     return;
   }
-  
+
   try {
     const ok = await requirePIN('add to whitelist');
     if (!ok) return;
     // Support temporary durations if requested via button
     if (type === 'temporary-15') {
-      await addToWhitelist(domain, 'temporary', 15 * 60 * 1000);
+      await addToWhitelist(parsed.domain, 'temporary', 15 * 60 * 1000, parsed.path);
     } else if (type === 'temporary-60') {
-      await addToWhitelist(domain, 'temporary', 60 * 60 * 1000);
+      await addToWhitelist(parsed.domain, 'temporary', 60 * 60 * 1000, parsed.path);
     } else {
-      await addToWhitelist(domain, 'permanent');
+      await addToWhitelist(parsed.domain, 'permanent', null, parsed.path);
     }
     input.value = '';
     await updateWhitelistDisplay();
   } catch (error) {
     console.error('Error adding to whitelist:', error);
-    alert('Failed to add domain to whitelist');
+    alert('Failed to add to whitelist');
   }
 }
 

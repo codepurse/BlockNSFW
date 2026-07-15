@@ -2,6 +2,9 @@ dist/
 *.zip
 node_modules/
 
+# Promo trailer (Remotion) — local-only, not part of the shipped extension
+trailer/
+
 # Editor / OS noise
 .DS_Store
 Thumbs.db

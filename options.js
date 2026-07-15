@@ -749,19 +749,19 @@ async function renderWhitelist() {
     const infoDiv = document.createElement('div');
     
     const domainStrong = document.createElement('strong');
-    domainStrong.textContent = item.domain;
-    
+    domainStrong.textContent = item.path ? item.domain + item.path : item.domain;
+
     const dateDiv = document.createElement('div');
     dateDiv.style.cssText = 'font-size:12px;color:GrayText;';
-    dateDiv.textContent = `Added ${addedDate}`;
-    
+    dateDiv.textContent = item.path ? `Page only · Added ${addedDate}` : `Added ${addedDate}`;
+
     infoDiv.appendChild(domainStrong);
     infoDiv.appendChild(dateDiv);
-    
+
     const removeButton = document.createElement('button');
     removeButton.textContent = 'Remove';
     removeButton.style.cssText = 'background:#d32f2f;color:white;border:none;padding:4px 8px;border-radius:4px;cursor:pointer;';
-    removeButton.onclick = () => removeWhitelistItem(item.domain);
+    removeButton.onclick = () => removeWhitelistItem(item.domain, item.path || null);
     
     itemDiv.appendChild(infoDiv);
     itemDiv.appendChild(removeButton);
@@ -769,9 +769,9 @@ async function renderWhitelist() {
   });
 }
 
-window.removeWhitelistItem = async function(domain) {
+window.removeWhitelistItem = async function(domain, path = null) {
   const whitelist = await getWhitelist();
-  const filtered = whitelist.filter(item => item.domain !== domain);
+  const filtered = whitelist.filter(item => !(item.domain === domain && (item.path || null) === (path || null)));
   await setWhitelist(filtered);
   await renderWhitelist();
 }
@@ -1978,27 +1978,29 @@ async function init() {
     const okPin = await requirePIN('add domain to whitelist');
     if (!okPin) return;
     const domainInput = $('whitelist-domain');
-    const domain = validateDomain(domainInput.value.trim());
-    
-    if (!domain) {
-      alert('Please enter a valid domain (e.g., example.com)');
+    // Accepts a bare domain or a domain + path (e.g. reddit.com/r/NoFap).
+    const parsed = self.DomainValidate.parseWhitelistInput(domainInput.value.trim());
+
+    if (!parsed) {
+      alert('Please enter a valid domain or page (e.g., example.com or example.com/r/Name)');
       return;
     }
-    
+
     const whitelist = await getWhitelist();
-    const exists = whitelist.some(item => item.domain === domain);
-    
+    const exists = whitelist.some(item => item.domain === parsed.domain && (item.path || null) === (parsed.path || null));
+
     if (exists) {
-      alert('Domain is already whitelisted');
+      alert(parsed.path ? 'This page is already whitelisted' : 'Domain is already whitelisted');
       return;
     }
-    
+
     const newItem = {
-      domain,
+      domain: parsed.domain,
+      path: parsed.path || null,
       type: 'permanent',
       addedAt: Date.now()
     };
-    
+
     whitelist.push(newItem);
     await setWhitelist(whitelist);
     domainInput.value = '';
@@ -2080,24 +2082,30 @@ async function init() {
               return;
             }
             
+            // Optional path scope — normalize the same way as typed entries.
+            const path = typeof item.path === 'string'
+              ? self.DomainValidate.normalizeWhitelistPath(item.path)
+              : null;
+
             validItems.push({
               domain: domain,
+              path: path,
               type: item.type === 'temporary' ? 'temporary' : 'permanent',
               addedAt: item.addedAt && Number.isInteger(item.addedAt) ? item.addedAt : Date.now(),
               expiresAt: item.expiresAt && Number.isInteger(item.expiresAt) ? item.expiresAt : undefined
             });
           });
-          
+
           if (validItems.length === 0) {
             throw new Error('No valid whitelist items found in the file');
           }
-          
+
           const current = await getWhitelist();
           const merged = [...current];
           let newDomains = 0;
-          
+
           validItems.forEach(item => {
-            if (!merged.some(existing => existing.domain === item.domain)) {
+            if (!merged.some(existing => existing.domain === item.domain && (existing.path || null) === (item.path || null))) {
               merged.push(item);
               newDomains++;
             }

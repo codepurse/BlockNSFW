@@ -1120,14 +1120,18 @@ function getBlockedReasonLabel(reasonKey) {
           window.location.replace(blockedUrl);
         };
 
-        // Respect whitelist (including temporary expiration)
+        // Respect whitelist (including temporary expiration + optional path scope)
         const whitelist = Array.isArray(result.pblocker_whitelist) ? result.pblocker_whitelist : [];
         const now = Date.now();
+        const pathname = location.pathname || '/';
+        const pathMatches = (self.DomainValidate && self.DomainValidate.whitelistPathMatches)
+          ? self.DomainValidate.whitelistPathMatches
+          : (_p, storedPath) => !storedPath;
         for (let i = 0; i < whitelist.length; i++) {
           const item = whitelist[i];
           // Skip expired temporary entries
           if (item.type === 'temporary' && item.expiresAt && item.expiresAt <= now) continue;
-          if (hostMatchesDomain(normalizedHost, item.domain)) {
+          if (hostMatchesDomain(normalizedHost, item.domain) && pathMatches(pathname, item.path)) {
             return; // Whitelisted -> allow
           }
         }
@@ -1618,11 +1622,16 @@ async function isCurrentPageWhitelisted() {
     const list = result.pblocker_whitelist || [];
     const now = Date.now();
     const hostname = location.hostname.replace(/^www\./, '').toLowerCase();
+    const pathname = location.pathname || '/';
+    const pathMatches = (self.DomainValidate && self.DomainValidate.whitelistPathMatches)
+      ? self.DomainValidate.whitelistPathMatches
+      : (_p, storedPath) => !storedPath;
     const userWhitelisted = list.some(item => {
       const domain = (item.domain || '').toLowerCase();
       const valid = item.type === 'permanent' || (item.expiresAt && item.expiresAt > now);
       if (!valid) return false;
-      return hostname === domain || hostname.endsWith('.' + domain);
+      const hostOk = hostname === domain || hostname.endsWith('.' + domain);
+      return hostOk && pathMatches(pathname, item.path);
     });
     if (userWhitelisted) return true;
     const remoteWL = result.pblocker_remote_whitelist_v1 || [];

@@ -15,6 +15,7 @@ const vm = require('vm');
 const SOURCE_PATH = path.join(__dirname, '..', 'background.js');
 const SHARED_HOSTNAME_PATH = path.join(__dirname, '..', 'shared', 'hostname.js');
 const SHARED_HOST_KEYWORDS_PATH = path.join(__dirname, '..', 'shared', 'host-keywords.js');
+const SHARED_VALIDATE_DOMAIN_PATH = path.join(__dirname, '..', 'shared', 'validate-domain.js');
 
 function noop() {}
 
@@ -60,6 +61,7 @@ function loadBackgroundContext() {
   const source = fs.readFileSync(SOURCE_PATH, 'utf8');
   const sharedHostnameSource = fs.readFileSync(SHARED_HOSTNAME_PATH, 'utf8');
   const sharedHostKeywordsSource = fs.readFileSync(SHARED_HOST_KEYWORDS_PATH, 'utf8');
+  const sharedValidateDomainSource = fs.readFileSync(SHARED_VALIDATE_DOMAIN_PATH, 'utf8');
   const sandbox = {
     chrome: makeChromeStub(),
     browser: undefined,
@@ -88,7 +90,7 @@ function loadBackgroundContext() {
   vm.createContext(sandbox);
   // Pre-load the shared hostname helper so background.js sees HostnameNormalize
   // on the global, just as it would in production via importScripts.
-  for (const [file, label] of [[sharedHostnameSource, 'shared/hostname.js'], [sharedHostKeywordsSource, 'shared/host-keywords.js']]) {
+  for (const [file, label] of [[sharedHostnameSource, 'shared/hostname.js'], [sharedHostKeywordsSource, 'shared/host-keywords.js'], [sharedValidateDomainSource, 'shared/validate-domain.js']]) {
     try {
       vm.runInContext(file, sandbox, { filename: label });
     } catch (err) {

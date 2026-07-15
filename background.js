@@ -8,6 +8,7 @@ try {
     self.importScripts('shared/hostname.js');
     self.importScripts('shared/host-keywords.js');
     self.importScripts('shared/version-compare.js');
+    self.importScripts('shared/validate-domain.js');
   }
 } catch (_) {
   // shared/hostname.js or shared/host-keywords.js could not be loaded
@@ -1437,24 +1438,32 @@ async function isWhitelisted(url) {
   try {
     const whitelist = await cleanExpiredWhitelist();
     if (whitelist.length === 0) return false;
-    
+
     const urlObj = new URL(url);
     const hostname = urlObj.hostname.replace(/^www\./, '');
-    
+    const pathname = urlObj.pathname || '/';
+    // Path scoping lives in shared/validate-domain.js. If that failed to load
+    // (e.g. importScripts unavailable), fall back to allowing only whole-domain
+    // entries so a path-scoped entry can never accidentally allow everything.
+    const pathMatches = (self.DomainValidate && self.DomainValidate.whitelistPathMatches)
+      ? self.DomainValidate.whitelistPathMatches
+      : (_p, storedPath) => !storedPath;
+
     // Use for loop for better performance and early exit
     for (let i = 0; i < whitelist.length; i++) {
       const item = whitelist[i];
       const whitelistDomain = item.domain.replace(/^www\./, '');
-      
-      // Exact match check first (most common case)
-      if (hostname === whitelistDomain) return true;
-      
-      // Subdomain check
-      if (hostname.endsWith('.' + whitelistDomain)) {
-        return true;
-      }
+
+      // Host must match first (exact, then subdomain).
+      const hostOk = hostname === whitelistDomain || hostname.endsWith('.' + whitelistDomain);
+      if (!hostOk) continue;
+
+      // A whole-domain entry (no path) allows the whole host; a path-scoped
+      // entry only allows matching paths. On a path miss keep scanning — another
+      // entry for the same host may still match.
+      if (pathMatches(pathname, item.path)) return true;
     }
-    
+
     return false;
   } catch (error) {
     console.error('BlockNSFW: Error checking whitelist', error);

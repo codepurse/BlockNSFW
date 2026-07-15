@@ -39,6 +39,7 @@
       "js": [
         "shared/hostname.js",
         "shared/host-keywords.js",
+        "shared/validate-domain.js",
         "shared/text-classifier-core.js",
         "ai-image-blocker-core.js",
         "ai-image-blocker.js",

@@ -4,6 +4,21 @@ All notable project changes should be documented here going forward.
 
 ## [1.7.1] - 2026-07-14
 
+### Added
+- Path-scoped whitelisting. A whitelist entry can now target a single section
+  of a site instead of the whole domain — e.g. `reddit.com/r/NoFap` allows that
+  subreddit while the rest of reddit.com stays blocked. Entries with no path
+  behave exactly as before (whole domain), so existing entries are unaffected.
+  Matching is path-segment-boundary safe (`/r/NoFap` never allows
+  `/r/NoFapVille`) and case-insensitive. The popup and options inputs accept a
+  bare domain or a domain+path, and scoped entries are labelled "Page only" in
+  the list. Enforced in all three gates (background navigation, content-script
+  block, content-script page scan) via a shared `whitelistPathMatches` helper in
+  `shared/validate-domain.js`. Known limitation: path scope is re-evaluated on
+  navigation and full page loads, so on SPA navigation (e.g. new reddit.com
+  switching subreddits without a reload) the page-scan gate keeps the value from
+  initial load; full-reload sites like old.reddit.com are unaffected.
+
 ### Fixed
 - Major browsing slowdown on content-heavy and dynamic pages (streaming chat
   apps, SPAs, infinite scroll), present even with all AI/smart features off. The
