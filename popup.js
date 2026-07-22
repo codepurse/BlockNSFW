@@ -364,11 +364,65 @@ async function getCurrentTabDomain() {
 async function isCurrentSiteWhitelisted() {
   const domain = await getCurrentTabDomain();
   if (!domain) return false;
-  
+
   const whitelist = await getWhitelist();
   // The "unblock this site" toggle is whole-site: it reflects (and toggles) a
   // whole-domain entry only, so a path-scoped entry doesn't light it up.
   return whitelist.some(item => item.domain === domain && !item.path);
+}
+
+// Is `host` already covered by an existing custom pattern? Mirrors the host
+// half of content.js's customPatternsMatchHost so the popup won't add a
+// duplicate (or a domain already caught by a `*.` parent entry). Path-scoped
+// patterns (e.g. "example.com/x") are ignored here: they're narrower than the
+// whole-domain block this button adds, so they shouldn't suppress it.
+function hostCoveredByPatterns(host, patterns) {
+  if (!host || !Array.isArray(patterns)) return false;
+  const h = host.toLowerCase().replace(/^www\./, '');
+  return patterns.some(raw => {
+    const p = (raw || '').trim().toLowerCase();
+    if (!p || p.indexOf('/') >= 0) return false; // skip path-scoped patterns
+    const base = p.startsWith('*.') ? p.slice(2) : p;
+    return h === base || h.endsWith('.' + base);
+  });
+}
+
+// Whether the current tab's domain is already on the custom blocklist.
+async function isCurrentSiteBlocked() {
+  const domain = await getCurrentTabDomain();
+  if (!domain) return false;
+  const settings = await getSettings();
+  return hostCoveredByPatterns(domain, settings.customPatterns || []);
+}
+
+// Add the current tab's domain to the custom blocklist. Append-only, so it can
+// only ever tighten protection — no PIN required (issue #11). Whitelist entries
+// win over the blocklist at match time, so we refuse when the site is
+// whitelisted rather than adding an entry that would silently do nothing.
+async function blockCurrentSite() {
+  try {
+    const domain = await getCurrentTabDomain();
+    if (!domain) {
+      alert('Cannot determine current site domain');
+      return;
+    }
+    if (await isCurrentSiteWhitelisted()) {
+      alert('This site is on your whitelist, which overrides blocking. Remove it from the whitelist first.');
+      return;
+    }
+    const settings = await getSettings();
+    const patterns = Array.isArray(settings.customPatterns) ? settings.customPatterns : [];
+    if (hostCoveredByPatterns(domain, patterns)) {
+      await updateUI(); // already blocked — just refresh the row state
+      return;
+    }
+    patterns.push(domain);
+    settings.customPatterns = patterns;
+    await setSettings(settings);
+    await updateUI();
+  } catch (error) {
+    console.error('BlockNSFW popup: Error blocking current site', error);
+  }
 }
 
 async function resetStats() {
@@ -457,12 +511,32 @@ async function updateUI() {
     const unblockRow = $('unblock-row');
     const unblockToggle = $('unblock-toggle');
     
+    const blockRow = $('block-row');
+    const blockBtn = $('block-site-btn');
+    const blockDesc = $('block-desc');
+
     if (domain && !domain.startsWith('chrome') && !domain.startsWith('moz-extension') && !domain.startsWith('edge')) {
       unblockRow.style.display = 'flex';
       const isWhitelisted = await isCurrentSiteWhitelisted();
       unblockToggle.classList.toggle('active', isWhitelisted);
+
+      // Block row: show for any real site. Reflect current state on the button.
+      if (blockRow) {
+        blockRow.style.display = 'flex';
+        const alreadyBlocked = await isCurrentSiteBlocked();
+        if (blockBtn) {
+          blockBtn.disabled = alreadyBlocked || isWhitelisted;
+          blockBtn.textContent = alreadyBlocked ? 'Blocked' : 'Block';
+        }
+        if (blockDesc) {
+          blockDesc.textContent = isWhitelisted
+            ? 'Whitelisted — remove from whitelist to block'
+            : (alreadyBlocked ? 'This site is on your blocklist' : 'Add current tab domain to your blocklist');
+        }
+      }
     } else {
       unblockRow.style.display = 'none';
+      if (blockRow) blockRow.style.display = 'none';
     }
     
     // Update main toggle
@@ -668,6 +742,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Set up event listeners
   $('toggle').addEventListener('click', toggleBlocking);
   $('unblock-toggle').addEventListener('click', toggleUnblockSite);
+  const blockSiteBtn = $('block-site-btn');
+  if (blockSiteBtn) blockSiteBtn.addEventListener('click', blockCurrentSite);
   $('settings').addEventListener('click', (e) => {
     e.preventDefault();
     openSettings();

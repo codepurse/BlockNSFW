@@ -633,6 +633,29 @@
       border-color: rgba(239, 68, 68, 0.2);
     }
 
+    .site-block-btn {
+      background: var(--primary);
+      color: var(--primary-foreground);
+      border: 1px solid var(--primary);
+      border-radius: var(--radius-sm);
+      font-size: 11px;
+      font-weight: 600;
+      padding: 6px 14px;
+      cursor: pointer;
+      transition: var(--transition-fast);
+      white-space: nowrap;
+    }
+
+    .site-block-btn:hover:not(:disabled) {
+      background: var(--primary-hover);
+      box-shadow: 0 0 10px var(--primary-glow);
+    }
+
+    .site-block-btn:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+
     /* Modal / Overlay (Glassmorphism) */
     .hidden { display: none !important; }
 
@@ -844,6 +867,15 @@
         <div class="toggle-switch" id="unblock-toggle">
           <div class="toggle-slider"></div>
         </div>
+      </div>
+
+      <!-- Block current site (append-only: only ever tightens, so no PIN) -->
+      <div class="toggle-row" id="block-row" style="display: none;">
+        <div class="toggle-label-container">
+          <span class="toggle-label">Block this website</span>
+          <span class="toggle-desc" id="block-desc">Add current tab domain to your blocklist</span>
+        </div>
+        <button class="site-block-btn" id="block-site-btn">Block</button>
       </div>
 
       <!-- SafeSearch Toggle -->

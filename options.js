@@ -440,15 +440,6 @@ async function getSettings() {
   return merged;
 }
 
-function areStringListsEqual(left, right) {
-  if (!Array.isArray(left) || !Array.isArray(right)) return false;
-  if (left.length !== right.length) return false;
-  for (let i = 0; i < left.length; i++) {
-    if (left[i] !== right[i]) return false;
-  }
-  return true;
-}
-
 async function setSettings(newSettings) {
   await browserAPI.storage.local.set({ [SETTINGS_KEY]: newSettings });
 }
@@ -1828,9 +1819,14 @@ async function init() {
   $('save').addEventListener('click', async () => {
     const settings = await getSettings();
     const nextCustomPatterns = serializePatterns($('patterns').value);
-    const customPatternsChanged = !areStringListsEqual(settings.customPatterns, nextCustomPatterns);
-    if (customPatternsChanged) {
-      const ok = await requirePINIfSet('modify custom blocklist');
+    // Adding to the blocklist only tightens protection, so it never needs the
+    // PIN. Removing an entry loosens protection, so gate that (and only that)
+    // behind the PIN — mirroring the popup's append-only "Block" button (#11).
+    const prevPatterns = Array.isArray(settings.customPatterns) ? settings.customPatterns : [];
+    const nextSet = new Set(nextCustomPatterns);
+    const removedAny = prevPatterns.some(p => !nextSet.has(p));
+    if (removedAny) {
+      const ok = await requirePINIfSet('remove from custom blocklist');
       if (!ok) return;
     }
     settings.enabled = $('enabled').checked;
