@@ -435,6 +435,7 @@ async function getSettings() {
   const { [SETTINGS_KEY]: settings } = await browserAPI.storage.local.get(SETTINGS_KEY);
   const merged = { ...DEFAULT_SETTINGS, ...(settings || {}) };
   merged.customPatterns = Array.isArray(merged.customPatterns) ? [...merged.customPatterns] : [];
+  merged.customKeywordList = Array.isArray(merged.customKeywordList) ? [...merged.customKeywordList] : [];
   merged.trustedImageDomains = Array.isArray(merged.trustedImageDomains) ? [...merged.trustedImageDomains] : [];
   merged.debugMode = merged.debugMode === true;
   return merged;
@@ -1875,6 +1876,8 @@ async function init() {
   const resetKeywords = $('reset-keywords');
   if (resetKeywords) {
     resetKeywords.addEventListener('click', async () => {
+      const ok = await requirePINIfSet('reset custom blocked words');
+      if (!ok) return;
       if (!confirm('Reset custom blocked words to defaults?')) return;
       const settings = await getSettings();
       settings.customKeywordList = [];
@@ -1904,6 +1907,8 @@ async function init() {
   });
 
   $('reset-trusted').addEventListener('click', async () => {
+    const ok = await requirePINIfSet('reset trusted domains');
+    if (!ok) return;
     // Get default trusted domains from background script
     const defaultDomains = [
       'steampowered.com',
@@ -1951,7 +1956,8 @@ async function init() {
 
   $('reset').addEventListener('click', async () => {
     const currentSettings = await getSettings();
-    if (currentSettings.customPatterns.length > 0) {
+    if (currentSettings.customPatterns.length > 0 ||
+        currentSettings.customKeywordList.length > 0) {
       const ok = await requirePINIfSet('reset settings');
       if (!ok) return;
     }
