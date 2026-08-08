@@ -4,6 +4,7 @@ const SETTINGS_KEY = 'pblocker_settings';
 const BLOCKED_STATS_KEY = 'pblocker_stats';
 const WHITELIST_KEY = 'pblocker_whitelist';
 const PIN_KEY = 'pblocker_pin';
+const ACCESS_CODE_KEY = 'pblocker_access_code';
 const STREAK_START_KEY = 'pblocker_streak_start';
 const UPDATE_INFO_KEY = 'pblocker_update_info';
 const UPDATE_DISMISSED_KEY = 'pblocker_update_dismissed';
@@ -96,21 +97,24 @@ function getAiStrictnessMeta(level) {
 // blocking.
 function getAiTextStrictnessMeta(level) {
   const normalized = normalizeAiStrictness(level);
+  // Wording note: text alone no longer blocks a page — every level below needs
+  // the AI Image Blocker to have flagged an image on the same page. These
+  // describe how readily the text side agrees, not what it blocks by itself.
   if (normalized === 'relaxed') {
     return {
       label: 'Relaxed',
-      detail: 'Blocks only pages the model is very confident are adult. Fewest false positives.'
+      detail: 'Agrees only on pages it is very confident are adult. Fewest false positives.'
     };
   }
   if (normalized === 'strict') {
     return {
       label: 'Strict',
-      detail: 'Also blocks borderline pages. May occasionally block benign text-heavy pages.'
+      detail: 'Also agrees on borderline pages. More likely to block benign text-heavy pages.'
     };
   }
   return {
     label: 'Balanced',
-    detail: 'Balanced filtering — blocks confident pages while letting benign multilingual pages through.'
+    detail: 'Balanced — agrees on confident pages while letting benign multilingual pages through.'
   };
 }
 
@@ -468,19 +472,176 @@ async function ensurePIN() {
   return true;
 }
 
-async function requirePIN(actionLabel = 'this action') {
+// --- Access code challenge -------------------------------------------------
+//
+// An optional second layer over the PIN, modelled on LeechBlock's. The code is
+// NOT a secret — it's displayed in full, right above the box you type it into.
+// The protection is the deliberate effort of retyping 32-128 random characters,
+// which is long enough for an impulse to pass. That design has consequences:
+//
+//   - Pasting must be impossible, or the whole thing is defeated in two
+//     seconds. The input refuses paste/drop, and the displayed code can't be
+//     selected or copied.
+//   - A wrong answer regenerates the code. Retrying against the same string
+//     would let someone assemble it piecemeal instead of typing it in one go.
+//
+// Ambiguous glyphs (O/0, I/l/1) are excluded: the point is deliberate effort,
+// not guessing which character you're looking at.
+const ACCESS_CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%&*+=?~';
+const ACCESS_CODE_LENGTHS = [32, 64, 128];
+
+// Scope: which changes have to face the code.
+//   'critical' (default) — only the master switches that would unlock
+//     everything at once: disabling blocking, clearing the PIN, and weakening
+//     the access code itself.
+//   'all' — every change that weakens protection.
+// 'critical' is the default because a code on every small edit trains people
+// to resent the feature and switch it off, which protects nobody. The rare,
+// decisive moments are the ones worth guarding.
+const ACCESS_CODE_SCOPES = ['critical', 'all'];
+
+function normalizeAccessCodeConfig(raw) {
+  const config = raw && typeof raw === 'object' ? raw : {};
+  const length = Number(config.length);
+  return {
+    enabled: config.enabled === true,
+    length: ACCESS_CODE_LENGTHS.includes(length) ? length : 64,
+    scope: ACCESS_CODE_SCOPES.includes(config.scope) ? config.scope : 'critical'
+  };
+}
+
+// Pure decision, kept separate from the modal so it can be tested directly.
+function accessCodeRequiredFor(config, isCritical) {
+  const normalized = normalizeAccessCodeConfig(config);
+  if (!normalized.enabled) return false;
+  if (normalized.scope === 'all') return true;
+  return isCritical === true;
+}
+
+async function getAccessCodeConfig() {
+  const { [ACCESS_CODE_KEY]: raw } = await browserAPI.storage.local.get(ACCESS_CODE_KEY);
+  return normalizeAccessCodeConfig(raw);
+}
+
+async function setAccessCodeConfig(config) {
+  await browserAPI.storage.local.set({ [ACCESS_CODE_KEY]: normalizeAccessCodeConfig(config) });
+}
+
+// Rejection sampling so every character is equally likely — modulo would bias
+// toward the start of the charset.
+function generateAccessCode(length) {
+  const size = ACCESS_CODE_CHARS.length;
+  const limit = Math.floor(256 / size) * size;
+  let code = '';
+  while (code.length < length) {
+    const bytes = new Uint8Array(length - code.length);
+    crypto.getRandomValues(bytes);
+    for (const byte of bytes) {
+      if (byte >= limit) continue; // discard, would skew the distribution
+      code += ACCESS_CODE_CHARS[byte % size];
+      if (code.length === length) break;
+    }
+  }
+  return code;
+}
+
+async function showAccessCodeModal(actionLabel = 'this action') {
+  const { length } = await getAccessCodeConfig();
+  let expected = generateAccessCode(length);
+
+  const modalPromise = createModal({
+    icon: '⌨️',
+    title: 'Access Code Required',
+    description: `Type the code below exactly to ${actionLabel}.`,
+    bodyHTML: `
+      <div class="access-code-display" id="modal-access-code">${expected}</div>
+      <input type="text" class="pin-input access-code-input" id="modal-access-code-input"
+             placeholder="Type the code above" autocomplete="off" autocorrect="off"
+             autocapitalize="off" spellcheck="false">
+      <div class="pin-hint" id="modal-access-code-hint">Copy and paste are disabled on purpose.</div>
+    `,
+    buttons: [
+      { text: 'Cancel', type: 'secondary', value: false },
+      {
+        text: 'Unlock',
+        type: 'primary',
+        onClick: () => {
+          const input = document.getElementById('modal-access-code-input');
+          const display = document.getElementById('modal-access-code');
+          const hint = document.getElementById('modal-access-code-hint');
+          if (!input) return false;
+
+          if (input.value === expected) return true;
+
+          // Wrong: issue a fresh code so the attempt can't be chipped away at.
+          expected = generateAccessCode(length);
+          if (display) display.textContent = expected;
+          input.value = '';
+          input.classList.add('error');
+          setTimeout(() => input.classList.remove('error'), 500);
+          if (hint) {
+            hint.textContent = "❌ That didn't match. Here's a new code.";
+            hint.className = 'pin-hint error';
+          }
+          return false; // keep the modal open
+        }
+      }
+    ]
+  });
+
+  // Wait for the modal to reach the DOM before wiring the guards.
+  await new Promise(resolve => setTimeout(resolve, 50));
+
+  const input = document.getElementById('modal-access-code-input');
+  const display = document.getElementById('modal-access-code');
+
+  if (input) {
+    // The feature is worthless if the code can be pasted in.
+    ['paste', 'drop', 'dragover'].forEach(evt => {
+      input.addEventListener(evt, (e) => e.preventDefault());
+    });
+    input.addEventListener('keydown', (e) => {
+      const key = (e.key || '').toLowerCase();
+      if ((e.ctrlKey || e.metaKey) && (key === 'v' || key === 'z')) e.preventDefault();
+    });
+  }
+
+  if (display) {
+    // Belt and braces: user-select is off in CSS, and copying is refused here
+    // in case selection happens some other way.
+    display.addEventListener('copy', (e) => e.preventDefault());
+    display.addEventListener('cut', (e) => e.preventDefault());
+    display.addEventListener('contextmenu', (e) => e.preventDefault());
+  }
+
+  return (await modalPromise) === true;
+}
+
+// Runs after the PIN check, so the two layers stack rather than replace.
+// `critical` marks the master switches — see ACCESS_CODE_SCOPES.
+async function requireAccessCodeIfEnabled(actionLabel = 'this action', critical = false) {
+  const config = await getAccessCodeConfig();
+  if (!accessCodeRequiredFor(config, critical)) return true;
+  return await showAccessCodeModal(actionLabel);
+}
+
+async function requirePIN(actionLabel = 'this action', opts) {
   const hasPin = await ensurePIN();
   if (!hasPin) return false;
   const verified = await showVerifyPINModal(actionLabel);
-  return verified === true;
+  if (verified !== true) return false;
+  return await requireAccessCodeIfEnabled(actionLabel, !!(opts && opts.critical));
 }
 
-// Only require PIN if one is already set (doesn't prompt to create one)
-async function requirePINIfSet(actionLabel = 'this action') {
+// Only require PIN if one is already set (doesn't prompt to create one).
+// The access code stands on its own, so it still applies when no PIN is set.
+async function requirePINIfSet(actionLabel = 'this action', opts) {
   const stored = await getPIN();
-  if (!stored) return true; // No PIN set, allow action
-  const verified = await showVerifyPINModal(actionLabel);
-  return verified === true;
+  if (stored) {
+    const verified = await showVerifyPINModal(actionLabel);
+    if (verified !== true) return false;
+  }
+  return await requireAccessCodeIfEnabled(actionLabel, !!(opts && opts.critical));
 }
 
 // Streak tracking
@@ -681,15 +842,63 @@ function updateCommitmentProgress(activeStep) {
   }
 }
 
+// One line per entry, tidied on save: blank lines dropped, duplicates removed,
+// then sorted A-Z. Dedup is case-insensitive because every consumer of these
+// lists (keyword matching, domain matching) is case-insensitive too, so
+// "Apricot" and "apricot" are the same entry — the first spelling wins.
+// Pasting a long list is the normal way people fill these in, so it arrives
+// unsorted and with repeats; cleaning it here keeps the stored list readable.
 function serializePatterns(text) {
-  return text
-    .split(/\r?\n/) // lines
-    .map(s => s.trim())
-    .filter(Boolean);
+  const seen = new Set();
+  const entries = [];
+  for (const line of text.split(/\r?\n/)) {
+    const entry = line.trim();
+    if (!entry) continue;
+    const key = entry.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    entries.push(entry);
+  }
+  return entries.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
 }
 
 function deserializePatterns(list) {
   return (list || []).join('\n');
+}
+
+// Protection-strength helpers. The rule across the whole options page: changes
+// that TIGHTEN protection are always free, changes that LOOSEN it go through
+// the PIN. Adding a blocked pattern/word tightens; removing one loosens.
+// Trusted image domains are the inverse — they're exempt from AI scanning, so
+// ADDING one loosens protection.
+// Compared case-insensitively, matching how these lists are actually used:
+// dropping "apple" while "Apple" remains blocks exactly as much as before, so
+// it must not count as a removal (serializePatterns collapses such pairs on
+// save, and a spurious PIN prompt there would be confusing).
+function normalizeEntries(list) {
+  return new Set((Array.isArray(list) ? list : []).map(item => String(item).toLowerCase()));
+}
+
+function hasRemovals(prev, next) {
+  const nextSet = normalizeEntries(next);
+  return [...normalizeEntries(prev)].some(item => !nextSet.has(item));
+}
+
+function hasAdditions(prev, next) {
+  const prevSet = normalizeEntries(prev);
+  return [...normalizeEntries(next)].some(item => !prevSet.has(item));
+}
+
+// Ordered weakest → strongest so a dropdown change can be classified.
+const IMAGE_FILTER_RANK = { lenient: 0, moderate: 1, strict: 2 };
+const AI_STRICTNESS_RANK = { relaxed: 0, balanced: 1, strict: 2 };
+
+function weakensImageFilter(prev, next) {
+  return IMAGE_FILTER_RANK[normalizeImageFilterLevel(next)] < IMAGE_FILTER_RANK[normalizeImageFilterLevel(prev)];
+}
+
+function weakensAiStrictness(prev, next) {
+  return AI_STRICTNESS_RANK[normalizeAiStrictness(next)] < AI_STRICTNESS_RANK[normalizeAiStrictness(prev)];
 }
 
 async function getWhitelist() {
@@ -795,7 +1004,15 @@ async function render() {
   $('pin-status').style.color = pin ? 'var(--success)' : 'var(--warning)';
   $('pin-status').style.background = pin ? 'rgba(16, 185, 129, 0.1)' : 'rgba(245, 158, 11, 0.1)';
   $('pin-status').style.borderColor = pin ? 'rgba(16, 185, 129, 0.2)' : 'rgba(245, 158, 11, 0.2)';
-  
+
+  const accessCode = await getAccessCodeConfig();
+  const accessCodeToggle = $('access-code-enabled');
+  if (accessCodeToggle) accessCodeToggle.checked = accessCode.enabled;
+  const accessCodeLength = $('access-code-length');
+  if (accessCodeLength) accessCodeLength.value = String(accessCode.length);
+  const accessCodeScope = $('access-code-scope-all');
+  if (accessCodeScope) accessCodeScope.checked = accessCode.scope === 'all';
+
   // Render DNS protection settings
   const dnsToggle = $('dns-filter-enabled');
   if (dnsToggle) {
@@ -1338,7 +1555,7 @@ async function init() {
   $('enabled').addEventListener('change', async (e) => {
     const s = await getSettings();
     if (s.enabled && !e.target.checked) {
-      const ok = await requirePINIfSet('disable blocking');
+      const ok = await requirePINIfSet('disable blocking', { critical: true });
       if (!ok) {
         e.target.checked = true;
         return;
@@ -1382,7 +1599,16 @@ async function init() {
   if (imageFilterLevelEl) {
     imageFilterLevelEl.addEventListener('change', async (e) => {
       const settings = await getSettings();
-      settings.imageFilterLevel = normalizeImageFilterLevel(e.target.value);
+      const nextLevel = normalizeImageFilterLevel(e.target.value);
+      // Raising the level is free; lowering it loosens protection.
+      if (weakensImageFilter(settings.imageFilterLevel, nextLevel)) {
+        const ok = await requirePINIfSet('lower image filtering');
+        if (!ok) {
+          e.target.value = normalizeImageFilterLevel(settings.imageFilterLevel);
+          return;
+        }
+      }
+      settings.imageFilterLevel = nextLevel;
       await setSettings(settings);
       const detail = $('image-filter-level-detail');
       if (detail) {
@@ -1396,7 +1622,15 @@ async function init() {
   if (aiStrictnessEl) {
     aiStrictnessEl.addEventListener('change', async (e) => {
       const settings = await getSettings();
-      settings.aiStrictness = normalizeAiStrictness(e.target.value);
+      const nextStrictness = normalizeAiStrictness(e.target.value);
+      if (weakensAiStrictness(settings.aiStrictness, nextStrictness)) {
+        const ok = await requirePINIfSet('lower AI image strictness');
+        if (!ok) {
+          e.target.value = normalizeAiStrictness(settings.aiStrictness);
+          return;
+        }
+      }
+      settings.aiStrictness = nextStrictness;
       await setSettings(settings);
       const detail = $('ai-strictness-detail');
       if (detail) {
@@ -1412,7 +1646,15 @@ async function init() {
   if (aiTextStrictnessEl) {
     aiTextStrictnessEl.addEventListener('change', async (e) => {
       const settings = await getSettings();
-      settings.aiTextStrictness = normalizeAiStrictness(e.target.value);
+      const nextStrictness = normalizeAiStrictness(e.target.value);
+      if (weakensAiStrictness(settings.aiTextStrictness, nextStrictness)) {
+        const ok = await requirePINIfSet('lower AI text strictness');
+        if (!ok) {
+          e.target.value = normalizeAiStrictness(settings.aiTextStrictness);
+          return;
+        }
+      }
+      settings.aiTextStrictness = nextStrictness;
       await setSettings(settings);
       const detail = $('ai-text-strictness-detail');
       if (detail) {
@@ -1427,6 +1669,15 @@ async function init() {
   if (dnsFilterToggle) {
     dnsFilterToggle.addEventListener('change', async (e) => {
       const settings = await getSettings();
+      // Turning DNS protection off removes a blocking layer, so it's gated
+      // like every other weakening toggle. Turning it on stays free.
+      if (settings.dnsFilterEnabled === true && !e.target.checked) {
+        const ok = await requirePINIfSet('turn off DNS Protection');
+        if (!ok) {
+          e.target.checked = true;
+          return;
+        }
+      }
       settings.dnsFilterEnabled = e.target.checked;
       await setSettings(settings);
       await render();
@@ -1606,12 +1857,23 @@ async function init() {
     
     // Auto-save settings when toggled
     const settings = await getSettings();
+    // Sending blocked pages somewhere of your own choosing replaces the
+    // deterrent screen, so switching away from the default is gated. Switching
+    // back to the built-in page is not.
+    if (e.target.checked) {
+      const ok = await requirePINIfSet('use a custom blocked page');
+      if (!ok) {
+        e.target.checked = false;
+        customSection.style.display = 'none';
+        return;
+      }
+    }
     settings.blockedPageType = e.target.checked ? 'custom' : 'default';
     settings.customBlockedPageUrl = e.target.checked ? $('custom-blocked-page-url').value.trim() : '';
     if (e.target.checked) {
       settings.plainBlockedPageHtml = '';
     }
-    
+
     await setSettings(settings);
     showToast('Blocked page settings updated', 'success');
   });
@@ -1661,7 +1923,17 @@ async function init() {
   $('custom-blocked-page-url').addEventListener('change', async (e) => {
     if ($('use-custom-blocked-page').checked) {
       const settings = await getSettings();
-      settings.customBlockedPageUrl = e.target.value.trim();
+      const nextUrl = e.target.value.trim();
+      // Repointing where blocked pages land is the same weakening as turning
+      // the custom page on, so it needs the same gate.
+      if (nextUrl !== (settings.customBlockedPageUrl || '')) {
+        const ok = await requirePINIfSet('change the custom blocked page URL');
+        if (!ok) {
+          e.target.value = settings.customBlockedPageUrl || '';
+          return;
+        }
+      }
+      settings.customBlockedPageUrl = nextUrl;
       await setSettings(settings);
       showToast('Custom blocked page URL updated', 'success');
     }
@@ -1686,6 +1958,16 @@ async function init() {
         reader.onload = () => resolve(String(reader.result || ''));
         reader.readAsText(file);
       });
+
+      // Gated here rather than on the toggle: the toggle has to open the file
+      // picker synchronously to stay inside its user-gesture window, and an
+      // await for the PIN would break that. Nothing is stored until this
+      // passes, so the effect is the same.
+      const uploadOk = await requirePINIfSet('replace the blocked page with your own HTML');
+      if (!uploadOk) {
+        input.value = '';
+        return;
+      }
 
       $('use-plain-html-blocked-page').checked = true;
       $('plain-blocked-page-section').style.display = 'block';
@@ -1820,27 +2102,53 @@ async function init() {
   $('save').addEventListener('click', async () => {
     const settings = await getSettings();
     const nextCustomPatterns = serializePatterns($('patterns').value);
-    // Adding to the blocklist only tightens protection, so it never needs the
-    // PIN. Removing an entry loosens protection, so gate that (and only that)
-    // behind the PIN — mirroring the popup's append-only "Block" button (#11).
-    const prevPatterns = Array.isArray(settings.customPatterns) ? settings.customPatterns : [];
-    const nextSet = new Set(nextCustomPatterns);
-    const removedAny = prevPatterns.some(p => !nextSet.has(p));
-    if (removedAny) {
-      const ok = await requirePINIfSet('remove from custom blocklist');
+    const customKeywords = $('custom-keywords');
+    const nextKeywords = customKeywords
+      ? serializePatterns(customKeywords.value)
+      : (Array.isArray(settings.customKeywordList) ? settings.customKeywordList : []);
+    const nextTrusted = serializePatterns($('trusted-domains').value);
+    const nextImageFilterLevel = normalizeImageFilterLevel($('image-filter-level') ? $('image-filter-level').value : settings.imageFilterLevel);
+    const nextAiStrictness = normalizeAiStrictness($('ai-strictness') ? $('ai-strictness').value : settings.aiStrictness);
+    const nextAiTextStrictness = normalizeAiStrictness($('ai-text-strictness') ? $('ai-text-strictness').value : settings.aiTextStrictness);
+
+    // Adding to a blocklist only tightens protection, so it never needs the
+    // PIN. Anything that loosens protection is gated — mirroring the popup's
+    // append-only "Block" button (#11). One prompt covers the whole save; the
+    // label names the first weakening change found so the reason is clear.
+    let weakenLabel = '';
+    if (hasRemovals(settings.customPatterns, nextCustomPatterns)) {
+      weakenLabel = 'remove from custom blocklist';
+    } else if (hasRemovals(settings.customKeywordList, nextKeywords)) {
+      weakenLabel = 'remove custom blocked words';
+    } else if (hasAdditions(settings.trustedImageDomains, nextTrusted)) {
+      weakenLabel = 'add a trusted image domain';
+    } else if (weakensImageFilter(settings.imageFilterLevel, nextImageFilterLevel)) {
+      weakenLabel = 'lower image filtering';
+    } else if (weakensAiStrictness(settings.aiStrictness, nextAiStrictness)) {
+      weakenLabel = 'lower AI image strictness';
+    } else if (weakensAiStrictness(settings.aiTextStrictness, nextAiTextStrictness)) {
+      weakenLabel = 'lower AI text strictness';
+    }
+    if (weakenLabel) {
+      const ok = await requirePINIfSet(weakenLabel);
       if (!ok) return;
     }
+
     settings.enabled = $('enabled').checked;
     settings.useSmartBlocking = $('smart').checked;
     settings.debugMode = $('debug-mode').checked;
-    settings.imageFilterLevel = normalizeImageFilterLevel($('image-filter-level') ? $('image-filter-level').value : settings.imageFilterLevel);
-    settings.aiStrictness = normalizeAiStrictness($('ai-strictness') ? $('ai-strictness').value : settings.aiStrictness);
-    settings.aiTextStrictness = normalizeAiStrictness($('ai-text-strictness') ? $('ai-text-strictness').value : settings.aiTextStrictness);
+    settings.imageFilterLevel = nextImageFilterLevel;
+    settings.aiStrictness = nextAiStrictness;
+    settings.aiTextStrictness = nextAiTextStrictness;
     settings.customPatterns = nextCustomPatterns;
-    const customKeywords = $('custom-keywords');
-    if (customKeywords) settings.customKeywordList = serializePatterns(customKeywords.value);
-    settings.trustedImageDomains = serializePatterns($('trusted-domains').value);
+    if (customKeywords) settings.customKeywordList = nextKeywords;
+    settings.trustedImageDomains = nextTrusted;
     await setSettings(settings);
+    // Show the tidied lists back, so the sorting and dedup are visible rather
+    // than only taking effect on the next page load.
+    $('patterns').value = deserializePatterns(nextCustomPatterns);
+    if (customKeywords) customKeywords.value = deserializePatterns(nextKeywords);
+    $('trusted-domains').value = deserializePatterns(nextTrusted);
     alert('Settings saved!');
   });
 
@@ -1867,8 +2175,17 @@ async function init() {
   if (saveKeywords) {
     saveKeywords.addEventListener('click', async () => {
       const settings = await getSettings();
-      settings.customKeywordList = serializePatterns($('custom-keywords').value);
+      const nextKeywords = serializePatterns($('custom-keywords').value);
+      // Adding a blocked word tightens protection (free); deleting one loosens
+      // it, so it needs the PIN — otherwise a blocked word is a two-second
+      // bypass, which defeats the point of setting one.
+      if (hasRemovals(settings.customKeywordList, nextKeywords)) {
+        const ok = await requirePINIfSet('remove custom blocked words');
+        if (!ok) return;
+      }
+      settings.customKeywordList = nextKeywords;
       await setSettings(settings);
+      $('custom-keywords').value = deserializePatterns(nextKeywords);
       alert('Custom blocked words saved!');
     });
   }
@@ -2149,6 +2466,66 @@ async function init() {
   });
 
   // PIN management
+  const accessCodeToggleEl = $('access-code-enabled');
+  if (accessCodeToggleEl) {
+    accessCodeToggleEl.addEventListener('change', async (e) => {
+      const config = await getAccessCodeConfig();
+      // Turning it ON tightens protection, so it's free. Turning it OFF
+      // removes a deterrent, so it has to survive the deterrent itself.
+      if (config.enabled && !e.target.checked) {
+        const ok = await requirePINIfSet('turn off the access code', { critical: true });
+        if (!ok) {
+          e.target.checked = true;
+          return;
+        }
+      }
+      await setAccessCodeConfig({ ...config, enabled: e.target.checked });
+      showToast(e.target.checked ? 'Access code enabled' : 'Access code disabled', 'success');
+    });
+  }
+
+  const accessCodeScopeEl = $('access-code-scope-all');
+  if (accessCodeScopeEl) {
+    accessCodeScopeEl.addEventListener('change', async (e) => {
+      const config = await getAccessCodeConfig();
+      // Narrowing the scope means fewer moments guarded, so it's gated as a
+      // critical change. Widening it is free.
+      if (config.scope === 'all' && !e.target.checked) {
+        const ok = await requirePINIfSet('ask for the code less often', { critical: true });
+        if (!ok) {
+          e.target.checked = true;
+          return;
+        }
+      }
+      await setAccessCodeConfig({ ...config, scope: e.target.checked ? 'all' : 'critical' });
+      showToast(
+        e.target.checked
+          ? 'Access code will be asked for every weakening change'
+          : 'Access code will only be asked for major changes',
+        'success'
+      );
+    });
+  }
+
+  const accessCodeLengthEl = $('access-code-length');
+  if (accessCodeLengthEl) {
+    accessCodeLengthEl.addEventListener('change', async (e) => {
+      const config = await getAccessCodeConfig();
+      const nextLength = normalizeAccessCodeConfig({ length: Number(e.target.value) }).length;
+      // A shorter code is a weaker deterrent, so shortening is gated. Only
+      // matters while the feature is on — otherwise there's nothing to weaken.
+      if (config.enabled && nextLength < config.length) {
+        const ok = await requirePINIfSet('shorten the access code', { critical: true });
+        if (!ok) {
+          e.target.value = String(config.length);
+          return;
+        }
+      }
+      await setAccessCodeConfig({ ...config, length: nextLength });
+      showToast(`Access code length set to ${nextLength} characters`, 'success');
+    });
+  }
+
   $('set-pin').addEventListener('click', async () => {
     const stored = await getPIN();
     if (stored) {
@@ -2201,7 +2578,11 @@ async function init() {
     
     const ok = await showVerifyPINModal('clear PIN');
     if (!ok) return;
-    
+
+    // Dropping the PIN removes protection, so the access code applies here too.
+    const codeOk = await requireAccessCodeIfEnabled('clear PIN', true);
+    if (!codeOk) return;
+
     await browserAPI.storage.local.remove(PIN_KEY);
     
     // Show success message
@@ -2226,7 +2607,7 @@ async function init() {
 
     const s = await getSettings();
     if (s.enabled) {
-      const ok = await requirePINIfSet('disable blocking');
+      const ok = await requirePINIfSet('disable blocking', { critical: true });
       if (!ok) return;
 
       const committed = await showCommitmentGate();

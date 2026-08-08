@@ -1868,7 +1868,27 @@ function checkPageTextWithModel() {
 
   const thresholds = getAiTextThresholds(aiTextStrictness);
   const imageBlockCount = (globalThis.__pblockerAIImageBlockCount | 0);
-  const verdict = TextClassifier.verdictForText(prob, thresholds, imageBlockCount);
+  let verdict = TextClassifier.verdictForText(prob, thresholds, imageBlockCount);
+
+  // TEMPORARY SAFETY CATCH — remove when text model v4 lands.
+  //
+  // The v3 model's vocabulary is inverted: it scores "videos" (+8.27) as a
+  // stronger adult signal than "nude" (+0.27) or "naked" (-0.44), because the
+  // adult training phrases average 1.7 words while the benign ones average 8,
+  // so generic media words absorbed the positive signal. "youtube" (+3.74)
+  // inherits its weight from "tube" through character n-grams alone. The
+  // visible symptom was m.youtube.com blocked at 99% confidence.
+  //
+  // No threshold separates that, so until the model is retrained the text
+  // score may not block a page on its own — it only counts when the AI image
+  // scanner independently flagged something on the same page. That makes this
+  // detector weaker, which is the right trade while it can't be trusted alone.
+  if (verdict === 'block' && imageBlockCount < 1) {
+    if (debugMode) {
+      log(`AI text block withheld (score ${prob.toFixed(2)}, no image corroboration) — v3 model is unreliable alone`);
+    }
+    verdict = 'allow';
+  }
 
   if (verdict === 'block' || verdict === 'fuse-block') {
     // Explain the verdict: pull the words on the page that pushed the linear

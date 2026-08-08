@@ -976,6 +976,33 @@
     .pin-strength-bar.medium { width: 66%; background: var(--warning); }
     .pin-strength-bar.strong { width: 100%; background: var(--success); }
 
+    /* Access code challenge. The code is meant to be read and retyped, never
+       copied, so selection is disabled here as the first line of defence
+       (handlers in options.js refuse copy/cut/paste as the second). */
+    .access-code-display {
+      padding: 0.75rem;
+      margin-bottom: 0.75rem;
+      background: var(--input-bg);
+      border: 1px solid var(--input-border);
+      border-radius: var(--radius);
+      color: var(--foreground);
+      font-family: var(--font-mono);
+      font-size: 0.875rem;
+      line-height: 1.6;
+      word-break: break-all;
+      text-align: left;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    /* Overrides .pin-input's wide letter-spacing — at 128 characters the code
+       needs to stay readable and wrap normally. */
+    .access-code-input {
+      letter-spacing: normal;
+      text-align: left;
+      font-size: 0.875rem;
+    }
+
     .pin-hint {
       margin-top: 0.375rem;
       font-size: 0.75rem;
@@ -1935,18 +1962,17 @@
           <div class="dg-callout">
             <div class="dg-callout-head">
               <span class="dg-callout-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><rect x="9.2" y="11" width="5.6" height="4.6" rx="1"/><path d="M10 11V9.5a2 2 0 0 1 4 0V11"/></svg></span>
-              <span class="dg-callout-title">Desktop Guard — make BlockNSFW uninstall-proof</span>
+              <span class="dg-callout-title">Take BlockNSFW beyond this browser</span>
               <span class="badge-new">New</span>
-              <span class="badge-beta">Beta</span>
             </div>
-            <p class="dg-callout-text">A native companion app force-installs the extension so the browser's <em>Remove</em> and <em>Disable</em> buttons are greyed out, and a background service re-applies protection if anything tampers with it. Uninstalling needs a password held by a parent or accountability partner. <strong>Now in beta for Windows &amp; Linux.</strong> <a class="dg-callout-link" href="https://github.com/codepurse/extension-guard" target="_blank" rel="noopener">Learn more →</a></p>
+            <p class="dg-callout-text"><strong>Android —</strong> blocks adult sites across your whole phone, not just one browser. <a class="dg-callout-link" href="https://play.google.com/store/apps/details?id=com.blocknsfw.android" target="_blank" rel="noopener">Get it on Google Play →</a></p>
+            <p class="dg-callout-text" style="margin-top: 0.5rem;"><strong>Desktop Guard <span class="badge-beta">Beta</span> —</strong> a native companion app for Windows &amp; Linux that force-installs the extension so the browser's <em>Remove</em> and <em>Disable</em> buttons are greyed out, and re-applies protection if anything tampers with it. Uninstalling needs a password held by a parent or accountability partner. <a class="dg-callout-link" href="https://github.com/codepurse/extension-guard" target="_blank" rel="noopener">Learn more →</a></p>
           </div>
           <ul style="margin: 0; padding-left: 1.1rem">
-            <li><strong>Community Stories</strong> — Anonymous recovery stories from people working through the same struggle. Read what helped others and share your own; every post is reviewed before it appears. <a href="community.html" style="color: var(--primary-hover); font-weight: 600; text-decoration: none;">Open Stories →</a></li>
-            <li><strong>AI Text Protection (multilingual)</strong> — A new on-device AI reads the page's text to catch adult sites the keyword and blocklist filters miss — especially non-English ones (Russian, Chinese, Korean, Thai, Arabic, and more). It blocks pages it's confident about, and teams up with the image AI to catch borderline ones. Nothing leaves your device.</li>
-            <li><strong>AI Image Protection</strong> — A new on-device AI looks at the actual picture to block adult images, even when nothing in the web address gives them away. Everything stays on your device — your images are never uploaded.</li>
-            <li><strong>Instant blocking</strong> — Flagged images are now hidden the moment they're checked, so adult content no longer flashes on screen before it's blocked.</li>
-            <li><strong>Smarter Bundled Blocklist</strong> — Regenerated and synced with the runtime parser, so offline installs get the same coverage.</li>
+            <li><strong>Access Code <span class="badge-new">New</span></strong> — An optional second lock on top of your PIN. A random code appears and you have to retype it by hand — copy and paste are switched off, and a typo gives you a fresh code. Choose 32, 64 or 128 characters. By default it only guards the big moments (turning blocking off, clearing your PIN), so day-to-day edits stay quick; there's a switch to require it for every change if you want that. It isn't about secrecy — it's about giving yourself a minute to think. Find it under Security.</li>
+            <li><strong>Your settings are harder to unlock in a weak moment</strong> — Some settings could previously be changed without your PIN, including deleting your own blocked words, turning off DNS Protection, and lowering AI strictness. Everything that weakens protection now asks for your PIN first. Adding words, tightening settings and turning protections on stay instant, as they should.</li>
+            <li><strong>Tidier lists</strong> — Your blocklist, blocked words and trusted sites are now sorted A-Z and de-duplicated when you save, so pasting in a long list no longer leaves a mess.</li>
+            <li><strong>AI Text Protection now asks for a second opinion</strong> — The text AI was flagging ordinary sites such as YouTube, so it no longer blocks a page on its own. A page is blocked only when both its text and an image on it look adult, which means the AI Image Blocker needs to be on for this to do anything. It catches less for now; the model is being retrained.</li>
           </ul>
         </div>
       </div>
@@ -2077,7 +2103,7 @@
       <div class="switch-container">
         <div class="switch-label">
           <span class="label">Enable AI Text Blocker</span>
-          <span class="description">Redirects pages whose text is confidently adult. Also blocks borderline pages when the AI Image Blocker flagged images on them.</span>
+          <span class="description">Blocks a page when its text looks adult <em>and</em> the AI Image Blocker flagged an image on it. Text alone no longer blocks a page while the text model is being retrained, so keep the AI Image Blocker on for this to have any effect.</span>
         </div>
         <label class="switch">
           <input type="checkbox" id="ai-text-blocker" />
@@ -2095,7 +2121,7 @@
           <option value="strict">Strict - Catch borderline pages (more false positives)</option>
         </select>
         <div class="pin-hint" id="ai-text-strictness-detail" style="margin-top: 0.5rem;">
-          Balanced filtering — blocks pages the model is confident about while letting benign multilingual pages through.
+          Balanced — agrees on confident pages while letting benign multilingual pages through.
         </div>
       </div>
     </div>
@@ -2348,6 +2374,47 @@ another-site.org/adult/*"></textarea>
           <button class="button button-sm" id="set-pin">Set PIN</button>
           <button class="button button-sm button-destructive" id="clear-pin">Clear PIN</button>
         </div>
+      </div>
+    </div>
+
+    <div class="card fade-in">
+      <div class="card-header">
+        <h2 class="card-title">Access Code</h2>
+        <p class="card-description">
+          Adds a second step on top of your PIN. A random code appears and you
+          must retype it by hand. Copy and paste are disabled, so it takes real,
+          deliberate effort — long enough for an urge to pass. By default it
+          only guards the decisive moments: turning blocking off, clearing your
+          PIN, or weakening the code itself.
+        </p>
+      </div>
+      <div class="switch-container">
+        <div class="switch-label">
+          <span class="label">Require an access code</span>
+          <span class="description">Off by default. Once on, turning it off also requires typing a code.</span>
+        </div>
+        <label class="switch">
+          <input type="checkbox" id="access-code-enabled" />
+          <span class="slider"></span>
+        </label>
+      </div>
+      <div class="switch-container">
+        <div class="switch-label">
+          <span class="label">Ask for the code on every settings change</span>
+          <span class="description">Off by default — the code is only asked for the big ones: turning blocking off, clearing your PIN, or weakening the code itself. Turn this on to be asked for every change that reduces your protection, including editing your blocked words and lists.</span>
+        </div>
+        <label class="switch">
+          <input type="checkbox" id="access-code-scope-all" />
+          <span class="slider"></span>
+        </label>
+      </div>
+      <div class="form-group" style="margin-top: 1rem;">
+        <label class="pin-input-label" for="access-code-length">Code length</label>
+        <select class="input" id="access-code-length">
+          <option value="32">32 characters - a short pause</option>
+          <option value="64">64 characters - recommended</option>
+          <option value="128">128 characters - maximum deterrent</option>
+        </select>
       </div>
     </div>
 
