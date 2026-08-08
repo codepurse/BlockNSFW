@@ -2,6 +2,63 @@
 
 All notable project changes should be documented here going forward.
 
+## [1.7.3] - 2026-08-08
+
+### Added
+- Optional access code, a second layer on top of the PIN. When enabled, a
+  freshly generated random code (32, 64 or 128 characters) must be retyped by
+  hand before the change goes through. By default it guards only the decisive
+  actions — turning blocking off, clearing the PIN, or weakening the code
+  itself — so routine edits are unaffected; a switch extends it to every
+  weakening change. The default is deliberately narrow: a code demanded on
+  every small edit trains people to resent the feature and switch it off, which
+  protects nobody. The code is not a
+  secret — it is displayed in full above the input. The deterrent is the
+  deliberate effort of typing it, so copy and paste are blocked (paste, drag,
+  drop and Ctrl/Cmd+V on the input; selection, copy and cut on the displayed
+  code), and a wrong answer issues a brand new code rather than letting the
+  same one be retried. Off by default; turning it off or shortening it requires
+  passing the challenge. Characters that look alike (`0`/`O`, `1`/`l`/`I`) are
+  excluded so retyping is effort, not guesswork.
+- Custom blocklist, blocked words and trusted domains lists are now
+  de-duplicated and sorted A-Z when saved, and the tidied list is shown back in
+  the box immediately. Duplicate detection is case-insensitive, matching how the
+  lists are actually used, so `Apricot` and `apricot` count as one entry.
+
+### Fixed
+- **Settings could be weakened without the PIN.** Several changes that reduce
+  protection were not covered by the PIN gate, so a blocked word could be
+  deleted in seconds and put back later. All of these now require the PIN:
+  removing custom blocked words (both the main save and the dedicated save
+  button), adding a trusted image domain, lowering image filtering or either AI
+  strictness level, turning off DNS Protection, switching the blocked page to a
+  custom URL or changing that URL, and uploading custom HTML for the blocked
+  page. Clearing the PIN now also has to pass the access code when one is set.
+  Reported by a user who found they could edit their own blocked word list
+  during a moment of temptation.
+- **AI text detector blocked ordinary sites**, most visibly `m.youtube.com` at
+  99% confidence. The v3 model's vocabulary is inverted: measured in isolation
+  it scores `videos` (+8.27) as a stronger adult signal than `nude` (+0.27),
+  `naked` (-0.44) or `erotic` (-0.60), and `youtube` (+3.74) inherits weight
+  from `tube` purely through character n-grams. The cause is the training data —
+  adult phrases average 1.7 words per line against 8.0 for the benign ones, so
+  short generic media words absorbed the positive signal. No threshold separates
+  that, so text blocking has been restricted rather than retuned (see Changed).
+  A retrained model is planned.
+
+### Changed
+- **The AI text blocker no longer blocks a page on text alone.** Until the model
+  is retrained, a high text score only blocks when the AI image scanner has
+  independently flagged an image on the same page. This makes the text detector
+  weaker and it will miss adult pages it would previously have caught; the other
+  layers (blocklist, keywords, URL matching and the image scanner) are
+  unaffected. The trade is deliberate while the model cannot be trusted alone.
+- Changes that *tighten* protection remain free of any prompt. Adding a blocked
+  word or domain, raising strictness, and turning protections on never ask for
+  the PIN or access code — only weakening does. This is intentional: making it
+  harder to strengthen your own protection would work against the point of the
+  extension.
+
 ## [1.7.1] - 2026-07-14
 
 ### Added
