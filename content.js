@@ -263,6 +263,13 @@ let customKeywordList = [];
 let imageFilterLevel = 'strict';
 let blocklistHosts = new Set();
 let blocklistMeta = null;
+// Full blocklist snapshots contain 200k+ domains and are prohibitively
+// expensive to clone and rebuild in every Firefox content-script realm. Keep a
+// bounded per-page host verdict cache and ask the background in batches instead.
+const backgroundBlocklistHostCache = new Map();
+const pendingBackgroundHostChecks = new Map();
+let backgroundHostCheckTimer = null;
+const BACKGROUND_HOST_CACHE_MAX = 5000;
 let trustedDomains = [];
 let isProcessing = false;
 let observer = null;
@@ -886,6 +893,8 @@ let domainTrie = new OptimizedDomainTrie();
 
 function isHostInDefaultBlocklist(host) {
   const h = normalizeHost(host);
+
+  if (backgroundBlocklistHostCache.get(h) === true) return true;
   
   // Exact match via set (fastest)
   if (blocklistHosts.has(h)) return true;
@@ -1154,13 +1163,26 @@ function getBlockedReasonLabel(reasonKey) {
           return;
         }
 
-        await ensureBlocklistLoaded();
+        // Preserve local custom/smart reasons without waiting for the default
+        // list; those checks use settings and the small built-in early list.
         const localReasonKey = getLocalBlockReasonKey(urlStr, normalizedHost, {
           customPatterns: settings.customPatterns || [],
           useSmartBlockingEnabled: settings.useSmartBlocking
         });
         if (localReasonKey) {
           redirectNow(localReasonKey, getBlockedReasonLabel(localReasonKey));
+          return;
+        }
+
+        // The full list has 200k+ entries. Asking the background for one URL is
+        // much cheaper than cloning that list and rebuilding its indexes in
+        // every page's content-script realm (especially under Firefox).
+        const backgroundVerdict = await sendRuntimeMessageForResponse({
+          type: 'should_block_url',
+          url: urlStr
+        });
+        if (backgroundVerdict && backgroundVerdict.blocked) {
+          redirectNow('default_blocklist', getBlockedReasonLabel('default_blocklist'));
           return;
         }
 
@@ -1395,9 +1417,6 @@ async function loadSettings() {
     customBlockedPageUrl = settings.customBlockedPageUrl || '';
     plainBlockedPageHtml = settings.plainBlockedPageHtml || '';
     
-    // Load default blocklist
-    await loadBlocklist();
-    
     // Initialize AI image blocker if available
     if (typeof window.AIImageBlocker !== 'undefined' &&
         window.AIImageBlocker &&
@@ -1609,9 +1628,88 @@ function enforceInstagramReelsBlock() {
   markInstagramReelsEntryPoints();
 }
 
-async function ensureBlocklistLoaded() {
-  if (blocklistHosts.size === 0) {
-    await loadBlocklist();
+function sendRuntimeMessageForResponse(message) {
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = (response) => {
+      if (settled) return;
+      settled = true;
+      resolve(response || null);
+    };
+    try {
+      const maybePromise = browserAPI.runtime.sendMessage(message, finish);
+      if (maybePromise && typeof maybePromise.then === 'function') {
+        maybePromise.then(finish, () => finish(null));
+      }
+    } catch (_) {
+      try {
+        const maybePromise = browserAPI.runtime.sendMessage(message);
+        if (maybePromise && typeof maybePromise.then === 'function') {
+          maybePromise.then(finish, () => finish(null));
+        } else {
+          finish(null);
+        }
+      } catch (_) {
+        finish(null);
+      }
+    }
+  });
+}
+
+function cacheBackgroundHostVerdict(host, blocked) {
+  if (!backgroundBlocklistHostCache.has(host) &&
+      backgroundBlocklistHostCache.size >= BACKGROUND_HOST_CACHE_MAX) {
+    backgroundBlocklistHostCache.delete(backgroundBlocklistHostCache.keys().next().value);
+  }
+  backgroundBlocklistHostCache.set(host, blocked === true);
+}
+
+async function flushBackgroundHostChecks() {
+  backgroundHostCheckTimer = null;
+  const hosts = Array.from(pendingBackgroundHostChecks.keys()).slice(0, 500);
+  if (hosts.length === 0) return;
+  const response = await sendRuntimeMessageForResponse({ type: 'check_blocklist_hosts', hosts });
+  const blockedHosts = new Set(response && Array.isArray(response.blockedHosts)
+    ? response.blockedHosts.map(normalizeHost)
+    : []);
+  for (const host of hosts) {
+    const resolvers = pendingBackgroundHostChecks.get(host) || [];
+    pendingBackgroundHostChecks.delete(host);
+    const blocked = blockedHosts.has(host);
+    cacheBackgroundHostVerdict(host, blocked);
+    resolvers.forEach(resolve => resolve(blocked));
+  }
+  if (pendingBackgroundHostChecks.size > 0 && !backgroundHostCheckTimer) {
+    backgroundHostCheckTimer = setTimeout(flushBackgroundHostChecks, 0);
+  }
+}
+
+function isHostBlockedByBackground(host) {
+  const normalized = normalizeHost(host);
+  if (!normalized) return Promise.resolve(false);
+  if (isHostInDefaultBlocklist(normalized)) return Promise.resolve(true);
+  if (backgroundBlocklistHostCache.has(normalized)) {
+    return Promise.resolve(backgroundBlocklistHostCache.get(normalized));
+  }
+  return new Promise(resolve => {
+    const resolvers = pendingBackgroundHostChecks.get(normalized) || [];
+    resolvers.push(resolve);
+    pendingBackgroundHostChecks.set(normalized, resolvers);
+    if (!backgroundHostCheckTimer) {
+      backgroundHostCheckTimer = setTimeout(flushBackgroundHostChecks, 0);
+    }
+  });
+}
+
+function isUrlBlockedByBackground(url) {
+  try {
+    const parsed = new URL(url, window.location.href);
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      return Promise.resolve(false);
+    }
+    return isHostBlockedByBackground(parsed.hostname);
+  } catch (_) {
+    return Promise.resolve(false);
   }
 }
 
@@ -2221,7 +2319,7 @@ async function shouldBlockElement(element) {
     const links = element.querySelectorAll('a[href]');
     for (const link of links) {
       try {
-        if (isAdultURL(link.href)) {
+        if (isAdultURL(link.href) || await isUrlBlockedByBackground(link.href)) {
           if (debugMode) {
             log('Blocking element due to adult URL:', link.href);
           }
@@ -2522,6 +2620,16 @@ function shouldBlockSocialPost(element, site) {
   }
 }
 
+async function hasBackgroundBlockedLink(element) {
+  if (!element || typeof element.querySelectorAll !== 'function') return false;
+  const anchors = element.querySelectorAll('a[href], a[data-expanded-url]');
+  for (const anchor of anchors) {
+    const url = anchor.getAttribute('data-expanded-url') || anchor.href || '';
+    if (url && await isUrlBlockedByBackground(url)) return true;
+  }
+  return false;
+}
+
 function isSearchResultContainer(element) {
   // Much simpler and more reliable check for individual search results
   
@@ -2687,7 +2795,7 @@ function filterMedia() {
 }
 
 // Social feed filtering: per-post, without blocking entire site
-function filterSocialFeed() {
+async function filterSocialFeed() {
   const site = getSocialSite();
   if (!site || !SOCIAL_SELECTORS[site]) return;
 
@@ -2695,17 +2803,17 @@ function filterSocialFeed() {
   const posts = document.querySelectorAll(selector);
   let blockedCount = 0;
 
-  posts.forEach((post) => {
+  for (const post of posts) {
     try {
-      if (!post || post.dataset.pblockerHidden === 'true' || post.dataset.pblockerProcessed === 'true') return;
-      if (shouldBlockSocialPost(post, site)) {
+      if (!post || post.dataset.pblockerHidden === 'true' || post.dataset.pblockerProcessed === 'true') continue;
+      if (shouldBlockSocialPost(post, site) || await hasBackgroundBlockedLink(post)) {
         hideElement(post, 'social-post');
         blockedCount++;
       } else {
         post.dataset.pblockerProcessed = 'true';
       }
     } catch (_) {}
-  });
+  }
 
   if (blockedCount > 0) {
     notifyBackground('social_post_filtered', { count: blockedCount });
@@ -3493,6 +3601,22 @@ function observeImage(img) {
     notifyBackground('image_filtered', { count: 1 });
     return; // Don't observe further
   }
+
+  // Preserve full remote/blocklist coverage without materializing the entire
+  // list in this page. Checks for many images sharing a CDN host coalesce into
+  // one background message and cache one boolean for the rest of the page.
+  const checkedUrl = effectiveUrl;
+  if (checkedUrl) {
+    const relatedUrls = [checkedUrl, ...getImageContextLinks(img)];
+    Promise.all(relatedUrls.map(isUrlBlockedByBackground)).then(verdicts => {
+      if (!verdicts.some(Boolean) || !img.isConnected) return;
+      if (getEffectiveImageUrl(img) !== checkedUrl) return;
+      if (img.dataset.pblockerHidden !== 'true') {
+        hideElement(img, 'image');
+        notifyBackground('image_filtered', { count: 1 });
+      }
+    }).catch(() => {});
+  }
   
   // For images that pass quick check, use IntersectionObserver for deeper analysis
   if (!imageObserver) setupIntersectionObserver();
@@ -3587,6 +3711,13 @@ function processIframe(iframe) {
       hideElement(iframe, 'iframe');
       iframe.dataset.pblockerProcessed = 'true';
       notifyBackground('iframe_filtered', { src });
+    } else if (src) {
+      isUrlBlockedByBackground(src).then(blocked => {
+        if (!blocked || !iframe.isConnected || iframe.dataset.pblockerProcessed === 'true') return;
+        hideElement(iframe, 'iframe');
+        iframe.dataset.pblockerProcessed = 'true';
+        notifyBackground('iframe_filtered', { src });
+      }).catch(() => {});
     }
   } catch (err) {
     if (debugMode) log('Error processing iframe:', err);
@@ -3657,6 +3788,16 @@ function observeMedia(video) {
   if (!mediaObserver) setupMediaObserver();
   video.dataset.pblockerObserved = 'true';
   try { mediaObserver.observe(video); } catch (_) {}
+  const urls = getEffectiveMediaUrls(video);
+  if (urls.length > 0) {
+    Promise.all(urls.map(isUrlBlockedByBackground)).then(verdicts => {
+      if (!verdicts.some(Boolean) || !video.isConnected) return;
+      if (video.dataset.pblockerHidden !== 'true') {
+        hideElement(video, 'video');
+        notifyBackground('video_filtered', { count: 1 });
+      }
+    }).catch(() => {});
+  }
 }
 
 // Background communication
@@ -3714,7 +3855,7 @@ async function processContent() {
     filterMedia();
 
     // Social site feeds: per-post filtering without blocking entire site
-    filterSocialFeed();
+    await filterSocialFeed();
     
     // Check page title and metadata
     if (checkPageMetadata()) {
@@ -3813,7 +3954,7 @@ async function processPendingSocial() {
       if (!el || el.nodeType !== Node.ELEMENT_NODE) continue;
       if (el.dataset && el.dataset.pblockerProcessed === 'true') continue;
       // First, apply fast synchronous checks (labels + direct adult links)
-      if (shouldBlockSocialPost(el, site)) {
+      if (shouldBlockSocialPost(el, site) || await hasBackgroundBlockedLink(el)) {
         hideElement(el, 'social-post');
         blockedCount++;
       } else if (site === 'reddit') {
@@ -3845,13 +3986,9 @@ async function processPendingSocial() {
 
 const debouncedProcessSocial = debounce(processPendingSocial, DEBOUNCE_DELAY);
 
-// Process the queued media elements in a single coalesced idle pass. The
-// expensive part — three subtree querySelectorAll sweeps per node plus the
-// per-image URL/keyword checks in observeImage — is what used to run
-// synchronously inside the mutation callback on every DOM change. Batching it
-// here keeps it off the critical rendering path, and the isConnected guard
-// skips nodes that were added and removed again before we got to them (common
-// in virtualized / streaming UIs).
+// Process queued media roots in one coalesced idle pass. Firefox content-script
+// DOM calls cross a compartment boundary, so one combined native selector is
+// materially cheaper than three calls per added element.
 function scheduleMediaDiscovery() {
   if (mediaDiscoveryScheduled) return;
   mediaDiscoveryScheduled = true;
@@ -3864,13 +4001,13 @@ function scheduleMediaDiscovery() {
       if (!el || el.nodeType !== Node.ELEMENT_NODE || !el.isConnected) continue;
       if (el.tagName === 'IMG') observeImage(el);
       else if (el.tagName === 'VIDEO') observeMedia(el);
-      if (el.tagName === 'IFRAME') processIframe(el);
-      const imgs = el.querySelectorAll?.('img');
-      imgs && imgs.forEach(observeImage);
-      const vids = el.querySelectorAll?.('video');
-      vids && vids.forEach(observeMedia);
-      const iframes = el.querySelectorAll?.('iframe');
-      iframes && iframes.forEach(processIframe);
+      else if (el.tagName === 'IFRAME') processIframe(el);
+      const media = el.querySelectorAll?.('img, video, iframe');
+      media && media.forEach(node => {
+        if (node.tagName === 'IMG') observeImage(node);
+        else if (node.tagName === 'VIDEO') observeMedia(node);
+        else processIframe(node);
+      });
     }
   };
   if (typeof requestIdleCallback === 'function') {
@@ -3903,9 +4040,11 @@ function setupMutationObserver() {
 
     for (const mutation of mutations) {
       if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
+        const addedElements = [];
         for (const node of mutation.addedNodes) {
           if (node.nodeType !== Node.ELEMENT_NODE) continue;
           const el = node;
+          addedElements.push(el);
 
           // A directly-added media element is O(1) to check, so do it NOW —
           // this preserves instant blocking of obvious bad-URL images/videos
@@ -3916,9 +4055,6 @@ function setupMutationObserver() {
           if (el.tagName === 'IMG') observeImage(el);
           else if (el.tagName === 'VIDEO') observeMedia(el);
           else if (el.tagName === 'IFRAME') processIframe(el);
-          pendingMediaNodes.add(el);
-          scheduleMedia = true;
-
           // A full-page text scan is only worth scheduling when a text feature
           // is actually enabled. We no longer read el.textContent per node just
           // to decide this — the debounced scan re-reads the page once anyway,
@@ -3964,6 +4100,21 @@ function setupMutationObserver() {
               }
             }
           }
+        }
+
+        if (addedElements.length > 0) {
+          // DocumentFragment/React batches can expose hundreds of sibling nodes
+          // in one record. Query their shared target once in native selector
+          // code; querying each sibling separately is a multi-second Firefox
+          // cross-compartment hot path. Small/single additions keep tight roots
+          // to avoid rescanning a large container unnecessarily.
+          const target = mutation.target;
+          if (addedElements.length > 4 && target && target.nodeType === Node.ELEMENT_NODE) {
+            pendingMediaNodes.add(target);
+          } else {
+            addedElements.forEach(el => pendingMediaNodes.add(el));
+          }
+          scheduleMedia = true;
         }
       } else if (mutation.type === 'attributes') {
         const target = mutation.target;
@@ -4069,9 +4220,12 @@ function setupEventListeners() {
     }
 
     if (changes[BLOCKLIST_META_KEY]) {
-      loadBlocklist().then(() => {
-        log('Blocklist refreshed from storage change');
-      });
+      // Background owns the canonical list. Invalidate only the tiny per-page
+      // verdict cache; cloning the refreshed 200k-entry snapshot here causes a
+      // multi-second main-thread stall in Firefox.
+      backgroundBlocklistHostCache.clear();
+      _cleanPageHostCache = null;
+      log('Blocklist host verdict cache invalidated');
     }
   });
   

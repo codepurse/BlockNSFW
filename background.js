@@ -482,9 +482,6 @@ class OptimizedDomainTrie {
   }
 }
 
-// Initialize trie with blocklist
-let domainTrie = new OptimizedDomainTrie();
-
 // Multi-tenant CDN parent domains that must not be parent-domain blocked.
 const SHARED_CDN_PARENT_DOMAINS = new Set([
   'b-cdn.net', 'cloudfront.net', 'akamaized.net', 'akamaihd.net',
@@ -509,7 +506,6 @@ function filterSharedCDNParents(hosts) {
 let patternCache = new Map(); // Cache for compiled regex patterns
 let urlCheckCache = new Map(); // Cache for URL blocking decisions
 let keywordCheckCache = new Map(); // Cache for hostname keyword checks
-let preCompiledDomainPatterns = new Map(); // Pre-compiled domain patterns for instant matching
 const MAX_CACHE_SIZE = 1000; // Limit cache size to prevent memory bloat
 let cacheVersion = 0; // Version to invalidate caches when patterns change
 
@@ -836,14 +832,18 @@ async function storeBlocklistInCache(domains) {
   if (!Array.isArray(domains) || domains.length === 0) return null;
 
   const previousMeta = blocklistMeta || (await loadBlocklistMeta());
-  const uniqueDomains = Array.from(new Set(domains.map(normalizeDomainForCache))).filter(isLikelyDomain);
-  uniqueDomains.sort();
+  const uniqueSet = new Set();
+  for (let index = 0; index < domains.length; index++) {
+    const normalized = normalizeDomainForCache(domains[index]);
+    if (isLikelyDomain(normalized)) uniqueSet.add(normalized);
+    // Keep a large refresh cooperative with Firefox rendering.
+    if (index > 0 && index % 5000 === 0) {
+      await new Promise(resolve => setTimeout(resolve, 0));
+    }
+  }
+  const uniqueDomains = Array.from(uniqueSet);
 
   const chunks = chunkArray(uniqueDomains, BLOCKLIST_CACHE_CHUNK_SIZE);
-  const dataToStore = {};
-  chunks.forEach((chunk, index) => {
-    dataToStore[`${BLOCKLIST_CACHE_CHUNK_PREFIX}${index}`] = chunk;
-  });
 
   const meta = {
     updatedAt: Date.now(),
@@ -853,9 +853,18 @@ async function storeBlocklistInCache(domains) {
     domainCount: uniqueDomains.length
   };
 
-  dataToStore[BLOCKLIST_CACHE_META_KEY] = meta;
-
-  await browserAPI.storage.local.set(dataToStore);
+  // Avoid one multi-megabyte storage serialization task. Small batches let the
+  // browser render between writes; metadata is committed last so readers never
+  // observe a partially written generation as current.
+  for (let start = 0; start < chunks.length; start += 8) {
+    const dataToStore = {};
+    for (let index = start; index < Math.min(chunks.length, start + 8); index++) {
+      dataToStore[`${BLOCKLIST_CACHE_CHUNK_PREFIX}${index}`] = chunks[index];
+    }
+    await browserAPI.storage.local.set(dataToStore);
+    await new Promise(resolve => setTimeout(resolve, 0));
+  }
+  await browserAPI.storage.local.set({ [BLOCKLIST_CACHE_META_KEY]: meta });
   await removeStaleBlocklistChunks(chunks.length);
 
   blocklistMeta = meta;
@@ -1494,6 +1503,25 @@ async function loadDefaultBlocklist() {
     defaultBlocklist = Array.isArray(list) ? list.map(normalizeDomainForCache).filter(isLikelyDomain) : [];
     defaultBlocklistSet = new Set(defaultBlocklist);
     console.log(`BlockNSFW: Loaded ${defaultBlocklist.length} domains from packaged blocklist`);
+
+    // A fresh release already carries a curated current snapshot. Mark it
+    // fresh so installation does not immediately download and rebuild the same
+    // multi-megabyte data while the first browsing pages are rendering.
+    const previousMeta = blocklistMeta || (await loadBlocklistMeta());
+    if (!previousMeta) {
+      blocklistMeta = {
+        updatedAt: Date.now(),
+        chunkCount: 0,
+        version: 1,
+        source: 'bundled',
+        domainCount: defaultBlocklist.length
+      };
+      await browserAPI.storage.local.set({ [BLOCKLIST_CACHE_META_KEY]: blocklistMeta });
+    } else {
+      // Preserve the original bundled timestamp across restarts so its normal
+      // TTL can expire and trigger a remote refresh.
+      blocklistMeta = previousMeta;
+    }
   } catch (e) {
     defaultBlocklist = [];
     defaultBlocklistSet = new Set();
@@ -1509,42 +1537,10 @@ async function rebuildCompiledPatterns() {
   
   const settings = await getSettings();
   const patternSources = [];
-  const hostEntries = [];
 
-  if (Array.isArray(defaultBlocklist)) {
-    for (let i = 0; i < defaultBlocklist.length; i++) {
-      const entry = defaultBlocklist[i];
-      if (!entry) continue;
-      if (entry.includes('*')) {
-        patternSources.push(entry);
-        continue;
-      }
-      const normalized = normalizeDomainForCache(entry);
-      if (isLikelyDomain(normalized)) {
-        hostEntries.push(normalized);
-      }
-    }
-  }
-
-  defaultBlocklistSet = new Set(hostEntries);
-  
-  // Rebuild trie WITHOUT shared CDN parent domains
-  domainTrie = new OptimizedDomainTrie();
-  domainTrie.batchInsert(filterSharedCDNParents(hostEntries));
-
-  // Pre-compile domain patterns for instant matching
-  preCompiledDomainPatterns = new Map();
-  hostEntries.forEach(domain => {
-    try {
-      // Create optimized regex for exact domain matching
-      const escapedDomain = domain.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      const regex = new RegExp(`^(www\\.)?${escapedDomain}$`, 'i');
-      preCompiledDomainPatterns.set(domain, regex);
-    } catch (e) {
-      console.error('BlockNSFW: Failed to pre-compile domain pattern', domain, e);
-    }
-  });
-
+  // loadDefaultBlocklist/remote refresh already own the normalized default
+  // Set. Rewalking 200k+ domains here on every startup or settings change was
+  // redundant and particularly costly in Firefox's extension process.
   if (Array.isArray(settings.customPatterns)) {
     for (let i = 0; i < settings.customPatterns.length; i++) {
       const pattern = settings.customPatterns[i];
@@ -1558,7 +1554,7 @@ async function rebuildCompiledPatterns() {
   compiledPatterns = buildHostPatterns(uniquePatterns);
   
   console.log(
-    `BlockNSFW: Compiled ${compiledPatterns.length} URL patterns with ${defaultBlocklistSet.size} host entries and ${preCompiledDomainPatterns.size} pre-compiled domain patterns`
+    `BlockNSFW: Compiled ${compiledPatterns.length} URL patterns with ${defaultBlocklistSet.size} host entries`
   );
 }
 
@@ -1624,21 +1620,6 @@ function isUrlInDefaultBlocklist(urlStr) {
       }
     }
 
-    // Trie with shared-CDN guard
-    if (domainTrie.size > 0 && domainTrie.search(normalized)) {
-      if (isSharedCDNParent(normalized)) return false;
-      let realMatch = defaultBlocklistSet.has(normalized);
-      if (!realMatch) {
-        for (let i = 1; i < labels.length - 1; i++) {
-          const candidate = labels.slice(i).join('.');
-          if (defaultBlocklistSet.has(candidate)) {
-            realMatch = !isSharedCDNParent(candidate);
-            if (realMatch) break;
-          }
-        }
-      }
-      if (realMatch) return true;
-    }
   } catch (error) {
     // Ignore parsing errors and treat as not blocked
   }
@@ -1750,19 +1731,8 @@ async function shouldBlock(urlStr) {
 
   let shouldBlockResult = false;
   
-  // Use pre-compiled domain patterns for instant matching when possible
   const hostname = u.hostname.toLowerCase();
-  const normalizedHost = normalizeDomainForCache(hostname);
-  
-  // Check pre-compiled domain patterns first (fastest path)
-  for (const [domain, regex] of preCompiledDomainPatterns) {
-    if (regex.test(normalizedHost)) {
-      shouldBlockResult = true;
-      break;
-    }
-  }
-  
-  if (!shouldBlockResult && isUrlInDefaultBlocklist(urlStr)) {
+  if (isUrlInDefaultBlocklist(urlStr)) {
     shouldBlockResult = true;
   } else if (!shouldBlockResult && urlMatchesCompiled(urlStr)) {
     shouldBlockResult = true;
@@ -1852,6 +1822,23 @@ browserAPI.runtime.onMessage.addListener((message, sender, sendResponse) => {
       }
     })();
     return true;
+  } else if (message.type === 'check_blocklist_hosts' && Array.isArray(message.hosts)) {
+    (async () => {
+      try {
+        if (!isReady) await initReady;
+        const hosts = message.hosts.slice(0, 1000);
+        const blockedHosts = [];
+        for (const rawHost of hosts) {
+          const host = normalizeDomainForCache(rawHost);
+          if (!host) continue;
+          if (isUrlInDefaultBlocklist(`https://${host}/`)) blockedHosts.push(host);
+        }
+        sendResponse({ success: true, blockedHosts });
+      } catch (error) {
+        sendResponse({ success: false, blockedHosts: [], error: error.message });
+      }
+    })();
+    return true;
   } else if (message.type === 'get_update_info') {
     // Popup/options ask for the latest update verdict. Returns the cached info
     // immediately if fresh, otherwise refreshes (TTL-guarded). `forceRefresh`
@@ -1895,7 +1882,6 @@ browserAPI.runtime.onMessage.addListener((message, sender, sendResponse) => {
   } else if (message.type === 'should_block_url' && typeof message.url === 'string') {
     (async () => {
       try {
-        await ensureRemoteBlocklistUpToDate();
         const blocked = await shouldBlock(message.url);
         sendResponse({ success: true, blocked });
       } catch (error) {
@@ -2200,9 +2186,14 @@ async function updateSafeSearchRules() {
   }
 }
 
-// Init
-browserAPI.runtime.onInstalled.addListener(async (details) => {
-  try {
+// Init. Firefox can run the background script and dispatch onInstalled at the
+// same time for a temporary/fresh install. Share one initialization promise so
+// the 4 MB blocklist is parsed and indexed once.
+let backgroundInitializationPromise = null;
+
+function initializeBackground() {
+  if (backgroundInitializationPromise) return backgroundInitializationPromise;
+  backgroundInitializationPromise = (async () => {
     const settings = await getSettings();
     await setSettings(settings); // ensure defaults saved
     await loadDefaultBlocklist();
@@ -2212,6 +2203,14 @@ browserAPI.runtime.onInstalled.addListener(async (details) => {
     ensureRemoteWhitelistUpToDate().catch(e => console.warn('BlockNSFW: initial whitelist sync failed', e));
     checkForUpdate().catch(e => console.warn('BlockNSFW: initial update check failed', e));
     fetchAnnouncement().catch(e => console.warn('BlockNSFW: initial announcement fetch failed', e));
+    console.log('BlockNSFW: Background initialized for Manifest V3');
+  })().finally(markReady);
+  return backgroundInitializationPromise;
+}
+
+browserAPI.runtime.onInstalled.addListener(async (details) => {
+  try {
+    await initializeBackground();
 
     // Fresh install only: open the first-run onboarding wizard once. Updates
     // keep using the in-page "What's New" card, so we don't nag on every bump.
@@ -2226,26 +2225,17 @@ browserAPI.runtime.onInstalled.addListener(async (details) => {
       }
     }
     console.log('BlockNSFW: Extension installed/updated - Manifest V3 compatible');
-  } finally {
-    markReady();
+  } catch (error) {
+    console.error('BlockNSFW: installation initialization failed', error);
   }
 });
 
 // When service worker starts
 (async function init() {
   try {
-    const settings = await getSettings();
-    await setSettings(settings); // ensure defaults saved
-    await loadDefaultBlocklist();
-    await rebuildCompiledPatterns();
-    await initializeExtensionStateTracking();
-    await updateSafeSearchRules();
-    ensureRemoteWhitelistUpToDate().catch(e => console.warn('BlockNSFW: whitelist sync failed', e));
-    checkForUpdate().catch(e => console.warn('BlockNSFW: update check failed', e));
-    fetchAnnouncement().catch(e => console.warn('BlockNSFW: announcement fetch failed', e));
-    console.log('BlockNSFW: Service worker initialized for Manifest V3');
-  } finally {
-    markReady();
+    await initializeBackground();
+  } catch (error) {
+    console.error('BlockNSFW: service worker initialization failed', error);
   }
 })();
 
