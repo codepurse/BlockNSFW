@@ -261,8 +261,6 @@ let isEnabled = true;
 let useSmartBlocking = true;
 let customKeywordList = [];
 let imageFilterLevel = 'strict';
-let blocklistHosts = new Set();
-let blocklistMeta = null;
 // Full blocklist snapshots contain 200k+ domains and are prohibitively
 // expensive to clone and rebuild in every Firefox content-script realm. Keep a
 // bounded per-page host verdict cache and ask the background in batches instead.
@@ -541,46 +539,6 @@ const KNOWN_SAFE_IMAGE_CDNS = new Set([
   'cdn.cnn.com',                                       // CNN CDN
 ]);
 
-// Multi-tenant CDN domains: individual subdomains may be adult sites, but the
-// parent domain itself must never be treated as a blocklist match because it
-// would collaterally block every legitimate customer of that CDN.
-const SHARED_CDN_PARENT_DOMAINS = new Set([
-  'b-cdn.net',              // BunnyCDN
-  'cloudfront.net',         // AWS CloudFront
-  'akamaized.net',          // Akamai
-  'akamaihd.net',           // Akamai HD
-  'azureedge.net',          // Azure CDN
-  'azurefd.net',            // Azure Front Door
-  'cloudflare.net',         // Cloudflare
-  'fastly.net',             // Fastly
-  'fastlylb.net',           // Fastly LB
-  'cdn77.org',              // CDN77
-  'kxcdn.com',              // KeyCDN
-  'stackpathdns.com',       // StackPath
-  'edgecastcdn.net',        // Edgecast / Verizon
-  'imgix.net',              // imgix
-  'scene7.com',             // Adobe Scene7
-  'amazonaws.com',          // AWS S3
-  'digitaloceanspaces.com', // DigitalOcean Spaces
-  'r2.dev',                 // Cloudflare R2
-  'netlify.app',            // Netlify
-  'vercel.app',             // Vercel
-  'pages.dev',              // Cloudflare Pages
-  'herokuapp.com',          // Heroku
-  'github.io',              // GitHub Pages
-  'imagedelivery.net',      // Cloudflare Images
-  'twimg.com',              // Twitter image CDN
-  'fbcdn.net',              // Facebook CDN
-  'cdninstagram.com',       // Instagram CDN
-  'gstatic.com',            // Google Static
-  'googleapis.com',         // Google APIs
-  'ggpht.com',              // Google Photos
-]);
-
-function isSharedCDNParent(domain) {
-  return SHARED_CDN_PARENT_DOMAINS.has(domain);
-}
-
 // Default trusted image domains -- e-commerce, gaming, social, education.
 // Merged from background.js so the content script can use them directly.
 const DEFAULT_TRUSTED_IMAGE_DOMAINS_LIST = [
@@ -740,191 +698,10 @@ function getBlockedRedirectUrl(targetUrl, reason, settings, detail) {
     extraParams;
 }
 
-// Optimized trie structure with pre-compilation for maximum performance
-class OptimizedDomainTrie {
-  constructor() {
-    this.root = Object.create(null); // Faster than Map for character keys
-    this.precompiled = null; // Cache for pre-compiled trie
-    this.size = 0;
-  }
-  
-  // Insert a domain in reverse order for efficient matching
-  insert(domain) {
-    const reversed = domain.split('.').reverse().join('.');
-    let node = this.root;
-    
-    for (const char of reversed) {
-      if (!node[char]) {
-        node[char] = Object.create(null);
-      }
-      node = node[char];
-    }
-    node['*'] = true; // Mark as blocked domain
-    this.size++;
-    this.precompiled = null; // Invalidate pre-compiled cache
-  }
-  
-  // Check if domain or any parent domain is blocked
-  search(domain) {
-    // Use pre-compiled version if available for maximum speed
-    if (this.precompiled) {
-      return this.precompiledSearch(domain);
-    }
-    
-    const reversed = domain.split('.').reverse().join('.');
-    let node = this.root;
-    
-    for (const char of reversed) {
-      if (!node[char]) {
-        return false;
-      }
-      node = node[char];
-      
-      // Check if current level is blocked
-      if (node['*']) {
-        return true;
-      }
-    }
-    return false;
-  }
-  
-  // Pre-compile the trie into a more efficient structure
-  precompile() {
-    if (this.precompiled) return; // Already pre-compiled
-    
-    const compiled = {
-      // Convert to a flat structure with optimized lookup
-      lookup: new Map(),
-      wildcards: new Set()
-    };
-    
-    // Flatten the trie structure for faster access
-    this.flattenTrie(this.root, '', compiled);
-    
-    this.precompiled = compiled;
-  }
-  
-  // Flatten trie structure for pre-compilation
-  flattenTrie(node, prefix, compiled) {
-    for (const char in node) {
-      if (char === '*') {
-        compiled.wildcards.add(prefix);
-        continue;
-      }
-      
-      const newPrefix = prefix + char;
-      if (node[char]['*']) {
-        compiled.lookup.set(newPrefix, true);
-      }
-      
-      this.flattenTrie(node[char], newPrefix, compiled);
-    }
-  }
-  
-  // Ultra-fast search using pre-compiled structure
-  precompiledSearch(domain) {
-    const reversed = domain.split('.').reverse().join('.');
-    
-    // Check exact matches first
-    if (this.precompiled.lookup.has(reversed)) {
-      return true;
-    }
-    
-    // Check for wildcard matches (parent domains)
-    const parts = reversed.split('');
-    let current = '';
-    
-    for (let i = 0; i < parts.length; i++) {
-      current += parts[i];
-      if (this.precompiled.wildcards.has(current)) {
-        return true;
-      }
-    }
-    
-    return false;
-  }
-  
-  // Batch insert for faster initialization
-  batchInsert(domains) {
-    for (const domain of domains) {
-      this.insert(domain);
-    }
-    // Auto-precompile after batch operations
-    if (this.size > 100) {
-      this.precompile();
-    }
-  }
-  
-  // Clear and reset the trie
-  clear() {
-    this.root = Object.create(null);
-    this.precompiled = null;
-    this.size = 0;
-  }
-  
-  // Get statistics about the trie
-  getStats() {
-    return {
-      size: this.size,
-      precompiled: !!this.precompiled,
-      memory: this.estimateMemoryUsage()
-    };
-  }
-  
-  // Estimate memory usage
-  estimateMemoryUsage() {
-    // Rough estimation based on character count
-    let charCount = 0;
-    const countChars = (node) => {
-      for (const char in node) {
-        charCount += char.length;
-        if (typeof node[char] === 'object') {
-          countChars(node[char]);
-        }
-      }
-    };
-    countChars(this.root);
-    return charCount * 2; // Approximate bytes (2 bytes per char)
-  }
-}
-
-// Initialize optimized trie with blocklist
-let domainTrie = new OptimizedDomainTrie();
-
 function isHostInDefaultBlocklist(host) {
   const h = normalizeHost(host);
 
   if (backgroundBlocklistHostCache.get(h) === true) return true;
-  
-  // Exact match via set (fastest)
-  if (blocklistHosts.has(h)) return true;
-
-  // Parent-domain matching: walk up the domain labels, but skip shared
-  // CDN parent domains to avoid collateral blocking of legitimate sites.
-  const labels = h.split('.');
-  for (let i = 1; i < labels.length - 1; i++) {
-    const candidate = labels.slice(i).join('.');
-    if (isSharedCDNParent(candidate)) continue;
-    if (blocklistHosts.has(candidate)) {
-      return true;
-    }
-  }
-
-  // Trie-based matching with shared-CDN guard.
-  if (domainTrie.size > 0 && domainTrie.search(h)) {
-    if (isSharedCDNParent(h)) return false;
-    let realMatch = blocklistHosts.has(h);
-    if (!realMatch) {
-      for (let i = 1; i < labels.length - 1; i++) {
-        const candidate = labels.slice(i).join('.');
-        if (blocklistHosts.has(candidate)) {
-          realMatch = !isSharedCDNParent(candidate);
-          if (realMatch) break;
-        }
-      }
-    }
-    if (realMatch) return true;
-  }
 
   for (let i = 0; i < DEFAULT_BLOCKLIST_HOSTS_EARLY.length; i++) {
     if (hostMatchesDomain(h, DEFAULT_BLOCKLIST_HOSTS_EARLY[i])) return true;
@@ -1669,14 +1446,18 @@ async function flushBackgroundHostChecks() {
   const hosts = Array.from(pendingBackgroundHostChecks.keys()).slice(0, 500);
   if (hosts.length === 0) return;
   const response = await sendRuntimeMessageForResponse({ type: 'check_blocklist_hosts', hosts });
-  const blockedHosts = new Set(response && Array.isArray(response.blockedHosts)
+  const succeeded = response?.success === true && Array.isArray(response.blockedHosts);
+  const blockedHosts = new Set(succeeded
     ? response.blockedHosts.map(normalizeHost)
     : []);
   for (const host of hosts) {
     const resolvers = pendingBackgroundHostChecks.get(host) || [];
     pendingBackgroundHostChecks.delete(host);
     const blocked = blockedHosts.has(host);
-    cacheBackgroundHostVerdict(host, blocked);
+    // A transport/service-worker failure is not evidence that a host is clean.
+    // Resolve fail-open for this pass, but leave it uncached so a later pass can
+    // retry instead of memoizing a dropped message for the page lifetime.
+    if (succeeded) cacheBackgroundHostVerdict(host, blocked);
     resolvers.forEach(resolve => resolve(blocked));
   }
   if (pendingBackgroundHostChecks.size > 0 && !backgroundHostCheckTimer) {
@@ -1711,6 +1492,21 @@ function isUrlBlockedByBackground(url) {
   } catch (_) {
     return Promise.resolve(false);
   }
+}
+
+async function hasAnyBackgroundBlockedUrl(urls) {
+  const candidates = urls.filter(Boolean);
+  if (candidates.length === 0) return false;
+  const verdicts = await Promise.all(candidates.map(isUrlBlockedByBackground));
+  return verdicts.some(Boolean);
+}
+
+async function warmCurrentPageBlocklistHost() {
+  const host = normalizeHost(window.location.hostname);
+  if (!host) return false;
+  const blocked = await isHostBlockedByBackground(host);
+  _cleanPageHostCache = null;
+  return blocked;
 }
 
 // Check if current page hostname is whitelisted (respects temporary expirations + remote global whitelist)
@@ -2010,59 +1806,6 @@ function checkPageTextWithModel() {
   return false;
 }
 
-function filterSharedCDNParents(hosts) {
-  const filtered = [];
-  for (const h of hosts) {
-    if (isSharedCDNParent(h)) continue;
-    filtered.push(h);
-  }
-  return filtered;
-}
-
-async function loadBlocklist() {
-  try {
-    const response = await browserAPI.runtime.sendMessage({ type: 'get_blocklist_snapshot' });
-    if (response?.success && Array.isArray(response.blocklist)) {
-      const normalized = response.blocklist
-        .map(normalizeHost)
-        .filter(host => host && host.includes('.'));
-      blocklistHosts = new Set(normalized);
-      blocklistMeta = response.meta || null;
-      
-      // Populate optimized trie with new blocklist data for faster matching
-      domainTrie = new OptimizedDomainTrie();
-      domainTrie.batchInsert(filterSharedCDNParents(normalized));
-      
-      if (blocklistHosts.size > 0) {
-        log('Blocklist snapshot loaded', blocklistHosts.size, 'domains', 'using trie-based matching');
-        return;
-      }
-    }
-  } catch (error) {
-    log('Error retrieving blocklist snapshot:', error);
-  }
-
-  try {
-    const fallbackResponse = await fetch(browserAPI.runtime.getURL('blocklist.json'));
-    const fallbackList = await fallbackResponse.json();
-    const normalized = (Array.isArray(fallbackList) ? fallbackList : [])
-      .map(normalizeHost)
-      .filter(host => host && host.includes('.'));
-    blocklistHosts = new Set(normalized);
-    blocklistMeta = null;
-    
-    // Populate optimized trie with fallback blocklist data
-    domainTrie = new OptimizedDomainTrie();
-    domainTrie.batchInsert(filterSharedCDNParents(normalized));
-    
-    log('Fallback blocklist loaded', blocklistHosts.size, 'domains', 'using trie-based matching');
-  } catch (error) {
-    log('Error loading fallback blocklist:', error);
-    blocklistHosts = new Set();
-    domainTrie = new OptimizedDomainTrie();
-  }
-}
-
 function escapeRegExp(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
@@ -2281,32 +2024,14 @@ function isAdultURL(url) {
   try {
     const urlObj = new URL(url);
     const hostname = normalizeHost(urlObj.hostname);
-
-    if (hostname && blocklistHosts.has(hostname)) {
-      return true;
-    }
-
-    if (hostname) {
-      const labels = hostname.split('.');
-      for (let i = 1; i < labels.length - 1; i++) {
-        const candidate = labels.slice(i).join('.');
-        if (isSharedCDNParent(candidate)) continue;
-        if (blocklistHosts.has(candidate)) {
-          return true;
-        }
-      }
-    }
-
-    if (matchesAdultKeywordHost(hostname)) return true;
-    
-    return false;
+    return isHostInDefaultBlocklist(hostname) || matchesAdultKeywordHost(hostname);
   } catch (error) {
     log('Error checking adult URL:', error);
     return false;
   }
 }
 
-async function shouldBlockElement(element) {
+async function shouldBlockElement(element, backgroundBlockedLink) {
   if (!element || !isEnabled) return false;
   
   try {
@@ -2316,16 +2041,32 @@ async function shouldBlockElement(element) {
     const alt = element.alt || '';
     
     // Check href attributes first (most reliable)
-    const links = element.querySelectorAll('a[href]');
+    const links = Array.from(element.querySelectorAll('a[href]'));
     for (const link of links) {
       try {
-        if (isAdultURL(link.href) || await isUrlBlockedByBackground(link.href)) {
+        if (isAdultURL(link.href)) {
           if (debugMode) {
             log('Blocking element due to adult URL:', link.href);
           }
           return true;
         }
-        
+      } catch (linkError) {
+        log('Error checking link:', linkError);
+      }
+    }
+
+    const blockedByBackground = backgroundBlockedLink === undefined
+      ? await hasAnyBackgroundBlockedUrl(links.map(link => link.href))
+      : backgroundBlockedLink;
+    if (blockedByBackground) {
+      if (debugMode) log('Blocking element due to background blocklist verdict');
+      return true;
+    }
+
+    // Keep network-backed Reddit metadata checks sequential. Host verdicts
+    // above have already been registered together for one background batch.
+    for (const link of links) {
+      try {
         // Check if it's a Reddit link to NSFW subreddit
         if (useSmartBlocking && isRedditURL(link.href)) {
           const shouldBlock = await shouldBlockRedditPage(link.href);
@@ -2623,11 +2364,10 @@ function shouldBlockSocialPost(element, site) {
 async function hasBackgroundBlockedLink(element) {
   if (!element || typeof element.querySelectorAll !== 'function') return false;
   const anchors = element.querySelectorAll('a[href], a[data-expanded-url]');
-  for (const anchor of anchors) {
-    const url = anchor.getAttribute('data-expanded-url') || anchor.href || '';
-    if (url && await isUrlBlockedByBackground(url)) return true;
-  }
-  return false;
+  const urls = Array.from(anchors, anchor =>
+    anchor.getAttribute('data-expanded-url') || anchor.href || ''
+  );
+  return hasAnyBackgroundBlockedUrl(urls);
 }
 
 function isSearchResultContainer(element) {
@@ -2731,7 +2471,7 @@ async function filterSearchResults() {
     log(`Found ${containers.length} potential result containers on ${searchEngine}`);
   }
   
-  // Process containers sequentially to avoid overwhelming Reddit API
+  const candidates = [];
   for (let index = 0; index < containers.length; index++) {
     const container = containers[index];
     try {
@@ -2742,32 +2482,40 @@ async function filterSearchResults() {
       
       // Only check the actual search result content, not search interface elements
       if (isSearchResultContainer(container)) {
-        if (debugMode) {
-          const title = container.querySelector('h1, h2, h3')?.textContent || 'No title';
-          log(`[${index}] Checking result: "${title.substring(0, 50)}..."`);
-        }
-        
-        // Process this result completely independently
-        const shouldBlock = await shouldBlockElement(container);
-        
-        if (debugMode) {
-          log(`[${index}] Result should be blocked: ${shouldBlock}`);
-        }
-        
-        if (shouldBlock) {
-          hideElement(container, 'search-result');
-          blockedCount++;
-          
-          if (debugMode) {
-            log(`[${index}] Blocked result successfully`);
-          }
-        }
+        candidates.push({ container, index });
       } else if (debugMode) {
         log(`[${index}] Skipped - not a search result container`);
       }
     } catch (error) {
       log(`Error processing container ${index}:`, error);
       // Continue processing other results even if one fails
+    }
+  }
+
+  // Register every result's hosts before yielding, allowing the pending-host
+  // coordinator to send one message for the whole search pass.
+  const backgroundVerdicts = await Promise.all(
+    candidates.map(({ container }) => hasBackgroundBlockedLink(container))
+  );
+
+  // Keep per-result Reddit metadata checks sequential; only the local
+  // background host lookups above are parallelized.
+  for (let candidateIndex = 0; candidateIndex < candidates.length; candidateIndex++) {
+    const { container, index } = candidates[candidateIndex];
+    try {
+      if (debugMode) {
+        const title = container.querySelector('h1, h2, h3')?.textContent || 'No title';
+        log(`[${index}] Checking result: "${title.substring(0, 50)}..."`);
+      }
+      const shouldBlock = await shouldBlockElement(container, backgroundVerdicts[candidateIndex]);
+      if (debugMode) log(`[${index}] Result should be blocked: ${shouldBlock}`);
+      if (shouldBlock) {
+        hideElement(container, 'search-result');
+        blockedCount++;
+        if (debugMode) log(`[${index}] Blocked result successfully`);
+      }
+    } catch (error) {
+      log(`Error processing container ${index}:`, error);
     }
   }
   
@@ -2800,13 +2548,16 @@ async function filterSocialFeed() {
   if (!site || !SOCIAL_SELECTORS[site]) return;
 
   const selector = SOCIAL_SELECTORS[site].containers;
-  const posts = document.querySelectorAll(selector);
+  const posts = Array.from(document.querySelectorAll(selector)).filter(post =>
+    post && post.dataset.pblockerHidden !== 'true' && post.dataset.pblockerProcessed !== 'true'
+  );
   let blockedCount = 0;
+  const backgroundVerdicts = await Promise.all(posts.map(hasBackgroundBlockedLink));
 
-  for (const post of posts) {
+  for (let index = 0; index < posts.length; index++) {
+    const post = posts[index];
     try {
-      if (!post || post.dataset.pblockerHidden === 'true' || post.dataset.pblockerProcessed === 'true') continue;
-      if (shouldBlockSocialPost(post, site) || await hasBackgroundBlockedLink(post)) {
+      if (shouldBlockSocialPost(post, site) || backgroundVerdicts[index]) {
         hideElement(post, 'social-post');
         blockedCount++;
       } else {
@@ -3913,15 +3664,15 @@ async function processPendingResults() {
   const toProcess = Array.from(pendingResults);
   pendingResults.clear();
   let blockedCount = 0;
+  const candidates = toProcess.filter(el =>
+    el && el.nodeType === Node.ELEMENT_NODE && el.dataset?.pblockerProcessed !== 'true'
+  );
+  const backgroundVerdicts = await Promise.all(candidates.map(hasBackgroundBlockedLink));
 
-  for (let i = 0; i < toProcess.length; i++) {
-    const el = toProcess[i];
+  for (let i = 0; i < candidates.length; i++) {
+    const el = candidates[i];
     try {
-      // Skip if removed, already processed, or not an element
-      if (!el || el.nodeType !== Node.ELEMENT_NODE) continue;
-      if (el.dataset && el.dataset.pblockerProcessed === 'true') continue;
-
-      const shouldBlock = await shouldBlockElement(el);
+      const shouldBlock = await shouldBlockElement(el, backgroundVerdicts[i]);
       if (shouldBlock) {
         hideElement(el, 'search-result');
         blockedCount++;
@@ -3948,13 +3699,15 @@ async function processPendingSocial() {
   pendingSocial.clear();
   let blockedCount = 0;
   const site = getSocialSite();
-  for (let i = 0; i < toProcess.length; i++) {
-    const el = toProcess[i];
+  const candidates = toProcess.filter(el =>
+    el && el.nodeType === Node.ELEMENT_NODE && el.dataset?.pblockerProcessed !== 'true'
+  );
+  const backgroundVerdicts = await Promise.all(candidates.map(hasBackgroundBlockedLink));
+  for (let i = 0; i < candidates.length; i++) {
+    const el = candidates[i];
     try {
-      if (!el || el.nodeType !== Node.ELEMENT_NODE) continue;
-      if (el.dataset && el.dataset.pblockerProcessed === 'true') continue;
       // First, apply fast synchronous checks (labels + direct adult links)
-      if (shouldBlockSocialPost(el, site) || await hasBackgroundBlockedLink(el)) {
+      if (shouldBlockSocialPost(el, site) || backgroundVerdicts[i]) {
         hideElement(el, 'social-post');
         blockedCount++;
       } else if (site === 'reddit') {
@@ -4226,6 +3979,9 @@ function setupEventListeners() {
       backgroundBlocklistHostCache.clear();
       _cleanPageHostCache = null;
       log('Blocklist host verdict cache invalidated');
+      warmCurrentPageBlocklistHost()
+        .then(() => processContent())
+        .catch(() => {});
     }
   });
   
@@ -4272,8 +4028,10 @@ async function init() {
     consoleLogPageTitle('init');
     log('Content script initializing on', window.location.hostname);
 
-    // Load settings and blocklist
+    // Load settings, then warm the one canonical-list verdict needed by the
+    // synchronous clean-page heuristics. The full list remains in background.
     await loadSettings();
+    await warmCurrentPageBlocklistHost();
 
     // Set up event listeners and observers
     setupEventListeners();
@@ -4457,8 +4215,7 @@ if (typeof window !== 'undefined') {
     getStats: () => ({ 
       enabled: isEnabled, 
       debug: debugMode, 
-      blocklistSize: blocklistHosts.size,
-      blocklistUpdatedAt: blocklistMeta?.updatedAt || null,
+      blocklistHostCacheSize: backgroundBlocklistHostCache.size,
       searchEngine: getSearchEngine(),
       logoUrl: browserAPI.runtime.getURL('icons/icon-48.png')
     })

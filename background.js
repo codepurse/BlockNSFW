@@ -321,167 +321,6 @@ function markReady() {
   }
 }
 
-// Optimized trie-based domain matching with pre-compilation for maximum performance
-class OptimizedDomainTrie {
-  constructor() {
-    this.root = Object.create(null); // Faster than Map for character keys
-    this.precompiled = null; // Pre-compiled lookup structure
-    this.precompiledVersion = 0;
-    this._domainCount = 0; // O(1) size tracker for hot-path gating
-    this.stats = {
-      searches: 0,
-      hits: 0,
-      precompiledSearches: 0,
-      precompiledHits: 0
-    };
-  }
-  
-  // Insert a domain in reverse order for efficient matching
-  insert(domain) {
-    const reversed = domain.split('.').reverse().join('.');
-    let node = this.root;
-    
-    for (const char of reversed) {
-      if (!node[char]) {
-        node[char] = Object.create(null);
-      }
-      node = node[char];
-    }
-    if (!node['*']) {
-      this._domainCount++;
-    }
-    node['*'] = true; // Mark as blocked domain
-    
-    // Invalidate pre-compiled cache
-    this.precompiled = null;
-    this.precompiledVersion++;
-  }
-  
-  // Batch insert multiple domains for better performance
-  batchInsert(domains) {
-    if (!Array.isArray(domains)) return;
-    
-    for (const domain of domains) {
-      if (typeof domain === 'string' && domain.includes('.')) {
-        this.insert(domain);
-      }
-    }
-  }
-  
-  // Check if domain or any parent domain is blocked
-  search(domain) {
-    this.stats.searches++;
-    
-    // Try pre-compiled lookup first for maximum speed
-    if (this.precompiled) {
-      this.stats.precompiledSearches++;
-      const result = this.precompiled[domain];
-      if (result !== undefined) {
-        this.stats.precompiledHits++;
-        return result;
-      }
-    }
-    
-    // Fallback to standard trie search
-    const reversed = domain.split('.').reverse().join('.');
-    let node = this.root;
-    
-    for (const char of reversed) {
-      if (!node[char]) {
-        this.stats.hits++;
-        return false;
-      }
-      node = node[char];
-      
-      // Check if current level is blocked
-      if (node['*']) {
-        this.stats.hits++;
-        return true;
-      }
-    }
-    
-    this.stats.hits++;
-    return false;
-  }
-  
-  // Pre-compile the trie for instant lookups
-  precompile() {
-    const lookup = Object.create(null);
-    
-    const compileNode = (node, currentPath = '') => {
-      if (node['*']) {
-        // Add the reversed path (which is the actual domain) to lookup
-        const domain = currentPath.split('').reverse().join('');
-        lookup[domain] = true;
-      }
-      
-      for (const char in node) {
-        if (char !== '*') {
-          compileNode(node[char], currentPath + char);
-        }
-      }
-    };
-    
-    compileNode(this.root);
-    this.precompiled = lookup;
-    return this.precompiled;
-  }
-  
-  // Auto-precompile when trie reaches certain size
-  autoPrecompile(minSize = 1000) {
-    if (!this.precompiled && this.estimateSize() >= minSize) {
-      return this.precompile();
-    }
-    return this.precompiled;
-  }
-  
-  // Estimate memory usage of the trie
-  estimateSize() {
-    let count = 0;
-    const countNodes = (node) => {
-      for (const key in node) {
-        count++;
-        if (typeof node[key] === 'object' && node[key] !== null) {
-          countNodes(node[key]);
-        }
-      }
-    };
-    countNodes(this.root);
-    return count;
-  }
-
-  // O(1) size accessor used by the hot path. Without this getter, callers
-  // that probed `domainTrie.size` always saw `undefined` and silently bypassed
-  // the trie lookup branch entirely.
-  get size() {
-    return this._domainCount;
-  }
-  
-  // Clear the trie
-  clear() {
-    this.root = Object.create(null);
-    this.precompiled = null;
-    this.precompiledVersion++;
-    this._domainCount = 0;
-    this.stats = {
-      searches: 0,
-      hits: 0,
-      precompiledSearches: 0,
-      precompiledHits: 0
-    };
-  }
-  
-  // Get performance statistics
-  getStats() {
-    return {
-      ...this.stats,
-      size: this.estimateSize(),
-      precompiled: !!this.precompiled,
-      precompiledVersion: this.precompiledVersion
-    };
-  }
-}
-
 // Multi-tenant CDN parent domains that must not be parent-domain blocked.
 const SHARED_CDN_PARENT_DOMAINS = new Set([
   'b-cdn.net', 'cloudfront.net', 'akamaized.net', 'akamaihd.net',
@@ -496,10 +335,6 @@ const SHARED_CDN_PARENT_DOMAINS = new Set([
 
 function isSharedCDNParent(domain) {
   return SHARED_CDN_PARENT_DOMAINS.has(domain);
-}
-
-function filterSharedCDNParents(hosts) {
-  return hosts.filter(h => !isSharedCDNParent(h));
 }
 
 // Performance optimization: Pattern and URL caching
@@ -816,16 +651,28 @@ async function loadBlocklistMeta() {
   }
 }
 
-async function removeStaleBlocklistChunks(keepCount) {
-  if (!blocklistMeta || typeof blocklistMeta.chunkCount !== 'number') return;
-  if (blocklistMeta.chunkCount <= keepCount) return;
-  const keysToRemove = [];
-  for (let index = keepCount; index < blocklistMeta.chunkCount; index++) {
-    keysToRemove.push(`${BLOCKLIST_CACHE_CHUNK_PREFIX}${index}`);
+function blocklistChunkKey(meta, index) {
+  const generation = meta && typeof meta.generation === 'string' ? meta.generation : '';
+  return generation
+    ? `${BLOCKLIST_CACHE_CHUNK_PREFIX}${generation}_${index}`
+    : `${BLOCKLIST_CACHE_CHUNK_PREFIX}${index}`;
+}
+
+function blocklistChunkKeys(meta) {
+  if (!meta || !Number.isInteger(meta.chunkCount) || meta.chunkCount <= 0) return [];
+  return Array.from({ length: meta.chunkCount }, (_, index) => blocklistChunkKey(meta, index));
+}
+
+function createBlocklistGeneration() {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
   }
-  if (keysToRemove.length > 0) {
-    await browserAPI.storage.local.remove(keysToRemove);
-  }
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+}
+
+async function removeBlocklistGeneration(meta) {
+  const keys = blocklistChunkKeys(meta);
+  if (keys.length > 0) await browserAPI.storage.local.remove(keys);
 }
 
 async function storeBlocklistInCache(domains) {
@@ -849,6 +696,7 @@ async function storeBlocklistInCache(domains) {
     updatedAt: Date.now(),
     chunkCount: chunks.length,
     version: (previousMeta?.version || 0) + 1,
+    generation: createBlocklistGeneration(),
     source: 'remote',
     domainCount: uniqueDomains.length
   };
@@ -859,15 +707,24 @@ async function storeBlocklistInCache(domains) {
   for (let start = 0; start < chunks.length; start += 8) {
     const dataToStore = {};
     for (let index = start; index < Math.min(chunks.length, start + 8); index++) {
-      dataToStore[`${BLOCKLIST_CACHE_CHUNK_PREFIX}${index}`] = chunks[index];
+      dataToStore[blocklistChunkKey(meta, index)] = chunks[index];
     }
     await browserAPI.storage.local.set(dataToStore);
     await new Promise(resolve => setTimeout(resolve, 0));
   }
   await browserAPI.storage.local.set({ [BLOCKLIST_CACHE_META_KEY]: meta });
-  await removeStaleBlocklistChunks(chunks.length);
-
   blocklistMeta = meta;
+
+  // Metadata switches readers to the complete new generation atomically.
+  // Cleanup is best-effort: stale data costs space, but must not invalidate an
+  // otherwise successful refresh.
+  if (previousMeta) {
+    try {
+      await removeBlocklistGeneration(previousMeta);
+    } catch (error) {
+      console.warn('BlockNSFW: failed to remove stale blocklist generation', error);
+    }
+  }
   return meta;
 }
 
@@ -877,19 +734,18 @@ async function loadBlocklistFromCache() {
     return [];
   }
 
-  const chunkKeys = Array.from({ length: meta.chunkCount }, (_, index) => `${BLOCKLIST_CACHE_CHUNK_PREFIX}${index}`);
+  const chunkKeys = blocklistChunkKeys(meta);
   const storedChunks = await browserAPI.storage.local.get(chunkKeys);
   const domains = [];
 
   for (let index = 0; index < chunkKeys.length; index++) {
     const key = chunkKeys[index];
     const chunk = storedChunks[key];
-    if (Array.isArray(chunk)) {
-      for (let j = 0; j < chunk.length; j++) {
-        const normalized = normalizeDomainForCache(chunk[j]);
-        if (isLikelyDomain(normalized)) {
-          domains.push(normalized);
-        }
+    if (!Array.isArray(chunk)) return [];
+    for (let j = 0; j < chunk.length; j++) {
+      const normalized = normalizeDomainForCache(chunk[j]);
+      if (isLikelyDomain(normalized)) {
+        domains.push(normalized);
       }
     }
   }
@@ -1503,25 +1359,6 @@ async function loadDefaultBlocklist() {
     defaultBlocklist = Array.isArray(list) ? list.map(normalizeDomainForCache).filter(isLikelyDomain) : [];
     defaultBlocklistSet = new Set(defaultBlocklist);
     console.log(`BlockNSFW: Loaded ${defaultBlocklist.length} domains from packaged blocklist`);
-
-    // A fresh release already carries a curated current snapshot. Mark it
-    // fresh so installation does not immediately download and rebuild the same
-    // multi-megabyte data while the first browsing pages are rendering.
-    const previousMeta = blocklistMeta || (await loadBlocklistMeta());
-    if (!previousMeta) {
-      blocklistMeta = {
-        updatedAt: Date.now(),
-        chunkCount: 0,
-        version: 1,
-        source: 'bundled',
-        domainCount: defaultBlocklist.length
-      };
-      await browserAPI.storage.local.set({ [BLOCKLIST_CACHE_META_KEY]: blocklistMeta });
-    } else {
-      // Preserve the original bundled timestamp across restarts so its normal
-      // TTL can expire and trigger a remote refresh.
-      blocklistMeta = previousMeta;
-    }
   } catch (e) {
     defaultBlocklist = [];
     defaultBlocklistSet = new Set();
@@ -1802,26 +1639,6 @@ browserAPI.runtime.onMessage.addListener((message, sender, sendResponse) => {
       if (url) logBlockedPage(url, 'Search results filtered');
     } catch (_) {}
     sendResponse({ success: true });
-  } else if (message.type === 'get_blocklist_snapshot') {
-    (async () => {
-      try {
-        if (!Array.isArray(defaultBlocklist) || defaultBlocklist.length === 0) {
-          await loadDefaultBlocklist();
-          await rebuildCompiledPatterns();
-        }
-        await ensureRemoteBlocklistUpToDate();
-        const meta = blocklistMeta || (await loadBlocklistMeta());
-        sendResponse({
-          success: true,
-          blocklist: Array.isArray(defaultBlocklist) ? [...defaultBlocklist] : [],
-          meta
-        });
-      } catch (error) {
-        console.error('BlockNSFW: failed to provide blocklist snapshot', error);
-        sendResponse({ success: false, error: error.message });
-      }
-    })();
-    return true;
   } else if (message.type === 'check_blocklist_hosts' && Array.isArray(message.hosts)) {
     (async () => {
       try {
@@ -1882,6 +1699,7 @@ browserAPI.runtime.onMessage.addListener((message, sender, sendResponse) => {
   } else if (message.type === 'should_block_url' && typeof message.url === 'string') {
     (async () => {
       try {
+        if (!isReady) await initReady;
         const blocked = await shouldBlock(message.url);
         sendResponse({ success: true, blocked });
       } catch (error) {

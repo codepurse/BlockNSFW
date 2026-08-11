@@ -20,11 +20,15 @@ const SHARED_VALIDATE_DOMAIN_PATH = path.join(__dirname, '..', 'shared', 'valida
 function noop() {}
 
 function makeChromeStub() {
+  const messageListeners = [];
   const stub = {
     runtime: {
       onInstalled: { addListener: noop },
       onStartup: { addListener: noop },
-      onMessage: { addListener: noop },
+      onMessage: {
+        addListener: listener => { messageListeners.push(listener); },
+        listeners: messageListeners
+      },
       sendMessage: (...args) => Promise.resolve(),
       getURL: (p) => p,
       getManifest: () => ({ version: '1.6.0' })

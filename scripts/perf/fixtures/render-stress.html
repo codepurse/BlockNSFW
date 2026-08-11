@@ -3,6 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="generator" content="Mastodon benchmark fixture">
   <title>BlockNSFW Firefox rendering benchmark</title>
   <style>
     * { box-sizing: border-box; }
@@ -35,6 +36,8 @@
     }
     .card strong, .card span { display: block; }
     .card span { color: #59616d; }
+    .card a { color: #315f9d; }
+    .card img { float: right; width: 12px; height: 12px; }
   </style>
 </head>
 <body>
@@ -49,13 +52,19 @@
 
       function makeCard(index) {
         const card = document.createElement('article');
-        card.className = 'card';
+        card.className = 'card status';
         card.dataset.index = String(index);
         const title = document.createElement('strong');
         title.textContent = `Feed item ${index}`;
         const copy = document.createElement('span');
         copy.textContent = `Ordinary benchmark content update ${index % 97}`;
-        card.append(title, copy);
+        const link = document.createElement('a');
+        link.href = `https://asset-${index % 64}.invalid/item/${index}`;
+        link.textContent = `Reference ${index % 64}`;
+        const image = document.createElement('img');
+        image.alt = 'Benign benchmark thumbnail';
+        image.src = 'data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=';
+        card.append(title, copy, link, image);
         return card;
       }
 
