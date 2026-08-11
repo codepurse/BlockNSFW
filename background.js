@@ -321,170 +321,6 @@ function markReady() {
   }
 }
 
-// Optimized trie-based domain matching with pre-compilation for maximum performance
-class OptimizedDomainTrie {
-  constructor() {
-    this.root = Object.create(null); // Faster than Map for character keys
-    this.precompiled = null; // Pre-compiled lookup structure
-    this.precompiledVersion = 0;
-    this._domainCount = 0; // O(1) size tracker for hot-path gating
-    this.stats = {
-      searches: 0,
-      hits: 0,
-      precompiledSearches: 0,
-      precompiledHits: 0
-    };
-  }
-  
-  // Insert a domain in reverse order for efficient matching
-  insert(domain) {
-    const reversed = domain.split('.').reverse().join('.');
-    let node = this.root;
-    
-    for (const char of reversed) {
-      if (!node[char]) {
-        node[char] = Object.create(null);
-      }
-      node = node[char];
-    }
-    if (!node['*']) {
-      this._domainCount++;
-    }
-    node['*'] = true; // Mark as blocked domain
-    
-    // Invalidate pre-compiled cache
-    this.precompiled = null;
-    this.precompiledVersion++;
-  }
-  
-  // Batch insert multiple domains for better performance
-  batchInsert(domains) {
-    if (!Array.isArray(domains)) return;
-    
-    for (const domain of domains) {
-      if (typeof domain === 'string' && domain.includes('.')) {
-        this.insert(domain);
-      }
-    }
-  }
-  
-  // Check if domain or any parent domain is blocked
-  search(domain) {
-    this.stats.searches++;
-    
-    // Try pre-compiled lookup first for maximum speed
-    if (this.precompiled) {
-      this.stats.precompiledSearches++;
-      const result = this.precompiled[domain];
-      if (result !== undefined) {
-        this.stats.precompiledHits++;
-        return result;
-      }
-    }
-    
-    // Fallback to standard trie search
-    const reversed = domain.split('.').reverse().join('.');
-    let node = this.root;
-    
-    for (const char of reversed) {
-      if (!node[char]) {
-        this.stats.hits++;
-        return false;
-      }
-      node = node[char];
-      
-      // Check if current level is blocked
-      if (node['*']) {
-        this.stats.hits++;
-        return true;
-      }
-    }
-    
-    this.stats.hits++;
-    return false;
-  }
-  
-  // Pre-compile the trie for instant lookups
-  precompile() {
-    const lookup = Object.create(null);
-    
-    const compileNode = (node, currentPath = '') => {
-      if (node['*']) {
-        // Add the reversed path (which is the actual domain) to lookup
-        const domain = currentPath.split('').reverse().join('');
-        lookup[domain] = true;
-      }
-      
-      for (const char in node) {
-        if (char !== '*') {
-          compileNode(node[char], currentPath + char);
-        }
-      }
-    };
-    
-    compileNode(this.root);
-    this.precompiled = lookup;
-    return this.precompiled;
-  }
-  
-  // Auto-precompile when trie reaches certain size
-  autoPrecompile(minSize = 1000) {
-    if (!this.precompiled && this.estimateSize() >= minSize) {
-      return this.precompile();
-    }
-    return this.precompiled;
-  }
-  
-  // Estimate memory usage of the trie
-  estimateSize() {
-    let count = 0;
-    const countNodes = (node) => {
-      for (const key in node) {
-        count++;
-        if (typeof node[key] === 'object' && node[key] !== null) {
-          countNodes(node[key]);
-        }
-      }
-    };
-    countNodes(this.root);
-    return count;
-  }
-
-  // O(1) size accessor used by the hot path. Without this getter, callers
-  // that probed `domainTrie.size` always saw `undefined` and silently bypassed
-  // the trie lookup branch entirely.
-  get size() {
-    return this._domainCount;
-  }
-  
-  // Clear the trie
-  clear() {
-    this.root = Object.create(null);
-    this.precompiled = null;
-    this.precompiledVersion++;
-    this._domainCount = 0;
-    this.stats = {
-      searches: 0,
-      hits: 0,
-      precompiledSearches: 0,
-      precompiledHits: 0
-    };
-  }
-  
-  // Get performance statistics
-  getStats() {
-    return {
-      ...this.stats,
-      size: this.estimateSize(),
-      precompiled: !!this.precompiled,
-      precompiledVersion: this.precompiledVersion
-    };
-  }
-}
-
-// Initialize trie with blocklist
-let domainTrie = new OptimizedDomainTrie();
-
 // Multi-tenant CDN parent domains that must not be parent-domain blocked.
 const SHARED_CDN_PARENT_DOMAINS = new Set([
   'b-cdn.net', 'cloudfront.net', 'akamaized.net', 'akamaihd.net',
@@ -501,15 +337,10 @@ function isSharedCDNParent(domain) {
   return SHARED_CDN_PARENT_DOMAINS.has(domain);
 }
 
-function filterSharedCDNParents(hosts) {
-  return hosts.filter(h => !isSharedCDNParent(h));
-}
-
 // Performance optimization: Pattern and URL caching
 let patternCache = new Map(); // Cache for compiled regex patterns
 let urlCheckCache = new Map(); // Cache for URL blocking decisions
 let keywordCheckCache = new Map(); // Cache for hostname keyword checks
-let preCompiledDomainPatterns = new Map(); // Pre-compiled domain patterns for instant matching
 const MAX_CACHE_SIZE = 1000; // Limit cache size to prevent memory bloat
 let cacheVersion = 0; // Version to invalidate caches when patterns change
 
@@ -820,45 +651,80 @@ async function loadBlocklistMeta() {
   }
 }
 
-async function removeStaleBlocklistChunks(keepCount) {
-  if (!blocklistMeta || typeof blocklistMeta.chunkCount !== 'number') return;
-  if (blocklistMeta.chunkCount <= keepCount) return;
-  const keysToRemove = [];
-  for (let index = keepCount; index < blocklistMeta.chunkCount; index++) {
-    keysToRemove.push(`${BLOCKLIST_CACHE_CHUNK_PREFIX}${index}`);
+function blocklistChunkKey(meta, index) {
+  const generation = meta && typeof meta.generation === 'string' ? meta.generation : '';
+  return generation
+    ? `${BLOCKLIST_CACHE_CHUNK_PREFIX}${generation}_${index}`
+    : `${BLOCKLIST_CACHE_CHUNK_PREFIX}${index}`;
+}
+
+function blocklistChunkKeys(meta) {
+  if (!meta || !Number.isInteger(meta.chunkCount) || meta.chunkCount <= 0) return [];
+  return Array.from({ length: meta.chunkCount }, (_, index) => blocklistChunkKey(meta, index));
+}
+
+function createBlocklistGeneration() {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
   }
-  if (keysToRemove.length > 0) {
-    await browserAPI.storage.local.remove(keysToRemove);
-  }
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+}
+
+async function removeBlocklistGeneration(meta) {
+  const keys = blocklistChunkKeys(meta);
+  if (keys.length > 0) await browserAPI.storage.local.remove(keys);
 }
 
 async function storeBlocklistInCache(domains) {
   if (!Array.isArray(domains) || domains.length === 0) return null;
 
   const previousMeta = blocklistMeta || (await loadBlocklistMeta());
-  const uniqueDomains = Array.from(new Set(domains.map(normalizeDomainForCache))).filter(isLikelyDomain);
-  uniqueDomains.sort();
+  const uniqueSet = new Set();
+  for (let index = 0; index < domains.length; index++) {
+    const normalized = normalizeDomainForCache(domains[index]);
+    if (isLikelyDomain(normalized)) uniqueSet.add(normalized);
+    // Keep a large refresh cooperative with Firefox rendering.
+    if (index > 0 && index % 5000 === 0) {
+      await new Promise(resolve => setTimeout(resolve, 0));
+    }
+  }
+  const uniqueDomains = Array.from(uniqueSet);
 
   const chunks = chunkArray(uniqueDomains, BLOCKLIST_CACHE_CHUNK_SIZE);
-  const dataToStore = {};
-  chunks.forEach((chunk, index) => {
-    dataToStore[`${BLOCKLIST_CACHE_CHUNK_PREFIX}${index}`] = chunk;
-  });
 
   const meta = {
     updatedAt: Date.now(),
     chunkCount: chunks.length,
     version: (previousMeta?.version || 0) + 1,
+    generation: createBlocklistGeneration(),
     source: 'remote',
     domainCount: uniqueDomains.length
   };
 
-  dataToStore[BLOCKLIST_CACHE_META_KEY] = meta;
-
-  await browserAPI.storage.local.set(dataToStore);
-  await removeStaleBlocklistChunks(chunks.length);
-
+  // Avoid one multi-megabyte storage serialization task. Small batches let the
+  // browser render between writes; metadata is committed last so readers never
+  // observe a partially written generation as current.
+  for (let start = 0; start < chunks.length; start += 8) {
+    const dataToStore = {};
+    for (let index = start; index < Math.min(chunks.length, start + 8); index++) {
+      dataToStore[blocklistChunkKey(meta, index)] = chunks[index];
+    }
+    await browserAPI.storage.local.set(dataToStore);
+    await new Promise(resolve => setTimeout(resolve, 0));
+  }
+  await browserAPI.storage.local.set({ [BLOCKLIST_CACHE_META_KEY]: meta });
   blocklistMeta = meta;
+
+  // Metadata switches readers to the complete new generation atomically.
+  // Cleanup is best-effort: stale data costs space, but must not invalidate an
+  // otherwise successful refresh.
+  if (previousMeta) {
+    try {
+      await removeBlocklistGeneration(previousMeta);
+    } catch (error) {
+      console.warn('BlockNSFW: failed to remove stale blocklist generation', error);
+    }
+  }
   return meta;
 }
 
@@ -868,19 +734,18 @@ async function loadBlocklistFromCache() {
     return [];
   }
 
-  const chunkKeys = Array.from({ length: meta.chunkCount }, (_, index) => `${BLOCKLIST_CACHE_CHUNK_PREFIX}${index}`);
+  const chunkKeys = blocklistChunkKeys(meta);
   const storedChunks = await browserAPI.storage.local.get(chunkKeys);
   const domains = [];
 
   for (let index = 0; index < chunkKeys.length; index++) {
     const key = chunkKeys[index];
     const chunk = storedChunks[key];
-    if (Array.isArray(chunk)) {
-      for (let j = 0; j < chunk.length; j++) {
-        const normalized = normalizeDomainForCache(chunk[j]);
-        if (isLikelyDomain(normalized)) {
-          domains.push(normalized);
-        }
+    if (!Array.isArray(chunk)) return [];
+    for (let j = 0; j < chunk.length; j++) {
+      const normalized = normalizeDomainForCache(chunk[j]);
+      if (isLikelyDomain(normalized)) {
+        domains.push(normalized);
       }
     }
   }
@@ -1509,42 +1374,10 @@ async function rebuildCompiledPatterns() {
   
   const settings = await getSettings();
   const patternSources = [];
-  const hostEntries = [];
 
-  if (Array.isArray(defaultBlocklist)) {
-    for (let i = 0; i < defaultBlocklist.length; i++) {
-      const entry = defaultBlocklist[i];
-      if (!entry) continue;
-      if (entry.includes('*')) {
-        patternSources.push(entry);
-        continue;
-      }
-      const normalized = normalizeDomainForCache(entry);
-      if (isLikelyDomain(normalized)) {
-        hostEntries.push(normalized);
-      }
-    }
-  }
-
-  defaultBlocklistSet = new Set(hostEntries);
-  
-  // Rebuild trie WITHOUT shared CDN parent domains
-  domainTrie = new OptimizedDomainTrie();
-  domainTrie.batchInsert(filterSharedCDNParents(hostEntries));
-
-  // Pre-compile domain patterns for instant matching
-  preCompiledDomainPatterns = new Map();
-  hostEntries.forEach(domain => {
-    try {
-      // Create optimized regex for exact domain matching
-      const escapedDomain = domain.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      const regex = new RegExp(`^(www\\.)?${escapedDomain}$`, 'i');
-      preCompiledDomainPatterns.set(domain, regex);
-    } catch (e) {
-      console.error('BlockNSFW: Failed to pre-compile domain pattern', domain, e);
-    }
-  });
-
+  // loadDefaultBlocklist/remote refresh already own the normalized default
+  // Set. Rewalking 200k+ domains here on every startup or settings change was
+  // redundant and particularly costly in Firefox's extension process.
   if (Array.isArray(settings.customPatterns)) {
     for (let i = 0; i < settings.customPatterns.length; i++) {
       const pattern = settings.customPatterns[i];
@@ -1558,7 +1391,7 @@ async function rebuildCompiledPatterns() {
   compiledPatterns = buildHostPatterns(uniquePatterns);
   
   console.log(
-    `BlockNSFW: Compiled ${compiledPatterns.length} URL patterns with ${defaultBlocklistSet.size} host entries and ${preCompiledDomainPatterns.size} pre-compiled domain patterns`
+    `BlockNSFW: Compiled ${compiledPatterns.length} URL patterns with ${defaultBlocklistSet.size} host entries`
   );
 }
 
@@ -1624,21 +1457,6 @@ function isUrlInDefaultBlocklist(urlStr) {
       }
     }
 
-    // Trie with shared-CDN guard
-    if (domainTrie.size > 0 && domainTrie.search(normalized)) {
-      if (isSharedCDNParent(normalized)) return false;
-      let realMatch = defaultBlocklistSet.has(normalized);
-      if (!realMatch) {
-        for (let i = 1; i < labels.length - 1; i++) {
-          const candidate = labels.slice(i).join('.');
-          if (defaultBlocklistSet.has(candidate)) {
-            realMatch = !isSharedCDNParent(candidate);
-            if (realMatch) break;
-          }
-        }
-      }
-      if (realMatch) return true;
-    }
   } catch (error) {
     // Ignore parsing errors and treat as not blocked
   }
@@ -1750,19 +1568,8 @@ async function shouldBlock(urlStr) {
 
   let shouldBlockResult = false;
   
-  // Use pre-compiled domain patterns for instant matching when possible
   const hostname = u.hostname.toLowerCase();
-  const normalizedHost = normalizeDomainForCache(hostname);
-  
-  // Check pre-compiled domain patterns first (fastest path)
-  for (const [domain, regex] of preCompiledDomainPatterns) {
-    if (regex.test(normalizedHost)) {
-      shouldBlockResult = true;
-      break;
-    }
-  }
-  
-  if (!shouldBlockResult && isUrlInDefaultBlocklist(urlStr)) {
+  if (isUrlInDefaultBlocklist(urlStr)) {
     shouldBlockResult = true;
   } else if (!shouldBlockResult && urlMatchesCompiled(urlStr)) {
     shouldBlockResult = true;
@@ -1832,23 +1639,20 @@ browserAPI.runtime.onMessage.addListener((message, sender, sendResponse) => {
       if (url) logBlockedPage(url, 'Search results filtered');
     } catch (_) {}
     sendResponse({ success: true });
-  } else if (message.type === 'get_blocklist_snapshot') {
+  } else if (message.type === 'check_blocklist_hosts' && Array.isArray(message.hosts)) {
     (async () => {
       try {
-        if (!Array.isArray(defaultBlocklist) || defaultBlocklist.length === 0) {
-          await loadDefaultBlocklist();
-          await rebuildCompiledPatterns();
+        if (!isReady) await initReady;
+        const hosts = message.hosts.slice(0, 1000);
+        const blockedHosts = [];
+        for (const rawHost of hosts) {
+          const host = normalizeDomainForCache(rawHost);
+          if (!host) continue;
+          if (isUrlInDefaultBlocklist(`https://${host}/`)) blockedHosts.push(host);
         }
-        await ensureRemoteBlocklistUpToDate();
-        const meta = blocklistMeta || (await loadBlocklistMeta());
-        sendResponse({
-          success: true,
-          blocklist: Array.isArray(defaultBlocklist) ? [...defaultBlocklist] : [],
-          meta
-        });
+        sendResponse({ success: true, blockedHosts });
       } catch (error) {
-        console.error('BlockNSFW: failed to provide blocklist snapshot', error);
-        sendResponse({ success: false, error: error.message });
+        sendResponse({ success: false, blockedHosts: [], error: error.message });
       }
     })();
     return true;
@@ -1895,7 +1699,7 @@ browserAPI.runtime.onMessage.addListener((message, sender, sendResponse) => {
   } else if (message.type === 'should_block_url' && typeof message.url === 'string') {
     (async () => {
       try {
-        await ensureRemoteBlocklistUpToDate();
+        if (!isReady) await initReady;
         const blocked = await shouldBlock(message.url);
         sendResponse({ success: true, blocked });
       } catch (error) {
@@ -2200,9 +2004,14 @@ async function updateSafeSearchRules() {
   }
 }
 
-// Init
-browserAPI.runtime.onInstalled.addListener(async (details) => {
-  try {
+// Init. Firefox can run the background script and dispatch onInstalled at the
+// same time for a temporary/fresh install. Share one initialization promise so
+// the 4 MB blocklist is parsed and indexed once.
+let backgroundInitializationPromise = null;
+
+function initializeBackground() {
+  if (backgroundInitializationPromise) return backgroundInitializationPromise;
+  backgroundInitializationPromise = (async () => {
     const settings = await getSettings();
     await setSettings(settings); // ensure defaults saved
     await loadDefaultBlocklist();
@@ -2212,6 +2021,14 @@ browserAPI.runtime.onInstalled.addListener(async (details) => {
     ensureRemoteWhitelistUpToDate().catch(e => console.warn('BlockNSFW: initial whitelist sync failed', e));
     checkForUpdate().catch(e => console.warn('BlockNSFW: initial update check failed', e));
     fetchAnnouncement().catch(e => console.warn('BlockNSFW: initial announcement fetch failed', e));
+    console.log('BlockNSFW: Background initialized for Manifest V3');
+  })().finally(markReady);
+  return backgroundInitializationPromise;
+}
+
+browserAPI.runtime.onInstalled.addListener(async (details) => {
+  try {
+    await initializeBackground();
 
     // Fresh install only: open the first-run onboarding wizard once. Updates
     // keep using the in-page "What's New" card, so we don't nag on every bump.
@@ -2226,26 +2043,17 @@ browserAPI.runtime.onInstalled.addListener(async (details) => {
       }
     }
     console.log('BlockNSFW: Extension installed/updated - Manifest V3 compatible');
-  } finally {
-    markReady();
+  } catch (error) {
+    console.error('BlockNSFW: installation initialization failed', error);
   }
 });
 
 // When service worker starts
 (async function init() {
   try {
-    const settings = await getSettings();
-    await setSettings(settings); // ensure defaults saved
-    await loadDefaultBlocklist();
-    await rebuildCompiledPatterns();
-    await initializeExtensionStateTracking();
-    await updateSafeSearchRules();
-    ensureRemoteWhitelistUpToDate().catch(e => console.warn('BlockNSFW: whitelist sync failed', e));
-    checkForUpdate().catch(e => console.warn('BlockNSFW: update check failed', e));
-    fetchAnnouncement().catch(e => console.warn('BlockNSFW: announcement fetch failed', e));
-    console.log('BlockNSFW: Service worker initialized for Manifest V3');
-  } finally {
-    markReady();
+    await initializeBackground();
+  } catch (error) {
+    console.error('BlockNSFW: service worker initialization failed', error);
   }
 })();
 
