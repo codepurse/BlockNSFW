@@ -1359,6 +1359,25 @@ async function loadDefaultBlocklist() {
     defaultBlocklist = Array.isArray(list) ? list.map(normalizeDomainForCache).filter(isLikelyDomain) : [];
     defaultBlocklistSet = new Set(defaultBlocklist);
     console.log(`BlockNSFW: Loaded ${defaultBlocklist.length} domains from packaged blocklist`);
+
+    // A fresh release already carries a curated current snapshot. Mark it
+    // fresh so installation does not immediately download and rebuild the same
+    // multi-megabyte data while the first browsing pages are rendering.
+    const previousMeta = blocklistMeta || (await loadBlocklistMeta());
+    if (!previousMeta) {
+      blocklistMeta = {
+        updatedAt: Date.now(),
+        chunkCount: 0,
+        version: 1,
+        source: 'bundled',
+        domainCount: defaultBlocklist.length
+      };
+      await browserAPI.storage.local.set({ [BLOCKLIST_CACHE_META_KEY]: blocklistMeta });
+    } else {
+      // Preserve the original bundled timestamp across restarts so its normal
+      // TTL can expire and trigger a remote refresh.
+      blocklistMeta = previousMeta;
+    }
   } catch (e) {
     defaultBlocklist = [];
     defaultBlocklistSet = new Set();
