@@ -352,6 +352,9 @@ const BLOCKLIST_CACHE_META_KEY = 'pblocker_blocklist_meta_v2';
 const BLOCKLIST_CACHE_CHUNK_PREFIX = 'pblocker_blocklist_chunk_v2_';
 const BLOCKLIST_CACHE_CHUNK_SIZE = 5000;
 const BLOCKLIST_CACHE_TTL = 1000 * 60 * 60 * 12; // 12 hours
+// Release builds replace this token with their UTC build time. Direct source
+// loads leave it at zero and use installation time as a development fallback.
+const BUNDLED_BLOCKLIST_BUILT_AT = Number('__BLOCKNSFW_BUILD_TIMESTAMP_MS__') || 0;
 
 let blocklistMeta = null;
 let remoteBlocklistPromise = null;
@@ -1359,6 +1362,27 @@ async function loadDefaultBlocklist() {
     defaultBlocklist = Array.isArray(list) ? list.map(normalizeDomainForCache).filter(isLikelyDomain) : [];
     defaultBlocklistSet = new Set(defaultBlocklist);
     console.log(`BlockNSFW: Loaded ${defaultBlocklist.length} domains from packaged blocklist`);
+
+    // A fresh release already carries a curated current snapshot. Mark it
+    // fresh so installation does not immediately download and rebuild the same
+    // multi-megabyte data while the first browsing pages are rendering.
+    const previousMeta = blocklistMeta || (await loadBlocklistMeta());
+    if (!previousMeta) {
+      blocklistMeta = {
+        updatedAt: BUNDLED_BLOCKLIST_BUILT_AT || Date.now(),
+        // No remote cache generation exists yet; the bundled snapshot is
+        // authoritative until updatedAt reaches the normal refresh TTL.
+        chunkCount: 0,
+        version: 1,
+        source: 'bundled',
+        domainCount: defaultBlocklist.length
+      };
+      await browserAPI.storage.local.set({ [BLOCKLIST_CACHE_META_KEY]: blocklistMeta });
+    } else {
+      // Preserve the original bundled timestamp across restarts so its normal
+      // TTL can expire and trigger a remote refresh.
+      blocklistMeta = previousMeta;
+    }
   } catch (e) {
     defaultBlocklist = [];
     defaultBlocklistSet = new Set();

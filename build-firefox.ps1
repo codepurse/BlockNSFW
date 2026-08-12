@@ -74,6 +74,18 @@ foreach ($file in $RuntimeFiles) {
     }
 }
 
+$BuildTimestampToken = "__BLOCKNSFW_BUILD_TIMESTAMP_MS__"
+$BuildTimestampMs = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds().ToString()
+$BackgroundDst = Join-Path $OutDir "background.js"
+$BackgroundSource = [System.IO.File]::ReadAllText($BackgroundDst)
+if (-not $BackgroundSource.Contains($BuildTimestampToken)) {
+    throw "Missing bundled blocklist build timestamp token in Firefox background.js"
+}
+[System.IO.File]::WriteAllText(
+    $BackgroundDst,
+    $BackgroundSource.Replace($BuildTimestampToken, $BuildTimestampMs)
+)
+
 $RequiredAssets = @(
     "vendor\tfjs\tf.es2017.js",
     "vendor\nsfwjs\nsfwjs.runtime.js",
