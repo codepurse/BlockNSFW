@@ -1839,7 +1839,17 @@ const SAFE_SEARCH_RULE_IDS = [
   10040, 10041, 10042, 10043
 ];
 const YOUTUBE_RESTRICT_RULE_IDS = [10010];
-const ALL_DNR_RULE_IDS = [...SAFE_SEARCH_RULE_IDS, ...YOUTUBE_RESTRICT_RULE_IDS];
+// Network-level image/media block for the user's own blocked sites (see
+// buildCustomImageBlockRules). One rule carries every eligible domain.
+const CUSTOM_IMAGE_BLOCK_RULE_IDS = [10050];
+// Dynamic-rule conditions have a bounded domain list; the curated blocklist
+// (200k+ hosts) could never fit here, but a user's own list realistically will.
+const CUSTOM_IMAGE_BLOCK_MAX_DOMAINS = 1000;
+const ALL_DNR_RULE_IDS = [
+  ...SAFE_SEARCH_RULE_IDS,
+  ...YOUTUBE_RESTRICT_RULE_IDS,
+  ...CUSTOM_IMAGE_BLOCK_RULE_IDS
+];
 
 function buildSafeSearchRules() {
   const mkRedirect = (id, regexFilter, params) => ({
@@ -2005,10 +2015,77 @@ function buildSafeSearchRules() {
   ];
 }
 
-async function updateSafeSearchRules() {
+// Reduce the user's customPatterns to hostnames usable as a DNR
+// `requestDomains` condition. requestDomains already matches subdomains, so
+// `*.example.com` and `example.com` collapse to the same entry.
+//
+// Deliberately skipped:
+//   - path-scoped patterns (`example.com/gallery`) — a host-wide image block
+//     would be broader than the user asked for; content.js still handles them.
+//   - patterns with an embedded wildcard (`ex*.com`) — no requestDomains
+//     equivalent.
+//   - whitelisted domains — an active allow entry outranks the pattern.
+function customPatternsToImageBlockDomains(patterns, whitelistedDomains = []) {
+  if (!Array.isArray(patterns) || patterns.length === 0) return [];
+
+  const clean = (value) => String(value || '').trim().toLowerCase().replace(/\.+$/, '');
+  const excluded = new Set(whitelistedDomains.map(clean).filter(Boolean));
+  const domains = new Set();
+
+  for (const raw of patterns) {
+    const pattern = clean(raw);
+    if (!pattern || pattern.includes('/')) continue;
+
+    const host = pattern.startsWith('*.') ? pattern.slice(2) : pattern;
+    if (!host || host.includes('*')) continue;
+    if (!host.includes('.') || !/^[a-z0-9.-]+$/.test(host)) continue;
+    if (excluded.has(host)) continue;
+
+    domains.add(host);
+    if (domains.size >= CUSTOM_IMAGE_BLOCK_MAX_DOMAINS) break;
+  }
+
+  return [...domains];
+}
+
+// Blocking a site should also stop its images from surfacing elsewhere —
+// hotlinked into forums, embedded in feeds, or opened full-size from an image
+// search result. content.js hides the search thumbnails (which are served by
+// the engine's own CDN, so DNR can't see them); this stops every request that
+// does reach the blocked host. See issue #23.
+function buildCustomImageBlockRules(requestDomains) {
+  if (!Array.isArray(requestDomains) || requestDomains.length === 0) return [];
+
+  return [{
+    id: CUSTOM_IMAGE_BLOCK_RULE_IDS[0],
+    priority: 2,
+    action: { type: 'block' },
+    condition: {
+      requestDomains,
+      // Sub-resources only — navigation still routes through the blocked page
+      // so the user gets the usual explanation instead of a browser error.
+      resourceTypes: ['image', 'media']
+    }
+  }];
+}
+
+async function getActiveWhitelistDomains() {
+  try {
+    const { [WHITELIST_KEY]: whitelist } = await browserAPI.storage.local.get(WHITELIST_KEY);
+    if (!Array.isArray(whitelist)) return [];
+    const now = Date.now();
+    return whitelist
+      .filter(item => item && item.domain && !(item.type === 'temporary' && item.expiresAt && item.expiresAt <= now))
+      .map(item => item.domain);
+  } catch (_) {
+    return [];
+  }
+}
+
+async function updateDnrRules() {
   try {
     if (!browserAPI.declarativeNetRequest || typeof browserAPI.declarativeNetRequest.updateDynamicRules !== 'function') {
-      console.warn('BlockNSFW: declarativeNetRequest API not available; skipping safe-search rules');
+      console.warn('BlockNSFW: declarativeNetRequest API not available; skipping dynamic rules');
       return;
     }
 
@@ -2017,14 +2094,22 @@ async function updateSafeSearchRules() {
     if (settings.safeSearchEnabled) addRules.push(...buildSafeSearchRules());
     // Rule id 10010 stays in ALL_DNR_RULE_IDS so any previously-set rule is removed.
 
+    if (settings.enabled) {
+      const imageBlockDomains = customPatternsToImageBlockDomains(
+        settings.customPatterns,
+        await getActiveWhitelistDomains()
+      );
+      addRules.push(...buildCustomImageBlockRules(imageBlockDomains));
+    }
+
     await browserAPI.declarativeNetRequest.updateDynamicRules({
       removeRuleIds: ALL_DNR_RULE_IDS,
       addRules
     });
 
-    console.log(`BlockNSFW: Safe-search rules updated (${addRules.length} active)`);
+    console.log(`BlockNSFW: Dynamic rules updated (${addRules.length} active)`);
   } catch (error) {
-    console.error('BlockNSFW: failed to update safe-search rules', error);
+    console.error('BlockNSFW: failed to update dynamic rules', error);
   }
 }
 
@@ -2041,7 +2126,7 @@ function initializeBackground() {
     await loadDefaultBlocklist();
     await rebuildCompiledPatterns();
     await initializeExtensionStateTracking();
-    await updateSafeSearchRules();
+    await updateDnrRules();
     ensureRemoteWhitelistUpToDate().catch(e => console.warn('BlockNSFW: initial whitelist sync failed', e));
     checkForUpdate().catch(e => console.warn('BlockNSFW: initial update check failed', e));
     fetchAnnouncement().catch(e => console.warn('BlockNSFW: initial announcement fetch failed', e));
@@ -2088,13 +2173,16 @@ browserAPI.storage.onChanged.addListener(async (changes, area) => {
     await rebuildCompiledPatterns();
     // Check if enabled state changed
     await checkExtensionStateChange();
-    // Re-apply safe-search / YouTube restricted rules if those toggles flipped
-    await updateSafeSearchRules();
+    // Re-apply safe-search rules and the custom-site image block if the
+    // relevant toggles or the user's blocked-site list changed
+    await updateDnrRules();
     console.log('BlockNSFW: Settings updated - patterns rebuilt');
   }
   // Clear URL caches when whitelist changes (patterns don't need rebuilding)
   if (changes[WHITELIST_KEY]) {
     urlCheckCache.clear();
     cacheVersion++;
+    // A new allow entry must lift the image block for that domain
+    await updateDnrRules();
   }
 });
