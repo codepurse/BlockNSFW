@@ -322,7 +322,9 @@ let anyTextFeatureOn = true;
 // work — instead of only processContent respecting it.
 let pageWhitelisted = false;
 
-// Adult content detection keywords (used for domain/site name lookups)
+// Adult content detection keywords (used for domain/site name lookups).
+// These are site names, so they are matched as standalone tokens via
+// indexOfSiteToken() below — never as bare substrings. See shared/token-match.js.
 const ADULT_CONTENT_KEYWORDS = [
   'pornhub', 'xvideos', 'xhamster', 'xnxx', 'redtube', 'youporn',
   'brazzers', 'chaturbate', 'onlyfans', 'bongacams',
@@ -617,6 +619,25 @@ const BENIGN_IMAGE_CONTEXT = new Set([
 // common benign usage in e-commerce, news, and education.
 const HIGH_CONFIDENCE_PATH_KEYWORDS = /\b(porn|porno|pornography|xxx|hentai|nsfw|erotic|fetish)\b/i;
 const AMBIGUOUS_PATH_KEYWORDS = /\b(nude|naked|sex|adult)\b/i;
+
+// Query strings go through shared/url-scan.js so a site's own adult-filter
+// switch reads as a control instead of as content: 4get's `?nsfw=no` means the
+// filter is ON, yet a raw scan of the query blocked the page. If that module is
+// missing, fall back to the path alone — scanning the query raw is exactly the
+// false positive the module exists to prevent.
+function buildUrlScanText(urlLike, opts) {
+  if (typeof UrlScan !== 'undefined' && UrlScan.buildUrlScanText) {
+    return UrlScan.buildUrlScanText(urlLike, opts);
+  }
+  try {
+    const u = typeof urlLike === 'string' ? new URL(urlLike, window.location.href) : urlLike;
+    let path = (u && u.pathname) || '';
+    try { path = decodeURIComponent(path); } catch (_) {}
+    return path;
+  } catch (_) {
+    return '';
+  }
+}
 
 const MAX_TEXT_LENGTH = 8000;
 
@@ -1024,9 +1045,7 @@ function isLikelyAdultHostEarly(host) {
 
 function isLikelyAdultPathEarly(urlStr) {
   try {
-    const u = new URL(urlStr);
-    let path = (u.pathname || '') + (u.search || '');
-    try { path = decodeURIComponent(path); } catch (_) {}
+    const path = buildUrlScanText(urlStr);
     return /\b(porn|porno|pornography|xxx|nsfw|hentai|nude|naked|erotic)\b/i.test(path);
   } catch (_) {
     return false;
@@ -1981,6 +2000,27 @@ function escapeRegExp(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+// Locate an adult *site* name in text as a standalone token. A site name glued
+// to other letters is part of a different word: substring matching on "erome"
+// (a real adult site) blocked every page that said "Jerome". Delegates to
+// shared/token-match.js so the rule is unit-tested; the local mirror below only
+// runs if that module failed to load.
+function indexOfSiteToken(lowerText, token, fromIndex) {
+  if (typeof TokenMatch !== 'undefined' && TokenMatch.indexOfStandaloneToken) {
+    return TokenMatch.indexOfStandaloneToken(lowerText, token, fromIndex);
+  }
+  if (!lowerText || !token) return -1;
+  const isLetter = (ch) => !!ch && ((ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z'));
+  let idx = lowerText.indexOf(token, fromIndex > 0 ? fromIndex : 0);
+  while (idx !== -1) {
+    const before = idx > 0 ? lowerText.charAt(idx - 1) : '';
+    const after = lowerText.charAt(idx + token.length);
+    if (!isLetter(before) && !isLetter(after)) return idx;
+    idx = lowerText.indexOf(token, idx + 1);
+  }
+  return -1;
+}
+
 function matchesCustomKeywords(lowerText) {
   for (let i = 0; i < customKeywordList.length; i++) {
     const raw = customKeywordList[i];
@@ -2041,12 +2081,12 @@ function analyzeTextForAdultContent(text) {
 
   const processLiteralMatches = (keyword, options = {}) => {
     if (!keyword) return;
-    let index = lowerText.indexOf(keyword);
+    let index = indexOfSiteToken(lowerText, keyword, 0);
     while (index !== -1) {
       totalMatches++;
       matchedKeywords.add(keyword);
       evaluateContextWindow(index, keyword.length, options);
-      index = lowerText.indexOf(keyword, index + keyword.length);
+      index = indexOfSiteToken(lowerText, keyword, index + keyword.length);
     }
   };
 
@@ -2151,11 +2191,11 @@ function containsAdultKeywords(text, opts) {
 
   const processLiteralMatches = (keyword, evalOpts = {}) => {
     if (!keyword) return;
-    let index = lowerText.indexOf(keyword);
+    let index = indexOfSiteToken(lowerText, keyword, 0);
     while (index !== -1) {
       totalMatches++;
       evaluateContextWindow(index, keyword.length, evalOpts);
-      index = lowerText.indexOf(keyword, index + keyword.length);
+      index = indexOfSiteToken(lowerText, keyword, index + keyword.length);
     }
   };
 
@@ -2338,7 +2378,7 @@ function shouldBlockCurrentSearchQuery() {
   const hasSafeIntent = SAFE_CONTEXT_KEYWORDS.some(keyword => query.includes(keyword));
   if (hasSafeIntent) return false;
 
-  if (ADULT_CONTENT_KEYWORDS.some(keyword => query.includes(keyword))) {
+  if (ADULT_CONTENT_KEYWORDS.some(keyword => indexOfSiteToken(query, keyword, 0) !== -1)) {
     return true;
   }
 
@@ -3351,7 +3391,7 @@ function shouldBlockImage(img) {
         
         try {
             const linkObj = new URL(linkUrl);
-            const linkPath = linkObj.pathname.toLowerCase() + linkObj.search.toLowerCase();
+            const linkPath = buildUrlScanText(linkObj).toLowerCase();
             const highConfSource = HIGH_CONFIDENCE_PATH_KEYWORDS.test(linkPath);
             const ambigSource = AMBIGUOUS_PATH_KEYWORDS.test(linkPath);
             const sourcePathMatch = highConfSource || (!isCleanPageHost() && ambigSource);

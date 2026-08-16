@@ -4,6 +4,8 @@ All notable project changes should be documented here going forward.
 
 ## [Unreleased]
 
+## [1.7.4] - 2026-08-16
+
 ### Added
 - **Images from sites you blocked yourself are now blocked too.** Adding a site
   to your custom blocklist stopped you visiting it, but its pictures still came
@@ -30,6 +32,29 @@ All notable project changes should be documented here going forward.
   reading the source attributed to each result. That works, but it depends on
   page structure the engines change without notice. Requested in
   [#23](https://github.com/codepurse/BlockNSFW/issues/23).
+
+### Fixed
+- **The name "Jerome" was blocked**, because it contains "erome" (erome.com is
+  on the adult site-name list) and those names were matched as bare substrings.
+  One match is enough to block on its own, so this hit harder than the report
+  suggested: a page titled "Jerome Powell speaks on rates" was blocked outright
+  by the metadata scan, searching "jerome powell" blocked the results page, and
+  any element or image caption naming a Jerome was hidden. Site names are now
+  matched as standalone tokens — a name glued to another letter is part of a
+  different word — so "Jerome", "Jerome's", "Jerome, Arizona", "St. Jerome" and
+  the Greek "eromenos" all pass, while "erome.com", "on erome", "EROME",
+  "erome/album/1" and "erome_2" still match. Digits and punctuation stay inside
+  the boundary so "tube8" and "pornhub2" are unaffected. Reported by a user.
+- **A search engine's own adult filter was read as adult content.** 4get.ca
+  turns its filter on with a URL parameter, `&nsfw=no`, and the smart keyword
+  filter scanned the raw query string — so the page was blocked for saying the
+  word "nsfw" while doing exactly what this extension wants. Query parameters
+  are now treated as controls rather than content: a keyword in a parameter
+  *name* only counts when the value says the switch is turned on, so `&nsfw=no`,
+  `&nsfw=0` and `&hide-nsfw=true` pass while `&nsfw=yes` (the user switching the
+  engine's filter off) still blocks. Parameter values are unchanged — `?q=porn`
+  is still a signal — and so are paths, so `/porn/clip?nsfw=no` blocks on the
+  path alone. Reported by a user of 4get.ca.
 
 ## [1.7.3] - 2026-08-08
 
