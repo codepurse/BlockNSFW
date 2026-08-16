@@ -16,7 +16,6 @@ test('background.js loads in sandbox and exposes pure functions', () => {
     'isHttpUrl',
     'isTrustedImageDomain',
     'isSharedCDNParent',
-    'filterSharedCDNParents',
     'isInRemoteWhitelist',
     'buildHostPatterns'
   ]) {
