@@ -260,6 +260,9 @@ const browserAPI = typeof browser !== 'undefined' ? browser : chrome;
 let isEnabled = true;
 let useSmartBlocking = true;
 let customKeywordList = [];
+// User-defined blocked sites (settings.customPatterns). Kept at module scope so
+// the image/search-result filters can honour them, not just page navigation.
+let customBlockPatterns = [];
 let imageFilterLevel = 'strict';
 let blocklistHosts = new Set();
 let blocklistMeta = null;
@@ -999,6 +1002,14 @@ function customPatternsMatchHost(urlStr, host, patterns) {
   return false;
 }
 
+// Does this URL/host match one of the user's own blocked-site patterns?
+// Thin wrapper over customPatternsMatchHost so the image and search-result
+// filters can consult the user's list the same way navigation blocking does.
+function matchesCustomBlockPattern(urlStr, host) {
+  if (!customBlockPatterns.length) return false;
+  return customPatternsMatchHost(urlStr, host, customBlockPatterns);
+}
+
 function isLikelyAdultHostEarly(host) {
   const h = normalizeHost(host);
   if (!h) return false;
@@ -1382,6 +1393,7 @@ async function loadSettings() {
     useSmartBlocking = settings.useSmartBlocking;
     imageFilterLevel = normalizeImageFilterLevel(settings.imageFilterLevel);
     customKeywordList = Array.isArray(settings.customKeywordList) ? settings.customKeywordList : [];
+    customBlockPatterns = Array.isArray(settings.customPatterns) ? settings.customPatterns : [];
     trustedDomains = settings.trustedImageDomains || [];
     debugMode = settings.debugMode === true;
     facebookReelsEnabled = settings.facebookReelsEnabled === true;
@@ -2200,7 +2212,12 @@ function isAdultURL(url) {
     }
 
     if (matchesAdultKeywordHost(hostname)) return true;
-    
+
+    // Sites the user blocked themselves count too — otherwise their custom
+    // blocklist would stop navigation but still let the site's images through
+    // image search, embeds and hotlinks.
+    if (matchesCustomBlockPattern(url, hostname)) return true;
+
     return false;
   } catch (error) {
     log('Error checking adult URL:', error);
@@ -3297,7 +3314,8 @@ function shouldBlockImage(img) {
       
       if (isHostInDefaultBlocklist(host)) return true;
       if (matchesAdultKeywordHost(host)) return true;
-      
+      if (matchesCustomBlockPattern(url, host)) return true;
+
       let decodedPath = path;
       try { decodedPath = decodeURIComponent(path).toLowerCase(); } catch(_) {}
 
@@ -3352,6 +3370,18 @@ function shouldBlockImage(img) {
 
   // Outside images search, use original signals
   if (!url && !alt && !title) return false;
+
+  // An explicit user block outranks the built-in trusted/safe-CDN allowlist —
+  // if they blocked the site, they meant its images too.
+  if (url && customBlockPatterns.length) {
+    try {
+      const host = normalizeHost(new URL(url, window.location.href).hostname);
+      if (matchesCustomBlockPattern(url, host)) {
+        if (debugMode) log('[Image Filter] Blocked — user blocklist host:', host);
+        return true;
+      }
+    } catch (_) {}
+  }
 
   if (isTrustedDomain(url) || isKnownSafeImageHost(url)) {
     if (debugMode) log('[Image Filter] Allowed — trusted/safe CDN:', url?.substring(0, 80));

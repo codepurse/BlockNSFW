@@ -2,6 +2,35 @@
 
 All notable project changes should be documented here going forward.
 
+## [Unreleased]
+
+### Added
+- **Images from sites you blocked yourself are now blocked too.** Adding a site
+  to your custom blocklist stopped you visiting it, but its pictures still came
+  through everywhere else — most visibly in image search, where a blocked site's
+  results sat in the grid untouched. The two halves of the extension were never
+  introduced: navigation checked your list, while the image and search-result
+  filters only ever consulted the built-in blocklist. They now share the same
+  answer, so a site you block is blocked as a *source* — its results are hidden
+  in image search, and its images are hidden wherever they are embedded or
+  hotlinked. Blocking a site by hand also now outranks the built-in trusted-CDN
+  allowlist, on the grounds that typing a domain in yourself is about as
+  explicit as an instruction gets.
+- Alongside that, requests for images and video from sites on your custom
+  blocklist are now refused at the network level rather than hidden after they
+  arrive. This catches what page-level filtering structurally cannot: the
+  full-size image behind a search result, and pictures hotlinked into forums and
+  feeds. Page navigation is deliberately left alone so you still get the usual
+  blocked page instead of a browser error. Entries scoped to a path
+  (`example.com/gallery`) keep their old page-level handling, since blocking a
+  whole host's images would be broader than what you asked for.
+
+  One honest limit: search engines serve result thumbnails from their own
+  servers, not from the site the picture came from, so those are matched by
+  reading the source attributed to each result. That works, but it depends on
+  page structure the engines change without notice. Requested in
+  [#23](https://github.com/codepurse/BlockNSFW/issues/23).
+
 ## [1.7.3] - 2026-08-08
 
 ### Added
