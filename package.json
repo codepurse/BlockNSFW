@@ -6,7 +6,8 @@
   "scripts": {
     "test": "node --test tests/*.test.js",
     "test:watch": "node --test --watch tests/*.test.js",
-    "lint:firefox": "web-ext lint --source-dir dist/firefox --output text"
+    "lint:firefox": "web-ext lint --source-dir dist/firefox --output text",
+    "perf:firefox": "node scripts/perf/firefox-render-benchmark.mjs"
   },
   "devDependencies": {
     "web-ext": "^8.3.0"

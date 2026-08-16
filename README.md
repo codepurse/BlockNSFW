@@ -143,6 +143,20 @@ Before release:
 6. Confirm whitelist add/remove flow works.
 7. Confirm no obvious console errors after fresh install.
 
+## Firefox Rendering Benchmark
+
+The repository includes a real-browser performance harness that launches clean
+Firefox profiles under Xvfb, remotely drives them over WebDriver BiDi, and
+compares a deterministic dynamic-feed workload with the extension absent and
+installed:
+
+```bash
+npm run perf:firefox
+```
+
+See [`scripts/perf/README.md`](scripts/perf/README.md) for shorter smoke runs,
+workload controls, and JSON output.
+
 ## Contributing
 
 See `.github/CONTRIBUTING.md`.

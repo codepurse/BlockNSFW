@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="generator" content="Mastodon benchmark fixture">
+  <title>BlockNSFW Firefox rendering benchmark</title>
+  <style>
+    * { box-sizing: border-box; }
+    html { background: #f4f5f7; color: #20242b; font: 14px/1.4 system-ui, sans-serif; }
+    body { margin: 0; }
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 2;
+      padding: 12px 18px;
+      background: rgba(255, 255, 255, .94);
+      border-bottom: 1px solid #d8dce2;
+    }
+    #feed {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 8px;
+      padding: 12px;
+      contain: layout style;
+    }
+    .card {
+      min-height: 72px;
+      padding: 9px;
+      overflow: hidden;
+      border: 1px solid #d9dde3;
+      border-radius: 6px;
+      background: white;
+      box-shadow: 0 1px 2px rgba(0, 0, 0, .06);
+      contain: layout paint style;
+    }
+    .card strong, .card span { display: block; }
+    .card span { color: #59616d; }
+    .card a { color: #315f9d; }
+    .card img { float: right; width: 12px; height: 12px; }
+  </style>
+</head>
+<body>
+  <header>Deterministic dynamic-feed rendering workload</header>
+  <main id="feed"></main>
+  <script>
+    (() => {
+      'use strict';
+
+      const feed = document.getElementById('feed');
+      let sequence = 0;
+
+      function makeCard(index) {
+        const card = document.createElement('article');
+        card.className = 'card status';
+        card.dataset.index = String(index);
+        const title = document.createElement('strong');
+        title.textContent = `Feed item ${index}`;
+        const copy = document.createElement('span');
+        copy.textContent = `Ordinary benchmark content update ${index % 97}`;
+        const link = document.createElement('a');
+        link.href = `https://asset-${index % 64}.invalid/item/${index}`;
+        link.textContent = `Reference ${index % 64}`;
+        const image = document.createElement('img');
+        image.alt = 'Benign benchmark thumbnail';
+        image.src = 'data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=';
+        card.append(title, copy, link, image);
+        return card;
+      }
+
+      function resetFeed(initialCards) {
+        feed.replaceChildren();
+        const fragment = document.createDocumentFragment();
+        for (let i = 0; i < initialCards; i++) fragment.appendChild(makeCard(sequence++));
+        feed.appendChild(fragment);
+      }
+
+      function percentile(sorted, fraction) {
+        if (sorted.length === 0) return 0;
+        const index = Math.min(sorted.length - 1, Math.floor(sorted.length * fraction));
+        return sorted[index];
+      }
+
+      window.runRenderBenchmark = async function runRenderBenchmark(options = {}) {
+        const durationMs = Number(options.durationMs) || 4000;
+        const initialCards = Number(options.initialCards) || 800;
+        const mutationsPerFrame = Number(options.mutationsPerFrame) || 12;
+        const maxCards = Number(options.maxCards) || 1200;
+        resetFeed(initialCards);
+
+        // Give layout, the content script, and its delayed observer setup time to
+        // settle before taking a sample.
+        await new Promise(resolve => setTimeout(resolve, 750));
+
+        const frameTimes = [];
+        const mutationTimes = [];
+        const startedAt = performance.now();
+        let previousFrameAt = 0;
+        let frameCount = 0;
+
+        await new Promise(resolve => {
+          function frame() {
+            const enteredAt = performance.now();
+            if (previousFrameAt) frameTimes.push(enteredAt - previousFrameAt);
+            previousFrameAt = enteredAt;
+
+            const mutationStartedAt = performance.now();
+            const fragment = document.createDocumentFragment();
+            for (let i = 0; i < mutationsPerFrame; i++) {
+              fragment.appendChild(makeCard(sequence++));
+            }
+            feed.appendChild(fragment);
+
+            // Also model a streaming UI: text changes in already-mounted nodes,
+            // plus bounded virtualization that removes old rows.
+            const live = feed.children;
+            for (let i = 0; i < Math.min(mutationsPerFrame, live.length); i++) {
+              const target = live[(frameCount * 7 + i * 13) % live.length];
+              const copy = target && target.lastElementChild;
+              if (copy) copy.textContent = `Ordinary live update ${sequence + i}`;
+            }
+            while (feed.childElementCount > maxCards) feed.firstElementChild.remove();
+            // Force one layout-dependent read per frame, as real feed positioning
+            // code commonly does. This makes render starvation visible in rAF.
+            void feed.lastElementChild?.offsetTop;
+            mutationTimes.push(performance.now() - mutationStartedAt);
+            frameCount++;
+
+            if ((performance.now() - startedAt) >= durationMs) {
+              resolve();
+              return;
+            }
+            requestAnimationFrame(frame);
+          }
+          requestAnimationFrame(frame);
+        });
+
+        await new Promise(resolve => setTimeout(resolve, 250));
+        const sortedFrames = frameTimes.slice().sort((a, b) => a - b);
+        const sortedMutations = mutationTimes.slice().sort((a, b) => a - b);
+        const elapsedMs = previousFrameAt - startedAt;
+        const sum = values => values.reduce((total, value) => total + value, 0);
+        return {
+          elapsedMs,
+          frames: frameCount,
+          fps: elapsedMs > 0 ? frameCount * 1000 / elapsedMs : 0,
+          frameMeanMs: sortedFrames.length ? sum(sortedFrames) / sortedFrames.length : 0,
+          frameP50Ms: percentile(sortedFrames, .50),
+          frameP95Ms: percentile(sortedFrames, .95),
+          frameP99Ms: percentile(sortedFrames, .99),
+          frameMaxMs: sortedFrames.at(-1) || 0,
+          framesOver20Ms: sortedFrames.filter(value => value > 20).length,
+          framesOver50Ms: sortedFrames.filter(value => value > 50).length,
+          mutationMeanMs: sortedMutations.length ? sum(sortedMutations) / sortedMutations.length : 0,
+          mutationP95Ms: percentile(sortedMutations, .95),
+          mutationMaxMs: sortedMutations.at(-1) || 0,
+          finalCards: feed.childElementCount
+        };
+      };
+    })();
+  </script>
+</body>
+</html>
