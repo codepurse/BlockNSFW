@@ -348,12 +348,57 @@ async function showDurationModal(options = {}) {
   });
 }
 
+// When the active tab is our own blocked page, the site the user means is the
+// one recorded in ?url=, not the extension page they are looking at.
+//
+// Without this, using the popup from a blocked page whitelists the extension's
+// own address — moz-extension://<uuid>/blocked.html on Firefox,
+// chrome-extension://<id>/blocked.html on Chrome — so the entry does nothing and
+// the site stays blocked with no hint why. Reported as issue #26.
+//
+// Only our own extension page is unwrapped, checked against runtime.getURL
+// rather than by protocol alone: another extension's page must not be able to
+// steer this by putting a url= parameter in its address.
+function resolveTabUrl(rawUrl) {
+  let url;
+  try {
+    url = new URL(rawUrl);
+  } catch (_) {
+    return null;
+  }
+
+  // Compared by protocol + host, NOT by origin. For non-special schemes like
+  // moz-extension: and chrome-extension:, URL.origin is the string "null" for
+  // every such address, so an origin check would treat any other extension's
+  // page as ours. Caught by tests/popup-tab-url.test.js.
+  let own;
+  try {
+    own = new URL(browserAPI.runtime.getURL('blocked.html'));
+  } catch (_) {
+    return url;
+  }
+  const sameExtension = url.protocol === own.protocol && url.host === own.host;
+  if (!sameExtension || !url.pathname.endsWith('/blocked.html')) return url;
+
+  const target = url.searchParams.get('url');
+  if (!target) return url; // opened directly, nothing to unwrap
+  try {
+    const resolved = new URL(target);
+    // Only http(s): a blocked page should never hand back a javascript: or
+    // data: URL for us to act on.
+    if (resolved.protocol !== 'http:' && resolved.protocol !== 'https:') return url;
+    return resolved;
+  } catch (_) {
+    return url;
+  }
+}
+
 async function getCurrentTabDomain() {
   try {
     const [tab] = await browserAPI.tabs.query({ active: true, currentWindow: true });
     if (tab && tab.url) {
-      const url = new URL(tab.url);
-      return url.hostname.replace(/^www\./, '');
+      const url = resolveTabUrl(tab.url);
+      if (url) return url.hostname.replace(/^www\./, '');
     }
   } catch (error) {
     console.error('Error getting current tab:', error);

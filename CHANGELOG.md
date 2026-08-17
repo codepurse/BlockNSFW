@@ -4,6 +4,23 @@ All notable project changes should be documented here going forward.
 
 ## [Unreleased]
 
+## [1.7.5] - 2026-08-18
+
+### Fixed
+- **"Unblock this website" whitelisted the extension instead of the site.** Used
+  from a blocked page, the popup read the address of the tab it was open on —
+  which is the extension's own blocked page, not the site that was blocked. So
+  the entry it saved was `moz-extension://<uuid>/blocked.html` (or
+  `chrome-extension://<id>/…`), which matches nothing: the whitelist appeared to
+  accept it while the site stayed blocked, with nothing to explain why. The popup
+  now takes the site from the `url` parameter the blocked page already carries.
+  Reported in [#26](https://github.com/codepurse/BlockNSFW/issues/26) on Firefox,
+  though the same code path affects Chrome and Edge.
+
+  Only *our own* blocked page is unwrapped, so another extension cannot point the
+  popup at a site of its choosing by putting a `url=` parameter in its address,
+  and a non-http target is refused rather than acted on.
+
 ## [1.7.4] - 2026-08-16
 
 ### Added
