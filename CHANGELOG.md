@@ -47,6 +47,23 @@ All notable project changes should be documented here going forward.
   or shortening it requires passing the challenge. Characters that look alike
   (`0`/`O`, `1`/`l`/`I`) are excluded so retyping is effort, not guesswork.
   Requested by two users.
+- Custom blocked words can now be regular expressions, so one line covers many
+  spellings instead of a long list of near-duplicates. A line wrapped in
+  slashes is a pattern — `/p[o0]rn/` catches both spellings, `/escort(s|ing)?/`
+  catches all three forms — and everything else stays a literal, so existing
+  lists are unaffected. Matching ignores capitals either way, since literals
+  always have. Syntax follows uBlacklist's, which users of these tools already
+  know. Requested by a user.
+
+  Patterns are checked when you save, and a broken one is refused with the
+  engine's own message. Two things are refused outright. The `g` and `y` flags,
+  because they make a pattern stateful — it would match on one page and
+  silently skip the next, which is worse than an error. And patterns slow
+  enough to freeze pages: `/(a+)+$/` is perfectly valid and takes exponential
+  time on the right input, which no amount of reading the source reveals, so
+  each candidate is *timed* against adversarial input built from its own
+  characters before it is ever allowed near a real page. A pattern that somehow
+  reaches storage anyway is skipped at match time rather than run.
 - Import and export for the custom blocklist, blocked words and trusted sites.
   Export writes one entry per line as `.csv`, which is both a valid
   single-column spreadsheet file and plain text you can paste straight back

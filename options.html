@@ -1976,6 +1976,7 @@
             <li><strong>Pages no longer freeze while loading <span class="badge-new">New</span></strong> — On Firefox especially, opening a page could stall for about a second while the extension got itself ready, which felt like the browser had locked up. That pause is gone: on the same test page the longest frozen moment dropped from roughly 1.2 seconds to under a twentieth of a second. The same fix applies to Chrome. Nothing about what gets blocked has changed. Contributed by <a href="https://github.com/oathkeeper-dev" target="_blank" rel="noopener">oathkeeper-dev</a>.</li>
             <li><strong>Setting up is quicker and uses less data</strong> — A fresh install downloaded the whole blocklist straight away, even though the very same list already ships inside the extension. It now starts from the copy it already has and only fetches an update when one is genuinely due, so setup finishes sooner and costs you several megabytes less.</li>
             <li><strong>Your settings are harder to unlock in a weak moment</strong> — Some settings could previously be changed without your PIN, including deleting your own blocked words, turning off DNS Protection, and lowering AI strictness. Everything that weakens protection now asks for your PIN first. Adding words, tightening settings and turning protections on stay instant, as they should.</li>
+            <li><strong>Blocked words can be patterns <span class="badge-new">New</span></strong> — Instead of listing every spelling of a word, you can write one line that covers them all. Wrap it in slashes to make it a pattern: <code class="code">/p[o0]rn/</code> catches "porn" and "p0rn", and <code class="code">/escort(s|ing)?/</code> catches "escort", "escorts" and "escorting". Plain words still work exactly as before. Patterns are checked when you save, so a mistake tells you what's wrong instead of quietly failing, and one slow enough to freeze pages is refused.</li>
             <li><strong>Import and export your lists <span class="badge-new">New</span></strong> — Your blocklist, blocked words and trusted sites now have Import and Export buttons. Export saves a file you can keep as a backup or open in a spreadsheet; import accepts .csv or .txt and adds to what you already have rather than replacing it. Imported entries appear in the box first, so you can look them over before hitting Save.</li>
             <li><strong>Tidier lists</strong> — Your blocklist, blocked words and trusted sites are now sorted A-Z and de-duplicated when you save, so pasting in a long list no longer leaves a mess.</li>
             <li><strong>AI Text Protection now asks for a second opinion</strong> — The text AI was flagging ordinary sites such as YouTube, so it no longer blocks a page on its own. A page is blocked only when both its text and an image on it look adult, which means the AI Image Blocker needs to be on for this to do anything. It catches less for now; the model is being retrained.</li>
@@ -2307,12 +2308,20 @@ disney.com"></textarea>
     <div class="card fade-in">
       <div class="card-header">
         <h2 class="card-title">Custom Blocked Words</h2>
-        <p class="card-description">Add words or phrases that should always trigger blocking when they appear on a page.</p>
+        <p class="card-description">
+          Add words or phrases that should always trigger blocking when they appear on a page.
+          One per line. A line wrapped in slashes is treated as a regular expression, so a single
+          line can cover many spellings: <code class="code">/p[o0]rn/</code> catches both "porn"
+          and "p0rn", and <code class="code">/escort(s|ing)?/</code> catches all three forms.
+          Matching ignores capitals either way. Patterns are checked when you save, and one that
+          is invalid or slow enough to freeze pages is refused with the reason.
+        </p>
       </div>
       <textarea class="textarea" id="custom-keywords" placeholder="Add one word or phrase per line:
 keyword
 another phrase
-site name"></textarea>
+/p[o0]rn/
+/escort(s|ing)?/"></textarea>
       <div class="button-group">
         <button class="button button-primary" id="save-keywords">Save Words</button>
         <button class="button" id="reset-keywords">Reset to Defaults</button>
@@ -2656,6 +2665,7 @@ another-site.org/adult/*"></textarea>
 
   <script src="appwrite-client.js"></script>
   <script src="shared/validate-domain.js"></script>
+  <script src="shared/keyword-pattern.js"></script>
   <script src="options.js"></script>
   <script>
     (function () {

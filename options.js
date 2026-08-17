@@ -866,6 +866,21 @@ function deserializePatterns(list) {
   return (list || []).join('\n');
 }
 
+// Blocked words may be `/regex/` entries. A broken or pathologically slow one
+// must never reach storage: the content script runs these against every page,
+// so the moment to catch it is here, while the user is looking at the box and
+// can fix it. Literal entries can never fail, so they never block a save.
+function findKeywordPatternError(entries) {
+  if (typeof KeywordPattern === 'undefined') return null;
+  for (let i = 0; i < entries.length; i++) {
+    const result = KeywordPattern.validateEntry(entries[i]);
+    if (!result.ok && result.isRegex) {
+      return { entry: entries[i], error: result.error };
+    }
+  }
+  return null;
+}
+
 // ---- List import / export -------------------------------------------------
 //
 // One entry per line, which is both a plain text list and a valid single-column
@@ -2192,6 +2207,12 @@ async function init() {
     const nextAiStrictness = normalizeAiStrictness($('ai-strictness') ? $('ai-strictness').value : settings.aiStrictness);
     const nextAiTextStrictness = normalizeAiStrictness($('ai-text-strictness') ? $('ai-text-strictness').value : settings.aiTextStrictness);
 
+    const savePatternError = findKeywordPatternError(nextKeywords);
+    if (savePatternError) {
+      showToast(`Blocked words: "${savePatternError.entry}" — ${savePatternError.error}`, 'error');
+      return;
+    }
+
     // Adding to a blocklist only tightens protection, so it never needs the
     // PIN. Anything that loosens protection is gated — mirroring the popup's
     // append-only "Block" button (#11). One prompt covers the whole save; the
@@ -2257,6 +2278,11 @@ async function init() {
     saveKeywords.addEventListener('click', async () => {
       const settings = await getSettings();
       const nextKeywords = serializePatterns($('custom-keywords').value);
+      const patternError = findKeywordPatternError(nextKeywords);
+      if (patternError) {
+        showToast(`"${patternError.entry}" — ${patternError.error}`, 'error');
+        return;
+      }
       // Adding a blocked word tightens protection (free); deleting one loosens
       // it, so it needs the PIN — otherwise a blocked word is a two-second
       // bypass, which defeats the point of setting one.

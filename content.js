@@ -1211,6 +1211,7 @@ async function loadSettings() {
     useSmartBlocking = settings.useSmartBlocking;
     imageFilterLevel = normalizeImageFilterLevel(settings.imageFilterLevel);
     customKeywordList = Array.isArray(settings.customKeywordList) ? settings.customKeywordList : [];
+    resetCustomKeywordCache(); // entries may have changed; drop stale compiles
     customBlockPatterns = Array.isArray(settings.customPatterns) ? settings.customPatterns : [];
     trustedDomains = settings.trustedImageDomains || [];
     debugMode = settings.debugMode === true;
@@ -1862,11 +1863,45 @@ function indexOfSiteToken(lowerText, token, fromIndex) {
   return -1;
 }
 
+// Compiled `/pattern/` entries, keyed by their raw text. Compiling includes a
+// timing probe (see shared/keyword-pattern.js), which is far too expensive to
+// repeat per page scan — this runs once per entry and is cleared whenever the
+// keyword list changes.
+let customKeywordRegexCache = new Map();
+
+function resetCustomKeywordCache() {
+  customKeywordRegexCache = new Map();
+}
+
+function customKeywordRegex(raw) {
+  if (customKeywordRegexCache.has(raw)) return customKeywordRegexCache.get(raw);
+  let compiled = null;
+  try {
+    compiled = (typeof KeywordPattern !== 'undefined' && KeywordPattern.compileEntry)
+      ? KeywordPattern.compileEntry(raw)
+      : null;
+  } catch (_) {
+    compiled = null; // a bad pattern must never break the whole scan
+  }
+  customKeywordRegexCache.set(raw, compiled);
+  return compiled;
+}
+
 function matchesCustomKeywords(lowerText) {
   for (let i = 0; i < customKeywordList.length; i++) {
     const raw = customKeywordList[i];
-    const keyword = (raw || '').toString().trim().toLowerCase();
-    if (!keyword) continue;
+    const entry = (raw || '').toString().trim();
+    if (!entry) continue;
+
+    // A `/pattern/` entry is a regular expression; anything else stays a
+    // literal, so lists written before this feature behave identically.
+    if (typeof KeywordPattern !== 'undefined' && KeywordPattern.isRegexEntry(entry)) {
+      const pattern = customKeywordRegex(entry);
+      if (pattern && pattern.test(lowerText)) return true;
+      continue;
+    }
+
+    const keyword = entry.toLowerCase();
     if (/^[a-z0-9]+$/i.test(keyword)) {
       const pattern = new RegExp(`\\b${escapeRegExp(keyword)}\\b`, 'i');
       if (pattern.test(lowerText)) return true;
