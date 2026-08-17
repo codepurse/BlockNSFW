@@ -327,7 +327,9 @@ let anyTextFeatureOn = true;
 // work — instead of only processContent respecting it.
 let pageWhitelisted = false;
 
-// Adult content detection keywords (used for domain/site name lookups)
+// Adult content detection keywords (used for domain/site name lookups).
+// These are site names, so they are matched as standalone tokens via
+// indexOfSiteToken() below — never as bare substrings. See shared/token-match.js.
 const ADULT_CONTENT_KEYWORDS = [
   'pornhub', 'xvideos', 'xhamster', 'xnxx', 'redtube', 'youporn',
   'brazzers', 'chaturbate', 'onlyfans', 'bongacams',
@@ -583,6 +585,25 @@ const BENIGN_IMAGE_CONTEXT = new Set([
 const HIGH_CONFIDENCE_PATH_KEYWORDS = /\b(porn|porno|pornography|xxx|hentai|nsfw|erotic|fetish)\b/i;
 const AMBIGUOUS_PATH_KEYWORDS = /\b(nude|naked|sex|adult)\b/i;
 
+// Query strings go through shared/url-scan.js so a site's own adult-filter
+// switch reads as a control instead of as content: 4get's `?nsfw=no` means the
+// filter is ON, yet a raw scan of the query blocked the page. If that module is
+// missing, fall back to the path alone — scanning the query raw is exactly the
+// false positive the module exists to prevent.
+function buildUrlScanText(urlLike, opts) {
+  if (typeof UrlScan !== 'undefined' && UrlScan.buildUrlScanText) {
+    return UrlScan.buildUrlScanText(urlLike, opts);
+  }
+  try {
+    const u = typeof urlLike === 'string' ? new URL(urlLike, window.location.href) : urlLike;
+    let path = (u && u.pathname) || '';
+    try { path = decodeURIComponent(path); } catch (_) {}
+    return path;
+  } catch (_) {
+    return '';
+  }
+}
+
 const MAX_TEXT_LENGTH = 8000;
 
 function normalizeHost(host) {
@@ -756,6 +777,42 @@ function matchesAdultKeywordHost(host) {
   return result;
 }
 
+// Compiled `/url/` and `title/…/` blocklist entries, keyed by raw text.
+// Compiling runs a timing probe, so it must not repeat per scan.
+let customPatternRegexCache = new Map();
+
+function resetCustomPatternCache() {
+  customPatternRegexCache = new Map();
+}
+
+function customPatternCompiled(raw) {
+  if (customPatternRegexCache.has(raw)) return customPatternRegexCache.get(raw);
+  let compiled = { kind: 'wildcard', regex: null };
+  try {
+    if (typeof KeywordPattern !== 'undefined' && KeywordPattern.compileListEntry) {
+      compiled = KeywordPattern.compileListEntry(raw);
+    }
+  } catch (_) {
+    compiled = { kind: 'wildcard', regex: null };
+  }
+  customPatternRegexCache.set(raw, compiled);
+  return compiled;
+}
+
+// Does the page title match a `title/…/` entry? Titles are only known once the
+// page has loaded, so this is page-level only — navigation blocking cannot see
+// them.
+function customPatternsMatchTitle(title, patterns) {
+  if (!title || !Array.isArray(patterns) || patterns.length === 0) return false;
+  for (let i = 0; i < patterns.length; i++) {
+    const raw = (patterns[i] || '').trim();
+    if (!raw) continue;
+    const compiled = customPatternCompiled(raw);
+    if (compiled.kind === 'title' && compiled.regex && compiled.regex.test(title)) return true;
+  }
+  return false;
+}
+
 function customPatternsMatchHost(urlStr, host, patterns) {
   if (!Array.isArray(patterns) || patterns.length === 0) return false;
   const h = normalizeHost(host);
@@ -763,6 +820,15 @@ function customPatternsMatchHost(urlStr, host, patterns) {
   for (let i = 0; i < patterns.length; i++) {
     const p = (patterns[i] || '').trim();
     if (!p) continue;
+
+    // `/regex/` entries match the whole URL; `title/…/` entries are handled by
+    // customPatternsMatchTitle and must not be treated as hostnames here.
+    const compiled = customPatternCompiled(p);
+    if (compiled.kind === 'url') {
+      if (compiled.regex && urlStr && compiled.regex.test(urlStr)) return true;
+      continue;
+    }
+    if (compiled.kind === 'title') continue;
     // Extract host part before first slash
     const slashIdx = p.indexOf('/');
     const pHost = slashIdx >= 0 ? p.slice(0, slashIdx) : p;
@@ -810,9 +876,7 @@ function isLikelyAdultHostEarly(host) {
 
 function isLikelyAdultPathEarly(urlStr) {
   try {
-    const u = new URL(urlStr);
-    let path = (u.pathname || '') + (u.search || '');
-    try { path = decodeURIComponent(path); } catch (_) {}
+    const path = buildUrlScanText(urlStr);
     return /\b(porn|porno|pornography|xxx|nsfw|hentai|nude|naked|erotic)\b/i.test(path);
   } catch (_) {
     return false;
@@ -1192,7 +1256,9 @@ async function loadSettings() {
     useSmartBlocking = settings.useSmartBlocking;
     imageFilterLevel = normalizeImageFilterLevel(settings.imageFilterLevel);
     customKeywordList = Array.isArray(settings.customKeywordList) ? settings.customKeywordList : [];
+    resetCustomKeywordCache(); // entries may have changed; drop stale compiles
     customBlockPatterns = Array.isArray(settings.customPatterns) ? settings.customPatterns : [];
+    resetCustomPatternCache(); // entries may have changed; drop stale compiles
     trustedDomains = settings.trustedImageDomains || [];
     debugMode = settings.debugMode === true;
     facebookReelsEnabled = settings.facebookReelsEnabled === true;
@@ -1561,6 +1627,18 @@ function isExtensionStorePage() {
     hostMatchesDomain(host, 'microsoftedge.microsoft.com');
 }
 
+// `title/…/` entries from the user's own blocklist. Deliberately not gated on
+// smart blocking, and not skipped on search engines: the user typed this
+// pattern themselves, which is about as explicit an instruction as there is.
+function checkCustomTitlePatterns() {
+  if (!customPatternsMatchTitle(document.title || '', customBlockPatterns)) return false;
+  const reason = `Page title matched one of your blocked-site patterns: "${document.title}"`;
+  log(reason);
+  notifyBackground('website_blocked', { reason, title: document.title });
+  redirectToBlockedPage('custom_title_pattern');
+  return true;
+}
+
 // Scan page title and meta tags for adult content
 function checkPageMetadata() {
   // Skip search engines (users need to search)
@@ -1822,11 +1900,66 @@ function escapeRegExp(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+// Locate an adult *site* name in text as a standalone token. A site name glued
+// to other letters is part of a different word: substring matching on "erome"
+// (a real adult site) blocked every page that said "Jerome". Delegates to
+// shared/token-match.js so the rule is unit-tested; the local mirror below only
+// runs if that module failed to load.
+function indexOfSiteToken(lowerText, token, fromIndex) {
+  if (typeof TokenMatch !== 'undefined' && TokenMatch.indexOfStandaloneToken) {
+    return TokenMatch.indexOfStandaloneToken(lowerText, token, fromIndex);
+  }
+  if (!lowerText || !token) return -1;
+  const isLetter = (ch) => !!ch && ((ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z'));
+  let idx = lowerText.indexOf(token, fromIndex > 0 ? fromIndex : 0);
+  while (idx !== -1) {
+    const before = idx > 0 ? lowerText.charAt(idx - 1) : '';
+    const after = lowerText.charAt(idx + token.length);
+    if (!isLetter(before) && !isLetter(after)) return idx;
+    idx = lowerText.indexOf(token, idx + 1);
+  }
+  return -1;
+}
+
+// Compiled `/pattern/` entries, keyed by their raw text. Compiling includes a
+// timing probe (see shared/keyword-pattern.js), which is far too expensive to
+// repeat per page scan — this runs once per entry and is cleared whenever the
+// keyword list changes.
+let customKeywordRegexCache = new Map();
+
+function resetCustomKeywordCache() {
+  customKeywordRegexCache = new Map();
+}
+
+function customKeywordRegex(raw) {
+  if (customKeywordRegexCache.has(raw)) return customKeywordRegexCache.get(raw);
+  let compiled = null;
+  try {
+    compiled = (typeof KeywordPattern !== 'undefined' && KeywordPattern.compileEntry)
+      ? KeywordPattern.compileEntry(raw)
+      : null;
+  } catch (_) {
+    compiled = null; // a bad pattern must never break the whole scan
+  }
+  customKeywordRegexCache.set(raw, compiled);
+  return compiled;
+}
+
 function matchesCustomKeywords(lowerText) {
   for (let i = 0; i < customKeywordList.length; i++) {
     const raw = customKeywordList[i];
-    const keyword = (raw || '').toString().trim().toLowerCase();
-    if (!keyword) continue;
+    const entry = (raw || '').toString().trim();
+    if (!entry) continue;
+
+    // A `/pattern/` entry is a regular expression; anything else stays a
+    // literal, so lists written before this feature behave identically.
+    if (typeof KeywordPattern !== 'undefined' && KeywordPattern.isRegexEntry(entry)) {
+      const pattern = customKeywordRegex(entry);
+      if (pattern && pattern.test(lowerText)) return true;
+      continue;
+    }
+
+    const keyword = entry.toLowerCase();
     if (/^[a-z0-9]+$/i.test(keyword)) {
       const pattern = new RegExp(`\\b${escapeRegExp(keyword)}\\b`, 'i');
       if (pattern.test(lowerText)) return true;
@@ -1882,12 +2015,12 @@ function analyzeTextForAdultContent(text) {
 
   const processLiteralMatches = (keyword, options = {}) => {
     if (!keyword) return;
-    let index = lowerText.indexOf(keyword);
+    let index = indexOfSiteToken(lowerText, keyword, 0);
     while (index !== -1) {
       totalMatches++;
       matchedKeywords.add(keyword);
       evaluateContextWindow(index, keyword.length, options);
-      index = lowerText.indexOf(keyword, index + keyword.length);
+      index = indexOfSiteToken(lowerText, keyword, index + keyword.length);
     }
   };
 
@@ -1992,11 +2125,11 @@ function containsAdultKeywords(text, opts) {
 
   const processLiteralMatches = (keyword, evalOpts = {}) => {
     if (!keyword) return;
-    let index = lowerText.indexOf(keyword);
+    let index = indexOfSiteToken(lowerText, keyword, 0);
     while (index !== -1) {
       totalMatches++;
       evaluateContextWindow(index, keyword.length, evalOpts);
-      index = lowerText.indexOf(keyword, index + keyword.length);
+      index = indexOfSiteToken(lowerText, keyword, index + keyword.length);
     }
   };
 
@@ -2177,7 +2310,7 @@ function shouldBlockCurrentSearchQuery() {
   const hasSafeIntent = SAFE_CONTEXT_KEYWORDS.some(keyword => query.includes(keyword));
   if (hasSafeIntent) return false;
 
-  if (ADULT_CONTENT_KEYWORDS.some(keyword => query.includes(keyword))) {
+  if (ADULT_CONTENT_KEYWORDS.some(keyword => indexOfSiteToken(query, keyword, 0) !== -1)) {
     return true;
   }
 
@@ -3210,7 +3343,7 @@ function shouldBlockImage(img) {
         
         try {
             const linkObj = new URL(linkUrl);
-            const linkPath = linkObj.pathname.toLowerCase() + linkObj.search.toLowerCase();
+            const linkPath = buildUrlScanText(linkObj).toLowerCase();
             const highConfSource = HIGH_CONFIDENCE_PATH_KEYWORDS.test(linkPath);
             const ambigSource = AMBIGUOUS_PATH_KEYWORDS.test(linkPath);
             const sourcePathMatch = highConfSource || (!isCleanPageHost() && ambigSource);
@@ -3638,6 +3771,11 @@ async function processContent() {
     // Social site feeds: per-post filtering without blocking entire site
     await filterSocialFeed();
     
+    // The user's own title patterns come first — an explicit instruction
+    // outranks the heuristics below it.
+    if (checkCustomTitlePatterns()) {
+      return;
+    }
     // Check page title and metadata
     if (checkPageMetadata()) {
       return;

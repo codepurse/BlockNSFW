@@ -4,6 +4,8 @@ All notable project changes should be documented here going forward.
 
 ## [Unreleased]
 
+## [1.7.4] - 2026-08-16
+
 ### Added
 - **Images from sites you blocked yourself are now blocked too.** Adding a site
   to your custom blocklist stopped you visiting it, but its pictures still came
@@ -30,31 +32,89 @@ All notable project changes should be documented here going forward.
   reading the source attributed to each result. That works, but it depends on
   page structure the engines change without notice. Requested in
   [#23](https://github.com/codepurse/BlockNSFW/issues/23).
-
-## [1.7.3] - 2026-08-08
-
-### Added
 - Optional access code, a second layer on top of the PIN. When enabled, a
-  freshly generated random code (32, 64 or 128 characters) must be retyped by
-  hand before the change goes through. By default it guards only the decisive
+  freshly generated random code (32, 64, 128 or 256 characters) must be retyped
+  by hand before the change goes through. By default it guards only the decisive
   actions — turning blocking off, clearing the PIN, or weakening the code
   itself — so routine edits are unaffected; a switch extends it to every
   weakening change. The default is deliberately narrow: a code demanded on
   every small edit trains people to resent the feature and switch it off, which
-  protects nobody. The code is not a
-  secret — it is displayed in full above the input. The deterrent is the
-  deliberate effort of typing it, so copy and paste are blocked (paste, drag,
-  drop and Ctrl/Cmd+V on the input; selection, copy and cut on the displayed
-  code), and a wrong answer issues a brand new code rather than letting the
-  same one be retried. Off by default; turning it off or shortening it requires
-  passing the challenge. Characters that look alike (`0`/`O`, `1`/`l`/`I`) are
-  excluded so retyping is effort, not guesswork.
+  protects nobody. The code is not a secret — it is displayed in full above the
+  input. The deterrent is the deliberate effort of typing it, so copy and paste
+  are blocked (paste, drag, drop and Ctrl/Cmd+V on the input; selection, copy
+  and cut on the displayed code), and a wrong answer issues a brand new code
+  rather than letting the same one be retried. Off by default; turning it off
+  or shortening it requires passing the challenge. Characters that look alike
+  (`0`/`O`, `1`/`l`/`I`) are excluded so retyping is effort, not guesswork.
+  Requested by two users.
+- The blocked-site list accepts regular expressions too, matching uBlacklist's
+  syntax so lists can be carried across: `/example\.(net|org)/` matches against
+  the address, and `title/Example Domain/` matches against the page title.
+  Wildcards (`*.example.com`, `example.com/adult/*`) remain the default, so
+  existing lists are untouched. Requested by a user.
+
+  One difference worth knowing: address patterns block before the page loads,
+  while title patterns can only be applied once it has loaded, so a title match
+  shows the page briefly before blocking it. Title patterns deliberately ignore
+  the smart-blocking setting and apply on search engines as well — an entry the
+  user typed themselves outranks the heuristics.
+- Custom blocked words can now be regular expressions, so one line covers many
+  spellings instead of a long list of near-duplicates. A line wrapped in
+  slashes is a pattern — `/p[o0]rn/` catches both spellings, `/escort(s|ing)?/`
+  catches all three forms — and everything else stays a literal, so existing
+  lists are unaffected. Matching ignores capitals either way, since literals
+  always have. Syntax follows uBlacklist's, which users of these tools already
+  know. Requested by a user.
+
+  Patterns are checked when you save, and a broken one is refused with the
+  engine's own message. Two things are refused outright. The `g` and `y` flags,
+  because they make a pattern stateful — it would match on one page and
+  silently skip the next, which is worse than an error. And patterns slow
+  enough to freeze pages: `/(a+)+$/` is perfectly valid and takes exponential
+  time on the right input, which no amount of reading the source reveals, so
+  each candidate is *timed* against adversarial input built from its own
+  characters before it is ever allowed near a real page. A pattern that somehow
+  reaches storage anyway is skipped at match time rather than run.
+- Import and export for the custom blocklist, blocked words and trusted sites.
+  Export writes one entry per line as `.csv`, which is both a valid
+  single-column spreadsheet file and plain text you can paste straight back
+  into the box; import accepts `.csv` or `.txt`. Blocked *words* can be phrases
+  containing commas, so entries are quoted per RFC 4180 on the way out and
+  unquoted on the way in — a phrase survives the round trip instead of being
+  split in two. Import merges rather than replaces, so it can never silently
+  drop entries you already had, and it fills the box rather than saving
+  directly: you see exactly what is about to be added, and the usual PIN rules
+  still apply when you press Save. Requested by a user. `.xlsx` is deliberately
+  not supported — it would mean bundling a spreadsheet parser into an extension
+  that ships almost no dependencies, for a format both Excel and Sheets already
+  export as `.csv`.
 - Custom blocklist, blocked words and trusted domains lists are now
   de-duplicated and sorted A-Z when saved, and the tidied list is shown back in
   the box immediately. Duplicate detection is case-insensitive, matching how the
   lists are actually used, so `Apricot` and `apricot` count as one entry.
 
 ### Fixed
+- **The name "Jerome" was blocked**, because it contains "erome" (erome.com is
+  on the adult site-name list) and those names were matched as bare substrings.
+  One match is enough to block on its own, so this hit harder than the report
+  suggested: a page titled "Jerome Powell speaks on rates" was blocked outright
+  by the metadata scan, searching "jerome powell" blocked the results page, and
+  any element or image caption naming a Jerome was hidden. Site names are now
+  matched as standalone tokens — a name glued to another letter is part of a
+  different word — so "Jerome", "Jerome's", "Jerome, Arizona", "St. Jerome" and
+  the Greek "eromenos" all pass, while "erome.com", "on erome", "EROME",
+  "erome/album/1" and "erome_2" still match. Digits and punctuation stay inside
+  the boundary so "tube8" and "pornhub2" are unaffected. Reported by a user.
+- **A search engine's own adult filter was read as adult content.** 4get.ca
+  turns its filter on with a URL parameter, `&nsfw=no`, and the smart keyword
+  filter scanned the raw query string — so the page was blocked for saying the
+  word "nsfw" while doing exactly what this extension wants. Query parameters
+  are now treated as controls rather than content: a keyword in a parameter
+  *name* only counts when the value says the switch is turned on, so `&nsfw=no`,
+  `&nsfw=0` and `&hide-nsfw=true` pass while `&nsfw=yes` (the user switching the
+  engine's filter off) still blocks. Parameter values are unchanged — `?q=porn`
+  is still a signal — and so are paths, so `/porn/clip?nsfw=no` blocks on the
+  path alone. Reported by a user of 4get.ca.
 - **Settings could be weakened without the PIN.** Several changes that reduce
   protection were not covered by the PIN gate, so a blocked word could be
   deleted in seconds and put back later. All of these now require the PIN:

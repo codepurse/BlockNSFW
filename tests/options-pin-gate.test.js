@@ -100,16 +100,62 @@ test('serializePatterns: empty input yields an empty list', () => {
   assert.deepEqual(patterns('\n  \n'), []);
 });
 
+// --- list import / export --------------------------------------------------
+
+const parse = (text) => Array.from(ctx.parseListFile(text));
+
+test('parseListFile: one entry per line, trimmed, blanks dropped', () => {
+  assert.deepEqual(parse('apple\n\n  mango  \r\nzebra\n'), ['apple', 'mango', 'zebra']);
+});
+
+test('parseListFile: an unquoted line stays one entry even with commas', () => {
+  // A list user typing "hello, world" means one phrase, not two entries.
+  assert.deepEqual(parse('hello, world\nplum'), ['hello, world', 'plum']);
+});
+
+test('parseListFile: quoted fields keep their commas', () => {
+  assert.deepEqual(parse('"buy now, act fast"\nplum'), ['buy now, act fast', 'plum']);
+});
+
+test('parseListFile: doubled quotes unescape to one quote', () => {
+  assert.deepEqual(parse('"say ""hi"" now"'), ['say "hi" now']);
+});
+
+test('parseListFile: quoted field may span lines', () => {
+  assert.deepEqual(parse('"two\nlines"\nplum'), ['two\nlines', 'plum']);
+});
+
+test('parseListFile: strips a UTF-8 BOM from the first entry', () => {
+  // Excel writes a BOM; without stripping it the first entry silently
+  // mismatches everything and never blocks.
+  assert.deepEqual(parse('﻿apple\nmango'), ['apple', 'mango']);
+});
+
+test('parseListFile: empty input yields nothing', () => {
+  assert.deepEqual(parse(''), []);
+  assert.deepEqual(parse('\r\n  \n'), []);
+});
+
+test('serializeListFile: quotes only what needs quoting', () => {
+  assert.equal(ctx.serializeListFile(['plum', 'hello, world', 'say "hi"']),
+    'plum\r\n"hello, world"\r\n"say ""hi"""');
+});
+
+test('serializeListFile / parseListFile: survive a round trip', () => {
+  const entries = ['plum', 'hello, world', 'say "hi"', 'multi\nline', 'apricot'];
+  assert.deepEqual(parse(ctx.serializeListFile(entries)), entries);
+});
+
 test('normalizeAccessCodeConfig: defaults to off at 64 characters', () => {
   const config = ctx.normalizeAccessCodeConfig(undefined);
   assert.equal(config.enabled, false);
   assert.equal(config.length, 64);
 });
 
-test('normalizeAccessCodeConfig: keeps the three supported lengths', () => {
-  assert.equal(ctx.normalizeAccessCodeConfig({ length: 32 }).length, 32);
-  assert.equal(ctx.normalizeAccessCodeConfig({ length: 64 }).length, 64);
-  assert.equal(ctx.normalizeAccessCodeConfig({ length: 128 }).length, 128);
+test('normalizeAccessCodeConfig: keeps every supported length', () => {
+  for (const length of [32, 64, 128, 256]) {
+    assert.equal(ctx.normalizeAccessCodeConfig({ length }).length, length);
+  }
 });
 
 test('normalizeAccessCodeConfig: rejects an unsupported length', () => {
@@ -154,7 +200,7 @@ test('accessCodeRequiredFor: a corrupted scope falls back to critical', () => {
 });
 
 test('generateAccessCode: returns exactly the requested length', () => {
-  for (const length of [32, 64, 128]) {
+  for (const length of [32, 64, 128, 256]) {
     assert.equal(ctx.generateAccessCode(length).length, length);
   }
 });
