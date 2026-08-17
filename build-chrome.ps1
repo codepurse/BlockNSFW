@@ -108,7 +108,24 @@ if ($Zip) {
     $ZipPath = Join-Path $ScriptDir "dist\blocknsfw-chrome.zip"
     if (Test-Path $ZipPath) { Remove-Item $ZipPath -Force }
     Write-Host "==> Creating $ZipPath" -ForegroundColor Cyan
-    Compress-Archive -Path (Join-Path $OutDir "*") -DestinationPath $ZipPath
+
+    # Use .NET ZipFile rather than Compress-Archive: Windows PowerShell 5.1
+    # writes backslash separators into the archive ("shared\file.js"), which the
+    # ZIP spec does not allow — paths must use forward slashes. Chrome has
+    # tolerated it so far, but an unzipper that reads the name literally would
+    # leave shared/*.js unreachable, and the extension would silently lose its
+    # helper modules. build-firefox.ps1 has always avoided this; now both match.
+    [System.Reflection.Assembly]::LoadWithPartialName("System.IO.Compression.FileSystem") | Out-Null
+    $ZipStream = [System.IO.Compression.ZipFile]::Open($ZipPath, "Create")
+    try {
+        $files = Get-ChildItem -Path $OutDir -Recurse -File
+        foreach ($f in $files) {
+            $rel = $f.FullName.Substring($OutDir.Length).TrimStart('\', '/') -replace '\\', '/'
+            [System.IO.Compression.ZipFileExtensions]::CreateEntryFromFile($ZipStream, $f.FullName, $rel, "Optimal") | Out-Null
+        }
+    } finally {
+        $ZipStream.Dispose()
+    }
 }
 
 Write-Host "==> Chrome build complete: $OutDir" -ForegroundColor Green

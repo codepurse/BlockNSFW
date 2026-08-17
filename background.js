@@ -929,6 +929,17 @@ function patternToRegex(pattern) {
   return regex;
 }
 
+// Escapes a user glob for use inside a larger regex: regex metacharacters
+// become literals, while `*` and `?` keep their wildcard meaning. Unlike
+// patternToRegex this does not anchor, so the caller can wrap it in scheme and
+// path scaffolding without that scaffolding being escaped too.
+function globToRegexSource(glob) {
+  return String(glob)
+    .replace(/[.+^${}()|[\]\\]/g, '\\$&')
+    .replace(/\*/g, '.*')
+    .replace(/\?/g, '.');
+}
+
 function buildHostPatterns(patterns) {
   const compiled = [];
   // Pre-allocate array size for better memory efficiency
@@ -950,13 +961,49 @@ function buildHostPatterns(patterns) {
           if (listEntry.regex) compiled[validCount++] = listEntry.regex;
           continue;
         }
+      } else if (typeof p === 'string' && /^\s*(title\s*)?\/.*\/[a-z]*\s*$/i.test(p)) {
+        // The helper is missing (an environment where neither importScripts nor
+        // the manifest loaded it). Falling through to the glob path would escape
+        // the slashes and produce a pattern that silently matches nothing — the
+        // user would see no error and no blocking. Handle the entry directly
+        // instead, and say so, rather than failing quietly.
+        console.warn('BlockNSFW: keyword-pattern helper unavailable; compiling pattern directly:', p);
+        const trimmed = p.trim();
+        if (/^title/i.test(trimmed)) continue; // title patterns are page-level
+        const close = trimmed.lastIndexOf('/');
+        const body = trimmed.slice(1, close);
+        const flags = trimmed.slice(close + 1);
+        try {
+          compiled[validCount++] = new RegExp(body, flags.indexOf('i') === -1 ? flags + 'i' : flags);
+        } catch (err) {
+          console.warn('BlockNSFW: invalid pattern skipped:', p, err);
+        }
+        continue;
       }
 
-      // If pattern does not include scheme, allow both http and https
+      // Build the regex from the user's glob, then add the scheme and optional
+      // path as real regex syntax.
+      //
+      // These used to be concatenated first and escaped afterwards, which meant
+      // the scheme and path scaffolding was escaped along with the user's text:
+      // "example.com" compiled to /^https.:\/\/example\.com\(\/\..*\).$/ — a
+      // pattern demanding a literal "(" in the URL, so it matched nothing.
+      // Custom blocklist entries were therefore never blocked at navigation
+      // time; only the content script caught them, after the page had begun
+      // loading. Escaping the user's part alone fixes that.
       if (!/^https?:\/\//i.test(p)) {
-        regex = patternToRegex('https?://'+ (p.startsWith('*.') ? '(?:.*\\.)?' + p.slice(2) : p).replace(/^\*\./, '(?:.*\\.)?') + '(/.*)?');
+        const slash = p.indexOf('/');
+        const hostPart = slash >= 0 ? p.slice(0, slash) : p;
+        const pathPart = slash >= 0 ? p.slice(slash) : '';
+        // A bare host covers its subdomains, matching how the content script
+        // reads the same entry (host === base || host endsWith '.' + base).
+        // The two layers must agree or a site blocks on one and not the other.
+        const hostSrc = hostPart.startsWith('*.')
+          ? '(?:.*\\.)?' + globToRegexSource(hostPart.slice(2))
+          : '(?:[^/]*\\.)?' + globToRegexSource(hostPart);
+        regex = new RegExp('^https?://' + hostSrc + globToRegexSource(pathPart) + '(/.*)?$', 'i');
       } else {
-        regex = patternToRegex(p);
+        regex = new RegExp('^' + globToRegexSource(p) + '(/.*)?$', 'i');
       }
       
       if (regex) {
