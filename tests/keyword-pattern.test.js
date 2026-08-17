@@ -109,6 +109,59 @@ test('ordinary patterns pass the timing probe comfortably', () => {
   }
 });
 
+// --- blocked-site entries --------------------------------------------------
+
+test('wildcard site entries are unchanged', () => {
+  for (const entry of ['example.com', '*.example.com', 'example.com/adult/*']) {
+    const parsed = KP.parseListEntry(entry);
+    assert.equal(parsed.kind, 'wildcard', `${entry} should stay a wildcard`);
+    assert.equal(KP.validateListEntry(entry).ok, true);
+    assert.equal(KP.compileListEntry(entry).regex, null, 'wildcards keep the glob path');
+  }
+});
+
+test('a slash-wrapped site entry is a URL regex', () => {
+  const parsed = KP.parseListEntry('/example\\.(net|org)/');
+  assert.equal(parsed.kind, 'url');
+  const compiled = KP.compileListEntry('/example\\.(net|org)/');
+  assert.equal(compiled.kind, 'url');
+  assert.ok(compiled.regex.test('https://example.net/page'));
+  assert.ok(compiled.regex.test('https://example.org/'));
+  assert.ok(!compiled.regex.test('https://example.com/'));
+});
+
+test('a title/ entry is a title regex', () => {
+  const parsed = KP.parseListEntry('title/Example Domain/');
+  assert.equal(parsed.kind, 'title');
+  const compiled = KP.compileListEntry('title/Example Domain/');
+  assert.equal(compiled.kind, 'title');
+  assert.ok(compiled.regex.test('Example Domain'));
+  assert.ok(compiled.regex.test('the example domain page')); // case-insensitive
+  assert.ok(!compiled.regex.test('Something else'));
+});
+
+test('a domain merely starting with "title" is still a wildcard', () => {
+  // "titles.com" must not be mistaken for a title pattern.
+  assert.equal(KP.parseListEntry('titles.com').kind, 'wildcard');
+  assert.equal(KP.parseListEntry('title.example.com').kind, 'wildcard');
+});
+
+test('a broken site regex is reported, not thrown', () => {
+  const result = KP.validateListEntry('/([unclosed/');
+  assert.equal(result.ok, false);
+  assert.ok(result.error.length > 0);
+  assert.equal(KP.compileListEntry('/([unclosed/').regex, null);
+});
+
+test('a slow site regex is refused', () => {
+  assert.equal(KP.validateListEntry('/(a+)+$/').ok, false);
+  assert.equal(KP.validateListEntry('title/(a+)+$/').ok, false);
+});
+
+test('stateful flags are refused on site entries too', () => {
+  assert.equal(KP.validateListEntry('/example/g').ok, false);
+});
+
 test('whitespace around an entry does not change how it is read', () => {
   assert.equal(KP.isRegexEntry('  /porn/  '), true);
   assert.ok(KP.compileEntry('  /porn/  ').test('porn'));

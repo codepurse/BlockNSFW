@@ -47,6 +47,17 @@ All notable project changes should be documented here going forward.
   or shortening it requires passing the challenge. Characters that look alike
   (`0`/`O`, `1`/`l`/`I`) are excluded so retyping is effort, not guesswork.
   Requested by two users.
+- The blocked-site list accepts regular expressions too, matching uBlacklist's
+  syntax so lists can be carried across: `/example\.(net|org)/` matches against
+  the address, and `title/Example Domain/` matches against the page title.
+  Wildcards (`*.example.com`, `example.com/adult/*`) remain the default, so
+  existing lists are untouched. Requested by a user.
+
+  One difference worth knowing: address patterns block before the page loads,
+  while title patterns can only be applied once it has loaded, so a title match
+  shows the page briefly before blocking it. Title patterns deliberately ignore
+  the smart-blocking setting and apply on search engines as well — an entry the
+  user typed themselves outranks the heuristics.
 - Custom blocked words can now be regular expressions, so one line covers many
   spellings instead of a long list of near-duplicates. A line wrapped in
   slashes is a pattern — `/p[o0]rn/` catches both spellings, `/escort(s|ing)?/`

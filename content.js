@@ -777,6 +777,42 @@ function matchesAdultKeywordHost(host) {
   return result;
 }
 
+// Compiled `/url/` and `title/…/` blocklist entries, keyed by raw text.
+// Compiling runs a timing probe, so it must not repeat per scan.
+let customPatternRegexCache = new Map();
+
+function resetCustomPatternCache() {
+  customPatternRegexCache = new Map();
+}
+
+function customPatternCompiled(raw) {
+  if (customPatternRegexCache.has(raw)) return customPatternRegexCache.get(raw);
+  let compiled = { kind: 'wildcard', regex: null };
+  try {
+    if (typeof KeywordPattern !== 'undefined' && KeywordPattern.compileListEntry) {
+      compiled = KeywordPattern.compileListEntry(raw);
+    }
+  } catch (_) {
+    compiled = { kind: 'wildcard', regex: null };
+  }
+  customPatternRegexCache.set(raw, compiled);
+  return compiled;
+}
+
+// Does the page title match a `title/…/` entry? Titles are only known once the
+// page has loaded, so this is page-level only — navigation blocking cannot see
+// them.
+function customPatternsMatchTitle(title, patterns) {
+  if (!title || !Array.isArray(patterns) || patterns.length === 0) return false;
+  for (let i = 0; i < patterns.length; i++) {
+    const raw = (patterns[i] || '').trim();
+    if (!raw) continue;
+    const compiled = customPatternCompiled(raw);
+    if (compiled.kind === 'title' && compiled.regex && compiled.regex.test(title)) return true;
+  }
+  return false;
+}
+
 function customPatternsMatchHost(urlStr, host, patterns) {
   if (!Array.isArray(patterns) || patterns.length === 0) return false;
   const h = normalizeHost(host);
@@ -784,6 +820,15 @@ function customPatternsMatchHost(urlStr, host, patterns) {
   for (let i = 0; i < patterns.length; i++) {
     const p = (patterns[i] || '').trim();
     if (!p) continue;
+
+    // `/regex/` entries match the whole URL; `title/…/` entries are handled by
+    // customPatternsMatchTitle and must not be treated as hostnames here.
+    const compiled = customPatternCompiled(p);
+    if (compiled.kind === 'url') {
+      if (compiled.regex && urlStr && compiled.regex.test(urlStr)) return true;
+      continue;
+    }
+    if (compiled.kind === 'title') continue;
     // Extract host part before first slash
     const slashIdx = p.indexOf('/');
     const pHost = slashIdx >= 0 ? p.slice(0, slashIdx) : p;
@@ -1213,6 +1258,7 @@ async function loadSettings() {
     customKeywordList = Array.isArray(settings.customKeywordList) ? settings.customKeywordList : [];
     resetCustomKeywordCache(); // entries may have changed; drop stale compiles
     customBlockPatterns = Array.isArray(settings.customPatterns) ? settings.customPatterns : [];
+    resetCustomPatternCache(); // entries may have changed; drop stale compiles
     trustedDomains = settings.trustedImageDomains || [];
     debugMode = settings.debugMode === true;
     facebookReelsEnabled = settings.facebookReelsEnabled === true;
@@ -1579,6 +1625,18 @@ function isExtensionStorePage() {
     hostMatchesDomain(host, 'chromewebstore.google.com') ||
     hostMatchesDomain(host, 'chrome.google.com') ||
     hostMatchesDomain(host, 'microsoftedge.microsoft.com');
+}
+
+// `title/…/` entries from the user's own blocklist. Deliberately not gated on
+// smart blocking, and not skipped on search engines: the user typed this
+// pattern themselves, which is about as explicit an instruction as there is.
+function checkCustomTitlePatterns() {
+  if (!customPatternsMatchTitle(document.title || '', customBlockPatterns)) return false;
+  const reason = `Page title matched one of your blocked-site patterns: "${document.title}"`;
+  log(reason);
+  notifyBackground('website_blocked', { reason, title: document.title });
+  redirectToBlockedPage('custom_title_pattern');
+  return true;
 }
 
 // Scan page title and meta tags for adult content
@@ -3713,6 +3771,11 @@ async function processContent() {
     // Social site feeds: per-post filtering without blocking entire site
     await filterSocialFeed();
     
+    // The user's own title patterns come first — an explicit instruction
+    // outranks the heuristics below it.
+    if (checkCustomTitlePatterns()) {
+      return;
+    }
     // Check page title and metadata
     if (checkPageMetadata()) {
       return;

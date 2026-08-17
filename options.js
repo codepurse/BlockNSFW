@@ -881,6 +881,20 @@ function findKeywordPatternError(entries) {
   return null;
 }
 
+// Same check for the blocked-site list, which also accepts `/regex/` and
+// `title/regex/` entries. Wildcard entries can never fail, so they never block
+// a save.
+function findBlocklistPatternError(entries) {
+  if (typeof KeywordPattern === 'undefined' || !KeywordPattern.validateListEntry) return null;
+  for (let i = 0; i < entries.length; i++) {
+    const result = KeywordPattern.validateListEntry(entries[i]);
+    if (!result.ok && result.kind !== 'wildcard' && result.kind !== 'empty') {
+      return { entry: entries[i], error: result.error };
+    }
+  }
+  return null;
+}
+
 // ---- List import / export -------------------------------------------------
 //
 // One entry per line, which is both a plain text list and a valid single-column
@@ -2210,6 +2224,12 @@ async function init() {
     const savePatternError = findKeywordPatternError(nextKeywords);
     if (savePatternError) {
       showToast(`Blocked words: "${savePatternError.entry}" — ${savePatternError.error}`, 'error');
+      return;
+    }
+
+    const blocklistError = findBlocklistPatternError(nextCustomPatterns);
+    if (blocklistError) {
+      showToast(`Blocklist: "${blocklistError.entry}" — ${blocklistError.error}`, 'error');
       return;
     }
 

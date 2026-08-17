@@ -182,13 +182,76 @@
     }
   }
 
+  // --- Blocked-site entries -------------------------------------------------
+  //
+  // The site list accepts three forms, following uBlacklist so users of that
+  // tool can bring their syntax across:
+  //
+  //     example.com, *.example.com, example.com/path/*   wildcard (as before)
+  //     /example\.(net|org)/                             regex over the URL
+  //     title/Example Domain/                            regex over the title
+  //
+  // Wildcards stay the default so existing lists are untouched. Title patterns
+  // are page-level by nature: the title is not known until the page loads, so
+  // navigation blocking cannot use them and the content script applies them.
+
+  function parseListEntry(entry) {
+    var value = String(entry == null ? '' : entry).trim();
+    if (!value) return { kind: 'empty', body: '', flags: '' };
+
+    // "title/.../flags" — only when it really carries a pattern, so a literal
+    // domain that happens to start with "title" is left alone.
+    var titleMatch = /^title\s*(\/.*)$/i.exec(value);
+    if (titleMatch) {
+      var titleParts = splitRegexEntry(titleMatch[1]);
+      if (titleParts) {
+        return { kind: 'title', body: titleParts.body, flags: titleParts.flags, source: titleMatch[1] };
+      }
+    }
+
+    var parts = splitRegexEntry(value);
+    if (parts) return { kind: 'url', body: parts.body, flags: parts.flags, source: value };
+
+    return { kind: 'wildcard', body: value, flags: '', source: value };
+  }
+
+  /**
+   * Validates one blocked-site entry. Wildcards always pass; the regex forms go
+   * through the same syntax, flag and timing checks as blocked words.
+   */
+  function validateListEntry(entry) {
+    var parsed = parseListEntry(entry);
+    if (parsed.kind === 'empty') return { ok: false, kind: parsed.kind, error: 'Empty entry' };
+    if (parsed.kind === 'wildcard') return { ok: true, kind: parsed.kind, error: '' };
+    var result = validateEntry(parsed.source);
+    return { ok: result.ok, kind: parsed.kind, error: result.error };
+  }
+
+  /**
+   * Compiles a blocked-site entry for matching.
+   * @returns {{kind: string, regex: RegExp|null}} kind is 'url', 'title' or
+   *   'wildcard'; regex is null for wildcards (the caller keeps its glob path)
+   *   and for anything that fails validation, so a bad entry is skipped rather
+   *   than thrown.
+   */
+  function compileListEntry(entry) {
+    var parsed = parseListEntry(entry);
+    if (parsed.kind !== 'url' && parsed.kind !== 'title') {
+      return { kind: parsed.kind, regex: null };
+    }
+    return { kind: parsed.kind, regex: compileEntry(parsed.source) };
+  }
+
   var exported = {
     MAX_PATTERN_LENGTH: MAX_PATTERN_LENGTH,
     PROBE_BUDGET_MS: PROBE_BUDGET_MS,
     isRegexEntry: isRegexEntry,
     splitRegexEntry: splitRegexEntry,
     validateEntry: validateEntry,
-    compileEntry: compileEntry
+    compileEntry: compileEntry,
+    parseListEntry: parseListEntry,
+    validateListEntry: validateListEntry,
+    compileListEntry: compileListEntry
   };
 
   root.KeywordPattern = exported;

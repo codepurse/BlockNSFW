@@ -9,6 +9,7 @@ try {
     self.importScripts('shared/host-keywords.js');
     self.importScripts('shared/version-compare.js');
     self.importScripts('shared/validate-domain.js');
+    self.importScripts('shared/keyword-pattern.js');
   }
 } catch (_) {
   // shared/hostname.js or shared/host-keywords.js could not be loaded
@@ -938,6 +939,19 @@ function buildHostPatterns(patterns) {
     try {
       const p = patterns[i];
       let regex;
+
+      // `/regex/` entries match the URL directly. `title/…/` entries need the
+      // page title, which does not exist yet at navigation time, so they are
+      // skipped here and enforced by the content script once the page loads.
+      if (typeof KeywordPattern !== 'undefined' && KeywordPattern.compileListEntry) {
+        const listEntry = KeywordPattern.compileListEntry(p);
+        if (listEntry.kind === 'title') continue;
+        if (listEntry.kind === 'url') {
+          if (listEntry.regex) compiled[validCount++] = listEntry.regex;
+          continue;
+        }
+      }
+
       // If pattern does not include scheme, allow both http and https
       if (!/^https?:\/\//i.test(p)) {
         regex = patternToRegex('https?://'+ (p.startsWith('*.') ? '(?:.*\\.)?' + p.slice(2) : p).replace(/^\*\./, '(?:.*\\.)?') + '(/.*)?');
