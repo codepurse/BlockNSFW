@@ -32,6 +32,25 @@ All notable project changes should be documented here going forward.
   reading the source attributed to each result. That works, but it depends on
   page structure the engines change without notice. Requested in
   [#23](https://github.com/codepurse/BlockNSFW/issues/23).
+- Optional access code, a second layer on top of the PIN. When enabled, a
+  freshly generated random code (32, 64, 128 or 256 characters) must be retyped
+  by hand before the change goes through. By default it guards only the decisive
+  actions — turning blocking off, clearing the PIN, or weakening the code
+  itself — so routine edits are unaffected; a switch extends it to every
+  weakening change. The default is deliberately narrow: a code demanded on
+  every small edit trains people to resent the feature and switch it off, which
+  protects nobody. The code is not a secret — it is displayed in full above the
+  input. The deterrent is the deliberate effort of typing it, so copy and paste
+  are blocked (paste, drag, drop and Ctrl/Cmd+V on the input; selection, copy
+  and cut on the displayed code), and a wrong answer issues a brand new code
+  rather than letting the same one be retried. Off by default; turning it off
+  or shortening it requires passing the challenge. Characters that look alike
+  (`0`/`O`, `1`/`l`/`I`) are excluded so retyping is effort, not guesswork.
+  Requested by two users.
+- Custom blocklist, blocked words and trusted domains lists are now
+  de-duplicated and sorted A-Z when saved, and the tidied list is shown back in
+  the box immediately. Duplicate detection is case-insensitive, matching how the
+  lists are actually used, so `Apricot` and `apricot` count as one entry.
 
 ### Fixed
 - **The name "Jerome" was blocked**, because it contains "erome" (erome.com is
@@ -55,31 +74,6 @@ All notable project changes should be documented here going forward.
   engine's filter off) still blocks. Parameter values are unchanged — `?q=porn`
   is still a signal — and so are paths, so `/porn/clip?nsfw=no` blocks on the
   path alone. Reported by a user of 4get.ca.
-
-## [1.7.3] - 2026-08-08
-
-### Added
-- Optional access code, a second layer on top of the PIN. When enabled, a
-  freshly generated random code (32, 64 or 128 characters) must be retyped by
-  hand before the change goes through. By default it guards only the decisive
-  actions — turning blocking off, clearing the PIN, or weakening the code
-  itself — so routine edits are unaffected; a switch extends it to every
-  weakening change. The default is deliberately narrow: a code demanded on
-  every small edit trains people to resent the feature and switch it off, which
-  protects nobody. The code is not a
-  secret — it is displayed in full above the input. The deterrent is the
-  deliberate effort of typing it, so copy and paste are blocked (paste, drag,
-  drop and Ctrl/Cmd+V on the input; selection, copy and cut on the displayed
-  code), and a wrong answer issues a brand new code rather than letting the
-  same one be retried. Off by default; turning it off or shortening it requires
-  passing the challenge. Characters that look alike (`0`/`O`, `1`/`l`/`I`) are
-  excluded so retyping is effort, not guesswork.
-- Custom blocklist, blocked words and trusted domains lists are now
-  de-duplicated and sorted A-Z when saved, and the tidied list is shown back in
-  the box immediately. Duplicate detection is case-insensitive, matching how the
-  lists are actually used, so `Apricot` and `apricot` count as one entry.
-
-### Fixed
 - **Settings could be weakened without the PIN.** Several changes that reduce
   protection were not covered by the PIN gate, so a blocked word could be
   deleted in seconds and put back later. All of these now require the PIN:

@@ -488,7 +488,7 @@ async function ensurePIN() {
 // Ambiguous glyphs (O/0, I/l/1) are excluded: the point is deliberate effort,
 // not guessing which character you're looking at.
 const ACCESS_CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%&*+=?~';
-const ACCESS_CODE_LENGTHS = [32, 64, 128];
+const ACCESS_CODE_LENGTHS = [32, 64, 128, 256];
 
 // Scope: which changes have to face the code.
 //   'critical' (default) — only the master switches that would unlock

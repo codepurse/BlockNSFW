@@ -106,10 +106,10 @@ test('normalizeAccessCodeConfig: defaults to off at 64 characters', () => {
   assert.equal(config.length, 64);
 });
 
-test('normalizeAccessCodeConfig: keeps the three supported lengths', () => {
-  assert.equal(ctx.normalizeAccessCodeConfig({ length: 32 }).length, 32);
-  assert.equal(ctx.normalizeAccessCodeConfig({ length: 64 }).length, 64);
-  assert.equal(ctx.normalizeAccessCodeConfig({ length: 128 }).length, 128);
+test('normalizeAccessCodeConfig: keeps every supported length', () => {
+  for (const length of [32, 64, 128, 256]) {
+    assert.equal(ctx.normalizeAccessCodeConfig({ length }).length, length);
+  }
 });
 
 test('normalizeAccessCodeConfig: rejects an unsupported length', () => {
@@ -154,7 +154,7 @@ test('accessCodeRequiredFor: a corrupted scope falls back to critical', () => {
 });
 
 test('generateAccessCode: returns exactly the requested length', () => {
-  for (const length of [32, 64, 128]) {
+  for (const length of [32, 64, 128, 256]) {
     assert.equal(ctx.generateAccessCode(length).length, length);
   }
 });
