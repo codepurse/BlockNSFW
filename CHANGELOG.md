@@ -47,6 +47,19 @@ All notable project changes should be documented here going forward.
   or shortening it requires passing the challenge. Characters that look alike
   (`0`/`O`, `1`/`l`/`I`) are excluded so retyping is effort, not guesswork.
   Requested by two users.
+- Import and export for the custom blocklist, blocked words and trusted sites.
+  Export writes one entry per line as `.csv`, which is both a valid
+  single-column spreadsheet file and plain text you can paste straight back
+  into the box; import accepts `.csv` or `.txt`. Blocked *words* can be phrases
+  containing commas, so entries are quoted per RFC 4180 on the way out and
+  unquoted on the way in — a phrase survives the round trip instead of being
+  split in two. Import merges rather than replaces, so it can never silently
+  drop entries you already had, and it fills the box rather than saving
+  directly: you see exactly what is about to be added, and the usual PIN rules
+  still apply when you press Save. Requested by a user. `.xlsx` is deliberately
+  not supported — it would mean bundling a spreadsheet parser into an extension
+  that ships almost no dependencies, for a format both Excel and Sheets already
+  export as `.csv`.
 - Custom blocklist, blocked words and trusted domains lists are now
   de-duplicated and sorted A-Z when saved, and the tidied list is shown back in
   the box immediately. Duplicate detection is case-insensitive, matching how the

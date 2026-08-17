@@ -866,6 +866,87 @@ function deserializePatterns(list) {
   return (list || []).join('\n');
 }
 
+// ---- List import / export -------------------------------------------------
+//
+// One entry per line, which is both a plain text list and a valid single-column
+// CSV, so the same file opens in a spreadsheet and pastes straight back into
+// the box. Import accepts either extension.
+//
+// Quoting matters here because blocked *words* can be phrases containing
+// commas. Export quotes per RFC 4180 and import understands those quotes, so a
+// phrase survives a round trip instead of being split in half.
+
+const MAX_IMPORT_BYTES = 1024 * 1024;
+
+function csvEscapeEntry(entry) {
+  const value = String(entry);
+  return /[",\r\n]/.test(value) ? '"' + value.replace(/"/g, '""') + '"' : value;
+}
+
+function serializeListFile(entries) {
+  return (Array.isArray(entries) ? entries : []).map(csvEscapeEntry).join('\r\n');
+}
+
+// Parses one entry per line. A quoted field may span lines and contain commas;
+// an unquoted line is taken whole (so an unquoted "hello, world" stays one
+// entry rather than becoming two, which is what a list user means).
+function parseListFile(text) {
+  const source = String(text || '').replace(/^﻿/, ''); // strip BOM
+  const entries = [];
+  let i = 0;
+  while (i < source.length) {
+    // Skip line breaks between records.
+    if (source[i] === '\r' || source[i] === '\n') { i++; continue; }
+    let value = '';
+    if (source[i] === '"') {
+      i++;
+      for (; i < source.length; i++) {
+        if (source[i] === '"') {
+          if (source[i + 1] === '"') { value += '"'; i++; continue; } // escaped
+          i++;
+          break;
+        }
+        value += source[i];
+      }
+      // Ignore anything trailing the closing quote up to the line break.
+      while (i < source.length && source[i] !== '\r' && source[i] !== '\n') i++;
+    } else {
+      const end = source.indexOf('\n', i);
+      const line = end === -1 ? source.slice(i) : source.slice(i, end);
+      value = line;
+      i = end === -1 ? source.length : end + 1;
+    }
+    const trimmed = value.trim();
+    if (trimmed) entries.push(trimmed);
+  }
+  return entries;
+}
+
+function downloadTextFile(filename, text) {
+  const blob = new Blob([text], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
+function listExportFilename(label) {
+  return `blocknsfw-${label}-${new Date().toISOString().split('T')[0]}.csv`;
+}
+
+function readFileAsText(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('read_failed'));
+    reader.onload = () => resolve(String(reader.result || ''));
+    reader.readAsText(file);
+  });
+}
+
 // Protection-strength helpers. The rule across the whole options page: changes
 // that TIGHTEN protection are always free, changes that LOOSEN it go through
 // the PIN. Adding a blocked pattern/word tightens; removing one loosens.
@@ -2466,6 +2547,73 @@ async function init() {
   });
 
   // PIN management
+  // Import/export for the three list boxes. Import merges into the textarea
+  // and leaves saving to the user: the entries are visible before they take
+  // effect, and the existing Save handler still applies the PIN rules (so an
+  // imported trusted domain is gated exactly as a typed one is). Merging is
+  // union-only, so importing can never silently drop entries already present.
+  [
+    { key: 'patterns', textarea: 'patterns', settingsKey: 'customPatterns', label: 'blocklist', noun: 'blocklist entries' },
+    { key: 'keywords', textarea: 'custom-keywords', settingsKey: 'customKeywordList', label: 'blocked-words', noun: 'blocked words' },
+    { key: 'trusted', textarea: 'trusted-domains', settingsKey: 'trustedImageDomains', label: 'trusted-sites', noun: 'trusted sites' }
+  ].forEach(list => {
+    const exportBtn = $(`export-${list.key}`);
+    const importBtn = $(`import-${list.key}`);
+    const fileInput = $(`import-${list.key}-file`);
+    const textarea = $(list.textarea);
+    if (!textarea) return;
+
+    if (exportBtn) {
+      exportBtn.addEventListener('click', () => {
+        // Exports what is on screen, including unsaved edits — the list you
+        // can see is the list you get.
+        const entries = serializePatterns(textarea.value);
+        if (entries.length === 0) {
+          showToast(`No ${list.noun} to export yet`, 'warning');
+          return;
+        }
+        downloadTextFile(listExportFilename(list.label), serializeListFile(entries));
+        showToast(`Exported ${entries.length} ${list.noun}`, 'success');
+      });
+    }
+
+    if (importBtn && fileInput) {
+      importBtn.addEventListener('click', () => fileInput.click());
+
+      fileInput.addEventListener('change', async (e) => {
+        const file = e.target.files && e.target.files[0];
+        if (!file) return;
+        try {
+          if (typeof file.size === 'number' && file.size > MAX_IMPORT_BYTES) {
+            showToast('File too large (max 1MB)', 'error');
+            return;
+          }
+          const imported = parseListFile(await readFileAsText(file));
+          if (imported.length === 0) {
+            showToast('No entries found in that file', 'warning');
+            return;
+          }
+          const existing = serializePatterns(textarea.value);
+          const before = existing.length;
+          // serializePatterns dedups (case-insensitively) and sorts the union.
+          const merged = serializePatterns(existing.concat(imported).join('\n'));
+          textarea.value = deserializePatterns(merged);
+          const added = merged.length - before;
+          showToast(
+            added > 0
+              ? `Added ${added} new ${list.noun} — review, then click Save`
+              : `Nothing new to add — all ${imported.length} were already in your list`,
+            added > 0 ? 'success' : 'info'
+          );
+        } catch (_) {
+          showToast('Could not read that file', 'error');
+        } finally {
+          e.target.value = ''; // allow re-importing the same file
+        }
+      });
+    }
+  });
+
   const accessCodeToggleEl = $('access-code-enabled');
   if (accessCodeToggleEl) {
     accessCodeToggleEl.addEventListener('change', async (e) => {

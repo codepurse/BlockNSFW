@@ -1976,6 +1976,7 @@
             <li><strong>Pages no longer freeze while loading <span class="badge-new">New</span></strong> — On Firefox especially, opening a page could stall for about a second while the extension got itself ready, which felt like the browser had locked up. That pause is gone: on the same test page the longest frozen moment dropped from roughly 1.2 seconds to under a twentieth of a second. The same fix applies to Chrome. Nothing about what gets blocked has changed. Contributed by <a href="https://github.com/oathkeeper-dev" target="_blank" rel="noopener">oathkeeper-dev</a>.</li>
             <li><strong>Setting up is quicker and uses less data</strong> — A fresh install downloaded the whole blocklist straight away, even though the very same list already ships inside the extension. It now starts from the copy it already has and only fetches an update when one is genuinely due, so setup finishes sooner and costs you several megabytes less.</li>
             <li><strong>Your settings are harder to unlock in a weak moment</strong> — Some settings could previously be changed without your PIN, including deleting your own blocked words, turning off DNS Protection, and lowering AI strictness. Everything that weakens protection now asks for your PIN first. Adding words, tightening settings and turning protections on stay instant, as they should.</li>
+            <li><strong>Import and export your lists <span class="badge-new">New</span></strong> — Your blocklist, blocked words and trusted sites now have Import and Export buttons. Export saves a file you can keep as a backup or open in a spreadsheet; import accepts .csv or .txt and adds to what you already have rather than replacing it. Imported entries appear in the box first, so you can look them over before hitting Save.</li>
             <li><strong>Tidier lists</strong> — Your blocklist, blocked words and trusted sites are now sorted A-Z and de-duplicated when you save, so pasting in a long list no longer leaves a mess.</li>
             <li><strong>AI Text Protection now asks for a second opinion</strong> — The text AI was flagging ordinary sites such as YouTube, so it no longer blocks a page on its own. A page is blocked only when both its text and an image on it look adult, which means the AI Image Blocker needs to be on for this to do anything. It catches less for now; the model is being retrained.</li>
           </ul>
@@ -2297,6 +2298,9 @@ disney.com"></textarea>
       <div class="button-group">
         <button class="button button-primary" id="save-trusted">Save Trusted Domains</button>
         <button class="button" id="reset-trusted">Reset to Defaults</button>
+        <button class="button" id="import-trusted">Import</button>
+        <button class="button" id="export-trusted">Export</button>
+        <input type="file" id="import-trusted-file" accept=".csv,.txt,text/csv,text/plain" hidden>
       </div>
     </div>
 
@@ -2312,7 +2316,10 @@ site name"></textarea>
       <div class="button-group">
         <button class="button button-primary" id="save-keywords">Save Words</button>
         <button class="button" id="reset-keywords">Reset to Defaults</button>
+        <button class="button" id="import-keywords">Import</button>
+        <button class="button" id="export-keywords">Export</button>
         <button class="button button-destructive" id="clear-keywords">Clear All</button>
+        <input type="file" id="import-keywords-file" accept=".csv,.txt,text/csv,text/plain" hidden>
       </div>
     </div>
 
@@ -2329,7 +2336,10 @@ another-site.org/adult/*"></textarea>
       <div class="button-group">
         <button class="button button-primary" id="save">Save Blocklist</button>
         <button class="button" id="reset">Reset to Defaults</button>
+        <button class="button" id="import-patterns">Import</button>
+        <button class="button" id="export-patterns">Export</button>
         <button class="button button-destructive" id="clear">Clear All</button>
+        <input type="file" id="import-patterns-file" accept=".csv,.txt,text/csv,text/plain" hidden>
       </div>
     </div>
 
