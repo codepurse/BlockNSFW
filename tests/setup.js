@@ -22,6 +22,8 @@ function noop() {}
 
 function makeChromeStub() {
   const messageListeners = [];
+  const tabUpdatedListeners = [];
+  const badges = new Map();
   const stub = {
     runtime: {
       onInstalled: { addListener: noop },
@@ -47,11 +49,22 @@ function makeChromeStub() {
     },
     tabs: {
       update: () => Promise.resolve(),
-      query: () => Promise.resolve([])
+      query: () => Promise.resolve([]),
+      onUpdated: { addListener: listener => { tabUpdatedListeners.push(listener); }, listeners: tabUpdatedListeners }
     },
     action: {
       setIcon: () => Promise.resolve(),
-      setBadgeText: () => Promise.resolve()
+      // Badge text is stored per tab so bumpTabBadge's read-back-then-add can be
+      // exercised: it reads the badge rather than keeping a tally, because the
+      // MV3 worker is torn down while the badge text survives.
+      _badges: badges,
+      getBadgeText: ({ tabId }) => Promise.resolve(badges.get(tabId) || ''),
+      setBadgeText: ({ tabId, text }) => {
+        if (text === '') badges.delete(tabId);
+        else badges.set(tabId, text);
+        return Promise.resolve();
+      },
+      setBadgeBackgroundColor: () => Promise.resolve()
     },
     alarms: {
       create: noop,

@@ -4,9 +4,262 @@ All notable project changes should be documented here going forward.
 
 ## [Unreleased]
 
-## [1.7.5] - 2026-08-18
+## [1.7.5] - 2026-08-24
+
+### Added
+- **A count on the toolbar icon.** Nothing outside the page ever showed that the
+  extension was working; `setBadgeText` was not called anywhere in the codebase,
+  while the counts themselves had been tracked in storage all along. The toolbar
+  icon now carries the number of things blocked in that tab — search results,
+  filtered images, AI-filtered images — capped at `99+` so a long scroll through
+  an image-heavy page cannot put four digits on it. A navigation starts a fresh
+  count.
+
+  This matters more than it sounds now that blocked results leave nothing behind:
+  it is the ambient signal that the extension is alive when a quiet page is
+  simply a quiet page. It reads the badge back from the browser rather than
+  keeping a tally in memory, because the MV3 service worker is torn down after
+  about thirty seconds idle while the badge text survives — a tally would have
+  jumped from *12* back to *1* on the next block.
+
+  Whole-site blocks are not counted, since the tab navigates to the blocked page
+  and the count is cleared by that navigation anyway.
+- **The count can live in the page instead of on the icon.** A badge on an
+  unpinned toolbar icon is a badge nobody sees — Chrome tucks unpinned extensions
+  behind the puzzle-piece menu, and no API exists to pin one on the user's behalf.
+  Settings → Customization → **Blocked Search Results** → *Where To Show The
+  Count* offers **Floating button on the page** instead: a small pill in the
+  bottom-right corner showing what was blocked here.
+
+  Clicking the pill lists the hosts the blocks came from, busiest first, since one
+  site usually accounts for most of an image grid. The listed hosts are inert
+  text — not links, no handler, nothing to click through to. Accounting for what
+  happened is the point; offering a route back to it is not.
+
+  On an image search the pill reports the *source* of each blocked picture rather
+  than the search engine. Thumbnails are served through the engine's own proxy, so
+  without unwrapping that address every image on the page would appear to have
+  come from DuckDuckGo.
+
+  Only one of the two is ever active: choosing the pill clears the badges already
+  drawn on open tabs, so the same blocks are never reported in two places.
+  Social-feed posts are counted by neither.
+- **Subscribed lists.** Settings → Customization → **Subscribed Lists** takes the
+  address of a ruleset file and follows it: the rules are downloaded, applied
+  alongside your own entries, and re-checked once a day. Requested by a user who
+  keeps his blocking in lists other people maintain and had no way to bring them
+  across.
+
+  The file format is uBlacklist's, deliberately, so an address already followed
+  in that extension can be pasted in unchanged. That was mostly free: the rule
+  syntax has matched since 1.7.4 (`example.com`, `*.example.com`,
+  `/example\.(net|org)/`, `title/Example Domain/`), and the comment support above
+  covers the headings and attribution those published files carry. What the
+  parser adds is the optional YAML front matter a ruleset uses to name itself.
+
+  **A subscribed list can only add blocks.** It cannot whitelist a site, cannot
+  unblock anything, and cannot change a setting. The rule syntax has no allow
+  form and nothing in the download path touches the whitelist or the enabled
+  flag. A file fetched from a stranger that could say "never block this site"
+  would be a remote off switch on a porn blocker, and that is the one thing this
+  must never become. Turning a subscription off, or removing it, is treated as
+  weakening protection and asks for the PIN like everything else in that
+  category.
+
+  A published list can be tens of thousands of lines, where a hand-typed one is a
+  dozen, and those rules are consulted for every image and every search result.
+  Bare domains — nearly all of any real list — therefore go into a hash set for a
+  single lookup, and only the wildcard and regex entries keep the loop. That is
+  the same path that made pages crawl in 1.7.0.
+
+  Failures are reported rather than hidden. A list whose host is down keeps
+  working from the copy already on disk and shows the error; one bad regex in
+  someone else's file is skipped rather than costing you the other thirty
+  thousand rules; and a file that is too long is applied up to the limit and says
+  so. Pasting the address of a GitHub *page* instead of the raw file is rejected
+  outright, rather than counting the lines of an HTML document as rules.
+
+  One-click subscribe links work too. Authors publish buttons pointing at
+  uBlacklist's redirect page, and since the format is shared, those open Settings
+  here with the address filled in. Filled in only — nothing is subscribed until
+  you press the button, so a web page cannot add a list by linking at one.
+- **Comment lines in the three user lists.** A line starting with `#` or `!` is a
+  note, ignored when matching — in the blocklist, the blocked-word list and the
+  trusted-sites list. Both markers are accepted because the tools people arrive
+  from disagree: uBlacklist uses `#`, uBlock Origin and AdGuard use `!`, and lists
+  get pasted between all three. Requested by a user.
+
+  Before this, such a line was not rejected — it was saved as a real entry that
+  matched nothing. A dead wildcard in the blocklist, or a literal phrase in the
+  word list that only fired on pages containing the text of the note. Silently
+  accepting junk was the worst of the three possible behaviours.
+
+  Two things made this more than a parser change.
+
+  Saving sorts A–Z and de-duplicates, and a note is almost always a heading for
+  the lines beneath it. Sorting lines individually would tear every comment away
+  from the group it labels, so entries are now sorted in **blocks**: the comments
+  immediately above an entry travel with it. Identical notes are never
+  de-duplicated — two `# ---` separators are both meant to be there — and a
+  duplicate entry's note joins the surviving copy rather than drifting onto
+  whatever sorts next. A list with no comments in it sorts exactly as it did
+  before.
+
+  And `#nsfw` is a realistic blocked word, since hashtags start with `#`. A single
+  leading backslash marks an entry that really does begin with `#` or `!` —
+  `\#nsfw` — and is stripped before matching. Entries already saved that would
+  now read as comments are rewritten with that escape once, on first open of the
+  options page, so nothing anyone saved changes meaning.
+
+  The rule lives in `shared/keyword-pattern.js` alongside the regex syntax, which
+  means the options page and the content script cannot disagree about what a
+  comment is. Every consumer of a stored list now goes through one filter, so a
+  comment cannot reach a matcher — the failure that would matter here is a
+  `# block example.com later` note compiled into a host pattern that blocks
+  `example.com`.
+- **A prompt to pin the extension.** Settings shows a dismissible banner
+  explaining how to pin the toolbar icon, and why it is worth doing — the count is
+  hidden without it, and so is the quickest route to unblocking a site. On Chrome
+  it appears only when the icon is genuinely unpinned, via
+  `action.getUserSettings()`. Firefox has no equivalent, so there it shows once
+  and stays dismissed.
+
+### Changed
+- **A blocked search result is now removed, not replaced with a card.** Every
+  blocked result used to become a full-width panel: the extension's logo in a
+  40px circle, *Content Filtered by BlockNSFW*, a line of explanation, a
+  **BLOCKED** badge and a hover lift. That is bearable when two results in ten
+  are hidden. It stopped being bearable in this release, which extends filtering
+  to DuckDuckGo's Images and Videos tabs and to the thumbnail rows on the All
+  tab — a 5×4 image grid with fifteen blocks became twenty shield boxes and no
+  pictures. Reported by a user who had just moved over from uBlacklist and ran
+  into it on exactly those verticals.
+
+  Blocked web results are now taken out of the list, and one line above the
+  results accounts for them: **"3 results blocked by BlockNSFW"**. One line
+  however many were blocked. Image and video results simply go — in a grid, a gap
+  reads as *fewer results*, while a grid of placeholders reads as an error state.
+
+  The line is deliberately text with nothing to click. uBlacklist's equivalent
+  carries a *Show* link, which makes sense for a tool that hides SEO spam and
+  makes much less sense here: a one-click reveal on every search page is a bypass
+  sitting on the surface people hit while browsing normally. Revealing blocked
+  results stays the popup's job, where it can be PIN-gated.
+
+  Placeholders are unchanged for images embedded in ordinary pages. There the box
+  is doing real work — holding the layout and explaining why an article has a
+  hole in it — which is a different job from a search grid.
+
+  Settings → Customization → **Blocked Search Results** keeps the old behaviour
+  available: *Show a notice in place* restores the per-result card for web
+  results. It is worth having rather than deleting, because a removed result is
+  indistinguishable from a result that never existed, and per-position evidence
+  is the point in an accountability setup. The choice covers web results only —
+  image and video results are always removed, since the card is a full-width flex
+  row with an avatar and a badge and a 200px tile cannot hold it. A second switch
+  turns the summary line off entirely for anyone who wants no on-page footprint
+  at all.
+
+  Changing either setting re-does the results already on screen, so the picker
+  does not appear to do nothing until the tab is reloaded.
 
 ### Fixed
+- **DuckDuckGo's Images and Videos tabs were not filtered at all.** A blocked
+  word stopped the matching web results, then the same search on the Images or
+  Videos tab showed everything. The selectors the filter used —
+  `.tile--img`, `.tile__title`, `.result` — belong to DuckDuckGo's pre-React
+  layout and match nothing on the current site, so there was no result to
+  examine and no keyword check ever ran. Google was unaffected, which is why
+  this looked like a keyword bug rather than a DuckDuckGo one.
+
+  Both verticals now key on the `data-testid` attributes DuckDuckGo puts on
+  each one, and on the semantic tags inside them (`figure` for an image result,
+  `article` for a video result), because every class name on that page is a
+  build hash that changes on each deploy. The old class selectors are kept as
+  fallbacks so older self-hosted instances keep working.
+
+  Two smaller things had to change with them. Image thumbnails are served
+  through DuckDuckGo's own proxy — `external-content.duckduckgo.com/iu/?u=…` —
+  so every picture on the page appeared to come from DuckDuckGo: the host and
+  path carry no information and the real address sits in a parameter. That
+  parameter is now unwrapped and scanned, as it already was for Yandex. And a
+  blocked image result now takes its whole tile with it rather than just the
+  picture, since the caption underneath spells out the title the block was
+  keyed on.
+
+  The All tab needed one more thing: it carries an inline row of thumbnails for
+  the same query, and no result selector reached it, so the web results above it
+  were replaced while the pictures stayed. Each row on that page is an
+  `<li data-layout="…">` naming what it holds, so the images and videos rows are
+  now treated as results and replaced whole — while ads and related searches are
+  left alone.
+
+  The knowledge panel — the Wikipedia summary above the results — is covered
+  too, but judged differently. It is several hundred words of reference prose
+  rather than a snippet, and at that length the built-in keyword scoring
+  misreads legitimate text, so the panel is blocked only on a stated signal: a
+  link to a blocklisted site, or a word from your own blocked-word list. The
+  heuristics get no vote on it.
+- **A search result that arrived late was never filtered.** DuckDuckGo serves no
+  results in its HTML at all — the entire page is built in the browser, row by
+  row. A result row therefore exists for a moment with its title still missing,
+  and both filtering paths marked such a row as "inspected" on the way past, so
+  once it filled in nothing looked at it again. Whichever row happened to be
+  slowest that pageload was the one that survived. A row is now only marked off
+  once it has actually been recognised as a result, and is re-examined until
+  then.
+
+  The incremental path the page-change observer uses had drifted from the full
+  pass as well: it judged the raw changed element rather than the result row
+  around it, and did not know about the explicit-signals-only rule. Both now go
+  through one shared resolver, so they cannot disagree about what a result is,
+  which element to replace, or how to judge it.
+- **Custom blocked words were ignored in image search below the strictest
+  setting.** In image results, a word from your own list only counted when the
+  image filter was set to Strict; on Moderate or Lenient the built-in term list
+  was consulted and yours was not. A word you typed yourself is an instruction
+  rather than a heuristic, so it now applies at every level — the level still
+  decides how far the built-in lists reach.
+- **"Go Back" on the blocked page did nothing.** It was wired as an inline
+  `onclick`, which the extension's content-security policy (`script-src 'self'`)
+  blocks outright, so the click was silently discarded. It is now a real
+  listener — and when the blocked page is the only entry in a tab's history,
+  with nothing to go back to, it leaves the page instead of sitting there.
+- **AI image blocking never worked on Firefox.** Turning the beta on did
+  nothing: no image was ever scanned, no image was ever blurred, and the only
+  hint was `AI runtime was not preloaded` in the background console. The cause
+  was one line in `background.js`, `if (typeof self.importScripts !== 'function')
+  return;`. Chrome runs the background as an MV3 service worker, where
+  `importScripts()` is the only way to pull in TensorFlow.js *and* may be called
+  only during the worker's first synchronous evaluation — hence the eager
+  preload. Firefox has no background service worker; `background.scripts` runs in
+  an event *page*, where `importScripts` does not exist at all. So the preload
+  returned immediately, `tf` and `nsfwjs` were never defined, and every
+  classify/ping request from the content script failed at the first step. The
+  fallback chain hid it: with the model unavailable, candidate images are
+  revealed rather than left hidden, so a Firefox page looked exactly like a page
+  with nothing to block.
+
+  An event page does have a DOM, so on Firefox the runtime is now loaded with
+  `<script>` tags instead — lazily, on the first classify or ping, and never
+  twice. Lazily matters: Firefox suspends idle event pages, and parsing the
+  4.5 MB TF.js bundle on every background wake-up would be a real cost for the
+  majority of users who leave this opt-in beta off. Chrome's eager
+  `importScripts` path is untouched.
+
+- **Firefox was also running the background with a degraded blocklist and broken
+  path-scoped whitelists.** Same root cause, separate symptom: `background.js`
+  pulls `shared/hostname.js`, `shared/host-keywords.js` and
+  `shared/validate-domain.js` in with `importScripts` too, and
+  `manifest.firefox.json` only declared three of the six shared helpers in
+  `background.scripts`. Each missing module has a guarded fallback, so nothing
+  threw — Firefox quietly used the short inline keyword list (27 entries instead
+  of the full host list, no punycode handling, no ambiguous-keyword rules) and
+  `whitelistPathMatches` degraded to *whole-domain entries only*, which meant a
+  path-scoped whitelist entry never allowed anything. All six are now declared.
+  A test asserts the manifest lists every helper `background.js` imports, so the
+  two cannot drift apart again.
+
 - **"Unblock this website" whitelisted the extension instead of the site.** Used
   from a blocked page, the popup read the address of the tab it was open on —
   which is the extension's own blocked page, not the site that was blocked. So

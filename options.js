@@ -10,6 +10,8 @@ const UPDATE_INFO_KEY = 'pblocker_update_info';
 const UPDATE_DISMISSED_KEY = 'pblocker_update_dismissed';
 const ANNOUNCEMENT_INFO_KEY = 'pblocker_announcement_info';
 const ANNOUNCEMENT_DISMISSED_KEY = 'pblocker_announcement_dismissed';
+// Note: unrelated to PIN_KEY — this is the toolbar-pin prompt, not the PIN lock.
+const PIN_BANNER_DISMISSED_KEY = 'pblocker_pin_banner_dismissed';
 
 const DEFAULT_SETTINGS = {
   enabled: true,
@@ -20,6 +22,9 @@ const DEFAULT_SETTINGS = {
   trustedImageDomains: [],
   debugMode: false,
   blockedPageType: 'default', // 'default', 'custom', 'plain_html'
+  searchResultTreatment: 'hide', // 'hide' | 'overlay' — web/text results only
+  searchSummaryEnabled: true, // the "N results blocked" line on search pages
+  blockCountDisplay: 'badge', // 'badge' (toolbar icon) | 'floating' (in-page pill)
   customBlockedPageUrl: '',
   plainBlockedPageHtml: '',
   dnsFilterEnabled: false,
@@ -435,6 +440,53 @@ async function showConfirmModal(config) {
   });
 }
 
+const COMMENT_MIGRATION_KEY = 'pblocker_comment_syntax_migrated';
+
+/**
+ * Comments arrived after these lists did, so an entry saved earlier that happens
+ * to start with '#' or '!' — `#nsfw` is a realistic blocked word — would suddenly
+ * be read as a note and stop blocking anything. Such entries are rewritten once
+ * with the escape (`\#nsfw`), which means exactly what they meant before.
+ *
+ * Runs once and records that it has. New comments typed after this point are
+ * left alone, because by then the user knows what a '#' does.
+ */
+async function migrateCommentSyntaxOnce() {
+  try {
+    const store = await browserAPI.storage.local.get([COMMENT_MIGRATION_KEY, SETTINGS_KEY]);
+    if (store[COMMENT_MIGRATION_KEY]) return;
+
+    const settings = store[SETTINGS_KEY];
+    if (!settings) {
+      // Nothing saved yet — a fresh install has nothing to protect.
+      await browserAPI.storage.local.set({ [COMMENT_MIGRATION_KEY]: true });
+      return;
+    }
+
+    const escape = (typeof KeywordPattern !== 'undefined' && KeywordPattern.escapeCommentEntry)
+      ? KeywordPattern.escapeCommentEntry
+      : (entry) => (isCommentLine(entry) ? '\\' + String(entry).trim() : entry);
+
+    let changed = false;
+    const next = { ...settings };
+    for (const key of ['customPatterns', 'customKeywordList', 'trustedImageDomains']) {
+      if (!Array.isArray(next[key])) continue;
+      const migrated = next[key].map((entry) => {
+        const escaped = escape(entry);
+        if (escaped !== entry) changed = true;
+        return escaped;
+      });
+      next[key] = migrated;
+    }
+
+    if (changed) await browserAPI.storage.local.set({ [SETTINGS_KEY]: next });
+    await browserAPI.storage.local.set({ [COMMENT_MIGRATION_KEY]: true });
+  } catch (_) {
+    // A failed migration must not stop the options page from opening. It will be
+    // retried next time, since the flag is only set on success.
+  }
+}
+
 async function getSettings() {
   const { [SETTINGS_KEY]: settings } = await browserAPI.storage.local.get(SETTINGS_KEY);
   const merged = { ...DEFAULT_SETTINGS, ...(settings || {}) };
@@ -848,18 +900,75 @@ function updateCommitmentProgress(activeStep) {
 // "Apricot" and "apricot" are the same entry — the first spelling wins.
 // Pasting a long list is the normal way people fill these in, so it arrives
 // unsorted and with repeats; cleaning it here keeps the stored list readable.
+function isCommentLine(entry) {
+  if (typeof KeywordPattern !== 'undefined' && KeywordPattern.isCommentEntry) {
+    return KeywordPattern.isCommentEntry(entry);
+  }
+  const value = String(entry || '').trim();
+  return !!value && (value.charAt(0) === '#' || value.charAt(0) === '!');
+}
+
+/**
+ * Normalise a list box into what gets stored: blank lines dropped, entries
+ * de-duplicated case-insensitively, and the whole thing sorted A–Z.
+ *
+ * Comments make the sort more than a sort. A note is almost always a heading for
+ * the lines under it — `# === Social ===` — so sorting the lines individually
+ * would strand every comment away from the group it labels. Entries are
+ * therefore sorted in *blocks*: the comments immediately above an entry travel
+ * with it. Comments are never de-duplicated, since two `# ---` rules are both
+ * meant to be there, and trailing comments with no entry after them stay at the
+ * end where they were written.
+ */
 function serializePatterns(text) {
-  const seen = new Set();
-  const entries = [];
+  const byKey = new Map();
+  const blocks = [];
+  let pendingComments = [];
+
   for (const line of text.split(/\r?\n/)) {
     const entry = line.trim();
     if (!entry) continue;
+
+    if (isCommentLine(entry)) {
+      pendingComments.push(entry);
+      continue;
+    }
+
     const key = entry.toLowerCase();
-    if (seen.has(key)) continue;
-    seen.add(key);
-    entries.push(entry);
+    const existing = byKey.get(key);
+    if (existing) {
+      // The entry is a duplicate and goes, but the note above it describes that
+      // same entry — so it joins the block that already owns it rather than
+      // being dropped or drifting onto whatever sorts next.
+      for (const comment of pendingComments) {
+        if (!existing.comments.includes(comment)) existing.comments.push(comment);
+      }
+      pendingComments = [];
+      continue;
+    }
+
+    const block = { entry, comments: pendingComments };
+    byKey.set(key, block);
+    blocks.push(block);
+    pendingComments = [];
   }
-  return entries.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+
+  blocks.sort((a, b) => a.entry.localeCompare(b.entry, undefined, { sensitivity: 'base' }));
+
+  const out = [];
+  for (const block of blocks) {
+    for (const comment of block.comments) out.push(comment);
+    out.push(block.entry);
+  }
+  // Comments after the last entry belong to nothing; keep them rather than lose
+  // what someone typed.
+  for (const comment of pendingComments) out.push(comment);
+  return out;
+}
+
+/** Entries only — what the counts shown to the user should reflect. */
+function countRealEntries(list) {
+  return (list || []).filter((entry) => entry && !isCommentLine(entry)).length;
 }
 
 function deserializePatterns(list) {
@@ -1040,6 +1149,112 @@ function validateDomain(domain) {
   return self.DomainValidate.validateDomain(domain);
 }
 
+// --- Subscribed lists --------------------------------------------------------
+
+function subscriptionStatusText(subscription) {
+  if (subscription.error) return `Update failed: ${subscription.error}`;
+  if (!subscription.updatedAt) return 'Not downloaded yet';
+
+  const when = new Date(subscription.updatedAt).toLocaleString();
+  const count = subscription.entryCount || 0;
+  let text = `${count.toLocaleString()} ${count === 1 ? 'rule' : 'rules'} · updated ${when}`;
+  // Say so out loud rather than quietly applying a partial list.
+  if (subscription.truncated) text += ' · list was too long and was cut short';
+  if (subscription.skipped) text += ` · ${subscription.skipped} unusable ${subscription.skipped === 1 ? 'line' : 'lines'} skipped`;
+  return text;
+}
+
+async function renderSubscriptions() {
+  const container = $('subscription-list');
+  if (!container) return;
+
+  let subscriptions = [];
+  try {
+    const response = await browserAPI.runtime.sendMessage({ type: 'subscription_list' });
+    subscriptions = (response && response.subscriptions) || [];
+  } catch (_) {
+    subscriptions = [];
+  }
+
+  container.innerHTML = '';
+  if (subscriptions.length === 0) {
+    const empty = document.createElement('div');
+    empty.className = 'whitelist-empty';
+    empty.textContent = 'No subscriptions yet.';
+    container.appendChild(empty);
+    return;
+  }
+
+  subscriptions.forEach((subscription) => {
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;justify-content:space-between;align-items:flex-start;gap:12px;padding:10px 8px;border-bottom:1px solid color-mix(in oklab,CanvasText,transparent 85%);';
+
+    const info = document.createElement('div');
+    info.style.cssText = 'min-width:0;flex:1;';
+
+    const name = document.createElement('strong');
+    name.textContent = subscription.name || subscription.url;
+    name.style.cssText = 'display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+    if (subscription.enabled === false) name.style.opacity = '0.55';
+    info.appendChild(name);
+
+    const url = document.createElement('div');
+    url.textContent = subscription.url;
+    url.style.cssText = 'font-size:0.78rem;opacity:0.65;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+    info.appendChild(url);
+
+    const status = document.createElement('div');
+    status.textContent = subscriptionStatusText(subscription);
+    status.style.cssText = `font-size:0.78rem;margin-top:2px;${subscription.error ? 'color:var(--error-color,#ef4444);' : 'opacity:0.65;'}`;
+    info.appendChild(status);
+
+    const actions = document.createElement('div');
+    actions.style.cssText = 'display:flex;gap:6px;flex-shrink:0;';
+
+    const toggle = document.createElement('button');
+    toggle.className = 'button';
+    toggle.textContent = subscription.enabled === false ? 'Enable' : 'Disable';
+    toggle.addEventListener('click', async () => {
+      // Turning a list off stops it blocking, which is a protection-weakening
+      // change and gated like every other one. Turning it back on is not.
+      if (subscription.enabled !== false) {
+        const allowed = await requirePINIfSet('disable this subscribed list');
+        if (!allowed) return;
+      }
+      await browserAPI.runtime.sendMessage({
+        type: 'subscription_toggle',
+        id: subscription.id,
+        enabled: subscription.enabled === false
+      });
+      await renderSubscriptions();
+    });
+    actions.appendChild(toggle);
+
+    const remove = document.createElement('button');
+    remove.className = 'button button-destructive';
+    remove.textContent = 'Remove';
+    remove.addEventListener('click', async () => {
+      const allowed = await requirePINIfSet('remove this subscribed list');
+      if (!allowed) return;
+      const confirmed = await showConfirmModal({
+        title: 'Remove this list?',
+        description: `${subscription.name || subscription.url} currently blocks ${(subscription.entryCount || 0).toLocaleString()} entries. Removing it stops all of them.`,
+        confirmText: 'Remove',
+        destructive: true
+      });
+      if (!confirmed) return;
+      await browserAPI.runtime.sendMessage({ type: 'subscription_remove', id: subscription.id });
+      showToast('Subscription removed', 'success');
+      await renderSubscriptions();
+    });
+    actions.appendChild(remove);
+
+    row.appendChild(info);
+    row.appendChild(actions);
+    container.appendChild(row);
+  });
+}
+
 async function renderWhitelist() {
   const whitelist = await cleanExpiredWhitelist();
   const container = $('whitelist-display');
@@ -1087,6 +1302,95 @@ window.removeWhitelistItem = async function(domain, path = null) {
   await renderWhitelist();
 }
 
+const SEARCH_RESULT_TREATMENT_DETAIL = {
+  hide: 'Blocked results are removed. A summary line above the results says how many.',
+  overlay: 'Each blocked result is replaced with a card. Image and video results are always removed — the card needs a full-width row and cannot fit a grid tile.'
+};
+
+function normalizeSearchResultTreatment(treatment) {
+  return String(treatment || '').toLowerCase() === 'overlay' ? 'overlay' : 'hide';
+}
+
+const BLOCK_COUNT_DISPLAY_DETAIL = {
+  badge: "A number on the extension's toolbar icon counts what was blocked in each tab. Hidden if the icon is not pinned — Chrome tucks unpinned extensions behind the puzzle-piece menu.",
+  floating: 'A small pill in the corner of the page shows the count. Click it to list the sites that were blocked; the listed sites are not links and lead nowhere.'
+};
+
+function normalizeBlockCountDisplay(display) {
+  return String(display || '').toLowerCase() === 'floating' ? 'floating' : 'badge';
+}
+
+/**
+ * The treatment picker plus the summary-line switch. Kept together because the
+ * summary is what accounts for blocked results once they stop announcing
+ * themselves individually — turning both off means a search page shows no trace
+ * of the extension at all, which is a legitimate choice but worth stating.
+ */
+function renderSearchResultTreatment(settings) {
+  const select = $('search-result-treatment');
+  const detail = $('search-result-treatment-detail');
+  const treatment = normalizeSearchResultTreatment(settings.searchResultTreatment);
+  if (select) select.value = treatment;
+  if (detail) detail.textContent = SEARCH_RESULT_TREATMENT_DETAIL[treatment];
+
+  const summary = $('search-summary-enabled');
+  if (summary) summary.checked = settings.searchSummaryEnabled !== false;
+
+  const display = normalizeBlockCountDisplay(settings.blockCountDisplay);
+  const displaySelect = $('block-count-display');
+  if (displaySelect) displaySelect.value = display;
+  const displayDetail = $('block-count-display-detail');
+  if (displayDetail) displayDetail.textContent = BLOCK_COUNT_DISPLAY_DETAIL[display];
+}
+
+/**
+ * Prompt to pin the toolbar icon, but only when it is genuinely unpinned — the
+ * badge is invisible behind Chrome's puzzle-piece menu, and no API can pin it for
+ * the user, so asking is the only option. Firefox has no getUserSettings, so
+ * there the banner is shown once and dismissed for good.
+ */
+async function renderPinBanner() {
+  const banner = $('pin-banner');
+  if (!banner) return;
+  try {
+    const { [PIN_BANNER_DISMISSED_KEY]: dismissed } =
+      await browserAPI.storage.local.get(PIN_BANNER_DISMISSED_KEY);
+    if (dismissed) { banner.classList.add('hidden'); return; }
+
+    // Only worth nagging about while the count is meant to be on the icon.
+    const settings = await getSettings();
+    if (normalizeBlockCountDisplay(settings.blockCountDisplay) !== 'badge') {
+      banner.classList.add('hidden');
+      return;
+    }
+
+    let pinned = null; // null = cannot tell
+    try {
+      if (browserAPI.action && typeof browserAPI.action.getUserSettings === 'function') {
+        const userSettings = await browserAPI.action.getUserSettings();
+        if (userSettings && typeof userSettings.isOnToolbar === 'boolean') {
+          pinned = userSettings.isOnToolbar;
+        }
+      }
+    } catch (_) {
+      // Unsupported in this browser; fall through to showing it once.
+    }
+
+    if (pinned === true) { banner.classList.add('hidden'); return; }
+    banner.classList.remove('hidden');
+  } catch (_) {
+    banner.classList.add('hidden');
+  }
+}
+
+async function dismissPinBanner() {
+  try {
+    await browserAPI.storage.local.set({ [PIN_BANNER_DISMISSED_KEY]: true });
+  } catch (_) {}
+  const banner = $('pin-banner');
+  if (banner) banner.classList.add('hidden');
+}
+
 async function render() {
   const settings = await getSettings();
   const stats = await getStats();
@@ -1103,6 +1407,23 @@ async function render() {
   const imageFilterLevelDetail = $('image-filter-level-detail');
   if (imageFilterLevelDetail) {
     imageFilterLevelDetail.textContent = getImageFilterLevelMeta(imageFilterLevel).detail;
+  }
+  renderSearchResultTreatment(settings);
+
+  const aboutVersion = $('about-version');
+  const whatsNewVersion = $('whats-new-version');
+  if (aboutVersion || whatsNewVersion) {
+    let version = '';
+    try {
+      version = browserAPI.runtime.getManifest().version;
+    } catch (_) {
+      version = '';
+    }
+    if (aboutVersion) aboutVersion.textContent = version ? `version ${version}` : 'this version';
+    // The highlights below the heading are written for one release. Stamping the
+    // running version on it means a stale card is visible as stale rather than
+    // reading as current, which is how the 1.7.4 list survived into 1.7.5.
+    if (whatsNewVersion) whatsNewVersion.textContent = version ? `in ${version}` : '';
   }
   $('patterns').value = deserializePatterns(settings.customPatterns);
   const customKeywords = $('custom-keywords');
@@ -1332,6 +1653,30 @@ async function render() {
   } catch (_) {}
 
   await renderWhitelist();
+  await renderSubscriptions();
+  applySubscribeQueryParam();
+}
+
+/**
+ * A subscribe link opens Settings with ?subscribe=<url>. The address is filled
+ * into the box and the section scrolled to, but nothing is added — the user
+ * still presses Subscribe. A page that can link here must not be able to change
+ * what gets blocked on its own.
+ */
+function applySubscribeQueryParam() {
+  try {
+    const requested = new URLSearchParams(window.location.search).get('subscribe');
+    if (!requested || !/^https?:\/\//i.test(requested)) return;
+
+    const input = $('subscription-url');
+    if (!input || input.value) return;
+    input.value = requested;
+
+    const hint = $('subscription-hint');
+    if (hint) hint.textContent = 'Filled in from a subscribe link. Check the address, then press Subscribe.';
+    input.scrollIntoView({ block: 'center' });
+    input.focus();
+  } catch (_) {}
 }
 
 async function updateReportCooldown() {
@@ -1534,6 +1879,8 @@ function requestAnnouncement() {
 }
 
 async function init() {
+  // Before the first render, so the boxes never show an unmigrated list.
+  await migrateCommentSyntaxOnce();
   await render();
 
   // Update-available banner
@@ -1547,6 +1894,11 @@ async function init() {
   if (infoDismissBtn) infoDismissBtn.addEventListener('click', dismissAnnouncementBanner);
   await renderAnnouncementBanner();
   requestAnnouncement();
+
+  // Toolbar pin prompt
+  const pinDismissBtn = $('pin-banner-dismiss');
+  if (pinDismissBtn) pinDismissBtn.addEventListener('click', dismissPinBanner);
+  await renderPinBanner();
 
   // Community Reports form handler
   const submitReportBtn = $('submit-report');
@@ -1988,6 +2340,88 @@ async function init() {
     showToast('Blocked page settings updated', 'success');
   });
 
+  const addSubscriptionBtn = $('add-subscription');
+  if (addSubscriptionBtn) {
+    addSubscriptionBtn.addEventListener('click', async () => {
+      const input = $('subscription-url');
+      const url = (input.value || '').trim();
+      if (!url) {
+        showToast('Enter the address of a ruleset file', 'warning');
+        return;
+      }
+
+      addSubscriptionBtn.disabled = true;
+      addSubscriptionBtn.textContent = 'Downloading…';
+      try {
+        const result = await browserAPI.runtime.sendMessage({ type: 'subscription_add', url });
+        if (!result || !result.ok) {
+          showToast((result && result.error) || 'Could not add that list', 'error');
+          return;
+        }
+        // Adding succeeds even when the download fails, so the failure has to be
+        // reported separately or a dead URL looks like it worked.
+        if (result.fetch && !result.fetch.ok) {
+          showToast(`Added, but the download failed: ${result.fetch.error}`, 'warning');
+        } else {
+          const count = (result.fetch && result.fetch.entryCount) || 0;
+          showToast(`Subscribed · ${count.toLocaleString()} rules added`, 'success');
+        }
+        input.value = '';
+        await renderSubscriptions();
+      } catch (error) {
+        showToast('Could not add that list', 'error');
+      } finally {
+        addSubscriptionBtn.disabled = false;
+        addSubscriptionBtn.textContent = 'Subscribe';
+      }
+    });
+  }
+
+  const refreshSubscriptionsBtn = $('refresh-subscriptions');
+  if (refreshSubscriptionsBtn) {
+    refreshSubscriptionsBtn.addEventListener('click', async () => {
+      refreshSubscriptionsBtn.disabled = true;
+      refreshSubscriptionsBtn.textContent = 'Updating…';
+      try {
+        await browserAPI.runtime.sendMessage({ type: 'subscription_refresh' });
+        await renderSubscriptions();
+        showToast('Subscriptions updated', 'success');
+      } catch (_) {
+        showToast('Could not update subscriptions', 'error');
+      } finally {
+        refreshSubscriptionsBtn.disabled = false;
+        refreshSubscriptionsBtn.textContent = 'Update Now';
+      }
+    });
+  }
+
+  $('search-result-treatment').addEventListener('change', async (e) => {
+    // Presentation only — a hidden result and an overlaid one are both blocked —
+    // so this is not PIN-gated. Neither option reveals anything.
+    const settings = await getSettings();
+    settings.searchResultTreatment = normalizeSearchResultTreatment(e.target.value);
+    await setSettings(settings);
+    renderSearchResultTreatment(settings);
+    showToast('Blocked search result style updated', 'success');
+  });
+
+  $('search-summary-enabled').addEventListener('change', async (e) => {
+    const settings = await getSettings();
+    settings.searchSummaryEnabled = !!e.target.checked;
+    await setSettings(settings);
+    showToast(settings.searchSummaryEnabled ? 'Summary line enabled' : 'Summary line hidden', 'success');
+  });
+
+  $('block-count-display').addEventListener('change', async (e) => {
+    const settings = await getSettings();
+    settings.blockCountDisplay = normalizeBlockCountDisplay(e.target.value);
+    await setSettings(settings);
+    renderSearchResultTreatment(settings);
+    // Pinning only matters while the count lives on the icon.
+    await renderPinBanner();
+    showToast('Block count display updated', 'success');
+  });
+
   $('use-plain-html-blocked-page').addEventListener('change', async (e) => {
     const plainSection = $('plain-blocked-page-section');
     const customToggle = $('use-custom-blocked-page');
@@ -2159,10 +2593,10 @@ async function init() {
     settings.blockedPageType = 'default';
     settings.customBlockedPageUrl = '';
     settings.plainBlockedPageHtml = '';
-    
+
     await setSettings(settings);
     await render();
-    
+
     showToast('Blocked page settings reset to default', 'success');
   });
 
@@ -2614,12 +3048,15 @@ async function init() {
         // Exports what is on screen, including unsaved edits — the list you
         // can see is the list you get.
         const entries = serializePatterns(textarea.value);
-        if (entries.length === 0) {
+        const realCount = countRealEntries(entries);
+        if (realCount === 0) {
           showToast(`No ${list.noun} to export yet`, 'warning');
           return;
         }
+        // Comments go into the file so a shared list keeps its headings, but the
+        // count reported is entries — that is what the user means by "how many".
         downloadTextFile(listExportFilename(list.label), serializeListFile(entries));
-        showToast(`Exported ${entries.length} ${list.noun}`, 'success');
+        showToast(`Exported ${realCount} ${list.noun}`, 'success');
       });
     }
 
@@ -2640,15 +3077,17 @@ async function init() {
             return;
           }
           const existing = serializePatterns(textarea.value);
-          const before = existing.length;
-          // serializePatterns dedups (case-insensitively) and sorts the union.
+          const before = countRealEntries(existing);
+          // serializePatterns dedups (case-insensitively) and sorts the union,
+          // keeping each comment with the entry it was written above.
           const merged = serializePatterns(existing.concat(imported).join('\n'));
           textarea.value = deserializePatterns(merged);
-          const added = merged.length - before;
+          const added = countRealEntries(merged) - before;
+          const importedCount = countRealEntries(imported);
           showToast(
             added > 0
               ? `Added ${added} new ${list.noun} — review, then click Save`
-              : `Nothing new to add — all ${imported.length} were already in your list`,
+              : `Nothing new to add — all ${importedCount} were already in your list`,
             added > 0 ? 'success' : 'info'
           );
         } catch (_) {

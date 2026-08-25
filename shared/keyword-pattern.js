@@ -52,6 +52,69 @@
   // to expose the blow-up, short enough to survive it.
   var PROBE_REPEAT = 22;
 
+  // --- Comments -------------------------------------------------------------
+  //
+  // A line beginning with '#' or '!' is a note, not an entry. Both markers are
+  // accepted because the tools people arrive from disagree: uBlacklist uses '#',
+  // uBlock Origin and AdGuard use '!'. Lists get pasted between all of them.
+  //
+  //     # === Social ===        a comment
+  //     ! also a comment
+  //     \#nsfw                  the literal blocked word "#nsfw"
+  //
+  // The escape exists because '#nsfw' is a perfectly reasonable blocked word —
+  // hashtags start with '#'. A single leading backslash means "this really is an
+  // entry", and is stripped before matching.
+
+  function isCommentEntry(entry) {
+    var value = String(entry == null ? '' : entry).trim();
+    if (!value) return false;
+    var first = value.charAt(0);
+    return first === '#' || first === '!';
+  }
+
+  // True when an entry would be mistaken for a comment if written bare, and so
+  // needs the backslash. Used to migrate lists saved before comments existed.
+  function needsCommentEscape(entry) {
+    return isCommentEntry(entry);
+  }
+
+  function escapeCommentEntry(entry) {
+    var value = String(entry == null ? '' : entry).trim();
+    return needsCommentEscape(value) ? '\\' + value : value;
+  }
+
+  // Removes the one leading backslash that protects a '#' or '!' entry. Any
+  // other backslash is left alone — it may be part of a regex.
+  function stripCommentEscape(entry) {
+    var value = String(entry == null ? '' : entry).trim();
+    if (value.length >= 2 && value.charAt(0) === '\\') {
+      var next = value.charAt(1);
+      if (next === '#' || next === '!') return value.slice(1);
+    }
+    return value;
+  }
+
+  /**
+   * The entries a matcher should actually run: comments dropped, escapes
+   * removed, blanks skipped. Every consumer of a user list goes through this so
+   * a comment can never become a live pattern.
+   *
+   * @param {Array<string>} list
+   * @returns {Array<string>}
+   */
+  function effectiveEntries(list) {
+    var out = [];
+    if (!list || typeof list.length !== 'number') return out;
+    for (var i = 0; i < list.length; i++) {
+      var raw = String(list[i] == null ? '' : list[i]).trim();
+      if (!raw) continue;
+      if (isCommentEntry(raw)) continue;
+      out.push(stripCommentEscape(raw));
+    }
+    return out;
+  }
+
   function isRegexEntry(entry) {
     var value = String(entry == null ? '' : entry).trim();
     return value.length >= 2 && value.charAt(0) === '/' && value.lastIndexOf('/') > 0;
@@ -110,6 +173,11 @@
   function validateEntry(entry) {
     var value = String(entry == null ? '' : entry).trim();
     if (!value) return { ok: false, isRegex: false, error: 'Empty entry' };
+
+    // Notes are valid and never compiled. Reported as not-a-regex so the
+    // save-blocking checks, which only stop on a bad regex, ignore them.
+    if (isCommentEntry(value)) return { ok: true, isRegex: false, isComment: true, error: '' };
+    value = stripCommentEscape(value);
 
     var parts = splitRegexEntry(value);
     if (!parts) return { ok: true, isRegex: false, error: '' };
@@ -199,6 +267,12 @@
     var value = String(entry == null ? '' : entry).trim();
     if (!value) return { kind: 'empty', body: '', flags: '' };
 
+    // A note carries no pattern. Recognised here so every caller that already
+    // routes through parseListEntry inherits comment support rather than each
+    // one having to remember.
+    if (isCommentEntry(value)) return { kind: 'comment', body: '', flags: '', source: value };
+    value = stripCommentEscape(value);
+
     // "title/.../flags" — only when it really carries a pattern, so a literal
     // domain that happens to start with "title" is left alone.
     var titleMatch = /^title\s*(\/.*)$/i.exec(value);
@@ -222,6 +296,8 @@
   function validateListEntry(entry) {
     var parsed = parseListEntry(entry);
     if (parsed.kind === 'empty') return { ok: false, kind: parsed.kind, error: 'Empty entry' };
+    // A comment is always fine and never compiled, so it must not block a save.
+    if (parsed.kind === 'comment') return { ok: true, kind: parsed.kind, error: '' };
     if (parsed.kind === 'wildcard') return { ok: true, kind: parsed.kind, error: '' };
     var result = validateEntry(parsed.source);
     return { ok: result.ok, kind: parsed.kind, error: result.error };
@@ -245,6 +321,11 @@
   var exported = {
     MAX_PATTERN_LENGTH: MAX_PATTERN_LENGTH,
     PROBE_BUDGET_MS: PROBE_BUDGET_MS,
+    isCommentEntry: isCommentEntry,
+    needsCommentEscape: needsCommentEscape,
+    escapeCommentEntry: escapeCommentEntry,
+    stripCommentEscape: stripCommentEscape,
+    effectiveEntries: effectiveEntries,
     isRegexEntry: isRegexEntry,
     splitRegexEntry: splitRegexEntry,
     validateEntry: validateEntry,

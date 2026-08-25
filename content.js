@@ -260,6 +260,15 @@ const browserAPI = typeof browser !== 'undefined' ? browser : chrome;
 let isEnabled = true;
 let useSmartBlocking = true;
 let customKeywordList = [];
+// Rules from subscribed lists. Held apart from the user's own patterns and in
+// two shapes on purpose: a published list is mostly bare domains and can run to
+// tens of thousands of lines, so those go in a Set for an O(1) host test, and
+// only the wildcard and regex entries stay in a list that has to be walked. The
+// walk happens per image and per search result, which is exactly the path that
+// made pages crawl in 1.7.0.
+let subscriptionHostSet = new Set();
+let subscriptionPatterns = [];
+
 // User-defined blocked sites (settings.customPatterns). Kept at module scope so
 // the image/search-result filters can honour them, not just page navigation.
 let customBlockPatterns = [];
@@ -285,6 +294,36 @@ let instagramReelsEnabled = false;
 let blockedPageType = 'default'; // 'default', 'custom', 'plain_html'
 let customBlockedPageUrl = ''; // URL for custom blocked page
 let plainBlockedPageHtml = '';
+
+// How a blocked web result is presented: removed outright ('hide') or replaced
+// with a card in place ('overlay'). Applies to web/text results only — image and
+// video results are always removed, because the card is a full-width flex row
+// with a 40px avatar and a badge, and a 200px grid tile cannot hold it. That is
+// also the case a user reported as too noisy once the verticals were filtered.
+let searchResultTreatment = 'hide'; // 'hide' | 'overlay'
+// Whether the "N results blocked" summary line is drawn at all. Some users want
+// no on-page footprint whatsoever.
+let searchSummaryEnabled = true;
+
+// Running total of results blocked on the current search, and the search it
+// belongs to. The incremental pass reports deltas — DuckDuckGo builds its
+// results row by row — so the summary has to accumulate rather than overwrite.
+// Keyed by search identity rather than reset on navigation: DuckDuckGo switches
+// verticals with pushState, which fires no popstate for us to listen to.
+let pageBlockedCount = 0;
+let pageBlockedCountKey = '';
+
+// Where the running block count is shown: on the toolbar icon, or as a pill in
+// the corner of the page. The toolbar badge is the platform's own idiom and
+// cannot collide with the page, but Chrome hides unpinned extension icons behind
+// the puzzle-piece menu — where a badge is invisible, and no API can pin it for
+// the user. The in-page pill is the fallback for exactly that case.
+let blockCountDisplay = 'badge'; // 'badge' | 'floating'
+// Hosts blocked on this page and how often, for the pill's detail panel.
+let pageBlockedEntries = new Map();
+let pageBlockedTotal = 0;
+let pageBlockedEntriesKey = '';
+let floatingCounterExpanded = false;
 
 // AI Text Blocker (multilingual hashed char-n-gram classifier). The model is a
 // pure-JS linear model in shared/text-classifier-core.js (global TextClassifier),
@@ -653,6 +692,57 @@ function normalizeImageFilterLevel(level) {
   return IMAGE_FILTER_LEVELS.STRICT;
 }
 
+/**
+ * Drop comment lines and unescape the rest before anything matches against a
+ * user list. Comments live in the same array as entries, so this has to happen
+ * at every point a stored list reaches matching code — a '# note' compiled as a
+ * pattern would block whatever it happened to mention.
+ */
+function liveListEntries(list) {
+  if (!Array.isArray(list)) return [];
+  if (typeof KeywordPattern !== 'undefined' && KeywordPattern.effectiveEntries) {
+    return KeywordPattern.effectiveEntries(list);
+  }
+  // Fallback if the shared module failed to load: still refuse to treat a
+  // comment as an entry, since that is the harmful direction.
+  return list
+    .map((entry) => String(entry == null ? '' : entry).trim())
+    .filter((entry) => entry && entry.charAt(0) !== '#' && entry.charAt(0) !== '!');
+}
+
+/**
+ * Flatten the enabled subscriptions into the two shapes the matcher uses. A
+ * disabled subscription keeps its rules on disk but contributes none, so
+ * switching it back on costs nothing.
+ */
+function loadSubscriptionRules(subscriptions, rulesById) {
+  subscriptionHostSet = new Set();
+  subscriptionPatterns = [];
+  if (!Array.isArray(subscriptions) || !rulesById || typeof rulesById !== 'object') return;
+
+  const entries = [];
+  for (const subscription of subscriptions) {
+    if (!subscription || subscription.enabled === false) continue;
+    const own = rulesById[subscription.id];
+    if (Array.isArray(own)) entries.push(...own);
+  }
+  if (!entries.length) return;
+
+  const split = (typeof Ruleset !== 'undefined' && Ruleset.splitEntries)
+    ? Ruleset.splitEntries(entries)
+    : { hosts: [], patterns: entries };
+  subscriptionHostSet = new Set(split.hosts);
+  subscriptionPatterns = split.patterns;
+}
+
+function normalizeSearchResultTreatment(treatment) {
+  return String(treatment || '').toLowerCase() === 'overlay' ? 'overlay' : 'hide';
+}
+
+function normalizeBlockCountDisplay(display) {
+  return String(display || '').toLowerCase() === 'floating' ? 'floating' : 'badge';
+}
+
 function getImageKeywordRegexForLevel(level) {
   const normalized = normalizeImageFilterLevel(level);
   if (normalized === IMAGE_FILTER_LEVELS.LENIENT) return LENIENT_IMAGE_KEYWORD_REGEX;
@@ -858,8 +948,37 @@ function customPatternsMatchHost(urlStr, host, patterns) {
 // Thin wrapper over customPatternsMatchHost so the image and search-result
 // filters can consult the user's list the same way navigation blocking does.
 function matchesCustomBlockPattern(urlStr, host) {
-  if (!customBlockPatterns.length) return false;
-  return customPatternsMatchHost(urlStr, host, customBlockPatterns);
+  if (customBlockPatterns.length &&
+      customPatternsMatchHost(urlStr, host, customBlockPatterns)) {
+    return true;
+  }
+  return matchesSubscriptionRule(urlStr, host);
+}
+
+/**
+ * The same question asked of subscribed lists. Bare hosts are answered from a
+ * Set — the overwhelmingly common case, and the reason a 30,000-line list does
+ * not slow every image on the page — before falling back to walking whatever
+ * wildcards and regexes the list also carries.
+ */
+function matchesSubscriptionRule(urlStr, host) {
+  if (subscriptionHostSet.size) {
+    const h = normalizeHost(host);
+    if (h) {
+      if (subscriptionHostSet.has(h)) return true;
+      // A rule for example.com covers its subdomains, matching how a bare host
+      // behaves everywhere else in the extension.
+      let index = h.indexOf('.');
+      while (index !== -1) {
+        const parent = h.slice(index + 1);
+        if (!parent.includes('.')) break;
+        if (subscriptionHostSet.has(parent)) return true;
+        index = h.indexOf('.', index + 1);
+      }
+    }
+  }
+  if (!subscriptionPatterns.length) return false;
+  return customPatternsMatchHost(urlStr, host, subscriptionPatterns);
 }
 
 function isLikelyAdultHostEarly(host) {
@@ -940,6 +1059,31 @@ function getBlockedReasonLabel(reasonKey) {
   }
 }
 
+// One-click subscribe links.
+//
+// List authors publish a button pointing at uBlacklist's redirect page,
+// https://ublacklist.github.io/rulesets/subscribe?url=<url-encoded-url>. Since
+// the ruleset format is the same, those links work here too: the address is
+// lifted out and handed to Settings, which asks before doing anything with it.
+//
+// This only reads a query parameter off a page the user deliberately clicked
+// through to. Nothing is subscribed without a further click in Settings, so a
+// page cannot add a list by linking at one.
+(function handleSubscribeLink() {
+  try {
+    const host = window.location.hostname.toLowerCase();
+    if (host !== 'ublacklist.github.io') return;
+    if (!/^\/rulesets\/subscribe\/?$/.test(window.location.pathname)) return;
+
+    const target = new URLSearchParams(window.location.search).get('url');
+    if (!target || !/^https?:\/\//i.test(target)) return;
+
+    browserAPI.runtime.sendMessage({ type: 'subscription_prefill', url: target });
+  } catch (_) {
+    // Never let this interfere with the page.
+  }
+})();
+
 // Run an instant host-level check at document_start to avoid page flash
 (function instantBlockEarly() {
   try {
@@ -1004,7 +1148,7 @@ function getBlockedReasonLabel(reasonKey) {
         }
 
         const instantReasonKey = getLocalBlockReasonKey(urlStr, normalizedHost, {
-          customPatterns: settings.customPatterns || [],
+          customPatterns: liveListEntries(settings.customPatterns),
           useSmartBlockingEnabled: settings.useSmartBlocking,
           includeCustomPatterns: false,
           includePathSignals: true,
@@ -1018,7 +1162,7 @@ function getBlockedReasonLabel(reasonKey) {
         // Preserve local custom/smart reasons without waiting for the default
         // list; those checks use settings and the small built-in early list.
         const localReasonKey = getLocalBlockReasonKey(urlStr, normalizedHost, {
-          customPatterns: settings.customPatterns || [],
+          customPatterns: liveListEntries(settings.customPatterns),
           useSmartBlockingEnabled: settings.useSmartBlocking
         });
         if (localReasonKey) {
@@ -1074,6 +1218,10 @@ const SEARCH_SELECTORS = {
   google: {
     // Use simpler, more reliable selectors for individual results
     containers: '.g, .rc, .MjjYud',
+    // Where the "N results blocked" summary goes — inserted before this node,
+    // so it sits above the result list the way uBlacklist's line does. First
+    // match wins; if none match, the parent of the first result is used.
+    resultsAnchor: '#rso, #search',
     images: 'img[data-src], img[src*="googleusercontent"], .rg_i img',
     // Context selectors for image search
     imageContext: {
@@ -1083,6 +1231,7 @@ const SEARCH_SELECTORS = {
   },
   bing: {
     containers: '.b_algo',
+    resultsAnchor: '#b_results',
     images: '.img_cont img, .mimg img',
     imageContext: {
       container: '.iuscp, .imgpt',
@@ -1090,16 +1239,43 @@ const SEARCH_SELECTORS = {
     }
   },
   duckduckgo: {
-    // Updated DuckDuckGo selectors for current DOM structure
-    containers: '[data-testid="result"], .nrn-react-div, .result, .web-result, .react-results--main .result',
-    images: '.tile--img img, .module--images img',
+    // DuckDuckGo's verticals are React with hashed class names ("GVdWSyhoW1SZ…")
+    // that change on every deploy, so nothing here may key on a class. The
+    // stable hooks are the data-testid attributes on each vertical and the
+    // semantic tags inside them: web/video results are <article>, image results
+    // are <figure>. The `.tile--*`/`.result` selectors are the pre-React layout,
+    // kept so older self-hosted instances still filter.
+    // The All tab carries inline images/videos modules — rows of thumbnails for
+    // the same query — that no result selector reached. Each result row is an
+    // <li data-layout="…">, which names what the row holds ("organic", "images",
+    // "videos", "about", "related_searches"), so the two verticals can be taken
+    // without touching the knowledge panel or the related-search row.
+    containers: '[data-testid="result"], [data-testid="zci-videos"] article, li[data-layout="images"], li[data-layout="videos"], .nrn-react-div, .result, .web-result, .react-results--main .result',
+    // Each result article sits alone in its own <li>; hiding the list item
+    // rather than the article keeps the replacement card outside the result's
+    // wrapping <a>, which would otherwise stay clickable.
+    resultRoot: 'li',
+    resultsAnchor: '[data-testid="mainline"], .react-results--main, #links',
+    // The knowledge panel is a result too, but it is several hundred words of
+    // reference prose rather than a snippet, and the heuristic term lists
+    // misread that much text. It is therefore judged on explicit signals only:
+    // a blocklisted link, or a word from the user's own list.
+    explicitOnlyContainers: 'li[data-layout="about"]',
+    images: '[data-testid="zci-images"] figure img, .tile--img img, .module--images img',
     imageContext: {
-      container: '.tile--img',
-      text: '.tile__title, .tile__body'
+      container: '[data-testid="zci-images"] figure, [data-testid="zci-images"] button, .tile--img',
+      // The figure carries the source page title (h3[title] and the thumbnail's
+      // own alt) plus the source domain in a <p>; related-search chips carry
+      // their label in a bare <div>.
+      text: 'figcaption, h3, p, div, .tile__title, .tile__body',
+      // Blocking only the <img> would leave the caption — and therefore the
+      // blocked word itself — on screen, so hide the whole tile.
+      tile: '[data-testid="zci-images"] figure'
     }
   },
   brave: {
     containers: '#results .snippet[data-type="web"], .snippet[data-type="web"]',
+    resultsAnchor: '#results',
     images: '.image-result img',
     imageContext: {
       container: '.image-result',
@@ -1108,6 +1284,7 @@ const SEARCH_SELECTORS = {
   },
   yahoo: {
     containers: '.algo, .dd',
+    resultsAnchor: '#web, #results, .searchCenterMiddle',
     images: '.img img',
     imageContext: {
       container: 'li',
@@ -1118,6 +1295,7 @@ const SEARCH_SELECTORS = {
     // Keep selectors broad enough for different Yandex result layouts,
     // but still anchored to organic result containers.
     containers: '.serp-item, li.serp-item, .Organic, .organic, .main__result',
+    resultsAnchor: '#search-result, .main__content, .serp-list',
     images: '.serp-item img, .ImagesContent img, .MMImage img',
     imageContext: {
       container: '.serp-item, .ImagesContent-Item, .MMImage, .Organic',
@@ -1216,8 +1394,11 @@ async function loadSettings() {
     const result = await browserAPI.storage.local.get([
       'pblocker_settings',
       'pblocker_whitelist',
-      'pblocker_temp_disable_until'
+      'pblocker_temp_disable_until',
+      'pblocker_subscriptions',
+      'pblocker_subscription_rules'
     ]);
+    loadSubscriptionRules(result.pblocker_subscriptions, result.pblocker_subscription_rules);
     
     const settings = result.pblocker_settings || {
       enabled: true,
@@ -1229,6 +1410,9 @@ async function loadSettings() {
       blockedPageType: 'default',
       customBlockedPageUrl: '',
       plainBlockedPageHtml: '',
+      searchResultTreatment: 'hide',
+      searchSummaryEnabled: true,
+      blockCountDisplay: 'badge',
       facebookReelsEnabled: false,
       instagramReelsEnabled: false,
       aiImageBlocker: false,
@@ -1255,11 +1439,11 @@ async function loadSettings() {
     }
     useSmartBlocking = settings.useSmartBlocking;
     imageFilterLevel = normalizeImageFilterLevel(settings.imageFilterLevel);
-    customKeywordList = Array.isArray(settings.customKeywordList) ? settings.customKeywordList : [];
+    customKeywordList = liveListEntries(settings.customKeywordList);
     resetCustomKeywordCache(); // entries may have changed; drop stale compiles
-    customBlockPatterns = Array.isArray(settings.customPatterns) ? settings.customPatterns : [];
+    customBlockPatterns = liveListEntries(settings.customPatterns);
     resetCustomPatternCache(); // entries may have changed; drop stale compiles
-    trustedDomains = settings.trustedImageDomains || [];
+    trustedDomains = liveListEntries(settings.trustedImageDomains);
     debugMode = settings.debugMode === true;
     facebookReelsEnabled = settings.facebookReelsEnabled === true;
     instagramReelsEnabled = settings.instagramReelsEnabled === true;
@@ -1271,6 +1455,12 @@ async function loadSettings() {
     blockedPageType = settings.blockedPageType || 'default';
     customBlockedPageUrl = settings.customBlockedPageUrl || '';
     plainBlockedPageHtml = settings.plainBlockedPageHtml || '';
+
+    // Read once here rather than per result: hideElement runs in a tight loop
+    // over every container on the page.
+    searchResultTreatment = normalizeSearchResultTreatment(settings.searchResultTreatment);
+    searchSummaryEnabled = settings.searchSummaryEnabled !== false;
+    blockCountDisplay = normalizeBlockCountDisplay(settings.blockCountDisplay);
     
     // Initialize AI image blocker if available
     if (typeof window.AIImageBlocker !== 'undefined' &&
@@ -2181,15 +2371,25 @@ function isAdultURL(url) {
   }
 }
 
-async function shouldBlockElement(element, backgroundBlockedLink) {
+async function shouldBlockElement(element, backgroundBlockedLink, opts) {
   if (!element || !isEnabled) return false;
-  
+
+  // `explicitOnly` containers are judged on stated intent rather than on the
+  // heuristic term lists: a blocklisted link still blocks them, and so does a
+  // word from the user's own list, but the built-in keyword scoring does not
+  // get a vote. Reserved for containers holding long reference prose, where
+  // that scoring produces false positives a snippet never would.
+  const explicitOnly = !!(opts && opts.explicitOnly);
+  const textMatches = explicitOnly
+    ? (value) => matchesCustomKeywords(String(value || '').slice(0, MAX_TEXT_LENGTH).toLowerCase())
+    : (value) => containsAdultKeywords(value);
+
   try {
     // Get text content from element and its children
     const textContent = element.textContent || '';
     const title = element.title || '';
     const alt = element.alt || '';
-    
+
     // Check href attributes first (most reliable)
     const links = Array.from(element.querySelectorAll('a[href]'));
     for (const link of links) {
@@ -2234,21 +2434,21 @@ async function shouldBlockElement(element, backgroundBlockedLink) {
     }
     
     // Check text content for adult keywords (be more conservative)
-    if (containsAdultKeywords(textContent)) {
+    if (textMatches(textContent)) {
       if (debugMode) {
         log('Blocking element due to text content:', textContent.substring(0, 100));
       }
       return true;
     }
     
-    if (containsAdultKeywords(title)) {
+    if (textMatches(title)) {
       if (debugMode) {
         log('Blocking element due to title:', title);
       }
       return true;
     }
     
-    if (containsAdultKeywords(alt)) {
+    if (textMatches(alt)) {
       if (debugMode) {
         log('Blocking element due to alt text:', alt);
       }
@@ -2527,10 +2727,16 @@ function isSearchResultContainer(element) {
   
   // DuckDuckGo specific checks
   if (searchEngine === 'duckduckgo') {
-    // DuckDuckGo uses different structures, be more flexible
-    const hasDDGTitle = element.querySelector('h2 a, h3 a, a[data-testid="result-title-a"], .result__title a, [data-testid="result-title-a"]');
-    const hasDataTestId = element.hasAttribute('data-testid') && element.getAttribute('data-testid').includes('result');
-    
+    // DuckDuckGo uses different structures, be more flexible. The two verticals
+    // nest the title the opposite way round — a web result is `h2 > a`, a video
+    // result is `a > article > h2` — so both orders have to be accepted or the
+    // videos tab is silently skipped.
+    const hasDDGTitle = element.querySelector('h2 a, h3 a, a h2, a h3, a[data-testid="result-title-a"], .result__title a, [data-testid="result-title-a"]');
+    // On the web vertical the testid is on the result element itself; once
+    // lifted to the wrapping <li> it sits on a descendant instead.
+    const hasDataTestId = (element.hasAttribute('data-testid') && element.getAttribute('data-testid').includes('result'))
+      || !!element.querySelector('[data-testid="result"]');
+
     if (hasDDGTitle || hasDataTestId) {
       const hasText = element.textContent && element.textContent.trim().length > 20;
       if (debugMode && hasText) {
@@ -2606,36 +2812,75 @@ function isSearchResultContainer(element) {
   return true;
 }
 
+// Every selector an engine wants examined, including the containers judged on
+// explicit signals only. Both the full pass and the observer's incremental path
+// read this, so they cannot drift apart.
+function searchContainerSelector(selectors) {
+  if (!selectors || !selectors.containers) return null;
+  return selectors.explicitOnlyContainers
+    ? `${selectors.containers}, ${selectors.explicitOnlyContainers}`
+    : selectors.containers;
+}
+
+// Resolve a matched element to the result container to act on, or null when
+// there is nothing to act on yet.
+//
+// Returning null for a row that is not yet recognisable as a result is the
+// point: these pages ship no results in their HTML at all and hydrate row by
+// row, so a container can exist with its title still missing. Marking such a
+// row off on the way past — which both paths used to do — meant it was never
+// looked at again once it filled in.
+function resolveResultContainer(element) {
+  if (!element || element.nodeType !== Node.ELEMENT_NODE) return null;
+  const engine = getSearchEngine();
+  const selectors = engine ? SEARCH_SELECTORS[engine] : null;
+  if (!selectors) return null;
+
+  const container = selectors.resultRoot
+    ? (element.closest(selectors.resultRoot) || element)
+    : element;
+
+  if (container.dataset.pblockerProcessed === 'true') return null;
+  if (!isSearchResultContainer(container)) return null;
+
+  const explicitOnlySelector = selectors.explicitOnlyContainers || '';
+  return {
+    container,
+    explicitOnly: !!explicitOnlySelector && !!container.matches?.(explicitOnlySelector)
+  };
+}
+
 async function filterSearchResults() {
   const searchEngine = getSearchEngine();
   if (!searchEngine || !SEARCH_SELECTORS[searchEngine]) return;
-  
+
   const selectors = SEARCH_SELECTORS[searchEngine];
   let blockedCount = 0;
   let processedCount = 0;
-  
+
   // Only filter individual search result containers, NOT search functionality
-  const containers = document.querySelectorAll(selectors.containers);
-  
+  const containers = document.querySelectorAll(searchContainerSelector(selectors));
+
   if (debugMode) {
     log(`Found ${containers.length} potential result containers on ${searchEngine}`);
   }
   
   const candidates = [];
+  const claimed = new Set();
   for (let index = 0; index < containers.length; index++) {
-    const container = containers[index];
     try {
-      // Skip if already processed
-      if (container.dataset.pblockerProcessed) continue;
-      container.dataset.pblockerProcessed = 'true';
-      processedCount++;
-      
-      // Only check the actual search result content, not search interface elements
-      if (isSearchResultContainer(container)) {
-        candidates.push({ container, index });
-      } else if (debugMode) {
-        log(`[${index}] Skipped - not a search result container`);
+      // Several matched elements can lift to the same wrapping row, so the
+      // resolved container — not the match — is what gets claimed.
+      const resolved = resolveResultContainer(containers[index]);
+      if (!resolved) {
+        if (debugMode) log(`[${index}] Skipped - not a result container yet (will be re-checked)`);
+        continue;
       }
+      if (claimed.has(resolved.container)) continue;
+      claimed.add(resolved.container);
+      resolved.container.dataset.pblockerProcessed = 'true';
+      processedCount++;
+      candidates.push({ container: resolved.container, index, explicitOnly: resolved.explicitOnly });
     } catch (error) {
       log(`Error processing container ${index}:`, error);
       // Continue processing other results even if one fails
@@ -2651,13 +2896,13 @@ async function filterSearchResults() {
   // Keep per-result Reddit metadata checks sequential; only the local
   // background host lookups above are parallelized.
   for (let candidateIndex = 0; candidateIndex < candidates.length; candidateIndex++) {
-    const { container, index } = candidates[candidateIndex];
+    const { container, index, explicitOnly } = candidates[candidateIndex];
     try {
       if (debugMode) {
         const title = container.querySelector('h1, h2, h3')?.textContent || 'No title';
-        log(`[${index}] Checking result: "${title.substring(0, 50)}..."`);
+        log(`[${index}] Checking result: "${title.substring(0, 50)}..."${explicitOnly ? ' (explicit signals only)' : ''}`);
       }
-      const shouldBlock = await shouldBlockElement(container, backgroundVerdicts[candidateIndex]);
+      const shouldBlock = await shouldBlockElement(container, backgroundVerdicts[candidateIndex], { explicitOnly });
       if (debugMode) log(`[${index}] Result should be blocked: ${shouldBlock}`);
       if (shouldBlock) {
         hideElement(container, 'search-result');
@@ -2672,10 +2917,12 @@ async function filterSearchResults() {
   if (debugMode) {
     log(`Processed ${processedCount} containers, blocked ${blockedCount} results on ${searchEngine}`);
   }
-  
+
   if (blockedCount > 0) {
     notifyBackground('search_result_filtered', { count: blockedCount });
+    addBlockedResultCount(blockedCount);
   }
+  updateBlockedResultsNotice();
 }
 
 // Image filtering
@@ -2743,35 +2990,455 @@ function isTrustedDomain(url) {
   }
 }
 
+// The result tile an image-search thumbnail belongs to, for engines that give us
+// one. Only defined inside an image-search context: on an ordinary page the
+// enclosing figure is the article's own illustration, not a result card.
+function getImageSearchTile(element) {
+  try {
+    if (!element || typeof element.closest !== 'function') return null;
+    if (!isImagesSearchContext()) return null;
+    const tileSelector = SEARCH_SELECTORS[getSearchEngine()]?.imageContext?.tile;
+    if (!tileSelector) return null;
+    return element.closest(tileSelector);
+  } catch (_) {
+    return null;
+  }
+}
+
 // Element hiding and replacement
 function hideElement(element, type) {
   if (!element || element.dataset.pblockerHidden) return;
-  
+
+  // Held before the image branch below can swap `element` for its wrapping tile:
+  // the address lives on the <img>, not on the tile.
+  const blockedSource = element;
+
+  // Hiding only the <img> of an image-search result leaves its caption behind —
+  // and the caption is where the title the user blocked is spelled out. Where
+  // the engine wraps each result in a tile, hide the tile instead.
+  if (type === 'image') {
+    const tile = getImageSearchTile(element);
+    if (tile && tile !== element) {
+      element.dataset.pblockerHidden = 'true';
+      if (tile.dataset.pblockerHidden) return;
+      element = tile;
+    }
+  }
+
   element.dataset.pblockerHidden = 'true';
   element.style.display = 'none';
-  
+
+  recordBlockedEntry(blockedSource, type);
+
   // Create replacement message for search results
   if (type === 'search-result') {
-    const replacement = createBlockedResultElement();
-    element.parentNode.insertBefore(replacement, element);
-    
-    // Add subtle entrance animation
-    requestAnimationFrame(() => {
-      replacement.style.opacity = '0';
-      replacement.style.transform = 'translateY(10px)';
-      replacement.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
-      
+    // 'hide' removes the result outright and lets the summary line above the
+    // results account for it — one line however many were blocked, instead of a
+    // branded card per result. 'overlay' keeps the card for people who want
+    // per-position evidence that something was filtered *there*: a removed
+    // result is indistinguishable from a result that never existed, which
+    // matters in an accountability setup.
+    if (searchResultTreatment === 'overlay' && element.parentNode) {
+      const replacement = createBlockedResultElement();
+      element.parentNode.insertBefore(replacement, element);
+
+      // Add subtle entrance animation
       requestAnimationFrame(() => {
-        replacement.style.opacity = '1';
-        replacement.style.transform = 'translateY(0)';
+        replacement.style.opacity = '0';
+        replacement.style.transform = 'translateY(10px)';
+        replacement.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
+
+        requestAnimationFrame(() => {
+          replacement.style.opacity = '1';
+          replacement.style.transform = 'translateY(0)';
+        });
       });
-    });
+    }
   } else if (type === 'image' || type === 'video') {
+    // In a search grid the tile is gone and a gap reads as "fewer results"; a
+    // grid of shield boxes reads as an error state. On an ordinary page the
+    // placeholder earns its keep — it holds the layout and explains the hole in
+    // the article — so it stays there.
+    if (isImagesSearchContext() || getImageSearchTile(element)) return;
     const placeholder = createBlockedImagePlaceholder(element);
     if (element.parentNode) {
       element.parentNode.insertBefore(placeholder, element);
     }
   }
+}
+
+const BLOCKED_SUMMARY_ID = 'pblocker-blocked-summary';
+const FLOATING_COUNTER_ID = 'pblocker-floating-counter';
+// Social posts are excluded on purpose: they do not feed the toolbar badge
+// either, and a pill that appears on every scroll of a feed is the noise this
+// whole change set out to remove.
+const COUNTED_BLOCK_TYPES = new Set(['search-result', 'image', 'video', 'iframe']);
+
+/**
+ * The host behind a blocked element, for the pill's detail panel. Each element
+ * type keeps its address somewhere different: a result in its link, an image in
+ * its src (possibly wrapped in a search engine's thumbnail proxy), a frame in
+ * its src attribute.
+ */
+function blockedEntryHost(element, type) {
+  try {
+    if (!element) return '';
+    let candidate = '';
+
+    if (type === 'search-result') {
+      const anchor = element.querySelector?.('a[href]');
+      candidate = anchor ? (anchor.getAttribute('data-expanded-url') || anchor.href || '') : '';
+    } else if (type === 'image') {
+      // On an image search the src is the engine's own proxy, which would make
+      // every result look like it came from the engine. The real address is in a
+      // parameter, and extractWrappedImageSearchUrls already knows how to get it.
+      const raw = getEffectiveImageUrl(element);
+      // The raw address is element 0 of that list and the unwrapped targets come
+      // after it, so the last entry is the real source when there is one.
+      const unwrapped = extractWrappedImageSearchUrls(raw);
+      candidate = (Array.isArray(unwrapped) && unwrapped.length > 1)
+        ? unwrapped[unwrapped.length - 1]
+        : raw;
+    } else {
+      candidate = element.currentSrc || element.src || element.getAttribute?.('src') || '';
+    }
+
+    if (!candidate) return '';
+    return new URL(candidate, window.location.href).hostname.toLowerCase().replace(/^www\./, '');
+  } catch (_) {
+    return '';
+  }
+}
+
+/**
+ * Tally one block for the in-page pill. Keyed on search identity like the
+ * summary line, so switching DuckDuckGo verticals does not carry the previous
+ * tab's list across.
+ */
+function recordBlockedEntry(element, type) {
+  try {
+    if (!COUNTED_BLOCK_TYPES.has(type)) return;
+
+    const key = currentSearchIdentity();
+    if (key !== pageBlockedEntriesKey) {
+      pageBlockedEntriesKey = key;
+      pageBlockedEntries = new Map();
+      pageBlockedTotal = 0;
+      floatingCounterExpanded = false;
+    }
+
+    pageBlockedTotal++;
+    const host = blockedEntryHost(element, type);
+    if (host) pageBlockedEntries.set(host, (pageBlockedEntries.get(host) || 0) + 1);
+
+    // Blocks arrive one image at a time on a scrolling page; redrawing per block
+    // would thrash layout for no benefit.
+    scheduleFloatingCounterUpdate();
+  } catch (_) {
+    // Fail-open: the tally is cosmetic and must never break a block.
+  }
+}
+
+/**
+ * Identity of the search currently on screen. Used to decide when the blocked
+ * tally belongs to a new search rather than the one it was counting. Includes
+ * the vertical parameters, because switching DuckDuckGo's Images/Videos tabs
+ * changes neither pathname nor query — and does it via pushState, so there is no
+ * popstate to hang a reset off.
+ */
+function currentSearchIdentity() {
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const vertical = ['ia', 'iax', 'iar', 'tbm', 'scope'].map((key) => params.get(key) || '').join('|');
+    const query = params.get('q') || params.get('p') || params.get('text') || '';
+    return `${window.location.hostname}${window.location.pathname}?${query}#${vertical}`;
+  } catch (_) {
+    return window.location.href;
+  }
+}
+
+/** Add to the running tally, restarting it when the search has changed. */
+function addBlockedResultCount(count) {
+  if (!count || count < 0) return pageBlockedCount;
+  const key = currentSearchIdentity();
+  if (key !== pageBlockedCountKey) {
+    pageBlockedCountKey = key;
+    pageBlockedCount = 0;
+  }
+  pageBlockedCount += count;
+  return pageBlockedCount;
+}
+
+/**
+ * Draw (or update) the one-line summary above the results — the whole of the
+ * extension's on-page presence when results are hidden rather than overlaid.
+ * Deliberately text only, with nothing to click: uBlacklist's equivalent line
+ * carries a "Show" link, which for a porn blocker is a one-click bypass sitting
+ * on every search page. Revealing blocked results is the popup's job, where it
+ * can be PIN-gated.
+ *
+ * Find-or-create rather than insert-once, because the engines that need this
+ * most re-render their result list and will throw the node away.
+ */
+function updateBlockedResultsNotice() {
+  try {
+    const engine = getSearchEngine();
+    // Turned off, nothing blocked, or the tally belongs to a previous search:
+    // in every case the line has to go, including when it is already drawn.
+    if (!searchSummaryEnabled || !engine || pageBlockedCount <= 0 ||
+        currentSearchIdentity() !== pageBlockedCountKey) {
+      const stale = document.getElementById(BLOCKED_SUMMARY_ID);
+      if (stale && stale.parentNode) stale.parentNode.removeChild(stale);
+      return;
+    }
+
+    let notice = document.getElementById(BLOCKED_SUMMARY_ID);
+    if (!notice || !notice.isConnected) {
+      notice = document.createElement('div');
+      notice.id = BLOCKED_SUMMARY_ID;
+      const isDarkMode = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+      notice.style.cssText = `
+        margin: 0 0 12px 0;
+        padding: 0;
+        font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+        font-size: 13px;
+        line-height: 1.5;
+        color: ${isDarkMode ? '#94a3b8' : '#64748b'};
+        background: none;
+        border: none;
+      `;
+      if (!insertBlockedResultsNotice(notice, engine)) return;
+    }
+
+    notice.textContent = pageBlockedCount === 1
+      ? '1 result blocked by BlockNSFW'
+      : `${pageBlockedCount} results blocked by BlockNSFW`;
+  } catch (error) {
+    // Fail-open: a missing summary must never stop results from being blocked.
+    log('Error updating blocked-results summary:', error);
+  }
+}
+
+let floatingCounterTimer = null;
+
+function scheduleFloatingCounterUpdate() {
+  if (floatingCounterTimer) return;
+  floatingCounterTimer = setTimeout(() => {
+    floatingCounterTimer = null;
+    updateFloatingCounter();
+  }, 200);
+}
+
+/**
+ * The in-page counter pill, for people whose toolbar icon is not pinned and who
+ * therefore never see the badge. Clicking it lists the hosts that were blocked.
+ *
+ * The listed hosts are inert text — not links, no click handler, not selectable
+ * as a unit — because the point is to account for what happened, not to offer a
+ * way back to it. That is the same reason the summary line above search results
+ * carries no "Show".
+ */
+function updateFloatingCounter() {
+  try {
+    const existing = document.getElementById(FLOATING_COUNTER_ID);
+
+    if (blockCountDisplay !== 'floating' || pageBlockedTotal <= 0 ||
+        currentSearchIdentity() !== pageBlockedEntriesKey) {
+      if (existing && existing.parentNode) existing.parentNode.removeChild(existing);
+      return;
+    }
+    if (!document.body) return;
+
+    const isDarkMode = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+    let host = existing;
+    if (!host || !host.isConnected) {
+      host = document.createElement('div');
+      host.id = FLOATING_COUNTER_ID;
+      // `all: initial` first, so a page with aggressive global rules cannot
+      // restyle the pill out of legibility.
+      host.style.cssText = `
+        all: initial;
+        position: fixed;
+        bottom: 16px;
+        right: 16px;
+        z-index: 2147483646;
+        font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+        display: block;
+      `;
+      document.body.appendChild(host);
+    }
+
+    // Rebuilt rather than patched: the content is a count and a short list, so
+    // there is nothing worth diffing, and this keeps the two states in one place.
+    while (host.firstChild) host.removeChild(host.firstChild);
+
+    const surface = isDarkMode ? '#1e293b' : '#ffffff';
+    const borderColor = isDarkMode ? '#334155' : '#e2e8f0';
+    const primaryText = isDarkMode ? '#f1f5f9' : '#0f172a';
+    const mutedText = isDarkMode ? '#94a3b8' : '#64748b';
+
+    if (floatingCounterExpanded) {
+      const panel = document.createElement('div');
+      panel.style.cssText = `
+        box-sizing: border-box;
+        min-width: 260px;
+        max-width: 380px;
+        max-height: 420px;
+        overflow-y: auto;
+        background: ${surface};
+        border: 1px solid ${borderColor};
+        border-radius: 14px;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, ${isDarkMode ? '0.5' : '0.15'});
+        padding: 18px 20px;
+        margin-bottom: 10px;
+        font-size: 16px;
+        line-height: 1.6;
+        color: ${primaryText};
+      `;
+
+      const heading = document.createElement('div');
+      heading.textContent = pageBlockedEntries.size === 1 ? 'Blocked source' : 'Blocked sources';
+      heading.style.cssText = `font-weight: 600; font-size: 14px; letter-spacing: 0.04em; text-transform: uppercase; color: ${mutedText}; margin-bottom: 12px;`;
+      panel.appendChild(heading);
+
+      if (pageBlockedEntries.size === 0) {
+        const empty = document.createElement('div');
+        empty.textContent = 'Source not available.';
+        empty.style.cssText = `color: ${mutedText};`;
+        panel.appendChild(empty);
+      } else {
+        // Busiest first: on an image grid one host usually accounts for most of
+        // the blocks, and that is the useful thing to see.
+        const sorted = Array.from(pageBlockedEntries.entries()).sort((a, b) => b[1] - a[1]);
+        for (const [entryHost, count] of sorted) {
+          const row = document.createElement('div');
+          row.style.cssText = `
+            display: flex;
+            justify-content: space-between;
+            gap: 16px;
+            padding: 6px 0;
+            cursor: default;
+            user-select: none;
+          `;
+          const name = document.createElement('span');
+          name.textContent = entryHost;
+          name.style.cssText = 'overflow: hidden; text-overflow: ellipsis; white-space: nowrap;';
+          const tally = document.createElement('span');
+          tally.textContent = String(count);
+          tally.style.cssText = `color: ${mutedText}; flex-shrink: 0; font-variant-numeric: tabular-nums;`;
+          row.appendChild(name);
+          row.appendChild(tally);
+          panel.appendChild(row);
+        }
+      }
+      host.appendChild(panel);
+    }
+
+    const pill = document.createElement('button');
+    pill.type = 'button';
+    pill.setAttribute('aria-expanded', floatingCounterExpanded ? 'true' : 'false');
+    pill.title = floatingCounterExpanded ? 'Hide blocked sources' : 'Show blocked sources';
+    pill.style.cssText = `
+      box-sizing: border-box;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-left: auto;
+      padding: 12px 18px;
+      background: ${surface};
+      border: 1px solid ${borderColor};
+      border-radius: 999px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, ${isDarkMode ? '0.45' : '0.12'});
+      font-family: inherit;
+      font-size: 17px;
+      font-weight: 600;
+      line-height: 1.2;
+      color: ${primaryText};
+      cursor: pointer;
+    `;
+
+    const shield = document.createElement('span');
+    shield.textContent = '🛡️';
+    shield.style.cssText = 'font-size: 19px; line-height: 1;';
+    pill.appendChild(shield);
+
+    const label = document.createElement('span');
+    label.textContent = pageBlockedTotal === 1 ? '1 blocked' : `${pageBlockedTotal} blocked`;
+    pill.appendChild(label);
+
+    pill.addEventListener('click', (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      floatingCounterExpanded = !floatingCounterExpanded;
+      updateFloatingCounter();
+    });
+
+    host.appendChild(pill);
+  } catch (error) {
+    log('Error updating floating counter:', error);
+  }
+}
+
+/**
+ * Undo the search-result filtering already applied to this page so the next pass
+ * can redo it under the new treatment. Only search results are touched — images
+ * and video keep their own restore path in restoreBlockedMediaElements().
+ */
+function resetBlockedSearchResults() {
+  try {
+    document.querySelectorAll('.pblocker-blocked-result').forEach((card) => {
+      if (card.parentNode) card.parentNode.removeChild(card);
+    });
+
+    const engine = getSearchEngine();
+    const selectors = engine ? SEARCH_SELECTORS[engine] : null;
+    if (!selectors) return;
+
+    // Un-hide and un-mark every result the filter touched. The elements are
+    // still in the DOM — hideElement only sets display:none — so re-judging them
+    // costs one pass and no refetch.
+    document.querySelectorAll('[data-pblocker-hidden="true"]').forEach((el) => {
+      if (!el.matches?.(searchContainerSelector(selectors)) &&
+          !(selectors.resultRoot && el.matches?.(selectors.resultRoot))) {
+        return;
+      }
+      el.style.display = '';
+      delete el.dataset.pblockerHidden;
+      delete el.dataset.pblockerProcessed;
+    });
+
+    pageBlockedCount = 0;
+    pageBlockedCountKey = '';
+    const notice = document.getElementById(BLOCKED_SUMMARY_ID);
+    if (notice && notice.parentNode) notice.parentNode.removeChild(notice);
+  } catch (error) {
+    log('Error resetting blocked search results:', error);
+  }
+}
+
+/**
+ * Place the summary above the result list. Falls back to the parent of the first
+ * result, so an engine whose layout has drifted still gets a line rather than
+ * silently losing the feature.
+ */
+function insertBlockedResultsNotice(notice, engine) {
+  const selectors = SEARCH_SELECTORS[engine];
+  if (!selectors) return false;
+
+  const anchor = selectors.resultsAnchor
+    ? document.querySelector(selectors.resultsAnchor)
+    : null;
+  if (anchor && anchor.parentNode) {
+    anchor.parentNode.insertBefore(notice, anchor);
+    return true;
+  }
+
+  const firstResult = document.querySelector(searchContainerSelector(selectors));
+  if (firstResult && firstResult.parentNode) {
+    firstResult.parentNode.insertBefore(notice, firstResult);
+    return true;
+  }
+  return false;
 }
 
 function createBlockedImagePlaceholder(element) {
@@ -3216,6 +3883,19 @@ function safelyDecodeUrlCandidate(value) {
   return decoded;
 }
 
+// Engines that serve image-search thumbnails through their own proxy, and the
+// parameter holding the real address. Without unwrapping these, every thumbnail
+// on the page looks like it comes from the search engine itself:
+//
+//   https://external-content.duckduckgo.com/iu/?u=https%3A%2F%2Ftse3.mm.bing.net%2Fth%3Fq%3DApricot…
+//
+// The host is duckduckgo.com and the path is just "/iu/", so a keyword scan of
+// the proxy address alone can never match anything — the terms are inside `u`.
+const WRAPPED_IMAGE_URL_PARAMS = {
+  duckduckgo: ['u'],
+  yandex: ['img_url', 'url', 'img_href', 'media_url', 'thumb_url']
+};
+
 function extractWrappedImageSearchUrls(rawUrl, engine = getSearchEngine()) {
   const urls = new Set();
   if (!rawUrl || typeof rawUrl !== 'string') return [];
@@ -3230,9 +3910,9 @@ function extractWrappedImageSearchUrls(rawUrl, engine = getSearchEngine()) {
   try {
     const parsed = new URL(normalizedRaw, window.location.href);
 
-    if (engine === 'yandex') {
-      const yandexParams = ['img_url', 'url', 'img_href', 'media_url', 'thumb_url'];
-      for (const paramName of yandexParams) {
+    const wrapperParams = WRAPPED_IMAGE_URL_PARAMS[engine];
+    if (wrapperParams) {
+      for (const paramName of wrapperParams) {
         const candidate = safelyDecodeUrlCandidate(parsed.searchParams.get(paramName) || '');
         if (/^https?:\/\//i.test(candidate)) {
           urls.add(candidate);
@@ -3302,26 +3982,55 @@ function shouldBlockImage(img) {
     try {
       const u = new URL(url, window.location.href);
       const host = u.hostname.toLowerCase();
-      const path = u.pathname.toLowerCase();
-      
+
       if (isHostInDefaultBlocklist(host)) return true;
       if (matchesAdultKeywordHost(host)) return true;
       if (matchesCustomBlockPattern(url, host)) return true;
 
-      let decodedPath = path;
-      try { decodedPath = decodeURIComponent(path).toLowerCase(); } catch(_) {}
+      // A proxied thumbnail (DuckDuckGo's external-content, Yandex's img_url)
+      // hides both the real host and the search terms inside a parameter, so
+      // the unwrapped address has to be checked as well as the proxy's own.
+      // Query text goes through buildUrlScanText, which drops adult-filter
+      // switches so `&adlt=moderate` does not read as an adult signal.
+      let scanText = '';
+      for (const candidate of extractWrappedImageSearchUrls(url, engine)) {
+        let candidateUrl = null;
+        try { candidateUrl = new URL(candidate, window.location.href); } catch (_) { continue; }
 
-      const highConfInPath = HIGH_CONFIDENCE_PATH_KEYWORDS.test(decodedPath);
-      const ambigInPath = AMBIGUOUS_PATH_KEYWORDS.test(decodedPath);
+        const candidateHost = candidateUrl.hostname.toLowerCase();
+        if (candidateHost !== host) {
+          if (isHostInDefaultBlocklist(candidateHost)) return true;
+          if (matchesAdultKeywordHost(candidateHost)) return true;
+          if (matchesCustomBlockPattern(candidate, candidateHost)) return true;
+        }
+
+        scanText += ' ' + buildUrlScanText(candidateUrl).toLowerCase();
+      }
+
+      const highConfInPath = HIGH_CONFIDENCE_PATH_KEYWORDS.test(scanText);
+      const ambigInPath = AMBIGUOUS_PATH_KEYWORDS.test(scanText);
       const shouldBlockByPath = highConfInPath || (!isCleanPageHost() && ambigInPath);
-                           
+
       if (!isTrustedDomain(url) && !isKnownSafeImageHost(url) && shouldBlockByPath) {
-        if (debugMode) log('Blocking image due to path keywords:', decodedPath);
+        if (debugMode) log('Blocking image due to path keywords:', scanText.trim().substring(0, 120));
+        return true;
+      }
+
+      // Lenient with no custom words needs no context text at all, and this
+      // runs once per image on a page that can hold hundreds of them.
+      const needsContext = level !== IMAGE_FILTER_LEVELS.LENIENT || customKeywordList.length > 0;
+      const contextText = needsContext ? getImageContextText(img) : '';
+
+      // A word the user typed themselves is an instruction, not a heuristic, so
+      // it applies at every filter level — the level only decides how far the
+      // built-in term lists reach. Same reasoning as custom title patterns
+      // outranking the smart-blocking gate.
+      if (matchesCustomKeywords(contextText) || matchesCustomKeywords(scanText)) {
+        if (debugMode) log('Blocking image — custom blocked word:', contextText.substring(0, 80));
         return true;
       }
 
       if (level !== IMAGE_FILTER_LEVELS.LENIENT) {
-        const contextText = getImageContextText(img);
         const contextMatch = level === IMAGE_FILTER_LEVELS.STRICT
           ? (contextText && containsAdultKeywords(contextText))
           : hasModerateContextSignals(contextText);
@@ -3832,21 +4541,34 @@ async function processPendingResults() {
   const toProcess = Array.from(pendingResults);
   pendingResults.clear();
   let blockedCount = 0;
-  const candidates = toProcess.filter(el =>
-    el && el.nodeType === Node.ELEMENT_NODE && el.dataset?.pblockerProcessed !== 'true'
+
+  // Resolve through the same rules the full pass uses. Judging a raw mutation
+  // target directly would hide the wrong element on engines that wrap their
+  // results, skip the explicit-signals-only policy, and — worst — mark a
+  // half-hydrated row as inspected so it was never revisited.
+  const candidates = [];
+  const claimed = new Set();
+  for (const el of toProcess) {
+    const resolved = resolveResultContainer(el);
+    if (!resolved || claimed.has(resolved.container)) continue;
+    claimed.add(resolved.container);
+    candidates.push(resolved);
+  }
+
+  const backgroundVerdicts = await Promise.all(
+    candidates.map(({ container }) => hasBackgroundBlockedLink(container))
   );
-  const backgroundVerdicts = await Promise.all(candidates.map(hasBackgroundBlockedLink));
 
   for (let i = 0; i < candidates.length; i++) {
-    const el = candidates[i];
+    const { container, explicitOnly } = candidates[i];
     try {
-      const shouldBlock = await shouldBlockElement(el, backgroundVerdicts[i]);
+      const shouldBlock = await shouldBlockElement(container, backgroundVerdicts[i], { explicitOnly });
       if (shouldBlock) {
-        hideElement(el, 'search-result');
+        hideElement(container, 'search-result');
         blockedCount++;
       } else {
         // Mark inspected to avoid redundant checks
-        el.dataset.pblockerProcessed = 'true';
+        container.dataset.pblockerProcessed = 'true';
       }
     } catch (_) {
       // Fail-open: skip this element
@@ -3855,7 +4577,12 @@ async function processPendingResults() {
 
   if (blockedCount > 0) {
     notifyBackground('search_result_filtered', { count: blockedCount });
+    addBlockedResultCount(blockedCount);
   }
+  // Runs even at zero: this pass fires on every result the page hydrates, and it
+  // is the only thing that redraws the summary after the engine re-renders its
+  // result list and discards the node.
+  updateBlockedResultsNotice();
 }
 
 const debouncedProcessResults = debounce(processPendingResults, DEBOUNCE_DELAY);
@@ -3955,7 +4682,7 @@ function setupMutationObserver() {
     let schedulePageTextScan = false;
     let scheduleMedia = false;
     const engine = getSearchEngine();
-    const containerSelector = engine ? SEARCH_SELECTORS[engine]?.containers : null;
+    const containerSelector = engine ? searchContainerSelector(SEARCH_SELECTORS[engine]) : null;
     const socialSite = getSocialSite();
     const socialSelector = socialSite ? SOCIAL_SELECTORS[socialSite]?.containers : null;
 
@@ -4128,6 +4855,7 @@ function setupEventListeners() {
     if (changes.pblocker_settings) {
       const previousLevel = imageFilterLevel;
       const previousEnabled = isEnabled;
+      const previousTreatment = searchResultTreatment;
       _cleanPageHostCache = null;
       loadSettings().then(() => {
         const levelChanged = previousLevel !== imageFilterLevel;
@@ -4135,9 +4863,32 @@ function setupEventListeners() {
         if (levelChanged || becameDisabled) {
           restoreBlockedMediaElements();
         }
+        // Switching treatment has to redo the results already on screen —
+        // otherwise the tab keeps the old presentation until it is reloaded,
+        // and the picker looks like it did nothing.
+        if (previousTreatment !== searchResultTreatment) {
+          resetBlockedSearchResults();
+        }
         log('Settings updated, reprocessing content');
         processContent();
+        // processContent() only filters *unprocessed* results, so a summary that
+        // just became visible (or has to disappear) needs its own nudge. Same for
+        // the pill when the count moves to or from the toolbar.
+        updateBlockedResultsNotice();
+        updateFloatingCounter();
       });
+    }
+
+    // A list that just finished downloading has to reach the page without a
+    // reload, or a fresh subscription looks like it did nothing.
+    if (changes.pblocker_subscriptions || changes.pblocker_subscription_rules) {
+      browserAPI.storage.local.get(['pblocker_subscriptions', 'pblocker_subscription_rules'])
+        .then((store) => {
+          loadSubscriptionRules(store.pblocker_subscriptions, store.pblocker_subscription_rules);
+          resetCustomPatternCache();
+          processContent();
+        })
+        .catch(() => {});
     }
 
     if (changes[BLOCKLIST_META_KEY]) {

@@ -10,6 +10,7 @@ try {
     self.importScripts('shared/version-compare.js');
     self.importScripts('shared/validate-domain.js');
     self.importScripts('shared/keyword-pattern.js');
+    self.importScripts('shared/ruleset.js');
   }
 } catch (_) {
   // shared/hostname.js or shared/host-keywords.js could not be loaded
@@ -17,14 +18,22 @@ try {
   // still work via ADULT_HOST_KEYWORDS.
 }
 
-// --- AI Image Blocker: TF.js + NSFW.js-compatible runtime in the SW ----------
-// The service worker owns the model so host-page CSP never applies to the
-// classifier runtime.
+// --- AI Image Blocker: TF.js + NSFW.js-compatible runtime in the background --
+// The background context owns the model so host-page CSP never applies to the
+// classifier runtime. How the runtime gets loaded differs per browser
+// (importScripts in Chrome's service worker, <script> tags in Firefox's event
+// page) — see preloadAiRuntime() / loadAiRuntimeViaDom() below.
 let _aiModel = null;
 let _aiModelPromise = null;
 let _aiModelFailed = false;
+// The TF.js backend the model actually ended up on ('webgl' | 'cpu'), reported
+// back to the content script so the ready log names something real.
+let _aiModelBackend = 'unknown';
 let _aiRuntimeLoaded = false;
 let _aiRuntimeLoadError = '';
+// Firefox-only (<script>-tag) loading state; see loadAiRuntimeViaDom().
+let _aiRuntimeDomPromise = null;
+const _aiRuntimeScriptsLoaded = new Set();
 let _aiModelLastError = '';
 let _aiModelLastFailureAt = 0;
 const AI_MODEL_RETRY_COOLDOWN_MS = 5000;
@@ -48,12 +57,18 @@ function syncAiRuntimeStateFromGlobals() {
   }
 }
 
+// Order matters: nsfwjs.runtime.js expects `tf` to already exist.
+const AI_RUNTIME_SCRIPTS = ['vendor/tfjs/tf.es2017.js', 'vendor/nsfwjs/nsfwjs.runtime.js'];
+
+// Chrome: the MV3 service worker may only call importScripts() during its
+// initial synchronous evaluation, so the runtime has to be pulled in eagerly
+// at startup — it cannot be deferred to the first classify request.
 function preloadAiRuntime() {
   if (typeof self === 'undefined' || typeof self.importScripts !== 'function') {
     return;
   }
   try {
-    self.importScripts('vendor/tfjs/tf.es2017.js', 'vendor/nsfwjs/nsfwjs.runtime.js');
+    self.importScripts(...AI_RUNTIME_SCRIPTS);
     syncAiRuntimeStateFromGlobals();
     if (!_aiRuntimeLoaded) {
       if (typeof self.tf === 'undefined') {
@@ -70,13 +85,74 @@ function preloadAiRuntime() {
 
 preloadAiRuntime();
 
+// Firefox: there is no MV3 service worker. `background.scripts` runs in an
+// event *page*, where importScripts() does not exist — so preloadAiRuntime()
+// above is a no-op there and every classify/ping request used to fail with
+// "AI runtime was not preloaded", which is why the AI image blocker never
+// worked on Firefox. An event page does have a DOM, so load the runtime with
+// <script> tags instead. Lazily, on first use: Firefox suspends idle event
+// pages, and parsing the 4.5 MB TF.js bundle on every background wake-up
+// would be a heavy cost for the majority of users who leave the AI blocker
+// off (it is opt-in beta).
+function canLoadAiRuntimeViaDom() {
+  return typeof document !== 'undefined' &&
+    typeof document.createElement === 'function' &&
+    !!(document.head || document.documentElement);
+}
+
+function loadAiRuntimeScriptTag(path) {
+  return new Promise((resolve, reject) => {
+    const el = document.createElement('script');
+    // An extension-origin URL, so the extension CSP's script-src 'self' covers
+    // it — no CSP relaxation needed.
+    el.src = browserAPI.runtime.getURL(path);
+    el.async = false;
+    el.onload = () => resolve();
+    el.onerror = () => reject(new Error(`failed to load ${path}`));
+    (document.head || document.documentElement).appendChild(el);
+  });
+}
+
+async function loadAiRuntimeViaDom() {
+  // Track what already executed so a retry after a partial failure never
+  // re-evaluates the multi-megabyte TF.js bundle.
+  for (const path of AI_RUNTIME_SCRIPTS) {
+    if (_aiRuntimeScriptsLoaded.has(path)) continue;
+    await loadAiRuntimeScriptTag(path);
+    _aiRuntimeScriptsLoaded.add(path);
+  }
+  syncAiRuntimeStateFromGlobals();
+  if (_aiRuntimeLoaded) return;
+  const missing = (typeof self !== 'undefined' && typeof self.tf === 'undefined')
+    ? 'tfjs'
+    : 'nsfwjs';
+  throw new Error(`failed to load AI runtime: ${missing} not available after load`);
+}
+
 async function ensureAiRuntimeLoaded() {
   syncAiRuntimeStateFromGlobals();
   if (_aiRuntimeLoaded) return;
+  if (canLoadAiRuntimeViaDom()) {
+    if (!_aiRuntimeDomPromise) {
+      _aiRuntimeDomPromise = loadAiRuntimeViaDom()
+        .catch((err) => {
+          _aiRuntimeLoadError = getAiModelErrorMessage(err);
+          throw err;
+        })
+        // Drop the in-flight promise either way so a later ping can retry;
+        // a success is already short-circuited by _aiRuntimeLoaded above.
+        .finally(() => { _aiRuntimeDomPromise = null; });
+    }
+    await _aiRuntimeDomPromise;
+    return;
+  }
   if (_aiRuntimeLoadError) {
     throw new Error(_aiRuntimeLoadError);
   }
-  throw new Error('AI runtime was not preloaded');
+  // Neither mechanism is available: no importScripts (not a worker) and no DOM
+  // (not a page). Nothing left to try — say so rather than reporting a
+  // misleading model error.
+  throw new Error('AI runtime unavailable: no importScripts and no DOM to load it with');
 }
 
 async function loadAiModel(options = {}) {
@@ -114,7 +190,10 @@ async function loadAiModel(options = {}) {
       _aiModelFailed = false;
       _aiModelLastError = '';
       _aiModelLastFailureAt = 0;
-      console.log('[BlockNSFW] AI Image Blocker model loaded.');
+      _aiModelBackend = (tfLike && typeof tfLike.getBackend === 'function' &&
+        tfLike.getBackend()) || 'unknown';
+      console.log('[BlockNSFW] AI Image Blocker model loaded, backend:',
+        _aiModelBackend);
       return _aiModel;
     } catch (err) {
       _aiModel = null;
@@ -247,6 +326,9 @@ const DEFAULT_SETTINGS = {
   customPatterns: [], // user patterns, wildcard supported e.g. *.example.com, example.com/path
   trustedImageDomains: [], // domains where images should never be blocked
   debugMode: false,
+  searchResultTreatment: 'hide', // 'hide' | 'overlay' — web/text results only
+  searchSummaryEnabled: true, // draw the "N results blocked" line on search pages
+  blockCountDisplay: 'badge', // 'badge' (toolbar icon) | 'floating' (in-page pill)
   dnsFilterEnabled: false,
   safeSearchEnabled: true,
   facebookReelsEnabled: false,
@@ -362,6 +444,23 @@ let remoteBlocklistPromise = null;
 
 // Remote global whitelist (false-positive overrides managed via GitHub)
 // Same maintainer-owned repository as the blocklist above.
+// --- Ruleset subscriptions ---------------------------------------------------
+//
+// A subscription is a URL the user chose, holding a list someone else maintains.
+// The metadata (name, url, status) lives apart from the rules themselves so the
+// options page can render the list without pulling tens of thousands of entries
+// into memory to do it.
+//
+// Subscriptions are strictly additive: their entries can add blocks and can do
+// nothing else. There is no allow form in the rule syntax, and nothing here
+// touches the whitelist or the enabled flag. A remote file that could unblock a
+// site would be a remote off switch on a porn blocker, which is the one thing
+// this cannot become.
+const SUBSCRIPTIONS_KEY = 'pblocker_subscriptions';
+const SUBSCRIPTION_RULES_KEY = 'pblocker_subscription_rules';
+const SUBSCRIPTION_TTL_MS = 24 * 60 * 60 * 1000; // once a day is plenty
+const MAX_SUBSCRIPTIONS = 20;
+
 const REMOTE_WHITELIST_URL = 'https://raw.githubusercontent.com/codepurse/BlockNSFW/refs/heads/main/data/WHITELIST.txt';
 const REMOTE_WHITELIST_CACHE_KEY = 'pblocker_remote_whitelist_v1';
 const REMOTE_WHITELIST_META_KEY = 'pblocker_remote_whitelist_meta_v1';
@@ -826,6 +925,187 @@ function parseWhitelistFile(text) {
     }
   }
   return domains;
+}
+
+// --- Ruleset subscriptions: storage ------------------------------------------
+
+async function getSubscriptions() {
+  try {
+    const { [SUBSCRIPTIONS_KEY]: list } = await browserAPI.storage.local.get(SUBSCRIPTIONS_KEY);
+    return Array.isArray(list) ? list : [];
+  } catch (_) {
+    return [];
+  }
+}
+
+async function setSubscriptions(list) {
+  await browserAPI.storage.local.set({ [SUBSCRIPTIONS_KEY]: list });
+}
+
+async function getSubscriptionRules() {
+  try {
+    const { [SUBSCRIPTION_RULES_KEY]: rules } = await browserAPI.storage.local.get(SUBSCRIPTION_RULES_KEY);
+    return (rules && typeof rules === 'object') ? rules : {};
+  } catch (_) {
+    return {};
+  }
+}
+
+async function setSubscriptionRules(rules) {
+  await browserAPI.storage.local.set({ [SUBSCRIPTION_RULES_KEY]: rules });
+}
+
+/**
+ * Every rule from every enabled subscription, flattened. Disabled ones are left
+ * on disk so switching a subscription back on does not need a re-download.
+ */
+async function getActiveSubscriptionEntries() {
+  const [subscriptions, rules] = await Promise.all([getSubscriptions(), getSubscriptionRules()]);
+  const entries = [];
+  for (const subscription of subscriptions) {
+    if (!subscription || subscription.enabled === false) continue;
+    const own = rules[subscription.id];
+    if (Array.isArray(own)) entries.push(...own);
+  }
+  return entries;
+}
+
+function subscriptionId(url) {
+  // Derived from the URL rather than random, so adding the same list twice is
+  // caught and a re-add reuses the rules already downloaded.
+  return 'sub_' + String(url || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0, 80);
+}
+
+// --- Ruleset subscriptions: fetching -----------------------------------------
+
+async function fetchSubscriptionRuleset(url) {
+  if (!self.Ruleset || !self.Ruleset.isHttpUrl(url)) {
+    throw new Error('Only http(s) addresses can be subscribed to');
+  }
+  const response = await fetch(url, { cache: 'no-store', redirect: 'follow' });
+  if (!response.ok) throw new Error(`Download failed (${response.status})`);
+
+  const text = await response.text();
+  if (text.length > self.Ruleset.MAX_FILE_BYTES) {
+    throw new Error('That file is too large to use as a ruleset');
+  }
+
+  const parsed = self.Ruleset.parseRuleset(text);
+  if (parsed.entries.length === 0) {
+    // An HTML error page or a wrong link parses cleanly to nothing, so this is
+    // the check that catches "you pasted the GitHub page, not the raw file".
+    throw new Error('No rules found at that address');
+  }
+  return parsed;
+}
+
+/**
+ * Re-download one subscription. Failures are recorded on the subscription and
+ * never throw outward: a list whose host is down must not stop the others, and
+ * the rules already on disk keep working in the meantime.
+ */
+async function refreshSubscription(id, options = {}) {
+  const { force = false } = options;
+  const subscriptions = await getSubscriptions();
+  const subscription = subscriptions.find((item) => item && item.id === id);
+  if (!subscription) return { ok: false, error: 'Subscription not found' };
+
+  const isStale = force || !subscription.updatedAt ||
+    (Date.now() - subscription.updatedAt) > SUBSCRIPTION_TTL_MS;
+  if (!isStale) return { ok: true, skipped: true };
+
+  try {
+    const parsed = await fetchSubscriptionRuleset(subscription.url);
+    const rules = await getSubscriptionRules();
+    rules[id] = parsed.entries;
+    await setSubscriptionRules(rules);
+
+    subscription.name = subscription.customName || parsed.name || subscription.name;
+    subscription.homepage = parsed.homepage || '';
+    subscription.entryCount = parsed.entries.length;
+    subscription.skipped = parsed.skipped;
+    subscription.truncated = !!parsed.truncated;
+    subscription.updatedAt = Date.now();
+    subscription.error = '';
+    await setSubscriptions(subscriptions);
+    await rebuildCompiledPatterns();
+    return { ok: true, entryCount: parsed.entries.length, skipped: parsed.skipped };
+  } catch (error) {
+    subscription.error = error && error.message ? error.message : 'Update failed';
+    subscription.lastErrorAt = Date.now();
+    await setSubscriptions(subscriptions);
+    return { ok: false, error: subscription.error };
+  }
+}
+
+async function refreshAllSubscriptions(options = {}) {
+  const subscriptions = await getSubscriptions();
+  const results = [];
+  for (const subscription of subscriptions) {
+    if (!subscription || subscription.enabled === false) continue;
+    results.push(await refreshSubscription(subscription.id, options));
+  }
+  return results;
+}
+
+async function addSubscription(url, name) {
+  const trimmed = String(url || '').trim();
+  if (!self.Ruleset || !self.Ruleset.isHttpUrl(trimmed)) {
+    return { ok: false, error: 'Enter a full http:// or https:// address' };
+  }
+
+  const subscriptions = await getSubscriptions();
+  if (subscriptions.length >= MAX_SUBSCRIPTIONS) {
+    return { ok: false, error: `You can follow up to ${MAX_SUBSCRIPTIONS} lists` };
+  }
+
+  const id = subscriptionId(trimmed);
+  if (subscriptions.some((item) => item && item.id === id)) {
+    return { ok: false, error: 'You already follow that list' };
+  }
+
+  const customName = String(name || '').trim().slice(0, 80);
+  subscriptions.push({
+    id,
+    url: trimmed,
+    name: customName || trimmed,
+    customName,
+    enabled: true,
+    addedAt: Date.now(),
+    updatedAt: 0,
+    entryCount: 0,
+    error: ''
+  });
+  await setSubscriptions(subscriptions);
+
+  // Fetch immediately: a subscription that sits empty until some later refresh
+  // looks broken, and this is also where a bad URL gets reported while the user
+  // is still looking at the box.
+  const result = await refreshSubscription(id, { force: true });
+  return { ok: true, id, fetch: result };
+}
+
+async function removeSubscription(id) {
+  const subscriptions = await getSubscriptions();
+  const next = subscriptions.filter((item) => item && item.id !== id);
+  await setSubscriptions(next);
+
+  const rules = await getSubscriptionRules();
+  delete rules[id];
+  await setSubscriptionRules(rules);
+
+  await rebuildCompiledPatterns();
+  return { ok: true };
+}
+
+async function setSubscriptionEnabled(id, enabled) {
+  const subscriptions = await getSubscriptions();
+  const subscription = subscriptions.find((item) => item && item.id === id);
+  if (!subscription) return { ok: false, error: 'Subscription not found' };
+  subscription.enabled = !!enabled;
+  await setSubscriptions(subscriptions);
+  await rebuildCompiledPatterns();
+  return { ok: true };
 }
 
 async function fetchRemoteWhitelist() {
@@ -1453,6 +1733,21 @@ async function loadDefaultBlocklist() {
   ensureRemoteBlocklistUpToDate().catch(error => console.warn('BlockNSFW: remote blocklist sync deferred', error));
 }
 
+/**
+ * Strip comment lines and unescape the rest before a stored list reaches any
+ * matcher. Mirrors content.js — both defer to shared/keyword-pattern.js so the
+ * two sides cannot disagree about what counts as a comment.
+ */
+function liveListEntries(list) {
+  if (!Array.isArray(list)) return [];
+  if (typeof KeywordPattern !== 'undefined' && KeywordPattern.effectiveEntries) {
+    return KeywordPattern.effectiveEntries(list);
+  }
+  return list
+    .map((entry) => String(entry == null ? '' : entry).trim())
+    .filter((entry) => entry && entry.charAt(0) !== '#' && entry.charAt(0) !== '!');
+}
+
 async function rebuildCompiledPatterns() {
   // Clear caches when rebuilding patterns
   clearAllCaches();
@@ -1463,13 +1758,18 @@ async function rebuildCompiledPatterns() {
   // loadDefaultBlocklist/remote refresh already own the normalized default
   // Set. Rewalking 200k+ domains here on every startup or settings change was
   // redundant and particularly costly in Firefox's extension process.
-  if (Array.isArray(settings.customPatterns)) {
-    for (let i = 0; i < settings.customPatterns.length; i++) {
-      const pattern = settings.customPatterns[i];
-      if (pattern) {
-        patternSources.push(pattern);
-      }
-    }
+  // liveListEntries drops the user's comment lines: a '# note' compiled into a
+  // host pattern would block whatever domain the note happened to mention.
+  const customPatterns = liveListEntries(settings.customPatterns);
+  for (let i = 0; i < customPatterns.length; i++) {
+    if (customPatterns[i]) patternSources.push(customPatterns[i]);
+  }
+
+  // Subscribed lists compile into the same set the user's own entries do. They
+  // can only ever add to it: nothing downstream of here can remove a block.
+  const subscribed = await getActiveSubscriptionEntries();
+  for (let i = 0; i < subscribed.length; i++) {
+    if (subscribed[i]) patternSources.push(subscribed[i]);
   }
 
   const uniquePatterns = [...new Set(patternSources)];
@@ -1688,11 +1988,99 @@ async function handleBlock(urlStr, type = 'blocked', reason = 'Pattern match') {
 }
 
 // Message listener for content script communications
+// --- Toolbar badge: what this tab blocked -----------------------------------
+// Ambient proof the extension is working even when nothing visible happens,
+// which is the job the per-result card used to do on search pages.
+
+const BADGE_CAP = 99;
+const BADGE_CAP_TEXT = '99+';
+
+/**
+ * Read the badge back from the browser rather than keeping a per-tab tally in a
+ * variable. Under MV3 the service worker is torn down after ~30s idle, which
+ * would reset a Map while the badge text itself survives — the count would jump
+ * from "12" to "1" on the next block. The badge is its own source of truth.
+ */
+// The display preference is read once and cached: bumpTabBadge is called for
+// every blocked image on a scrolling page, and a storage round-trip per block
+// would be a lot of churn for a setting that changes once in a blue moon.
+let cachedBlockCountDisplay = null;
+
+async function getBlockCountDisplay() {
+  if (cachedBlockCountDisplay) return cachedBlockCountDisplay;
+  try {
+    const settings = await getSettings();
+    cachedBlockCountDisplay = settings.blockCountDisplay === 'floating' ? 'floating' : 'badge';
+  } catch (_) {
+    cachedBlockCountDisplay = 'badge';
+  }
+  return cachedBlockCountDisplay;
+}
+
+async function bumpTabBadge(tabId, by) {
+  if (typeof tabId !== 'number' || tabId < 0) return;
+  // With the count in the page there must be nothing on the icon, or the same
+  // blocks get reported twice in two places.
+  if (await getBlockCountDisplay() !== 'badge') return;
+  const increment = Number.isFinite(by) && by > 0 ? Math.floor(by) : 1;
+  try {
+    const current = await browserAPI.action.getBadgeText({ tabId });
+    if (current === BADGE_CAP_TEXT) return; // already capped; stop counting
+    const total = (parseInt(current, 10) || 0) + increment;
+    await browserAPI.action.setBadgeText({
+      tabId,
+      text: total > BADGE_CAP ? BADGE_CAP_TEXT : String(total)
+    });
+    await browserAPI.action.setBadgeBackgroundColor({ tabId, color: '#4f46e5' });
+  } catch (_) {
+    // Badge support varies (and getBadgeText is unavailable on some Firefox
+    // versions). Never let a cosmetic counter break the block that triggered it.
+  }
+}
+
+/**
+ * Wipe every tab's badge — used when the count moves into the page, so a number
+ * left on the icon does not sit there permanently reporting a stale total.
+ */
+async function clearAllTabBadges() {
+  try {
+    const tabs = await browserAPI.tabs.query({});
+    for (const tab of tabs) clearTabBadge(tab.id);
+  } catch (_) {
+    // tabs.query unavailable; the badges will clear on their next navigation.
+  }
+}
+
+function clearTabBadge(tabId) {
+  if (typeof tabId !== 'number' || tabId < 0) return;
+  try {
+    const result = browserAPI.action.setBadgeText({ tabId, text: '' });
+    if (result && typeof result.catch === 'function') result.catch(() => {});
+  } catch (_) {}
+}
+
+// A committed navigation starts a fresh count. Two signals, because neither is
+// available everywhere: `changeInfo.url` catches history-driven navigation (how
+// search engines switch verticals) but is withheld from Firefox without the
+// "tabs" permission, which this extension does not request; `status === 'loading'`
+// needs no permission but only fires on a real page load.
+try {
+  browserAPI.tabs.onUpdated.addListener((tabId, changeInfo) => {
+    if (!changeInfo) return;
+    if (typeof changeInfo.url === 'string' || changeInfo.status === 'loading') {
+      clearTabBadge(tabId);
+    }
+  });
+} catch (_) {
+  // tabs.onUpdated unavailable in this build; the badge just accumulates.
+}
+
 browserAPI.runtime.onMessage.addListener((message, sender, sendResponse) => {
   // Messages addressed to the offscreen document are handled there, not here.
   if (message && message.target === 'offscreen-ai') return false;
   if (message.type === 'image_filtered') {
     updateStats('image_filtered');
+    bumpTabBadge(sender?.tab?.id, 1);
     try {
       const url = typeof message.url === 'string' ? message.url : (typeof sender?.url === 'string' ? sender.url : '');
       if (url) logBlockedPage(url, 'Image filtered');
@@ -1700,6 +2088,7 @@ browserAPI.runtime.onMessage.addListener((message, sender, sendResponse) => {
     sendResponse({ success: true });
   } else if (message.type === 'image_ai_filtered') {
     updateStats('image_ai_filtered');
+    bumpTabBadge(sender?.tab?.id, 1);
     try {
       const url = typeof message.url === 'string'
         ? message.url
@@ -1719,11 +2108,83 @@ browserAPI.runtime.onMessage.addListener((message, sender, sendResponse) => {
     sendResponse({ success: true });
   } else if (message.type === 'search_result_filtered') {
     updateStats('search_result_filtered');
+    // The pass reports how many results it blocked; the badge counts all of
+    // them, unlike updateStats which records the pass as a single event.
+    bumpTabBadge(sender?.tab?.id, typeof message.count === 'number' ? message.count : 1);
     try {
       const url = typeof message.url === 'string' ? message.url : (typeof sender?.url === 'string' ? sender.url : '');
       if (url) logBlockedPage(url, 'Search results filtered');
     } catch (_) {}
     sendResponse({ success: true });
+  } else if (message.type === 'subscription_prefill' && typeof message.url === 'string') {
+    // Opens Settings with the address filled in. Deliberately does not
+    // subscribe: a link on a web page must never be able to add a list by
+    // itself, only offer one.
+    (async () => {
+      try {
+        if (!self.Ruleset || !self.Ruleset.isHttpUrl(message.url)) {
+          sendResponse({ ok: false });
+          return;
+        }
+        const optionsUrl = browserAPI.runtime.getURL('options.html') +
+          '?subscribe=' + encodeURIComponent(message.url);
+        await browserAPI.tabs.create({ url: optionsUrl });
+        sendResponse({ ok: true });
+      } catch (error) {
+        sendResponse({ ok: false, error: error.message });
+      }
+    })();
+    return true;
+  } else if (message.type === 'subscription_list') {
+    (async () => {
+      try {
+        sendResponse({ success: true, subscriptions: await getSubscriptions() });
+      } catch (error) {
+        sendResponse({ success: false, error: error.message, subscriptions: [] });
+      }
+    })();
+    return true;
+  } else if (message.type === 'subscription_add') {
+    (async () => {
+      try {
+        sendResponse(await addSubscription(message.url, message.name));
+      } catch (error) {
+        sendResponse({ ok: false, error: error.message });
+      }
+    })();
+    return true;
+  } else if (message.type === 'subscription_remove') {
+    (async () => {
+      try {
+        sendResponse(await removeSubscription(message.id));
+      } catch (error) {
+        sendResponse({ ok: false, error: error.message });
+      }
+    })();
+    return true;
+  } else if (message.type === 'subscription_toggle') {
+    (async () => {
+      try {
+        sendResponse(await setSubscriptionEnabled(message.id, message.enabled));
+      } catch (error) {
+        sendResponse({ ok: false, error: error.message });
+      }
+    })();
+    return true;
+  } else if (message.type === 'subscription_refresh') {
+    (async () => {
+      try {
+        if (message.id) {
+          sendResponse(await refreshSubscription(message.id, { force: true }));
+        } else {
+          const results = await refreshAllSubscriptions({ force: true });
+          sendResponse({ ok: true, results });
+        }
+      } catch (error) {
+        sendResponse({ ok: false, error: error.message });
+      }
+    })();
+    return true;
   } else if (message.type === 'check_blocklist_hosts' && Array.isArray(message.hosts)) {
     (async () => {
       try {
@@ -1865,7 +2326,7 @@ browserAPI.runtime.onMessage.addListener((message, sender, sendResponse) => {
       }
       try {
         await loadAiModel({ forceRetry: message.forceRetry === true });
-        sendResponse({ ready: true, backend: 'service-worker' });
+        sendResponse({ ready: true, backend: _aiModelBackend });
       } catch (error) {
         console.warn('[BlockNSFW] SW model load failed:', error && error.message || error);
         sendResponse({
@@ -2157,7 +2618,7 @@ async function updateDnrRules() {
 
     if (settings.enabled) {
       const imageBlockDomains = customPatternsToImageBlockDomains(
-        settings.customPatterns,
+        liveListEntries(settings.customPatterns),
         await getActiveWhitelistDomains()
       );
       addRules.push(...buildCustomImageBlockRules(imageBlockDomains));
@@ -2189,6 +2650,10 @@ function initializeBackground() {
     await initializeExtensionStateTracking();
     await updateDnrRules();
     ensureRemoteWhitelistUpToDate().catch(e => console.warn('BlockNSFW: initial whitelist sync failed', e));
+    // Not forced: each subscription re-downloads only once its own day is up.
+    // Deliberately not awaited — a slow or dead list host must not hold up
+    // initialisation, and the rules already on disk are in use meanwhile.
+    refreshAllSubscriptions().catch(e => console.warn('BlockNSFW: subscription sync failed', e));
     checkForUpdate().catch(e => console.warn('BlockNSFW: initial update check failed', e));
     fetchAnnouncement().catch(e => console.warn('BlockNSFW: initial announcement fetch failed', e));
     console.log('BlockNSFW: Background initialized for Manifest V3');
@@ -2231,6 +2696,12 @@ browserAPI.runtime.onInstalled.addListener(async (details) => {
 browserAPI.storage.onChanged.addListener(async (changes, area) => {
   if (area !== 'local') return;
   if (changes[SETTINGS_KEY]) {
+    // Drop the cached badge/pill preference so the next block reads the new one.
+    const previousDisplay = cachedBlockCountDisplay;
+    cachedBlockCountDisplay = null;
+    if (previousDisplay === 'badge' && await getBlockCountDisplay() === 'floating') {
+      await clearAllTabBadges();
+    }
     await rebuildCompiledPatterns();
     // Check if enabled state changed
     await checkExtensionStateChange();
