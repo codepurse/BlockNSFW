@@ -38,6 +38,18 @@ Firefox is not separate MV2 port. It uses dedicated MV3 manifest plus same runti
 - Firefox build uses `declarativeNetRequest`.
 - Firefox build uses `background.scripts`, while Chrome build uses service-worker entry in `manifest.json`.
 - Extension pages are referenced through `runtime.getURL(...)`, which keeps popup/options/audit/stats pages portable across browsers.
+- **`importScripts()` does not exist on Firefox.** Chrome's background is a
+  service worker; Firefox's `background.scripts` is an event *page*. Anything
+  `background.js` loads with `self.importScripts(...)` therefore has to be listed
+  in `manifest.firefox.json` under `background.scripts` as well, or Firefox
+  silently runs the guarded fallback path instead. `tests/firefox-ai-runtime.test.js`
+  asserts the two stay in sync for the `shared/*` helpers.
+- **AI image classifier runtime.** Chrome imports `vendor/tfjs/tf.es2017.js` +
+  `vendor/nsfwjs/nsfwjs.runtime.js` eagerly with `importScripts` (a service
+  worker may only call it during initial evaluation) and classifies inside an
+  offscreen document on WebGL. Firefox has no `chrome.offscreen`, so it loads the
+  same two bundles lazily as `<script>` tags on the event page and classifies
+  there. Keep both bundles in the build; `build-firefox.ps1` verifies they exist.
 
 ## Build Commands
 
@@ -83,6 +95,9 @@ powershell -ExecutionPolicy Bypass -File .\build-firefox.ps1 -Zip
 - [ ] Stats and audit pages open
 - [ ] Storage reads/writes persist
 - [ ] No Firefox-specific console errors from Promise / callback mismatches
+- [ ] Settings > enable the AI image blocker, load an adult page, confirm images
+      blur and the background console logs `AI Image Blocker ready`
+- [ ] Path-scoped whitelist entry allows its path and nothing else on that host
 
 ## Known Release Tasks
 

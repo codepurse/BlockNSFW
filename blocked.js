@@ -152,6 +152,28 @@ if (reason && urlEl) {
   }
 }
 
+// --- Page chrome ------------------------------------------------------------
+
+function runtimeURL(path) {
+  return browserAPI.runtime.getURL(path);
+}
+
+function openTab(target) {
+  window.open(target, '_blank');
+}
+
+function goBack() {
+  // content.js arrives here via location.replace(), so the blocked site is not
+  // in history and stepping back lands on whatever preceded it. A tab opened
+  // straight onto a blocked link has nothing behind it at all.
+  if (history.length > 1) {
+    history.back();
+  } else {
+    location.replace('about:blank');
+  }
+}
+
+// User-supplied HTML replaces the document outright.
 if (mode === 'plain_html') {
   (async () => {
     try {
@@ -173,8 +195,14 @@ document.addEventListener('DOMContentLoaded', () => {
   if (settings) {
     settings.addEventListener('click', (e) => {
       e.preventDefault();
-      const optionsUrl = browserAPI.runtime.getURL('options.html');
-      window.open(optionsUrl, '_blank');
+      openTab(runtimeURL('options.html'));
     });
+  }
+
+  // Bound here rather than as an inline onclick: the extension CSP is
+  // script-src 'self', which blocks inline handlers outright.
+  const backButton = document.getElementById('back-button');
+  if (backButton) {
+    backButton.addEventListener('click', goBack);
   }
 });

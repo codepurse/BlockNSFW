@@ -1,0 +1,619 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Changelog - BlockNSFW</title>
+  <style>
+    :root {
+      /* Clean Modern Dark — single indigo accent (matches options.html) */
+      --background: #0b0c10;
+      --background-gradient: linear-gradient(180deg, #0c0d12 0%, #0a0b0e 100%);
+      --surface: #14161c;
+      --surface-2: #1a1d24;
+      --foreground: #f2f3f5;
+      --foreground-muted: #a4abb8;
+      --foreground-dim: #6b727f;
+
+      --card-bg: #14161c;
+      --card-border: rgba(255, 255, 255, 0.07);
+      --card-border-hover: rgba(255, 255, 255, 0.14);
+      --card-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+
+      --primary: #6366f1;
+      --primary-hover: #818cf8;
+      --primary-soft: rgba(99, 102, 241, 0.12);
+      --primary-foreground: #ffffff;
+
+      --success: #22c55e;
+      --warning: #f59e0b;
+
+      --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+
+      --radius: 10px;
+      --radius-sm: 8px;
+      --radius-lg: 14px;
+      --transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: var(--font-sans);
+      background: var(--background-gradient);
+      color: var(--foreground);
+      line-height: 1.6;
+      font-size: 14px;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      min-height: 100vh;
+    }
+
+    /* Header */
+    .header {
+      margin: 1rem auto 1rem auto;
+      max-width: 860px;
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: var(--radius-lg);
+      padding: 1.5rem;
+      box-shadow: var(--card-shadow);
+    }
+
+    .header-content {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    .header-icon {
+      width: 44px;
+      height: 44px;
+      background: var(--primary);
+      border-radius: var(--radius);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.375rem;
+      flex-shrink: 0;
+    }
+
+    .header-title-section h1 {
+      font-size: 1.4rem;
+      font-weight: 650;
+      letter-spacing: -0.02em;
+      margin-bottom: 0.25rem;
+    }
+
+    .header-subtitle {
+      color: var(--foreground-muted);
+      font-size: 0.9rem;
+      line-height: 1.4;
+    }
+
+    .header-actions {
+      margin-left: auto;
+      display: flex;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+    }
+
+    .button {
+      background: transparent;
+      color: var(--foreground-muted);
+      border: 1px solid var(--card-border);
+      border-radius: var(--radius);
+      padding: 0.625rem 1.25rem;
+      font-size: 0.875rem;
+      font-weight: 500;
+      font-family: inherit;
+      cursor: pointer;
+      transition: var(--transition);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      text-decoration: none;
+    }
+
+    .button:hover {
+      color: var(--foreground);
+      border-color: var(--card-border-hover);
+      background: var(--surface-2);
+    }
+
+    .container {
+      max-width: 860px;
+      margin: 0 auto;
+      padding: 1rem 4px 4rem 4px;
+    }
+
+    /* A release */
+    .release {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: var(--radius-lg);
+      padding: 1.5rem;
+      box-shadow: var(--card-shadow);
+      margin-bottom: 1.25rem;
+    }
+
+    .release-head {
+      display: flex;
+      align-items: baseline;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+      padding-bottom: 0.875rem;
+      margin-bottom: 1.25rem;
+      border-bottom: 1px solid var(--card-border);
+    }
+
+    .release-version {
+      font-size: 1.5rem;
+      font-weight: 650;
+      letter-spacing: -0.02em;
+    }
+
+    .release-date {
+      color: var(--foreground-dim);
+      font-size: 0.875rem;
+      margin-left: auto;
+    }
+
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      padding: 0.125rem 0.625rem;
+      border-radius: 999px;
+      font-size: 0.7rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .tag-current {
+      background: var(--primary-soft);
+      color: var(--primary-hover);
+      border: 1px solid rgba(99, 102, 241, 0.28);
+    }
+
+    .group {
+      margin-bottom: 1.5rem;
+    }
+
+    .group:last-child {
+      margin-bottom: 0;
+    }
+
+    .group-title {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.75rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--foreground-dim);
+      margin-bottom: 0.875rem;
+    }
+
+    .group-title::after {
+      content: "";
+      flex: 1;
+      height: 1px;
+      background: var(--card-border);
+    }
+
+    .entry {
+      padding: 0.75rem 0;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+    }
+
+    .entry:last-child {
+      border-bottom: none;
+      padding-bottom: 0;
+    }
+
+    .entry-title {
+      font-weight: 600;
+      color: var(--foreground);
+      margin-bottom: 0.25rem;
+    }
+
+    .entry-body {
+      color: var(--foreground-muted);
+      font-size: 0.9rem;
+      line-height: 1.65;
+    }
+
+    .entry-body a {
+      color: var(--primary-hover);
+      text-decoration: none;
+    }
+
+    .entry-body a:hover {
+      text-decoration: underline;
+    }
+
+    .code {
+      font-family: var(--font-mono);
+      font-size: 0.85em;
+      background: var(--surface-2);
+      border: 1px solid var(--card-border);
+      border-radius: 4px;
+      padding: 0.05rem 0.35rem;
+    }
+
+    .note {
+      max-width: 860px;
+      margin: 0 auto 1rem auto;
+      padding: 0 4px;
+      color: var(--foreground-dim);
+      font-size: 0.85rem;
+    }
+
+    .note a {
+      color: var(--primary-hover);
+      text-decoration: none;
+    }
+
+    @media (max-width: 600px) {
+      .header-content { flex-wrap: wrap; }
+      .header-actions { margin-left: 0; width: 100%; }
+      .release-date { margin-left: 0; width: 100%; }
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="header-content">
+      <div class="header-icon">📜</div>
+      <div class="header-title-section">
+        <h1>Changelog</h1>
+        <div class="header-subtitle">What changed in each version of BlockNSFW</div>
+      </div>
+      <div class="header-actions">
+        <a class="button" href="options.html">← Back to Settings</a>
+        <a class="button" href="https://github.com/codepurse/BlockNSFW/blob/main/CHANGELOG.md" target="_blank" rel="noopener">Full technical changelog</a>
+      </div>
+    </div>
+  </div>
+
+  <div class="container">
+
+    <!-- ===================== 1.7.5 ===================== -->
+    <div class="release">
+      <div class="release-head">
+        <span class="release-version">1.7.5</span>
+        <span class="tag tag-current">Current</span>
+        <span class="release-date">August 2026</span>
+      </div>
+
+      <div class="group">
+        <div class="group-title">New</div>
+
+        <div class="entry">
+          <div class="entry-title">Blocked search results are removed, not papered over</div>
+          <div class="entry-body">
+            Every blocked result used to be replaced with a large card carrying the extension's
+            logo and a <em>BLOCKED</em> badge. That was bearable for two results in ten and became a
+            wall once image and video results started being filtered too. Blocked results are now
+            simply removed, and one line above the results accounts for them:
+            <em>"3 results blocked by BlockNSFW"</em> — one line however many were blocked. Image and
+            video results just go; a gap in a grid reads as fewer results, while a grid of
+            placeholders reads as an error. Reported by a user moving over from uBlacklist.
+          </div>
+        </div>
+
+        <div class="entry">
+          <div class="entry-title">You choose what a blocked result leaves behind</div>
+          <div class="entry-body">
+            Settings → Customization → <strong>Blocked Search Results</strong>. Keep the quiet
+            removal, or pick <em>Show a notice in place</em> to bring the old per-result card back
+            for web results — a removed result is indistinguishable from one that never existed,
+            and that per-position evidence is the point in an accountability setup. A second
+            switch turns the summary line off entirely. Image and video results are always
+            removed either way.
+          </div>
+        </div>
+
+        <div class="entry">
+          <div class="entry-title">A count of what was blocked</div>
+          <div class="entry-body">
+            Nothing outside the page ever showed the extension was working. The toolbar icon now
+            carries the number of things blocked in that tab — search results, filtered images —
+            capped at <span class="code">99+</span>, and cleared when you navigate. If you would
+            rather have it in the page, <em>Where To Show The Count</em> offers a small floating
+            pill in the corner instead. Clicking the pill lists the sites the blocks came from,
+            busiest first. Those listed sites are plain text: they are not links and lead nowhere.
+          </div>
+        </div>
+
+        <div class="entry">
+          <div class="entry-title">Follow blocklists other people maintain</div>
+          <div class="entry-body">
+            Settings → Customization → <strong>Subscribed Lists</strong>. Give it the address of a
+            ruleset file and BlockNSFW downloads it, blocks everything on it alongside your own
+            entries, and checks for changes once a day. When the author adds new sites, you get them
+            without doing anything. uBlacklist ruleset files work as they are, so addresses you
+            already follow there can be pasted straight in, and one-click subscribe buttons on list
+            authors' sites open Settings with the address filled in ready for you to confirm.
+            A subscribed list can only <strong>add</strong> blocks. It can never whitelist a site,
+            unblock anything, or change a setting. Turning one off asks for your PIN.
+            Requested by a user.
+          </div>
+        </div>
+
+        <div class="entry">
+          <div class="entry-title">Comments in your lists</div>
+          <div class="entry-body">
+            A line starting with <span class="code">#</span> or <span class="code">!</span> is now a
+            note rather than an entry, in all three boxes — blocklist, blocked words and trusted
+            sites. Both markers work because the tools people arrive from disagree: uBlacklist uses
+            <span class="code">#</span>, uBlock Origin and AdGuard use <span class="code">!</span>.
+            Notes stay attached to the entry written below them when the list is sorted, so they work
+            as section headings, and they survive Import and Export. To block a word that genuinely
+            starts with one of those characters, put a backslash first —
+            <span class="code">\#nsfw</span>. Any such entry already in your list was converted for
+            you, so nothing you saved changes meaning. Requested by a user.
+          </div>
+        </div>
+
+        <div class="entry">
+          <div class="entry-title">A nudge to pin the extension</div>
+          <div class="entry-body">
+            Chrome tucks unpinned extensions behind the puzzle-piece menu, which hides the icon,
+            the count on it, and the quickest route to unblocking a site. Settings now shows a
+            dismissible reminder of how to pin it — and only when it is genuinely unpinned.
+          </div>
+        </div>
+      </div>
+
+      <div class="group">
+        <div class="group-title">Fixed</div>
+
+        <div class="entry">
+          <div class="entry-title">AI image blocking never worked on Firefox</div>
+          <div class="entry-body">
+            Turning the beta on did nothing on Firefox: no image was ever checked and none was
+            ever blurred. Firefox and Chrome run an extension's background code in two different
+            kinds of container, and the step that loads the image model only ever worked in
+            Chrome's — so on Firefox the model was never there to ask. Nothing looked wrong,
+            which is why this went unnoticed for so long: when the model is unavailable the
+            images are shown rather than left as blank holes, so a page with the filter on
+            looked exactly like a page with nothing to block. The model now loads on Firefox
+            too. Chrome and Edge were never affected.
+          </div>
+        </div>
+
+        <div class="entry">
+          <div class="entry-title">Firefox was matching against a shorter blocklist than Chrome</div>
+          <div class="entry-body">
+            The same underlying cause, with a quieter symptom. Three pieces of shared matching
+            logic never reached Firefox's background, and each had a smaller fallback it used
+            instead — so Firefox checked addresses against a 27-word list rather than the full
+            one, missed look-alike domains written in other alphabets, and quietly ignored the
+            path on a whitelist entry, meaning <em>allow this one section of a site</em> allowed
+            nothing at all. All three are in place now.
+          </div>
+        </div>
+
+        <div class="entry">
+          <div class="entry-title">"Unblock this website" whitelisted the extension instead of the site</div>
+          <div class="entry-body">
+            Used from a blocked page, the popup read the address of the tab it was open on — which
+            is the extension's own blocked page, not the site that was blocked. The entry it saved
+            matched nothing, so the whitelist appeared to accept it while the site stayed blocked,
+            with nothing to explain why. Reported in
+            <a href="https://github.com/codepurse/BlockNSFW/issues/26" target="_blank" rel="noopener">#26</a>
+            on Firefox, though the same path affected Chrome and Edge.
+          </div>
+        </div>
+
+        <div class="entry">
+          <div class="entry-title">DuckDuckGo's Images and Videos tabs were not filtered at all</div>
+          <div class="entry-body">
+            A blocked word stopped the matching web results, then the same search on the Images or
+            Videos tab showed everything. The filter was looking for parts of DuckDuckGo's old
+            layout that no longer exist, so no result was ever examined. Both tabs are filtered
+            now, along with the rows of thumbnails that appear on the All tab. A blocked image
+            takes its whole tile with it rather than leaving the caption behind.
+          </div>
+        </div>
+
+        <div class="entry">
+          <div class="entry-title">A search result that arrived late was never filtered</div>
+          <div class="entry-body">
+            DuckDuckGo builds its results in the browser, row by row, so a row exists for a moment
+            with its title still missing — and it was being marked as already inspected on the way
+            past. Whichever row happened to be slowest was the one that survived. Rows are now
+            re-examined until they are actually readable.
+          </div>
+        </div>
+
+        <div class="entry">
+          <div class="entry-title">Your own blocked words were ignored in image search</div>
+          <div class="entry-body">
+            In image results, a word from your own list only counted when the image filter was set
+            to Strict; on Moderate or Lenient the built-in list was consulted and yours was not. A
+            word you typed yourself is an instruction rather than a guess, so it now applies at
+            every level.
+          </div>
+        </div>
+
+        <div class="entry">
+          <div class="entry-title">"Go Back" on the blocked page did nothing</div>
+          <div class="entry-body">
+            The button's click was being discarded outright by the extension's own security policy.
+            It works now — and when the blocked page is the only thing in a tab's history, with
+            nothing to go back to, it leaves the page instead of sitting there.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===================== 1.7.4 ===================== -->
+    <div class="release">
+      <div class="release-head">
+        <span class="release-version">1.7.4</span>
+        <span class="release-date">17 August 2026</span>
+      </div>
+
+      <div class="group">
+        <div class="group-title">New</div>
+
+        <div class="entry">
+          <div class="entry-title">Take BlockNSFW beyond this browser</div>
+          <div class="entry-body">
+            <strong>Android</strong> blocks adult sites across your whole phone, not just one
+            browser —
+            <a href="https://play.google.com/store/apps/details?id=com.blocknsfw.android" target="_blank" rel="noopener">get it on Google Play</a>.
+            <strong>Desktop Guard</strong> (beta) is a native companion app for Windows and Linux
+            that force-installs the extension so the browser's <em>Remove</em> and <em>Disable</em>
+            buttons are greyed out, and re-applies protection if anything tampers with it.
+            Uninstalling needs a password held by a parent or accountability partner —
+            <a href="https://github.com/codepurse/extension-guard" target="_blank" rel="noopener">learn more</a>.
+          </div>
+        </div>
+
+        <div class="entry">
+          <div class="entry-title">Access Code</div>
+          <div class="entry-body">
+            An optional second lock on top of your PIN. A random code appears and you have to
+            retype it by hand — copy and paste are switched off, and a typo gives you a fresh code.
+            Choose 32, 64, 128 or 256 characters. By default it only guards the big moments
+            (turning blocking off, clearing your PIN), so day-to-day edits stay quick; there's a
+            switch to require it for every change. It isn't about secrecy — it's about giving
+            yourself a minute to think. Under Security.
+          </div>
+        </div>
+
+        <div class="entry">
+          <div class="entry-title">Sites you block are now blocked as a source of images</div>
+          <div class="entry-body">
+            Adding a site to your blocklist stopped you visiting it, but its pictures still turned
+            up everywhere else, most obviously sitting in image search results. Blocking a site now
+            hides its results in image search and hides its images wherever they're embedded or
+            hotlinked, and the picture itself is refused before it downloads. Requested by a user.
+          </div>
+        </div>
+
+        <div class="entry">
+          <div class="entry-title">Blocked sites can be patterns too</div>
+          <div class="entry-body">
+            Alongside wildcards, the blocklist now takes a regular expression for the address,
+            <span class="code">/example\.(net|org)/</span>, or for the page title,
+            <span class="code">title/Example Domain/</span>. Same syntax as uBlacklist, so lists you
+            already keep will work. Address patterns block before the page loads; title patterns
+            catch it just after.
+          </div>
+        </div>
+
+        <div class="entry">
+          <div class="entry-title">Blocked words can be patterns</div>
+          <div class="entry-body">
+            Instead of listing every spelling of a word, write one line that covers them all. Wrap
+            it in slashes to make it a pattern: <span class="code">/p[o0]rn/</span> catches "porn"
+            and "p0rn", and <span class="code">/escort(s|ing)?/</span> catches "escort", "escorts"
+            and "escorting". Plain words still work exactly as before. Patterns are checked when you
+            save, so a mistake tells you what's wrong instead of quietly failing, and one slow
+            enough to freeze pages is refused.
+          </div>
+        </div>
+
+        <div class="entry">
+          <div class="entry-title">Import and export your lists</div>
+          <div class="entry-body">
+            Your blocklist, blocked words and trusted sites now have Import and Export buttons.
+            Export saves a file you can keep as a backup or open in a spreadsheet; import accepts
+            .csv or .txt and adds to what you already have rather than replacing it. Imported
+            entries appear in the box first, so you can look them over before hitting Save.
+          </div>
+        </div>
+
+        <div class="entry">
+          <div class="entry-title">Pages no longer freeze while loading</div>
+          <div class="entry-body">
+            On Firefox especially, opening a page could stall for about a second while the extension
+            got itself ready, which felt like the browser had locked up. That pause is gone: on the
+            same test page the longest frozen moment dropped from roughly 1.2 seconds to under a
+            twentieth of a second. The same fix applies to Chrome, and nothing about what gets
+            blocked has changed. Contributed by
+            <a href="https://github.com/oathkeeper-dev" target="_blank" rel="noopener">oathkeeper-dev</a>.
+          </div>
+        </div>
+      </div>
+
+      <div class="group">
+        <div class="group-title">Fixed</div>
+
+        <div class="entry">
+          <div class="entry-title">Names like "Jerome" are no longer blocked</div>
+          <div class="entry-body">
+            An adult site name buried inside an ordinary word was being treated as a match, so a
+            news page about Jerome Powell was blocked outright and searching for the name blocked
+            the results. Site names now have to stand on their own to count.
+          </div>
+        </div>
+
+        <div class="entry">
+          <div class="entry-title">A search engine's own safety filter no longer looks like adult content</div>
+          <div class="entry-body">
+            On 4get.ca, switching its filter on puts the word "nsfw" in the address, and the page
+            was blocked for saying it while doing exactly what you'd want. Settings in a web address
+            are now read as switches rather than as content.
+          </div>
+        </div>
+
+        <div class="entry">
+          <div class="entry-title">Your settings are harder to unlock in a weak moment</div>
+          <div class="entry-body">
+            Some settings could previously be changed without your PIN, including deleting your own
+            blocked words, turning off DNS Protection, and lowering AI strictness. Everything that
+            weakens protection now asks for your PIN first. Adding words, tightening settings and
+            turning protections on stay instant, as they should.
+          </div>
+        </div>
+
+        <div class="entry">
+          <div class="entry-title">Setting up is quicker and uses less data</div>
+          <div class="entry-body">
+            A fresh install downloaded the whole blocklist straight away, even though the very same
+            list already ships inside the extension. It now starts from the copy it already has and
+            only fetches an update when one is genuinely due, so setup finishes sooner and costs you
+            several megabytes less.
+          </div>
+        </div>
+
+        <div class="entry">
+          <div class="entry-title">Tidier lists</div>
+          <div class="entry-body">
+            Your blocklist, blocked words and trusted sites are now sorted A–Z and de-duplicated
+            when you save, so pasting in a long list no longer leaves a mess.
+          </div>
+        </div>
+
+        <div class="entry">
+          <div class="entry-title">AI Text Protection now asks for a second opinion</div>
+          <div class="entry-body">
+            The text AI was flagging ordinary sites such as YouTube, so it no longer blocks a page
+            on its own. A page is blocked only when both its text and an image on it look adult,
+            which means the AI Image Blocker needs to be on for this to do anything. It catches less
+            for now; the model is being retrained.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <p class="note">
+      Older releases and the full technical history live in
+      <a href="https://github.com/codepurse/BlockNSFW/blob/main/CHANGELOG.md" target="_blank" rel="noopener">CHANGELOG.md</a>.
+    </p>
+
+  </div>
+</body>
+</html>

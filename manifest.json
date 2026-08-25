@@ -43,6 +43,7 @@
         "shared/url-scan.js",
         "shared/token-match.js",
         "shared/keyword-pattern.js",
+        "shared/ruleset.js",
         "shared/text-classifier-core.js",
         "ai-image-blocker-core.js",
         "ai-image-blocker.js",

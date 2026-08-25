@@ -426,6 +426,14 @@
       font-weight: 400;
     }
 
+    /* Same weight as a switch's label, for a standalone control that needs one. */
+    .field-label {
+      display: block;
+      font-weight: 500;
+      color: var(--foreground);
+      font-size: 0.9rem;
+    }
+
     .switch {
       position: relative;
       display: inline-block;
@@ -1354,6 +1362,20 @@
       flex-shrink: 0;
     }
 
+    /* Version stamp beside "What's New" — filled from the manifest so the
+       heading cannot claim a release the notes below it are not about. */
+    .whats-new-version {
+      /* A flex item of .card-title, so the parent's gap does the spacing and no
+         margin is needed here. */
+      font-size: 0.75rem;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      color: var(--foreground-dim);
+    }
+    .whats-new-version:empty {
+      display: none;
+    }
+
     /* "BETA" badge — amber to signal experimental */
     .badge-beta {
       display: inline-flex;
@@ -1892,6 +1914,7 @@
       </nav>
       <div class="sidebar-footer">
         <a href="stats.html" class="sidebar-action"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg></span><span>Statistics</span></a>
+        <a href="changelog.html" class="sidebar-action"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="13" y2="17"/></svg></span><span>Changelog</span></a>
         <a href="https://github.com/codepurse/BlockNSFW" target="_blank" rel="noopener noreferrer" class="sidebar-action"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .5C5.65.5.5 5.65.5 12c0 5.08 3.29 9.39 7.86 10.92.58.1.79-.25.79-.56 0-.28-.01-1.02-.02-2-3.2.7-3.88-1.54-3.88-1.54-.52-1.32-1.27-1.67-1.27-1.67-1.04-.71.08-.7.08-.7 1.15.08 1.76 1.18 1.76 1.18 1.02 1.75 2.68 1.24 3.34.95.1-.74.4-1.24.73-1.53-2.55-.29-5.24-1.28-5.24-5.69 0-1.26.45-2.29 1.19-3.1-.12-.29-.52-1.47.11-3.06 0 0 .97-.31 3.18 1.18a11 11 0 0 1 5.79 0c2.21-1.49 3.18-1.18 3.18-1.18.63 1.59.23 2.77.11 3.06.74.81 1.19 1.84 1.19 3.1 0 4.42-2.69 5.39-5.25 5.68.41.36.78 1.05.78 2.12 0 1.53-.01 2.76-.01 3.13 0 .31.21.67.8.56 4.57-1.53 7.85-5.84 7.85-10.92C23.5 5.65 18.35.5 12 .5z"/></svg></span><span>GitHub</span></a>
         <a href="https://buymeacoffee.com/monolab.co" target="_blank" class="sidebar-action sidebar-action-coffee"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 8h1a4 4 0 0 1 0 8h-1"/><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/><line x1="6" y1="2" x2="6" y2="4"/><line x1="10" y1="2" x2="10" y2="4"/><line x1="14" y1="2" x2="14" y2="4"/></svg></span><span>Buy Me a Coffee</span></a>
       </div>
@@ -1911,6 +1934,26 @@
         <div class="update-banner-actions">
           <a href="#" target="_blank" rel="noopener noreferrer" class="btn-update" id="update-banner-link">Update now</a>
           <button class="btn-dismiss" id="update-banner-dismiss" title="Dismiss" aria-label="Dismiss">&times;</button>
+        </div>
+      </div>
+
+      <!-- Pin Prompt Banner (shown when the toolbar icon is not pinned, so the
+           badge count is hidden behind Chrome's puzzle-piece menu) -->
+      <div class="info-banner hidden" id="pin-banner" role="status">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <line x1="12" y1="17" x2="12" y2="22"></line>
+          <path d="M5 17h14l-1.5-4.5V4H6.5v8.5L5 17z"></path>
+        </svg>
+        <div class="info-banner-text">
+          <div class="info-banner-title">Pin BlockNSFW to your toolbar</div>
+          <div class="info-banner-sub">
+            Click the puzzle-piece icon in your browser toolbar, then the pin next to BlockNSFW.
+            Unpinned, the icon is hidden — along with the count of what was blocked, and the
+            quickest route to unblocking a site.
+          </div>
+        </div>
+        <div class="info-banner-actions">
+          <button class="btn-dismiss" id="pin-banner-dismiss" title="Dismiss" aria-label="Dismiss">&times;</button>
         </div>
       </div>
 
@@ -1957,7 +2000,10 @@
 
     <div class="card fade-in" id="whats-new-card">
       <div class="card-header">
-        <h2 class="card-title">What’s New</h2>
+        <h2 class="card-title">What’s New <span id="whats-new-version" class="whats-new-version"></span></h2>
+        <p class="card-description" style="margin-bottom: 0.75rem;">
+          The headlines from this release. <a href="changelog.html" target="_blank" rel="noopener" style="color: var(--primary-hover); font-weight: 600; text-decoration: none;">📜 See the full changelog →</a>
+        </p>
         <div class="card-description">
           <div class="dg-callout">
             <div class="dg-callout-head">
@@ -1969,18 +2015,10 @@
             <p class="dg-callout-text" style="margin-top: 0.5rem;"><strong>Desktop Guard <span class="badge-beta">Beta</span> —</strong> a native companion app for Windows &amp; Linux that force-installs the extension so the browser's <em>Remove</em> and <em>Disable</em> buttons are greyed out, and re-applies protection if anything tampers with it. Uninstalling needs a password held by a parent or accountability partner. <a class="dg-callout-link" href="https://github.com/codepurse/extension-guard" target="_blank" rel="noopener">Learn more →</a></p>
           </div>
           <ul style="margin: 0; padding-left: 1.1rem">
-            <li><strong>Access Code <span class="badge-new">New</span></strong> — An optional second lock on top of your PIN. A random code appears and you have to retype it by hand — copy and paste are switched off, and a typo gives you a fresh code. Choose 32, 64, 128 or 256 characters. By default it only guards the big moments (turning blocking off, clearing your PIN), so day-to-day edits stay quick; there's a switch to require it for every change if you want that. It isn't about secrecy — it's about giving yourself a minute to think. Find it under Security.</li>
-            <li><strong>Sites you block are now blocked as a source of images <span class="badge-new">New</span></strong> — Adding a site to your blocklist stopped you visiting it, but its pictures still turned up everywhere else, most obviously sitting in image search results. Blocking a site now hides its results in image search and hides its images wherever they're embedded or hotlinked, and the picture itself is refused before it downloads. Requested by a user.</li>
-            <li><strong>Names like "Jerome" are no longer blocked</strong> — An adult site name buried inside an ordinary word was being treated as a match, so a news page about Jerome Powell was blocked outright and searching for the name blocked the results. Site names now have to stand on their own to count.</li>
-            <li><strong>A search engine's own safety filter no longer looks like adult content</strong> — On 4get.ca, switching its filter on puts the word "nsfw" in the address, and the page was blocked for saying it while doing exactly what you'd want. Settings in a web address are now read as switches rather than as content.</li>
-            <li><strong>Pages no longer freeze while loading <span class="badge-new">New</span></strong> — On Firefox especially, opening a page could stall for about a second while the extension got itself ready, which felt like the browser had locked up. That pause is gone: on the same test page the longest frozen moment dropped from roughly 1.2 seconds to under a twentieth of a second. The same fix applies to Chrome. Nothing about what gets blocked has changed. Contributed by <a href="https://github.com/oathkeeper-dev" target="_blank" rel="noopener">oathkeeper-dev</a>.</li>
-            <li><strong>Setting up is quicker and uses less data</strong> — A fresh install downloaded the whole blocklist straight away, even though the very same list already ships inside the extension. It now starts from the copy it already has and only fetches an update when one is genuinely due, so setup finishes sooner and costs you several megabytes less.</li>
-            <li><strong>Your settings are harder to unlock in a weak moment</strong> — Some settings could previously be changed without your PIN, including deleting your own blocked words, turning off DNS Protection, and lowering AI strictness. Everything that weakens protection now asks for your PIN first. Adding words, tightening settings and turning protections on stay instant, as they should.</li>
-            <li><strong>Blocked sites can be patterns too <span class="badge-new">New</span></strong> — Alongside wildcards, the blocklist now takes a regular expression for the address, <code class="code">/example\.(net|org)/</code>, or for the page title, <code class="code">title/Example Domain/</code>. Same syntax as uBlacklist, so lists you already keep will work. Address patterns block before the page loads; title patterns catch it just after.</li>
-            <li><strong>Blocked words can be patterns <span class="badge-new">New</span></strong> — Instead of listing every spelling of a word, you can write one line that covers them all. Wrap it in slashes to make it a pattern: <code class="code">/p[o0]rn/</code> catches "porn" and "p0rn", and <code class="code">/escort(s|ing)?/</code> catches "escort", "escorts" and "escorting". Plain words still work exactly as before. Patterns are checked when you save, so a mistake tells you what's wrong instead of quietly failing, and one slow enough to freeze pages is refused.</li>
-            <li><strong>Import and export your lists <span class="badge-new">New</span></strong> — Your blocklist, blocked words and trusted sites now have Import and Export buttons. Export saves a file you can keep as a backup or open in a spreadsheet; import accepts .csv or .txt and adds to what you already have rather than replacing it. Imported entries appear in the box first, so you can look them over before hitting Save.</li>
-            <li><strong>Tidier lists</strong> — Your blocklist, blocked words and trusted sites are now sorted A-Z and de-duplicated when you save, so pasting in a long list no longer leaves a mess.</li>
-            <li><strong>AI Text Protection now asks for a second opinion</strong> — The text AI was flagging ordinary sites such as YouTube, so it no longer blocks a page on its own. A page is blocked only when both its text and an image on it look adult, which means the AI Image Blocker needs to be on for this to do anything. It catches less for now; the model is being retrained.</li>
+            <li><strong>Follow blocklists other people maintain <span class="badge-new">New</span></strong> — Give BlockNSFW the address of a ruleset file and it downloads the list, blocks everything on it alongside your own entries, and checks for changes once a day. uBlacklist ruleset files work as they are, so lists you already follow can be pasted straight in. A subscribed list can only <strong>add</strong> blocks — it can never whitelist a site or change a setting. Settings → Customization → Subscribed Lists. Requested by a user.</li>
+            <li><strong>Blocked search results are removed, not papered over</strong> — A blocked result used to be replaced by a full-width card with a BLOCKED badge, which became a wall once image and video results were filtered too. Blocked results are now simply taken out, and one line above the results accounts for them however many there were. The old cards are still available under Settings → Customization → Blocked Search Results.</li>
+            <li><strong>A count of what was blocked <span class="badge-new">New</span></strong> — Nothing outside the page ever showed the extension was working. The toolbar icon now carries the number of things blocked in that tab, cleared when you navigate. If you would rather have it in the page, <em>Where To Show The Count</em> offers a small floating pill in the corner instead.</li>
+            <li><strong>Fixes</strong> — DuckDuckGo’s Images and Videos tabs are filtered at last, “Unblock this website” now unblocks the site rather than the extension’s own blocked page, your own blocked words apply in image search at every filter level, and Go Back works. Notes are allowed in your lists too: a line starting with # or ! is kept as a comment rather than treated as an entry.</li>
           </ul>
         </div>
       </div>
@@ -2224,10 +2262,10 @@
     <div class="card fade-in">
       <div class="card-header">
         <h2 class="card-title">Custom Blocked Page</h2>
-        <p class="card-description">Choose what page to display when content is blocked. Use the default blocked page, specify a custom URL, or show your own HTML.</p>
+        <p class="card-description">Choose what page to display when content is blocked. Use the built-in page, specify a custom URL, or show your own HTML.</p>
       </div>
-      
-      <div class="form-group">
+
+      <div class="form-group" style="margin-top: 1rem;">
         <div class="switch-container">
           <div class="switch-label">
             <span class="label">Use Custom Blocked Page</span>
@@ -2286,17 +2324,60 @@
 
     <div class="card fade-in">
       <div class="card-header">
+        <h2 class="card-title">Blocked Search Results</h2>
+        <p class="card-description">Choose what a blocked result leaves behind on a search page.</p>
+      </div>
+
+      <div class="form-group">
+        <label class="field-label" for="search-result-treatment">Web Results</label>
+        <select class="input" id="search-result-treatment" style="margin-top: 0.5rem;">
+          <option value="hide">Hide completely</option>
+          <option value="overlay">Show a notice in place</option>
+        </select>
+        <div class="pin-hint" id="search-result-treatment-detail" style="margin-top: 0.5rem;">
+          Blocked results are removed. A summary line above the results says how many.
+        </div>
+      </div>
+
+      <div class="form-group" style="margin-top: 1rem;">
+        <div class="switch-container">
+          <div class="switch-label">
+            <span class="label">Show Summary Line</span>
+            <span class="description">Display "N results blocked by BlockNSFW" above search results</span>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="search-summary-enabled" />
+            <span class="slider"></span>
+          </label>
+        </div>
+      </div>
+
+      <div class="form-group" style="margin-top: 1rem;">
+        <label class="field-label" for="block-count-display">Where To Show The Count</label>
+        <select class="input" id="block-count-display" style="margin-top: 0.5rem;">
+          <option value="badge">On the toolbar icon</option>
+          <option value="floating">Floating button on the page</option>
+        </select>
+        <div class="pin-hint" id="block-count-display-detail" style="margin-top: 0.5rem;">
+          A number on the extension's toolbar icon counts what was blocked in each tab.
+        </div>
+      </div>
+    </div>
+
+    <div class="card fade-in">
+      <div class="card-header">
         <h2 class="card-title">Trusted Image Domains</h2>
-        <p class="card-description">Images from these domains will never be blocked, even if they contain keywords. Perfect for legitimate platforms.</p>
+        <p class="card-description">Images from these domains will never be blocked, even if they contain keywords. Perfect for legitimate platforms.
+          A line starting with <code class="code">#</code> or <code class="code">!</code> is a note, ignored when matching.</p>
       </div>
       <textarea class="textarea" id="trusted-domains" placeholder="Enter trusted domains, one per line:
-steampowered.com
+# === Shopping ===
 amazon.com
+steampowered.com
+# === Video ===
 youtube.com
 twitch.tv
-reddit.com
-netflix.com
-disney.com"></textarea>
+netflix.com"></textarea>
       <div class="button-group">
         <button class="button button-primary" id="save-trusted">Save Trusted Domains</button>
         <button class="button" id="reset-trusted">Reset to Defaults</button>
@@ -2315,14 +2396,18 @@ disney.com"></textarea>
           line can cover many spellings: <code class="code">/p[o0]rn/</code> catches both "porn"
           and "p0rn", and <code class="code">/escort(s|ing)?/</code> catches all three forms.
           Matching ignores capitals either way. Patterns are checked when you save, and one that
-          is invalid or slow enough to freeze pages is refused with the reason.
+          is invalid or slow enough to freeze pages is refused with the reason.<br>
+          <strong>Comments</strong> — a line starting with <code class="code">#</code> or
+          <code class="code">!</code> is a note, ignored when matching. To block a word that really
+          begins with one of those, put a backslash first: <code class="code">\#nsfw</code>.
         </p>
       </div>
       <textarea class="textarea" id="custom-keywords" placeholder="Add one word or phrase per line:
+# notes start with # or !
 keyword
 another phrase
 /p[o0]rn/
-/escort(s|ing)?/"></textarea>
+\#hashtag"></textarea>
       <div class="button-group">
         <button class="button button-primary" id="save-keywords">Save Words</button>
         <button class="button" id="reset-keywords">Reset to Defaults</button>
@@ -2345,10 +2430,14 @@ another phrase
           is refused with the reason. Title patterns are matched once the page loads, so the page
           appears briefly before it is blocked; address patterns block before it loads at all.
           A site you add here is also blocked as a source of images — its results are hidden in
-          image search, and its pictures are blocked wherever they appear on other sites.
+          image search, and its pictures are blocked wherever they appear on other sites.<br>
+          <strong>Comments</strong> — a line starting with <code class="code">#</code> or
+          <code class="code">!</code> is a note, ignored when matching. Notes stay with the entry
+          written below them when the list is sorted, so they work as section headings.
         </p>
       </div>
       <textarea class="textarea" id="patterns" placeholder="Add one pattern per line:
+# === Section heading ===
 badexample.com
 *.inappropriate.net
 another-site.org/adult/*
@@ -2361,6 +2450,42 @@ title/Example Domain/"></textarea>
         <button class="button" id="export-patterns">Export</button>
         <button class="button button-destructive" id="clear">Clear All</button>
         <input type="file" id="import-patterns-file" accept=".csv,.txt,text/csv,text/plain" hidden>
+      </div>
+    </div>
+
+    <div class="card fade-in">
+      <div class="card-header">
+        <h2 class="card-title">Subscribed Lists</h2>
+        <p class="card-description">
+          Follow a blocklist someone else maintains. Give it the address of a ruleset file and
+          BlockNSFW downloads it, applies it alongside your own entries, and checks for changes
+          once a day. uBlacklist ruleset files work as they are, so addresses you already follow
+          in that extension can be pasted straight in.<br>
+          A subscribed list can only <strong>add</strong> blocks. It can never whitelist a site,
+          unblock anything, or change your settings.
+        </p>
+      </div>
+
+      <div class="form-group">
+        <div class="input-group">
+          <input type="url" class="input" id="subscription-url"
+                 placeholder="https://example.com/list.txt"
+                 autocomplete="off" />
+          <button class="button button-primary" id="add-subscription">Subscribe</button>
+        </div>
+        <div class="pin-hint" id="subscription-hint" style="margin-top: 0.5rem;">
+          Paste the address of the raw file, not the page it is displayed on.
+        </div>
+      </div>
+
+      <div class="form-group">
+        <div id="subscription-list" style="max-height: 320px; overflow-y: auto;">
+          <div class="whitelist-empty">No subscriptions yet.</div>
+        </div>
+      </div>
+
+      <div class="button-group">
+        <button class="button" id="refresh-subscriptions">Update Now</button>
       </div>
     </div>
 
@@ -2582,8 +2707,18 @@ title/Example Domain/"></textarea>
       <section class="section" id="section-about">
         <div class="section-head">
           <h2 class="section-title">About</h2>
-          <p class="section-desc">The source code behind BlockNSFW.</p>
+          <p class="section-desc">Your version, and the source code behind BlockNSFW.</p>
         </div>
+
+    <div class="card fade-in">
+      <div class="card-header">
+        <h2 class="card-title">📜 Version</h2>
+        <p class="card-description">You are running <strong id="about-version">—</strong>. See what changed in this version and the ones before it.</p>
+      </div>
+      <div class="button-group">
+        <a class="button button-primary" href="changelog.html" style="text-decoration: none;">View Changelog</a>
+      </div>
+    </div>
 
     <div class="card fade-in" id="open-source-card">
       <div class="card-header">
@@ -2678,6 +2813,8 @@ title/Example Domain/"></textarea>
   <script src="appwrite-client.js"></script>
   <script src="shared/validate-domain.js"></script>
   <script src="shared/keyword-pattern.js"></script>
+  <!-- Loaded for its template registry only, so the style picker below and the
+       blocked page itself can never drift out of sync. -->
   <script src="options.js"></script>
   <script>
     (function () {

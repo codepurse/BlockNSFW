@@ -37,6 +37,7 @@ $RuntimeFiles   = @(
     "options.js",
     "blocked.html",
     "blocked.js",
+    "changelog.html",
     "onboarding.html",
     "onboarding.js",
     "audit.html",
