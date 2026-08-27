@@ -163,7 +163,26 @@ All notable project changes should be documented here going forward.
   Changing either setting re-does the results already on screen, so the picker
   does not appear to do nothing until the tab is reloaded.
 
+### Changed
+- **Notes are dimmed in the list boxes.** A `#` or `!` line now reads in grey
+  while the entries stay bright, so a list with headings in it can be scanned at
+  a glance instead of being one wall of identical text. Nothing about what gets
+  saved or matched changed — a textarea cannot colour one line differently from
+  another, so the box is drawn in two layers, with the text painted underneath
+  and the real textarea kept on top for typing, selection, undo and spellcheck.
+  Suggested by Maksim.
+
 ### Fixed
+- **Sorting filed `/regex/` entries under their slash.** Saving sorts a list
+  A–Z, and a pattern entry was compared on its opening delimiter rather than on
+  the word inside it, so every pattern clumped at the top of the list. Notes are
+  attached to the entry written beneath them and travel with it, so a pattern
+  overtaking that entry dragged the whole block down — which is how notes
+  written at the top of a list ended up underneath it. (The locale order of the
+  three markers involved is `!`, then `/`, then `#`, which is why the result
+  looked arbitrary rather than merely wrong.) Entries are now filed under their
+  first letter or digit, so `/apricots?/` sorts beside `apricots` instead of
+  above the entire list. Reported by Maksim.
 - **DuckDuckGo's Images and Videos tabs were not filtered at all.** A blocked
   word stopped the matching web results, then the same search on the Images or
   Videos tab showed everything. The selectors the filter used —

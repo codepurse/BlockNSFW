@@ -920,6 +920,24 @@ function isCommentLine(entry) {
  * meant to be there, and trailing comments with no entry after them stay at the
  * end where they were written.
  */
+/**
+ * What an entry is filed under. Leading punctuation is skipped, so `/apricots?/`
+ * files under "a" beside the literal it stands in for rather than under "/".
+ *
+ * Sorting on the raw text put every `/regex/` entry in a clump above the whole
+ * list — above the notes written at the top of it, because a note travels with
+ * the entry beneath it and that entry had been overtaken. The locale order for
+ * the three markers involved is `!` then `/` then `#`, which is why the result
+ * read as arbitrary.
+ */
+function entrySortKey(entry) {
+  const value = String(entry || '').trim();
+  const stripped = value.replace(/^[^\p{L}\p{N}]+/u, '');
+  // An entry made only of punctuation keeps its own text, so it still sorts
+  // somewhere predictable instead of collapsing to an empty key.
+  return stripped || value;
+}
+
 function serializePatterns(text) {
   const byKey = new Map();
   const blocks = [];
@@ -953,7 +971,16 @@ function serializePatterns(text) {
     pendingComments = [];
   }
 
-  blocks.sort((a, b) => a.entry.localeCompare(b.entry, undefined, { sensitivity: 'base' }));
+  blocks.sort((a, b) => {
+    const byName = entrySortKey(a.entry).localeCompare(
+      entrySortKey(b.entry), undefined, { sensitivity: 'base' }
+    );
+    // `/porn/` and `porn` file under the same name; compare the raw text so the
+    // order of the pair is settled rather than left to the sort's stability.
+    return byName !== 0
+      ? byName
+      : a.entry.localeCompare(b.entry, undefined, { sensitivity: 'base' });
+  });
 
   const out = [];
   for (const block of blocks) {
@@ -973,6 +1000,68 @@ function countRealEntries(list) {
 
 function deserializePatterns(list) {
   return (list || []).join('\n');
+}
+
+// --- note lines dimmed inside the list boxes --------------------------------
+// A textarea paints all of its text in one colour, so the notes and the entries
+// cannot be told apart at a glance. Each list box is therefore two layers: a
+// <pre> mirror that paints the text with the notes dimmed, and the textarea
+// itself on top with transparent text, still doing the typing, selecting,
+// undo and spellcheck it always did. Nothing here changes what gets saved.
+
+/** Repaint one mirror. Text goes in as text, never as markup. */
+function paintListMirror(textarea, mirror) {
+  const lines = String(textarea.value || '').split('\n');
+  const frag = document.createDocumentFragment();
+
+  lines.forEach((line, index) => {
+    const span = document.createElement('span');
+    if (isCommentLine(line)) span.className = 'is-note';
+    span.textContent = line;
+    frag.appendChild(span);
+    // Keep the line breaks between the spans so the mirror wraps and grows
+    // exactly as the textarea does.
+    if (index < lines.length - 1) frag.appendChild(document.createTextNode('\n'));
+  });
+
+  mirror.replaceChildren(frag);
+  mirror.scrollTop = textarea.scrollTop;
+  mirror.scrollLeft = textarea.scrollLeft;
+}
+
+function setupListSyntaxHighlighting() {
+  const boxes = document.querySelectorAll('.textarea-syntax > .textarea');
+
+  boxes.forEach((textarea) => {
+    const mirror = textarea.parentElement.querySelector('.textarea-syntax__mirror');
+    if (!mirror) return;
+
+    const paint = () => paintListMirror(textarea, mirror);
+
+    textarea.addEventListener('input', paint);
+    textarea.addEventListener('scroll', () => {
+      mirror.scrollTop = textarea.scrollTop;
+      mirror.scrollLeft = textarea.scrollLeft;
+    });
+
+    // Loading settings, importing a file and resetting all assign to `.value`,
+    // which fires no event. Rather than have every one of those call sites
+    // remember to repaint — and a future one forget — the setter is wrapped on
+    // this element so any assignment repaints itself.
+    const descriptor = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value');
+    if (descriptor && descriptor.get && descriptor.set) {
+      Object.defineProperty(textarea, 'value', {
+        configurable: true,
+        get() { return descriptor.get.call(this); },
+        set(next) {
+          descriptor.set.call(this, next);
+          paint();
+        }
+      });
+    }
+
+    paint();
+  });
 }
 
 // Blocked words may be `/regex/` entries. A broken or pathologically slow one
@@ -1881,6 +1970,8 @@ function requestAnnouncement() {
 async function init() {
   // Before the first render, so the boxes never show an unmigrated list.
   await migrateCommentSyntaxOnce();
+  // Before render() too, so the first list painted is already highlighted.
+  setupListSyntaxHighlighting();
   await render();
 
   // Update-available banner
