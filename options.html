@@ -2480,8 +2480,13 @@ another phrase
       <div class="card-header">
         <h2 class="card-title">Custom Blocklist</h2>
         <p class="card-description">
-          Add one entry per line to block sites. Three forms are accepted:<br>
+          Add one entry per line to block sites. Four forms are accepted:<br>
           <strong>Wildcards</strong> — <code class="code">pornhub.com</code>, <code class="code">*.inappropriate.net</code>, <code class="code">example.com/adult/*</code><br>
+          <strong>A whole top-level domain</strong> — <code class="code">.xyz</code> or
+          <code class="code">xyz</code> blocks every site ending in it. Some TLDs are used almost
+          entirely for spam and malware, and this covers all of them at once — which also makes it
+          the broadest entry you can write, so check it is really what you want. Images from a
+          blocked TLD are hidden page-side rather than by a network rule.<br>
           <strong>Regular expression on the address</strong> — <code class="code">/example\.(net|org)/</code><br>
           <strong>Regular expression on the page title</strong> — <code class="code">title/Example Domain/</code><br>
           Patterns are checked when you save, and one that is invalid or slow enough to freeze pages
@@ -2500,6 +2505,7 @@ another phrase
 badexample.com
 *.inappropriate.net
 another-site.org/adult/*
+.xyz
 /example\.(net|org)/
 title/Example Domain/"></textarea>
         <pre class="textarea-syntax__mirror" aria-hidden="true"></pre>

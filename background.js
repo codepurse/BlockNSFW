@@ -1273,8 +1273,13 @@ function buildHostPatterns(patterns) {
       // loading. Escaping the user's part alone fixes that.
       if (!/^https?:\/\//i.test(p)) {
         const slash = p.indexOf('/');
-        const hostPart = slash >= 0 ? p.slice(0, slash) : p;
+        // A leading dot (".xyz", ".example.com") names the same thing as the
+        // bare form; left in, it compiled to a pattern demanding a literal
+        // double dot and so matched nothing. The content script applies the
+        // same rule, and the two layers have to agree.
+        const hostPart = (slash >= 0 ? p.slice(0, slash) : p).replace(/^\.+/, '');
         const pathPart = slash >= 0 ? p.slice(slash) : '';
+        if (!hostPart) continue;
         // A bare host covers its subdomains, matching how the content script
         // reads the same entry (host === base || host endsWith '.' + base).
         // The two layers must agree or a site blocks on one and not the other.
@@ -2550,7 +2555,11 @@ function buildSafeSearchRules() {
 function customPatternsToImageBlockDomains(patterns, whitelistedDomains = []) {
   if (!Array.isArray(patterns) || patterns.length === 0) return [];
 
-  const clean = (value) => String(value || '').trim().toLowerCase().replace(/\.+$/, '');
+  // A leading dot is stripped along with a trailing one: ".xyz" is the same
+  // entry as "xyz", and left alone it reached requestDomains as the literal
+  // ".xyz" — not a domain, and enough to invalidate the single rule every other
+  // blocked host shares.
+  const clean = (value) => String(value || '').trim().toLowerCase().replace(/^\.+/, '').replace(/\.+$/, '');
   const excluded = new Set(whitelistedDomains.map(clean).filter(Boolean));
   const domains = new Set();
 
@@ -2560,6 +2569,11 @@ function customPatternsToImageBlockDomains(patterns, whitelistedDomains = []) {
 
     const host = pattern.startsWith('*.') ? pattern.slice(2) : pattern;
     if (!host || host.includes('*')) continue;
+    // A whole-TLD entry is deliberately excluded here. requestDomains takes
+    // domains, not suffixes, and a rule blocking every image request under a
+    // TLD is far broader than a network-level rule should be. The content
+    // script still hides those images page-side, which is where the user can
+    // see what happened.
     if (!host.includes('.') || !/^[a-z0-9.-]+$/.test(host)) continue;
     if (excluded.has(host)) continue;
 

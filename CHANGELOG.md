@@ -163,6 +163,24 @@ All notable project changes should be documented here going forward.
   Changing either setting re-does the results already on screen, so the picker
   does not appear to do nothing until the tab is reloaded.
 
+### Added
+- **Block a whole top-level domain.** `.xyz` on its own line blocks every site
+  ending in it. Some TLDs are used almost entirely for spam and malware, and
+  listing their sites one at a time is hopeless. It is the broadest entry the
+  blocklist accepts, so the settings page says so plainly next to it.
+
+  Most of this already worked and nobody could reach it: a bare host entry
+  covers its subdomains, and `xyz` is only the shortest case of that. But
+  `.xyz` — the form anyone actually writes — matched nothing, on both the
+  navigation and the in-page path, and said nothing about it. A leading dot is
+  now stripped wherever a blocklist host is read, so `.xyz` and `xyz` are the
+  same entry, and `.example.com` works as well as `example.com`. Requested by
+  Maksim.
+
+  Images from a blocked TLD are hidden page-side rather than by a network rule.
+  The network rule takes domains, not suffixes, and blocking every image request
+  under a TLD is broader than a rule at that level should be.
+
 ### Changed
 - **Notes are dimmed in the list boxes.** A `#` or `!` line now reads in grey
   while the entries stay bright, so a list with headings in it can be scanned at
@@ -173,6 +191,13 @@ All notable project changes should be documented here going forward.
   Suggested by Maksim.
 
 ### Fixed
+- **A blocklist entry written with a leading dot reached the image rule
+  verbatim.** `.xyz` passed the domain check that guards the image-blocking
+  rule, so the literal string `.xyz` was handed to the browser as a domain to
+  block requests from. It is not a domain, and one bad entry is enough to
+  invalidate the single rule that every other blocked host shares — so adding
+  `.xyz` to the list could stop image blocking working for the sites that were
+  blocking correctly before it.
 - **Sorting filed `/regex/` entries under their slash.** Saving sorts a list
   A–Z, and a pattern entry was compared on its opening delimiter rather than on
   the word inside it, so every pattern clumped at the top of the list. Notes are
