@@ -763,6 +763,45 @@
       box-shadow: 0 0 10px var(--primary-glow);
     }
 
+    /* Access code modal. The code is meant to be read and retyped, never
+       copied, so selection is disabled here as the first line of defence
+       (handlers in shared/access-code.js refuse copy/cut/paste as the second).
+       The 256-character option is seven-odd lines in a 320px popup, hence the
+       scroll cap rather than a modal that runs off the bottom. */
+    .access-code-display {
+      max-height: 132px;
+      overflow-y: auto;
+      padding: 8px 10px;
+      margin-bottom: 8px;
+      background: rgba(15, 23, 42, 0.6);
+      border: 1px solid var(--card-border);
+      border-radius: var(--radius-sm);
+      color: var(--foreground);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 11px;
+      line-height: 1.6;
+      word-break: break-all;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    /* Overrides .modal-field input's wide letter-spacing — at 256 characters
+       the code needs to stay readable and wrap normally. */
+    .access-code-input {
+      letter-spacing: normal !important;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 11px !important;
+    }
+
+    /* Its own class rather than .modal-note, which is right-aligned for the
+       duration modal's tip — this one reads as a hint under the input. */
+    .access-code-note {
+      margin-top: 8px;
+      font-size: 10px;
+      color: var(--foreground-muted);
+      line-height: 1.4;
+    }
+
     /* Duration Modal Specifics */
     .chip-group {
       display: flex;
@@ -992,6 +1031,26 @@
     </div>
   </div>
 
+  <!-- Access Code Modal -->
+  <div id="access-code-modal-overlay" class="modal-overlay hidden" aria-hidden="true">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="access-code-modal-title">
+      <div class="modal-title" id="access-code-modal-title">Access Code Required</div>
+      <div class="modal-desc" id="access-code-modal-desc">Type the code below exactly to continue.</div>
+      <div class="access-code-display" id="access-code-display"></div>
+      <div class="modal-field">
+        <input type="text" id="access-code-input" class="access-code-input"
+               autocomplete="off" autocorrect="off" autocapitalize="off"
+               spellcheck="false" placeholder="Type the code above" />
+      </div>
+      <div class="modal-error" id="access-code-error"></div>
+      <div class="modal-actions">
+        <button id="access-code-cancel" class="btn">Cancel</button>
+        <button id="access-code-ok" class="btn btn-primary">Unlock</button>
+      </div>
+      <div class="access-code-note">Copy and paste are disabled on purpose.</div>
+    </div>
+  </div>
+
   <!-- Duration Modal -->
   <div id="duration-modal-overlay" class="modal-overlay hidden" aria-hidden="true">
     <div class="modal" role="dialog" aria-modal="true" aria-labelledby="duration-modal-title">
@@ -1016,6 +1075,7 @@
   </div>
 
   <script src="shared/validate-domain.js"></script>
+  <script src="shared/access-code.js"></script>
   <script src="popup.js"></script>
 </body>
 </html>

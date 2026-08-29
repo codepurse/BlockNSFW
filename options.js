@@ -4,7 +4,6 @@ const SETTINGS_KEY = 'pblocker_settings';
 const BLOCKED_STATS_KEY = 'pblocker_stats';
 const WHITELIST_KEY = 'pblocker_whitelist';
 const PIN_KEY = 'pblocker_pin';
-const ACCESS_CODE_KEY = 'pblocker_access_code';
 const STREAK_START_KEY = 'pblocker_streak_start';
 const UPDATE_INFO_KEY = 'pblocker_update_info';
 const UPDATE_DISMISSED_KEY = 'pblocker_update_dismissed';
@@ -526,75 +525,30 @@ async function ensurePIN() {
 
 // --- Access code challenge -------------------------------------------------
 //
-// An optional second layer over the PIN, modelled on LeechBlock's. The code is
-// NOT a secret — it's displayed in full, right above the box you type it into.
-// The protection is the deliberate effort of retyping 32-128 random characters,
-// which is long enough for an impulse to pass. That design has consequences:
-//
-//   - Pasting must be impossible, or the whole thing is defeated in two
-//     seconds. The input refuses paste/drop, and the displayed code can't be
-//     selected or copied.
-//   - A wrong answer regenerates the code. Retrying against the same string
-//     would let someone assemble it piecemeal instead of typing it in one go.
-//
-// Ambiguous glyphs (O/0, I/l/1) are excluded: the point is deliberate effort,
-// not guessing which character you're looking at.
-const ACCESS_CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%&*+=?~';
-const ACCESS_CODE_LENGTHS = [32, 64, 128, 256];
-
-// Scope: which changes have to face the code.
-//   'critical' (default) — only the master switches that would unlock
-//     everything at once: disabling blocking, clearing the PIN, and weakening
-//     the access code itself.
-//   'all' — every change that weakens protection.
-// 'critical' is the default because a code on every small edit trains people
-// to resent the feature and switch it off, which protects nobody. The rare,
-// decisive moments are the ones worth guarding.
-const ACCESS_CODE_SCOPES = ['critical', 'all'];
+// The rules, the charset, the config shape and the paste guards all live in
+// shared/access-code.js so the popup enforces exactly the same layer (issue
+// #29). Only the modal chrome is page-specific.
+const AccessCode = self.AccessCode;
+const ACCESS_CODE_LENGTHS = AccessCode.LENGTHS;
 
 function normalizeAccessCodeConfig(raw) {
-  const config = raw && typeof raw === 'object' ? raw : {};
-  const length = Number(config.length);
-  return {
-    enabled: config.enabled === true,
-    length: ACCESS_CODE_LENGTHS.includes(length) ? length : 64,
-    scope: ACCESS_CODE_SCOPES.includes(config.scope) ? config.scope : 'critical'
-  };
+  return AccessCode.normalizeConfig(raw);
 }
 
-// Pure decision, kept separate from the modal so it can be tested directly.
 function accessCodeRequiredFor(config, isCritical) {
-  const normalized = normalizeAccessCodeConfig(config);
-  if (!normalized.enabled) return false;
-  if (normalized.scope === 'all') return true;
-  return isCritical === true;
+  return AccessCode.requiredFor(config, isCritical);
+}
+
+function generateAccessCode(length) {
+  return AccessCode.generate(length);
 }
 
 async function getAccessCodeConfig() {
-  const { [ACCESS_CODE_KEY]: raw } = await browserAPI.storage.local.get(ACCESS_CODE_KEY);
-  return normalizeAccessCodeConfig(raw);
+  return await AccessCode.readConfig(browserAPI.storage.local);
 }
 
 async function setAccessCodeConfig(config) {
-  await browserAPI.storage.local.set({ [ACCESS_CODE_KEY]: normalizeAccessCodeConfig(config) });
-}
-
-// Rejection sampling so every character is equally likely — modulo would bias
-// toward the start of the charset.
-function generateAccessCode(length) {
-  const size = ACCESS_CODE_CHARS.length;
-  const limit = Math.floor(256 / size) * size;
-  let code = '';
-  while (code.length < length) {
-    const bytes = new Uint8Array(length - code.length);
-    crypto.getRandomValues(bytes);
-    for (const byte of bytes) {
-      if (byte >= limit) continue; // discard, would skew the distribution
-      code += ACCESS_CODE_CHARS[byte % size];
-      if (code.length === length) break;
-    }
-  }
-  return code;
+  await AccessCode.writeConfig(browserAPI.storage.local, config);
 }
 
 async function showAccessCodeModal(actionLabel = 'this action') {
@@ -644,33 +598,18 @@ async function showAccessCodeModal(actionLabel = 'this action') {
   // Wait for the modal to reach the DOM before wiring the guards.
   await new Promise(resolve => setTimeout(resolve, 50));
 
-  const input = document.getElementById('modal-access-code-input');
-  const display = document.getElementById('modal-access-code');
-
-  if (input) {
-    // The feature is worthless if the code can be pasted in.
-    ['paste', 'drop', 'dragover'].forEach(evt => {
-      input.addEventListener(evt, (e) => e.preventDefault());
-    });
-    input.addEventListener('keydown', (e) => {
-      const key = (e.key || '').toLowerCase();
-      if ((e.ctrlKey || e.metaKey) && (key === 'v' || key === 'z')) e.preventDefault();
-    });
-  }
-
-  if (display) {
-    // Belt and braces: user-select is off in CSS, and copying is refused here
-    // in case selection happens some other way.
-    display.addEventListener('copy', (e) => e.preventDefault());
-    display.addEventListener('cut', (e) => e.preventDefault());
-    display.addEventListener('contextmenu', (e) => e.preventDefault());
-  }
+  // Refuses paste/drop into the box and copy off the display — the feature is
+  // worthless if the code can be moved across in two seconds.
+  AccessCode.hardenEntry(
+    document.getElementById('modal-access-code-input'),
+    document.getElementById('modal-access-code')
+  );
 
   return (await modalPromise) === true;
 }
 
 // Runs after the PIN check, so the two layers stack rather than replace.
-// `critical` marks the master switches — see ACCESS_CODE_SCOPES.
+// `critical` marks the master switches — see SCOPES in shared/access-code.js.
 async function requireAccessCodeIfEnabled(actionLabel = 'this action', critical = false) {
   const config = await getAccessCodeConfig();
   if (!accessCodeRequiredFor(config, critical)) return true;
@@ -2946,8 +2885,6 @@ async function init() {
 
   // Whitelist event listeners
   $('add-whitelist').addEventListener('click', async () => {
-    const okPin = await requirePIN('add domain to whitelist');
-    if (!okPin) return;
     const domainInput = $('whitelist-domain');
     // Accepts a bare domain or a domain + path (e.g. reddit.com/r/NoFap).
     const parsed = self.DomainValidate.parseWhitelistInput(domainInput.value.trim());
@@ -2964,6 +2901,16 @@ async function init() {
       alert(parsed.path ? 'This page is already whitelisted' : 'Domain is already whitelisted');
       return;
     }
+
+    // Gate last, so a typo or a duplicate never costs someone a 256-character
+    // code. A bare domain unlocks the whole site — as total as switching
+    // blocking off — so it counts as critical; a path-scoped entry opens one
+    // section and doesn't.
+    const okPin = await requirePIN(
+      parsed.path ? 'whitelist this page' : 'whitelist this whole site',
+      { critical: !parsed.path }
+    );
+    if (!okPin) return;
 
     const newItem = {
       domain: parsed.domain,
@@ -3007,7 +2954,9 @@ async function init() {
 
   $('import-whitelist').addEventListener('click', () => {
     // Require PIN before importing whitelist entries (only if PIN is set)
-    requirePINIfSet('import whitelist').then(ok => {
+    // A whitelist file is a bulk whole-site unlock, so it faces the same bar
+    // as whitelisting a site by hand.
+    requirePINIfSet('import a whitelist file', { critical: true }).then(ok => {
       if (!ok) return;
       
       const input = document.createElement('input');

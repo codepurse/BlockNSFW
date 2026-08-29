@@ -10,6 +10,8 @@ const STREAK_START_KEY = 'pblocker_streak_start';
 const UPDATE_INFO_KEY = 'pblocker_update_info';
 const UPDATE_DISMISSED_KEY = 'pblocker_update_dismissed';
 
+const AccessCode = self.AccessCode;
+
 function $(id) { return document.getElementById(id); }
 
 async function getSettings() {
@@ -115,9 +117,93 @@ async function ensurePIN() {
   return true;
 }
 
-async function requirePIN(actionLabel = 'this action') {
-  const hasPin = await ensurePIN();
-  if (!hasPin) return false;
+// --- Access code ------------------------------------------------------------
+//
+// The second layer over the PIN. Until issue #29 it existed only on the
+// options page, so anything reachable from here — including "unblock this
+// site", which whitelists the whole domain and overrides blocking entirely —
+// was guarded by a four-digit PIN alone however the user had configured it.
+// The rules live in shared/access-code.js; only the modal is popup-specific.
+
+async function getAccessCodeConfig() {
+  return await AccessCode.readConfig(browserAPI.storage.local);
+}
+
+function getAccessCodeElements() {
+  return {
+    overlay: $('access-code-modal-overlay'),
+    desc: $('access-code-modal-desc'),
+    display: $('access-code-display'),
+    input: $('access-code-input'),
+    error: $('access-code-error'),
+    ok: $('access-code-ok'),
+    cancel: $('access-code-cancel')
+  };
+}
+
+async function showAccessCodeModal(actionLabel = 'this action') {
+  const { length } = await getAccessCodeConfig();
+  const el = getAccessCodeElements();
+  // No modal in the DOM means no way to enforce the code — refuse the action
+  // rather than waving it through, and never fall back to prompt() (its box
+  // accepts a paste, which is the one thing this must not allow).
+  if (!el.overlay) return false;
+
+  let expected = AccessCode.generate(length);
+  el.desc.textContent = `Type the code below exactly to ${actionLabel}.`;
+  el.display.textContent = expected;
+  el.input.value = '';
+  el.error.textContent = '';
+  // The markup is static and reused, so harden it once rather than stacking a
+  // fresh set of listeners every time the modal opens.
+  if (!el.input.dataset.hardened) {
+    AccessCode.hardenEntry(el.input, el.display);
+    el.input.dataset.hardened = '1';
+  }
+  el.overlay.classList.remove('hidden');
+  el.overlay.setAttribute('aria-hidden', 'false');
+  el.input.focus();
+
+  return new Promise(resolve => {
+    const cleanup = () => {
+      el.ok.onclick = null;
+      el.cancel.onclick = null;
+      el.input.onkeydown = null;
+      el.overlay.classList.add('hidden');
+      el.overlay.setAttribute('aria-hidden', 'true');
+    };
+    el.ok.onclick = () => {
+      if (el.input.value === expected) {
+        cleanup();
+        resolve(true);
+        return;
+      }
+      // Wrong: issue a fresh code so the attempt can't be chipped away at.
+      expected = AccessCode.generate(length);
+      el.display.textContent = expected;
+      el.display.scrollTop = 0;
+      el.input.value = '';
+      el.error.textContent = "That didn't match. Here's a new code.";
+      el.input.focus();
+    };
+    el.cancel.onclick = () => { cleanup(); resolve(false); };
+    el.input.onkeydown = (e) => {
+      // No Enter-to-submit: at 256 characters a stray Enter mid-code would
+      // throw the whole attempt away.
+      if (e.key === 'Escape') el.cancel.click();
+    };
+  });
+}
+
+// Runs after the PIN check, so the two layers stack rather than replace.
+// `critical` marks the master switches — see SCOPES in shared/access-code.js.
+async function requireAccessCodeIfEnabled(actionLabel = 'this action', critical = false) {
+  const config = await getAccessCodeConfig();
+  if (!AccessCode.requiredFor(config, critical)) return true;
+  return await showAccessCodeModal(actionLabel);
+}
+
+async function verifyPIN(actionLabel) {
   const stored = await getPIN();
   let attempt = 0;
   while (attempt < 3) {
@@ -130,19 +216,29 @@ async function requirePIN(actionLabel = 'this action') {
   return false;
 }
 
-// Only require PIN if one is already set (doesn't prompt to create one)
-async function requirePINIfSet(actionLabel = 'this action') {
+async function requirePIN(actionLabel = 'this action', opts) {
+  const hasPin = await ensurePIN();
+  if (!hasPin) return false;
+  if (!await verifyPIN(actionLabel)) return false;
+  return await requireAccessCodeIfEnabled(actionLabel, !!(opts && opts.critical));
+}
+
+// For actions that only ever tighten protection. Tightening is free (issue
+// #11) — the access code guards the way out, never the way back in. Under the
+// 'all' scope this would otherwise charge someone 256 characters of typing to
+// re-block a site, which is the opposite of what the feature is for.
+async function requirePINOnly(actionLabel = 'this action') {
+  const hasPin = await ensurePIN();
+  if (!hasPin) return false;
+  return await verifyPIN(actionLabel);
+}
+
+// Only require PIN if one is already set (doesn't prompt to create one).
+// The access code stands on its own, so it still applies when no PIN is set.
+async function requirePINIfSet(actionLabel = 'this action', opts) {
   const stored = await getPIN();
-  if (!stored) return true; // No PIN set, allow action
-  let attempt = 0;
-  while (attempt < 3) {
-    const entered = await showPinModal(`Enter PIN to ${actionLabel}`);
-    if (entered === null) return false;
-    if (entered === stored) return true;
-    attempt++;
-    await showPinModal('Incorrect PIN. Try again.', { errorOnly: true });
-  }
-  return false;
+  if (stored && !await verifyPIN(actionLabel)) return false;
+  return await requireAccessCodeIfEnabled(actionLabel, !!(opts && opts.critical));
 }
 
 // Modal UI for PIN
@@ -652,11 +748,15 @@ async function toggleUnblockSite() {
     const isWhitelisted = await isCurrentSiteWhitelisted();
     
     if (isWhitelisted) {
-      const ok = await requirePIN('remove whitelist');
+      // Re-blocking the site: tightening, so the PIN alone (as before).
+      const ok = await requirePINOnly('remove whitelist');
       if (!ok) return;
       await removeFromWhitelist(domain);
     } else {
-      const ok = await requirePIN('whitelist this site');
+      // Whole-site whitelist: it overrides blocking for every page on the
+      // domain, which is as total as switching blocking off, so it faces the
+      // access code even in the default 'critical' scope (issue #29).
+      const ok = await requirePIN('whitelist this whole site', { critical: true });
       if (!ok) return;
       // Ask for temporary duration via modal
       const result = await showDurationModal({
@@ -703,7 +803,12 @@ async function handleAddWhitelist(type) {
   }
 
   try {
-    const ok = await requirePIN('add to whitelist');
+    // A bare domain unlocks the whole site; a path-scoped entry opens one
+    // section, so only the former counts as critical.
+    const ok = await requirePIN(
+      parsed.path ? 'whitelist this page' : 'whitelist this whole site',
+      { critical: !parsed.path }
+    );
     if (!ok) return;
     // Support temporary durations if requested via button
     if (type === 'temporary-15') {

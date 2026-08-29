@@ -4,6 +4,38 @@ All notable project changes should be documented here going forward.
 
 ## [Unreleased]
 
+### Fixed
+- **The popup could unblock a site with nothing but the PIN, however the access
+  code was configured.** Reported in
+  [#29](https://github.com/codepurse/BlockNSFW/issues/29). The access code —
+  the layer whose whole point is that a 32-256 character retype outlasts an
+  urge — lived only in `options.js`. The popup carried its own older copy of
+  the gate, which verified four digits and returned. So popup → *unblock this
+  site* → PIN wrote a whole-site whitelist entry, and a whitelist entry
+  overrides blocking entirely: the site was open, and the code was never asked
+  for. The options page meanwhile promised the code on "every change that
+  reduces your protection". Whitelisting a site by hand and switching SafeSearch
+  off went the same way.
+
+  The rules, the charset, the config shape and the paste guards now live in
+  `shared/access-code.js`, and the popup enforces them through the same
+  `requirePIN` / `requirePINIfSet` chain the options page uses. Two copies of a
+  gate is how the first one quietly stopped covering everything, so there is one.
+
+  Where the popup cannot show the modal it refuses the action rather than
+  waving it through, and it never falls back to `prompt()` — that box accepts a
+  paste, which is the one thing this feature must not allow.
+
+### Changed
+- **Whitelisting a whole site is now a critical action.** It unlocks every page
+  on the domain, which is as total as switching blocking off, so it faces the
+  access code in the default `critical` scope rather than only under "ask on
+  every change" — as does importing a whitelist file. Whitelisting a single
+  *page* (`example.com/r/Name`) opens one section and is not treated as
+  critical. Both entry points ask for the code after the input has been checked
+  and found not to be a duplicate, so a typo can no longer cost someone 256
+  characters of typing.
+
 ## [1.7.5] - 2026-08-24
 
 ### Added

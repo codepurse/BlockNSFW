@@ -2612,8 +2612,8 @@ title/Example Domain/"></textarea>
           Adds a second step on top of your PIN. A random code appears and you
           must retype it by hand. Copy and paste are disabled, so it takes real,
           deliberate effort — long enough for an urge to pass. By default it
-          only guards the decisive moments: turning blocking off, clearing your
-          PIN, or weakening the code itself.
+          only guards the decisive moments: turning blocking off, whitelisting a
+          whole site, clearing your PIN, or weakening the code itself.
         </p>
       </div>
       <div class="switch-container">
@@ -2629,7 +2629,7 @@ title/Example Domain/"></textarea>
       <div class="switch-container">
         <div class="switch-label">
           <span class="label">Ask for the code on every settings change</span>
-          <span class="description">Off by default — the code is only asked for the big ones: turning blocking off, clearing your PIN, or weakening the code itself. Turn this on to be asked for every change that reduces your protection, including editing your blocked words and lists.</span>
+          <span class="description">Off by default — the code is only asked for the big ones: turning blocking off, whitelisting a whole site, clearing your PIN, or weakening the code itself. Turn this on to be asked for every change that reduces your protection, including editing your blocked words and lists.</span>
         </div>
         <label class="switch">
           <input type="checkbox" id="access-code-scope-all" />
@@ -2879,6 +2879,7 @@ title/Example Domain/"></textarea>
 
   <script src="appwrite-client.js"></script>
   <script src="shared/validate-domain.js"></script>
+  <script src="shared/access-code.js"></script>
   <script src="shared/keyword-pattern.js"></script>
   <!-- Loaded for its template registry only, so the style picker below and the
        blocked page itself can never drift out of sync. -->
