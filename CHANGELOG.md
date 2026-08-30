@@ -4,6 +4,43 @@ All notable project changes should be documented here going forward.
 
 ## [Unreleased]
 
+## [1.7.6] - 2026-08-30
+
+### Added
+- **Block a whole top-level domain.** `.xyz` on its own line blocks every site
+  ending in it. Some TLDs are used almost entirely for spam and malware, and
+  listing their sites one at a time is hopeless. It is the broadest entry the
+  blocklist accepts, so the settings page says so plainly next to it.
+
+  Most of this already worked and nobody could reach it: a bare host entry
+  covers its subdomains, and `xyz` is only the shortest case of that. But
+  `.xyz` — the form anyone actually writes — matched nothing, on both the
+  navigation and the in-page path, and said nothing about it. A leading dot is
+  now stripped wherever a blocklist host is read, so `.xyz` and `xyz` are the
+  same entry, and `.example.com` works as well as `example.com`. Requested by
+  Maksim.
+
+  Images from a blocked TLD are hidden page-side rather than by a network rule.
+  The network rule takes domains, not suffixes, and blocking every image request
+  under a TLD is broader than a rule at that level should be.
+
+### Changed
+- **Notes are dimmed in the list boxes.** A `#` or `!` line now reads in grey
+  while the entries stay bright, so a list with headings in it can be scanned at
+  a glance instead of being one wall of identical text. Nothing about what gets
+  saved or matched changed — a textarea cannot colour one line differently from
+  another, so the box is drawn in two layers, with the text painted underneath
+  and the real textarea kept on top for typing, selection, undo and spellcheck.
+  Suggested by Maksim.
+- **Whitelisting a whole site is now a critical action.** It unlocks every page
+  on the domain, which is as total as switching blocking off, so it faces the
+  access code in the default `critical` scope rather than only under "ask on
+  every change" — as does importing a whitelist file. Whitelisting a single
+  *page* (`example.com/r/Name`) opens one section and is not treated as
+  critical. Both entry points ask for the code after the input has been checked
+  and found not to be a duplicate, so a typo can no longer cost someone 256
+  characters of typing.
+
 ### Fixed
 - **The popup could unblock a site with nothing but the PIN, however the access
   code was configured.** Reported in
@@ -25,16 +62,84 @@ All notable project changes should be documented here going forward.
   Where the popup cannot show the modal it refuses the action rather than
   waving it through, and it never falls back to `prompt()` — that box accepts a
   paste, which is the one thing this feature must not allow.
+- **A blocklist entry written with a leading dot reached the image rule
+  verbatim.** `.xyz` passed the domain check that guards the image-blocking
+  rule, so the literal string `.xyz` was handed to the browser as a domain to
+  block requests from. It is not a domain, and one bad entry is enough to
+  invalidate the single rule that every other blocked host shares — so adding
+  `.xyz` to the list could stop image blocking working for the sites that were
+  blocking correctly before it.
+- **Sorting filed `/regex/` entries under their slash.** Saving sorts a list
+  A–Z, and a pattern entry was compared on its opening delimiter rather than on
+  the word inside it, so every pattern clumped at the top of the list. Notes are
+  attached to the entry written beneath them and travel with it, so a pattern
+  overtaking that entry dragged the whole block down — which is how notes
+  written at the top of a list ended up underneath it. (The locale order of the
+  three markers involved is `!`, then `/`, then `#`, which is why the result
+  looked arbitrary rather than merely wrong.) Entries are now filed under their
+  first letter or digit, so `/apricots?/` sorts beside `apricots` instead of
+  above the entire list. Reported by Maksim.
+- **DuckDuckGo's Images and Videos tabs were not filtered at all.** A blocked
+  word stopped the matching web results, then the same search on the Images or
+  Videos tab showed everything. The selectors the filter used —
+  `.tile--img`, `.tile__title`, `.result` — belong to DuckDuckGo's pre-React
+  layout and match nothing on the current site, so there was no result to
+  examine and no keyword check ever ran. Google was unaffected, which is why
+  this looked like a keyword bug rather than a DuckDuckGo one.
 
-### Changed
-- **Whitelisting a whole site is now a critical action.** It unlocks every page
-  on the domain, which is as total as switching blocking off, so it faces the
-  access code in the default `critical` scope rather than only under "ask on
-  every change" — as does importing a whitelist file. Whitelisting a single
-  *page* (`example.com/r/Name`) opens one section and is not treated as
-  critical. Both entry points ask for the code after the input has been checked
-  and found not to be a duplicate, so a typo can no longer cost someone 256
-  characters of typing.
+  Both verticals now key on the `data-testid` attributes DuckDuckGo puts on
+  each one, and on the semantic tags inside them (`figure` for an image result,
+  `article` for a video result), because every class name on that page is a
+  build hash that changes on each deploy. The old class selectors are kept as
+  fallbacks so older self-hosted instances keep working.
+
+  Two smaller things had to change with them. Image thumbnails are served
+  through DuckDuckGo's own proxy — `external-content.duckduckgo.com/iu/?u=…` —
+  so every picture on the page appeared to come from DuckDuckGo: the host and
+  path carry no information and the real address sits in a parameter. That
+  parameter is now unwrapped and scanned, as it already was for Yandex. And a
+  blocked image result now takes its whole tile with it rather than just the
+  picture, since the caption underneath spells out the title the block was
+  keyed on.
+
+  The All tab needed one more thing: it carries an inline row of thumbnails for
+  the same query, and no result selector reached it, so the web results above it
+  were replaced while the pictures stayed. Each row on that page is an
+  `<li data-layout="…">` naming what it holds, so the images and videos rows are
+  now treated as results and replaced whole — while ads and related searches are
+  left alone.
+
+  The knowledge panel — the Wikipedia summary above the results — is covered
+  too, but judged differently. It is several hundred words of reference prose
+  rather than a snippet, and at that length the built-in keyword scoring
+  misreads legitimate text, so the panel is blocked only on a stated signal: a
+  link to a blocklisted site, or a word from your own blocked-word list. The
+  heuristics get no vote on it.
+- **A search result that arrived late was never filtered.** DuckDuckGo serves no
+  results in its HTML at all — the entire page is built in the browser, row by
+  row. A result row therefore exists for a moment with its title still missing,
+  and both filtering paths marked such a row as "inspected" on the way past, so
+  once it filled in nothing looked at it again. Whichever row happened to be
+  slowest that pageload was the one that survived. A row is now only marked off
+  once it has actually been recognised as a result, and is re-examined until
+  then.
+
+  The incremental path the page-change observer uses had drifted from the full
+  pass as well: it judged the raw changed element rather than the result row
+  around it, and did not know about the explicit-signals-only rule. Both now go
+  through one shared resolver, so they cannot disagree about what a result is,
+  which element to replace, or how to judge it.
+- **Custom blocked words were ignored in image search below the strictest
+  setting.** In image results, a word from your own list only counted when the
+  image filter was set to Strict; on Moderate or Lenient the built-in term list
+  was consulted and yours was not. A word you typed yourself is an instruction
+  rather than a heuristic, so it now applies at every level — the level still
+  decides how far the built-in lists reach.
+- **"Go Back" on the blocked page did nothing.** It was wired as an inline
+  `onclick`, which the extension's content-security policy (`script-src 'self'`)
+  blocks outright, so the click was silently discarded. It is now a real
+  listener — and when the blocked page is the only entry in a tab's history,
+  with nothing to go back to, it leaves the page instead of sitting there.
 
 ## [1.7.5] - 2026-08-24
 
@@ -195,112 +300,7 @@ All notable project changes should be documented here going forward.
   Changing either setting re-does the results already on screen, so the picker
   does not appear to do nothing until the tab is reloaded.
 
-### Added
-- **Block a whole top-level domain.** `.xyz` on its own line blocks every site
-  ending in it. Some TLDs are used almost entirely for spam and malware, and
-  listing their sites one at a time is hopeless. It is the broadest entry the
-  blocklist accepts, so the settings page says so plainly next to it.
-
-  Most of this already worked and nobody could reach it: a bare host entry
-  covers its subdomains, and `xyz` is only the shortest case of that. But
-  `.xyz` — the form anyone actually writes — matched nothing, on both the
-  navigation and the in-page path, and said nothing about it. A leading dot is
-  now stripped wherever a blocklist host is read, so `.xyz` and `xyz` are the
-  same entry, and `.example.com` works as well as `example.com`. Requested by
-  Maksim.
-
-  Images from a blocked TLD are hidden page-side rather than by a network rule.
-  The network rule takes domains, not suffixes, and blocking every image request
-  under a TLD is broader than a rule at that level should be.
-
-### Changed
-- **Notes are dimmed in the list boxes.** A `#` or `!` line now reads in grey
-  while the entries stay bright, so a list with headings in it can be scanned at
-  a glance instead of being one wall of identical text. Nothing about what gets
-  saved or matched changed — a textarea cannot colour one line differently from
-  another, so the box is drawn in two layers, with the text painted underneath
-  and the real textarea kept on top for typing, selection, undo and spellcheck.
-  Suggested by Maksim.
-
 ### Fixed
-- **A blocklist entry written with a leading dot reached the image rule
-  verbatim.** `.xyz` passed the domain check that guards the image-blocking
-  rule, so the literal string `.xyz` was handed to the browser as a domain to
-  block requests from. It is not a domain, and one bad entry is enough to
-  invalidate the single rule that every other blocked host shares — so adding
-  `.xyz` to the list could stop image blocking working for the sites that were
-  blocking correctly before it.
-- **Sorting filed `/regex/` entries under their slash.** Saving sorts a list
-  A–Z, and a pattern entry was compared on its opening delimiter rather than on
-  the word inside it, so every pattern clumped at the top of the list. Notes are
-  attached to the entry written beneath them and travel with it, so a pattern
-  overtaking that entry dragged the whole block down — which is how notes
-  written at the top of a list ended up underneath it. (The locale order of the
-  three markers involved is `!`, then `/`, then `#`, which is why the result
-  looked arbitrary rather than merely wrong.) Entries are now filed under their
-  first letter or digit, so `/apricots?/` sorts beside `apricots` instead of
-  above the entire list. Reported by Maksim.
-- **DuckDuckGo's Images and Videos tabs were not filtered at all.** A blocked
-  word stopped the matching web results, then the same search on the Images or
-  Videos tab showed everything. The selectors the filter used —
-  `.tile--img`, `.tile__title`, `.result` — belong to DuckDuckGo's pre-React
-  layout and match nothing on the current site, so there was no result to
-  examine and no keyword check ever ran. Google was unaffected, which is why
-  this looked like a keyword bug rather than a DuckDuckGo one.
-
-  Both verticals now key on the `data-testid` attributes DuckDuckGo puts on
-  each one, and on the semantic tags inside them (`figure` for an image result,
-  `article` for a video result), because every class name on that page is a
-  build hash that changes on each deploy. The old class selectors are kept as
-  fallbacks so older self-hosted instances keep working.
-
-  Two smaller things had to change with them. Image thumbnails are served
-  through DuckDuckGo's own proxy — `external-content.duckduckgo.com/iu/?u=…` —
-  so every picture on the page appeared to come from DuckDuckGo: the host and
-  path carry no information and the real address sits in a parameter. That
-  parameter is now unwrapped and scanned, as it already was for Yandex. And a
-  blocked image result now takes its whole tile with it rather than just the
-  picture, since the caption underneath spells out the title the block was
-  keyed on.
-
-  The All tab needed one more thing: it carries an inline row of thumbnails for
-  the same query, and no result selector reached it, so the web results above it
-  were replaced while the pictures stayed. Each row on that page is an
-  `<li data-layout="…">` naming what it holds, so the images and videos rows are
-  now treated as results and replaced whole — while ads and related searches are
-  left alone.
-
-  The knowledge panel — the Wikipedia summary above the results — is covered
-  too, but judged differently. It is several hundred words of reference prose
-  rather than a snippet, and at that length the built-in keyword scoring
-  misreads legitimate text, so the panel is blocked only on a stated signal: a
-  link to a blocklisted site, or a word from your own blocked-word list. The
-  heuristics get no vote on it.
-- **A search result that arrived late was never filtered.** DuckDuckGo serves no
-  results in its HTML at all — the entire page is built in the browser, row by
-  row. A result row therefore exists for a moment with its title still missing,
-  and both filtering paths marked such a row as "inspected" on the way past, so
-  once it filled in nothing looked at it again. Whichever row happened to be
-  slowest that pageload was the one that survived. A row is now only marked off
-  once it has actually been recognised as a result, and is re-examined until
-  then.
-
-  The incremental path the page-change observer uses had drifted from the full
-  pass as well: it judged the raw changed element rather than the result row
-  around it, and did not know about the explicit-signals-only rule. Both now go
-  through one shared resolver, so they cannot disagree about what a result is,
-  which element to replace, or how to judge it.
-- **Custom blocked words were ignored in image search below the strictest
-  setting.** In image results, a word from your own list only counted when the
-  image filter was set to Strict; on Moderate or Lenient the built-in term list
-  was consulted and yours was not. A word you typed yourself is an instruction
-  rather than a heuristic, so it now applies at every level — the level still
-  decides how far the built-in lists reach.
-- **"Go Back" on the blocked page did nothing.** It was wired as an inline
-  `onclick`, which the extension's content-security policy (`script-src 'self'`)
-  blocks outright, so the click was silently discarded. It is now a real
-  listener — and when the blocked page is the only entry in a tab's history,
-  with nothing to go back to, it leaves the page instead of sitting there.
 - **AI image blocking never worked on Firefox.** Turning the beta on did
   nothing: no image was ever scanned, no image was ever blurred, and the only
   hint was `AI runtime was not preloaded` in the background console. The cause
