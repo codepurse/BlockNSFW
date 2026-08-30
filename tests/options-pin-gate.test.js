@@ -10,6 +10,9 @@ const vm = require('vm');
 
 function loadOptionsContext() {
   const source = fs.readFileSync(path.join(__dirname, '..', 'options.js'), 'utf8');
+  // The access code moved to a shared module (issue #29). options.html loads
+  // it before options.js, so do the same here.
+  const accessCode = fs.readFileSync(path.join(__dirname, '..', 'shared', 'access-code.js'), 'utf8');
   // options.js only touches the DOM from inside its DOMContentLoaded handler,
   // so stubbing the listener is enough to evaluate it here.
   const context = {
@@ -21,15 +24,12 @@ function loadOptionsContext() {
   };
   context.self = context;
   vm.createContext(context);
+  vm.runInContext(accessCode, context);
   vm.runInContext(source, context);
   return context;
 }
 
 const ctx = loadOptionsContext();
-
-// Top-level `const` lands in the realm's lexical scope rather than on the
-// context object, so reach it by evaluating the name inside that realm.
-const constant = (name) => vm.runInContext(name, ctx);
 
 test('hasRemovals: deleting an entry is a removal', () => {
   assert.equal(ctx.hasRemovals(['apricot', 'plum'], ['plum']), true);
@@ -146,91 +146,14 @@ test('serializeListFile / parseListFile: survive a round trip', () => {
   assert.deepEqual(parse(ctx.serializeListFile(entries)), entries);
 });
 
-test('normalizeAccessCodeConfig: defaults to off at 64 characters', () => {
-  const config = ctx.normalizeAccessCodeConfig(undefined);
-  assert.equal(config.enabled, false);
-  assert.equal(config.length, 64);
-});
-
-test('normalizeAccessCodeConfig: keeps every supported length', () => {
-  for (const length of [32, 64, 128, 256]) {
-    assert.equal(ctx.normalizeAccessCodeConfig({ length }).length, length);
-  }
-});
-
-test('normalizeAccessCodeConfig: rejects an unsupported length', () => {
-  // A stored "1" would otherwise turn the deterrent into a single keystroke.
+// The access code's own rules (charset, lengths, scope) are tested against
+// shared/access-code.js in tests/access-code.test.js. What matters here is
+// that options.js still reaches them.
+test('options.js delegates the access-code decision to the shared module', () => {
+  assert.equal(ctx.accessCodeRequiredFor({ enabled: true, scope: 'critical' }, true), true);
+  assert.equal(ctx.accessCodeRequiredFor({ enabled: true, scope: 'critical' }, false), false);
   assert.equal(ctx.normalizeAccessCodeConfig({ length: 1 }).length, 64);
-  assert.equal(ctx.normalizeAccessCodeConfig({ length: 'lots' }).length, 64);
-});
-
-test('normalizeAccessCodeConfig: only a real true enables it', () => {
-  assert.equal(ctx.normalizeAccessCodeConfig({ enabled: 'yes' }).enabled, false);
-  assert.equal(ctx.normalizeAccessCodeConfig({ enabled: 1 }).enabled, false);
-  assert.equal(ctx.normalizeAccessCodeConfig({ enabled: true }).enabled, true);
-});
-
-test('normalizeAccessCodeConfig: defaults scope to critical', () => {
-  assert.equal(ctx.normalizeAccessCodeConfig({}).scope, 'critical');
-  assert.equal(ctx.normalizeAccessCodeConfig({ scope: 'nonsense' }).scope, 'critical');
-  assert.equal(ctx.normalizeAccessCodeConfig({ scope: 'all' }).scope, 'all');
-});
-
-test('accessCodeRequiredFor: disabled never prompts', () => {
-  assert.equal(ctx.accessCodeRequiredFor({ enabled: false, scope: 'all' }, true), false);
-  assert.equal(ctx.accessCodeRequiredFor({ enabled: false, scope: 'all' }, false), false);
-});
-
-test('accessCodeRequiredFor: critical scope only prompts on master switches', () => {
-  const config = { enabled: true, scope: 'critical' };
-  assert.equal(ctx.accessCodeRequiredFor(config, true), true);
-  // Editing a blocked word must NOT demand the code in this mode — that
-  // friction is what drives people to switch the feature off entirely.
-  assert.equal(ctx.accessCodeRequiredFor(config, false), false);
-});
-
-test('accessCodeRequiredFor: all scope prompts on every weakening change', () => {
-  const config = { enabled: true, scope: 'all' };
-  assert.equal(ctx.accessCodeRequiredFor(config, true), true);
-  assert.equal(ctx.accessCodeRequiredFor(config, false), true);
-});
-
-test('accessCodeRequiredFor: a corrupted scope falls back to critical', () => {
-  assert.equal(ctx.accessCodeRequiredFor({ enabled: true, scope: 'everything' }, false), false);
-});
-
-test('generateAccessCode: returns exactly the requested length', () => {
-  for (const length of [32, 64, 128, 256]) {
-    assert.equal(ctx.generateAccessCode(length).length, length);
-  }
-});
-
-test('generateAccessCode: uses only charset characters', () => {
-  const allowed = new Set(constant('ACCESS_CODE_CHARS'));
-  for (const char of ctx.generateAccessCode(128)) {
-    assert.ok(allowed.has(char), `unexpected character: ${char}`);
-  }
-});
-
-test('generateAccessCode: excludes visually ambiguous glyphs', () => {
-  // Retyping should be an effort, not a guessing game. Each confusable group
-  // is broken by dropping the clashing members: 0/O go, so lowercase "o" is
-  // unambiguous and stays; 1/l/I go, so "i" is likewise safe to keep.
-  const chars = constant('ACCESS_CODE_CHARS');
-  for (const char of '0O1lI') {
-    assert.ok(!chars.includes(char), `charset should not contain ${char}`);
-  }
-});
-
-test('generateAccessCode: charset has no duplicate characters', () => {
-  // A repeated character would be twice as likely as the rest.
-  const chars = constant('ACCESS_CODE_CHARS');
-  assert.equal(new Set(chars).size, chars.length);
-});
-
-test('generateAccessCode: does not repeat itself', () => {
-  const codes = new Set(Array.from({ length: 20 }, () => ctx.generateAccessCode(32)));
-  assert.equal(codes.size, 20);
+  assert.equal(ctx.generateAccessCode(32).length, 32);
 });
 
 test('weakensImageFilter: lowering the level weakens', () => {

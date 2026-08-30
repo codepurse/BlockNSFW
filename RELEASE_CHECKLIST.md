@@ -78,7 +78,15 @@ protected when they are not — check by hand every release.
 - [ ] Access code: a wrong answer issues a **new** code rather than re-showing
       the same one
 - [ ] Access code with the default scope: only the master switches (disable
-      blocking, clear PIN, weaken the code) ask for it — routine edits do not
+      blocking, whitelist a whole site, import a whitelist, clear PIN, weaken
+      the code) ask for it — routine edits do not
+- [ ] Access code **from the popup**: with a code set, the *unblock this site*
+      toggle asks for it after the PIN, and refusing leaves the site blocked.
+      This is issue #29 — the popup once had its own PIN-only gate, so check
+      the popup separately from the options page every release
+- [ ] Popup: whitelisting a single *page* (`example.com/r/Name`) does not
+      demand the code in the default scope, and re-blocking a whitelisted site
+      never does — tightening stays free
 
 ## 4. Asset Check
 
