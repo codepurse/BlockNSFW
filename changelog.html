@@ -285,11 +285,93 @@
 
   <div class="container">
 
+    <!-- ===================== 1.7.6 ===================== -->
+    <div class="release">
+      <div class="release-head">
+        <span class="release-version">1.7.6</span>
+        <span class="tag tag-current">Current</span>
+        <span class="release-date">August 2026</span>
+      </div>
+
+      <div class="group">
+        <div class="group-title">New</div>
+
+        <div class="entry">
+          <div class="entry-title">Block a whole top-level domain</div>
+          <div class="entry-body">
+            Some top-level domains are used almost entirely for spam and malware, and listing their sites one at a time is hopeless. A line reading <span class="code">.xyz</span> now blocks every site ending in it. It is the broadest entry the blocklist accepts, so the settings page says so plainly next to it. Images from a blocked TLD are hidden in the page rather than by a network rule. Requested by Maksim.
+          </div>
+        </div>
+
+        <div class="entry">
+          <div class="entry-title">Notes are dimmed in your lists</div>
+          <div class="entry-body">
+            A line starting with <span class="code">#</span> or <span class="code">!</span> now reads in grey while your entries stay bright, so a list with section headings in it can be scanned at a glance instead of being one wall of identical text. Typing, selection and undo all behave exactly as before. Suggested by Maksim.
+          </div>
+        </div>
+
+        <div class="group-title">Fixed</div>
+
+        <div class="entry">
+          <div class="entry-title">Sorting filed pattern entries under their punctuation</div>
+          <div class="entry-body">
+            Saving a list sorts it A-Z, and a <span class="code">/regex/</span> entry was filed under its opening slash rather than under the word inside it, so patterns clumped at the top. Notes travel with the entry written beneath them, so a pattern jumping the queue dragged that whole block with it — which is how notes written at the top of a list ended up underneath it. Entries are now filed under their first letter, so <span class="code">/apricots?/</span> sorts beside <span class="code">apricots</span>. Reported by Maksim.
+          </div>
+        </div>
+
+        <div class="entry">
+          <div class="entry-title">A blocklist entry written with a leading dot could break image blocking</div>
+          <div class="entry-body">
+            An entry such as <span class="code">.xyz</span> was passed to the browser as a domain to block image requests from. It is not a domain, and image blocking uses one rule shared by every blocked site — so a single entry like that could stop image blocking working for the sites that were blocking correctly before it.
+          </div>
+        </div>
+
+        <div class="entry">
+          <div class="entry-title">DuckDuckGo's Images and Videos tabs were not filtered at all</div>
+          <div class="entry-body">
+            A blocked word stopped the matching web results, then the same search on the Images or
+            Videos tab showed everything. The filter was looking for parts of DuckDuckGo's old
+            layout that no longer exist, so no result was ever examined. Both tabs are filtered
+            now, along with the rows of thumbnails that appear on the All tab. A blocked image
+            takes its whole tile with it rather than leaving the caption behind.
+          </div>
+        </div>
+
+        <div class="entry">
+          <div class="entry-title">A search result that arrived late was never filtered</div>
+          <div class="entry-body">
+            DuckDuckGo builds its results in the browser, row by row, so a row exists for a moment
+            with its title still missing — and it was being marked as already inspected on the way
+            past. Whichever row happened to be slowest was the one that survived. Rows are now
+            re-examined until they are actually readable.
+          </div>
+        </div>
+
+        <div class="entry">
+          <div class="entry-title">Your own blocked words were ignored in image search</div>
+          <div class="entry-body">
+            In image results, a word from your own list only counted when the image filter was set
+            to Strict; on Moderate or Lenient the built-in list was consulted and yours was not. A
+            word you typed yourself is an instruction rather than a guess, so it now applies at
+            every level.
+          </div>
+        </div>
+
+        <div class="entry">
+          <div class="entry-title">"Go Back" on the blocked page did nothing</div>
+          <div class="entry-body">
+            The button's click was being discarded outright by the extension's own security policy.
+            It works now — and when the blocked page is the only thing in a tab's history, with
+            nothing to go back to, it leaves the page instead of sitting there.
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- ===================== 1.7.5 ===================== -->
     <div class="release">
       <div class="release-head">
         <span class="release-version">1.7.5</span>
-        <span class="tag tag-current">Current</span>
         <span class="release-date">August 2026</span>
       </div>
 
@@ -411,46 +493,6 @@
             with nothing to explain why. Reported in
             <a href="https://github.com/codepurse/BlockNSFW/issues/26" target="_blank" rel="noopener">#26</a>
             on Firefox, though the same path affected Chrome and Edge.
-          </div>
-        </div>
-
-        <div class="entry">
-          <div class="entry-title">DuckDuckGo's Images and Videos tabs were not filtered at all</div>
-          <div class="entry-body">
-            A blocked word stopped the matching web results, then the same search on the Images or
-            Videos tab showed everything. The filter was looking for parts of DuckDuckGo's old
-            layout that no longer exist, so no result was ever examined. Both tabs are filtered
-            now, along with the rows of thumbnails that appear on the All tab. A blocked image
-            takes its whole tile with it rather than leaving the caption behind.
-          </div>
-        </div>
-
-        <div class="entry">
-          <div class="entry-title">A search result that arrived late was never filtered</div>
-          <div class="entry-body">
-            DuckDuckGo builds its results in the browser, row by row, so a row exists for a moment
-            with its title still missing — and it was being marked as already inspected on the way
-            past. Whichever row happened to be slowest was the one that survived. Rows are now
-            re-examined until they are actually readable.
-          </div>
-        </div>
-
-        <div class="entry">
-          <div class="entry-title">Your own blocked words were ignored in image search</div>
-          <div class="entry-body">
-            In image results, a word from your own list only counted when the image filter was set
-            to Strict; on Moderate or Lenient the built-in list was consulted and yours was not. A
-            word you typed yourself is an instruction rather than a guess, so it now applies at
-            every level.
-          </div>
-        </div>
-
-        <div class="entry">
-          <div class="entry-title">"Go Back" on the blocked page did nothing</div>
-          <div class="entry-body">
-            The button's click was being discarded outright by the extension's own security policy.
-            It works now — and when the blocked page is the only thing in a tab's history, with
-            nothing to go back to, it leaves the page instead of sitting there.
           </div>
         </div>
       </div>
