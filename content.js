@@ -903,6 +903,17 @@ function customPatternsMatchTitle(title, patterns) {
   return false;
 }
 
+// The host a blocklist entry is really about: normalizeHost for the www./case
+// handling every host goes through, plus the leading-dot rule that lets ".xyz"
+// and "xyz" name the same thing. Falls back to normalizeHost alone if the
+// shared module did not load, which keeps existing entries working.
+function blockHostBase(value) {
+  const stripped = (typeof self !== 'undefined' && self.DomainValidate && self.DomainValidate.normalizeBlockHost)
+    ? self.DomainValidate.normalizeBlockHost(value)
+    : String(value || '').trim().toLowerCase().replace(/^\.+/, '').replace(/\.+$/, '');
+  return normalizeHost(stripped);
+}
+
 function customPatternsMatchHost(urlStr, host, patterns) {
   if (!Array.isArray(patterns) || patterns.length === 0) return false;
   const h = normalizeHost(host);
@@ -924,11 +935,14 @@ function customPatternsMatchHost(urlStr, host, patterns) {
     const pHost = slashIdx >= 0 ? p.slice(0, slashIdx) : p;
     // Support leading wildcard subdomain
     if (pHost.startsWith('*.')) {
-      const base = normalizeHost(pHost.slice(2));
-      if (h === base || h.endsWith('.' + base)) return true;
+      const base = blockHostBase(pHost.slice(2));
+      if (base && (h === base || h.endsWith('.' + base))) return true;
     } else {
-      const base = normalizeHost(pHost);
-      if (h === base || h.endsWith('.' + base)) return true;
+      // A leading dot (".xyz", ".example.com") is the same entry as the bare
+      // form, since a bare host already covers its subdomains. Without this it
+      // matched nothing at all, without saying so.
+      const base = blockHostBase(pHost);
+      if (base && (h === base || h.endsWith('.' + base))) return true;
     }
     // If path was provided, do a loose URL match as a fallback
     if (slashIdx >= 0) {

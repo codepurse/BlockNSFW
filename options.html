@@ -544,6 +544,58 @@
       font-weight: 400;
     }
 
+    /* Note lines dimmed inside a list box.
+       A textarea cannot colour one line differently from another, so the box is
+       layered: a <pre> mirror paints the text, and the textarea above it keeps
+       the caret, selection and every native editing behaviour with its own text
+       made transparent. Every metric below has to match .textarea exactly or the
+       two layers drift apart as you type. */
+    .textarea-syntax {
+      position: relative;
+      background: var(--input-bg);
+      border-radius: var(--radius);
+    }
+
+    .textarea-syntax > .textarea {
+      position: relative;
+      z-index: 1;
+      /* A textarea is inline by default, which leaves a descender gap under it
+         and makes the wrapper taller than the box it wraps. */
+      display: block;
+      background: transparent;
+      color: transparent;
+      caret-color: var(--foreground);
+    }
+
+    /* Transparent text would hide the selected characters entirely, so the
+       selection stays translucent and the mirror reads through it. */
+    .textarea-syntax > .textarea::selection {
+      background: rgba(99, 102, 241, 0.35);
+    }
+
+    .textarea-syntax__mirror {
+      position: absolute;
+      inset: 0;
+      margin: 0;
+      padding: 0.875rem;
+      border: 1px solid transparent;
+      border-radius: var(--radius);
+      font-family: var(--font-mono);
+      font-size: 0.85rem;
+      line-height: 1.5;
+      color: var(--foreground);
+      white-space: pre-wrap;
+      overflow-wrap: break-word;
+      overflow: hidden;
+      pointer-events: none;
+      user-select: none;
+      box-sizing: border-box;
+    }
+
+    .textarea-syntax__mirror .is-note {
+      color: var(--foreground-dim);
+    }
+
     /* Buttons */
     .button {
       display: inline-flex;
@@ -2370,7 +2422,8 @@
         <p class="card-description">Images from these domains will never be blocked, even if they contain keywords. Perfect for legitimate platforms.
           A line starting with <code class="code">#</code> or <code class="code">!</code> is a note, ignored when matching.</p>
       </div>
-      <textarea class="textarea" id="trusted-domains" placeholder="Enter trusted domains, one per line:
+      <div class="textarea-syntax">
+        <textarea class="textarea" id="trusted-domains" placeholder="Enter trusted domains, one per line:
 # === Shopping ===
 amazon.com
 steampowered.com
@@ -2378,6 +2431,8 @@ steampowered.com
 youtube.com
 twitch.tv
 netflix.com"></textarea>
+        <pre class="textarea-syntax__mirror" aria-hidden="true"></pre>
+      </div>
       <div class="button-group">
         <button class="button button-primary" id="save-trusted">Save Trusted Domains</button>
         <button class="button" id="reset-trusted">Reset to Defaults</button>
@@ -2402,12 +2457,15 @@ netflix.com"></textarea>
           begins with one of those, put a backslash first: <code class="code">\#nsfw</code>.
         </p>
       </div>
-      <textarea class="textarea" id="custom-keywords" placeholder="Add one word or phrase per line:
+      <div class="textarea-syntax">
+        <textarea class="textarea" id="custom-keywords" placeholder="Add one word or phrase per line:
 # notes start with # or !
 keyword
 another phrase
 /p[o0]rn/
 \#hashtag"></textarea>
+        <pre class="textarea-syntax__mirror" aria-hidden="true"></pre>
+      </div>
       <div class="button-group">
         <button class="button button-primary" id="save-keywords">Save Words</button>
         <button class="button" id="reset-keywords">Reset to Defaults</button>
@@ -2422,8 +2480,13 @@ another phrase
       <div class="card-header">
         <h2 class="card-title">Custom Blocklist</h2>
         <p class="card-description">
-          Add one entry per line to block sites. Three forms are accepted:<br>
+          Add one entry per line to block sites. Four forms are accepted:<br>
           <strong>Wildcards</strong> — <code class="code">pornhub.com</code>, <code class="code">*.inappropriate.net</code>, <code class="code">example.com/adult/*</code><br>
+          <strong>A whole top-level domain</strong> — <code class="code">.xyz</code> or
+          <code class="code">xyz</code> blocks every site ending in it. Some TLDs are used almost
+          entirely for spam and malware, and this covers all of them at once — which also makes it
+          the broadest entry you can write, so check it is really what you want. Images from a
+          blocked TLD are hidden page-side rather than by a network rule.<br>
           <strong>Regular expression on the address</strong> — <code class="code">/example\.(net|org)/</code><br>
           <strong>Regular expression on the page title</strong> — <code class="code">title/Example Domain/</code><br>
           Patterns are checked when you save, and one that is invalid or slow enough to freeze pages
@@ -2436,13 +2499,17 @@ another phrase
           written below them when the list is sorted, so they work as section headings.
         </p>
       </div>
-      <textarea class="textarea" id="patterns" placeholder="Add one pattern per line:
+      <div class="textarea-syntax">
+        <textarea class="textarea" id="patterns" placeholder="Add one pattern per line:
 # === Section heading ===
 badexample.com
 *.inappropriate.net
 another-site.org/adult/*
+.xyz
 /example\.(net|org)/
 title/Example Domain/"></textarea>
+        <pre class="textarea-syntax__mirror" aria-hidden="true"></pre>
+      </div>
       <div class="button-group">
         <button class="button button-primary" id="save">Save Blocklist</button>
         <button class="button" id="reset">Reset to Defaults</button>

@@ -38,6 +38,40 @@
     return DOMAIN_REGEX.test(domain) ? domain : null;
   }
 
+  // --- Blocklist host entries -------------------------------------------------
+  // A blocklist host may be written with a leading dot — ".xyz", ".example.com".
+  // That is how a whole TLD reads naturally, how hosts files and uBlock write an
+  // "and its subdomains" rule, and what anyone typing a TLD reaches for first.
+  //
+  // It means exactly what the bare form already means here, because a bare host
+  // entry covers its subdomains: "example.com" matches sub.example.com, and by
+  // the same rule "xyz" matches spam.xyz. Written with the dot, though, the
+  // entry used to match *nothing*, silently, on both the navigation and the
+  // in-page path — and reached the image-blocking rule as the literal domain
+  // ".xyz", which is not a domain at all.
+  //
+  // The three layers that read these entries — the content script, the
+  // navigation matcher and the image rule — have to agree, so the rule lives
+  // here rather than three times over.
+  function normalizeBlockHost(value) {
+    if (typeof value !== 'string') return '';
+    var host = value.trim().toLowerCase();
+    host = host.replace(/^\.+/, '');  // ".xyz" and "xyz" are the same entry
+    host = host.replace(/\.+$/, '');  // trailing dot: the FQDN form
+    return host;
+  }
+
+  /**
+   * True when an entry names a whole top-level domain rather than a site — one
+   * label, no dot, e.g. "xyz" or ".tk". These are deliberately broad, so the
+   * places that need to treat them differently (the image rule, and any wording
+   * shown to the user) can ask.
+   */
+  function isTldEntry(value) {
+    var host = normalizeBlockHost(value);
+    return !!host && !host.includes('.') && /^[a-z0-9-]+$/.test(host);
+  }
+
   // --- Path-scoped whitelist support ------------------------------------------
   // A whitelist entry may carry an optional `path` so the user can allow just a
   // section of an otherwise-blocked site (e.g. reddit.com/r/NoFap without
@@ -90,6 +124,8 @@
   var exported = {
     DOMAIN_REGEX: DOMAIN_REGEX,
     validateDomain: validateDomain,
+    normalizeBlockHost: normalizeBlockHost,
+    isTldEntry: isTldEntry,
     normalizeWhitelistPath: normalizeWhitelistPath,
     whitelistPathMatches: whitelistPathMatches,
     parseWhitelistInput: parseWhitelistInput

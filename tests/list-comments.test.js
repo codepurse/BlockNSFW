@@ -42,6 +42,7 @@ function loadOptionsListContext() {
   vm.runInContext(
     [
       functionSource(optionsSource, 'isCommentLine'),
+      functionSource(optionsSource, 'entrySortKey'),
       functionSource(optionsSource, 'serializePatterns'),
       functionSource(optionsSource, 'countRealEntries'),
       functionSource(optionsSource, 'deserializePatterns')
@@ -223,6 +224,39 @@ test('serializePatterns: a list with no comments is unchanged from before', () =
   assert.deepEqual(
     plain(ctx.serializePatterns('zebra.com\napple.com\nApple.com\n\nmango.com')),
     ['apple.com', 'mango.com', 'zebra.com']
+  );
+});
+
+// --- what an entry sorts as ------------------------------------------------
+// Reported by Maksim: notes written at the top of a list ended up below the
+// entries. The cause was the sort, not the notes. A `/regex/` entry was filed
+// under "/" rather than under its first letter, so it overtook the entry the
+// notes were attached to and the whole block was carried down with it.
+
+test('entrySortKey: a pattern files under its first letter, not its delimiter', () => {
+  const ctx = loadOptionsListContext();
+  assert.equal(ctx.entrySortKey('/apricots?/'), 'apricots?/');
+  assert.equal(ctx.entrySortKey('title/Example Domain/'), 'title/Example Domain/');
+  assert.equal(ctx.entrySortKey('apricots'), 'apricots');
+  // Nothing left after stripping means the entry keeps its own text, so it
+  // still lands somewhere predictable instead of on an empty key.
+  assert.equal(ctx.entrySortKey('***'), '***');
+  assert.equal(ctx.entrySortKey('  /porn/  '), 'porn/');
+});
+
+test('serializePatterns: notes at the top of a list stay at the top', () => {
+  const ctx = loadOptionsListContext();
+  assert.deepEqual(
+    plain(ctx.serializePatterns('# My list\n! updated 2026-08\napricots\n/porn/\nzebra')),
+    ['# My list', '! updated 2026-08', 'apricots', '/porn/', 'zebra']
+  );
+});
+
+test('serializePatterns: a pattern sorts beside the literal it stands in for', () => {
+  const ctx = loadOptionsListContext();
+  assert.deepEqual(
+    plain(ctx.serializePatterns('porn\n/apricots?/\napricots\nzebra')),
+    ['apricots', '/apricots?/', 'porn', 'zebra']
   );
 });
 
