@@ -285,11 +285,88 @@
 
   <div class="container">
 
+    <!-- ===================== 1.7.6 ===================== -->
+    <div class="release">
+      <div class="release-head">
+        <span class="release-version">1.7.6</span>
+        <span class="tag tag-current">Current</span>
+        <span class="release-date">30 August 2026</span>
+      </div>
+
+      <div class="group">
+        <div class="group-title">New</div>
+
+        <div class="entry">
+          <div class="entry-title">Block a whole top-level domain</div>
+          <div class="entry-body">
+            Put <span class="code">.xyz</span> on a line of its own and every site ending in it is
+            blocked. Some domain endings are used almost entirely for spam and malware, and listing
+            their sites one at a time is hopeless. This is the broadest entry the blocklist accepts,
+            so the settings page says so plainly next to it. Most of this quietly worked already —
+            but <span class="code">.xyz</span>, the form anyone actually writes, matched nothing and
+            said nothing about it. Requested by Maksim.
+          </div>
+        </div>
+
+        <div class="entry">
+          <div class="entry-title">Notes stand out from entries</div>
+          <div class="entry-body">
+            A line starting with <span class="code">#</span> or <span class="code">!</span> now reads
+            in grey while your entries stay bright, so a long list with headings in it can be scanned
+            at a glance instead of being one wall of identical text. Nothing about what gets saved or
+            matched changed. Suggested by Maksim.
+          </div>
+        </div>
+      </div>
+
+      <div class="group">
+        <div class="group-title">Fixed</div>
+
+        <div class="entry">
+          <div class="entry-title">The access code did not guard "unblock this site"</div>
+          <div class="entry-body">
+            If you had set an access code — the long random string you retype by hand, on top of your
+            PIN — it was only ever asked for on the settings page. Unblocking a site from the toolbar
+            popup asked for the four-digit PIN and nothing else, and unblocking a site opens every
+            page on it. So the strongest lock the extension offers was missing from the one place
+            most likely to be used in a weak moment. Whitelisting a site by hand and turning
+            SafeSearch off went the same way.
+            <br /><br />
+            The popup now asks for the code exactly as the settings page does. Unblocking a whole
+            site is treated as one of the decisive actions, alongside turning blocking off — so it
+            asks for the code even on the default setting, not only if you chose "ask on every
+            change". Unblocking a single page of a site is narrower and is not treated that way.
+            Re-blocking a site you had unblocked still needs only the PIN: tightening protection is
+            never made harder. Reported by Pattrattbarr (#29).
+          </div>
+        </div>
+
+        <div class="entry">
+          <div class="entry-title">A blocklist entry starting with a dot could stop image blocking</div>
+          <div class="entry-body">
+            An entry like <span class="code">.xyz</span> was handed to the browser as though it were
+            a domain to block image requests from. It is not one, and a single bad entry is enough to
+            invalidate the rule every other blocked site shares — so adding one could stop image
+            blocking working for the sites that were blocking correctly before it.
+          </div>
+        </div>
+
+        <div class="entry">
+          <div class="entry-title">Patterns were sorted under their slash</div>
+          <div class="entry-body">
+            Saving sorts a list A–Z, and a <span class="code">/regex/</span> entry was compared on its
+            opening slash rather than on the word inside it, so every pattern clumped at the top.
+            Notes travel with the entry written beneath them, which is how notes written at the top of
+            a list ended up underneath it.
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- ===================== 1.7.5 ===================== -->
     <div class="release">
       <div class="release-head">
         <span class="release-version">1.7.5</span>
-        <span class="tag tag-current">Current</span>
         <span class="release-date">August 2026</span>
       </div>
 
