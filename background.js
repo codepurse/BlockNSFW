@@ -2449,7 +2449,7 @@ function buildSafeSearchRules() {
   // Add a provider preference to the outgoing Cookie header without replacing
   // unrelated login/session cookies. This is stronger than response-side
   // Set-Cookie injection: the very first search request already sees it.
-  const mkAppendRequestCookie = (id, requestDomains, cookieValue) => ({
+  const mkAppendRequestCookie = (id, requestDomains, regexFilter, cookieValue) => ({
     id,
     priority: 3,
     action: {
@@ -2460,6 +2460,7 @@ function buildSafeSearchRules() {
     },
     condition: {
       requestDomains,
+      regexFilter,
       resourceTypes: ['main_frame', 'sub_frame', 'xmlhttprequest']
     }
   });
@@ -2517,7 +2518,8 @@ function buildSafeSearchRules() {
       'yandex.az', 'yandex.tj', 'yandex.ee', 'yandex.tm', 'yandex.fr',
       'yandex.md', 'yandex.eu', 'yandex.co.il', 'yandex.lv', 'yandex.lt',
       'ya.ru'
-    ], `yp=${Math.floor(Date.now() / 1000) + 31536000}.sp.family%3A2`),
+    ], String.raw`^https?://(www\.)?(yandex\.(com(\.am|\.tr|\.ge)?|co\.il|ru|ua|by|kz|uz|az|tj|ee|tm|fr|md|eu|lv|lt)|ya\.ru)/(search|images|video|tune/search)(/|\?|$)`,
+    `yp=${Math.floor(Date.now() / 1000) + 31536000}.sp.family%3A2`),
 
     // ---- Cookie-based enforcement (response Set-Cookie injection) ----
     // Presearch SafeSearch is stored in `use_safe_search` cookie (SearXNG ref).

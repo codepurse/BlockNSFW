@@ -11,12 +11,28 @@ const YANDEX_SEARCH_BASE_DOMAINS = [
 ];
 
 function getYandexSearchBaseDomain(hostname) {
-  const host = String(hostname || '').trim().toLowerCase().replace(/^www\./, '');
-  return YANDEX_SEARCH_BASE_DOMAINS.find(domain => host === domain || host.endsWith(`.${domain}`)) || '';
+  const host = String(hostname || '').trim().toLowerCase();
+  return YANDEX_SEARCH_BASE_DOMAINS.find(domain => host === domain || host === `www.${domain}`) || '';
 }
 
 function isYandexSearchHost(hostname) {
   return !!getYandexSearchBaseDomain(hostname);
+}
+
+function isYandexSafeSearchPath(pathname, search = '') {
+  const path = String(pathname || '/').toLowerCase();
+  return path === '/'
+    ? new URLSearchParams(search).has('text')
+    : ['/search', '/images', '/video', '/tune/search'].some(prefix =>
+        path === prefix || path.startsWith(`${prefix}/`));
+}
+
+function updateYandexFamilyCookieValue(currentValue, expiresAt) {
+  const blocks = String(currentValue || '')
+    .split('#')
+    .filter(block => block && !/\.sp\.family/i.test(block));
+  blocks.push(`${expiresAt}.sp.family%3A2`);
+  return blocks.join('#');
 }
 
 // ----------------------------------------------------------------------------
@@ -31,6 +47,8 @@ function isYandexSearchHost(hostname) {
     if (u.protocol !== 'http:' && u.protocol !== 'https:') return;
     const host = (u.hostname || '').toLowerCase().replace(/^www\./, '');
     const path = u.pathname || '/';
+    const isYandexSearchPage = isYandexSearchHost(u.hostname) &&
+      isYandexSafeSearchPath(path, u.search);
 
     const settingsKey = 'pblocker_settings';
     const isAolYahooHost = (hostname) => /(^|\.)search\.aol\./.test(hostname) || hostname === 'search.yahoo.com';
@@ -201,7 +219,7 @@ function isYandexSearchHost(hostname) {
           }
         }
       }
-      if (isYandexSearchHost(u.hostname)) {
+      if (isYandexSearchPage) {
         // This is Yandex's current persisted representation of Family mode,
         // verified against /tune/search. DNR also appends the same value to the
         // first outgoing request; this stored copy keeps client-side state and
@@ -209,7 +227,9 @@ function isYandexSearchHost(hostname) {
         try {
           const baseDomain = getYandexSearchBaseDomain(u.hostname);
           const expiresAt = Math.floor(Date.now() / 1000) + 31536000;
-          const value = `${expiresAt}.sp.family%3A2`;
+          const ypCookie = document.cookie.split(';').find(part => part.trim().startsWith('yp='));
+          const currentValue = ypCookie ? ypCookie.trim().slice(3) : '';
+          const value = updateYandexFamilyCookieValue(currentValue, expiresAt);
           document.cookie = `yp=${value}; Domain=.${baseDomain}; Path=/; Max-Age=31536000; SameSite=Lax; Secure`;
         } catch (_) {}
         // Only observe the settings document; running a whole-document
@@ -305,7 +325,7 @@ function isYandexSearchHost(hostname) {
     const relevant = host.endsWith('presearch.com')
       || host.endsWith('qwant.com')
       || isAolYahooHost(u.hostname.toLowerCase())
-      || isYandexSearchHost(u.hostname);
+      || isYandexSearchPage;
     if (!relevant) return;
 
     Promise.resolve(browserAPI.storage.local.get([settingsKey])).then((res) => {

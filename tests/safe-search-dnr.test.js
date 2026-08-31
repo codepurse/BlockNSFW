@@ -61,6 +61,16 @@ function detectedSearchEngine(url) {
   return sandbox.result;
 }
 
+function updatedYandexFamilyCookie(currentValue, expiresAt) {
+  const sandbox = { currentValue, expiresAt };
+  vm.createContext(sandbox);
+  vm.runInContext(`
+    ${contentFunctionSource('updateYandexFamilyCookieValue')}
+    globalThis.result = updateYandexFamilyCookieValue(currentValue, expiresAt);
+  `, sandbox);
+  return sandbox.result;
+}
+
 test('DuckDuckGo navigation is forced onto its dedicated safe host', () => {
   const ddg = rule(10003);
 
@@ -143,14 +153,40 @@ test('Yandex receives Family mode on the first network request', () => {
   assert.ok(yandex.condition.requestDomains.includes('yandex.com.tr'));
   assert.ok(yandex.condition.requestDomains.includes('ya.ru'));
   assert.deepEqual(yandex.condition.resourceTypes, ['main_frame', 'sub_frame', 'xmlhttprequest']);
+
+  const pattern = new RegExp(yandex.condition.regexFilter);
+  assert.equal(pattern.test('https://yandex.ru/search/?text=flowers'), true);
+  assert.equal(pattern.test('https://www.yandex.com/images/search?text=flowers'), true);
+  assert.equal(pattern.test('https://ya.ru/video/search?text=flowers'), true);
+  assert.equal(pattern.test('https://mail.yandex.ru/search/?text=flowers'), false);
+  assert.equal(pattern.test('https://disk.yandex.ru/images/file.jpg'), false);
 });
 
 test('Yandex regional search hosts are recognized without accepting lookalikes', () => {
   assert.equal(detectedSearchEngine('https://yandex.com/search/?text=flowers'), 'yandex');
   assert.equal(detectedSearchEngine('https://www.yandex.com.tr/images/search?text=flowers'), 'yandex');
   assert.equal(detectedSearchEngine('https://ya.ru/search/?text=flowers'), 'yandex');
+  assert.equal(detectedSearchEngine('https://mail.yandex.ru/search/?text=flowers'), null);
   assert.equal(detectedSearchEngine('https://yandex.com.evil.example/search/?text=flowers'), null);
   assert.equal(detectedSearchEngine('https://notyandex.com/search/?text=flowers'), null);
+});
+
+test('Yandex Family mode preserves unrelated yp preference blocks', () => {
+  const existing = '1790777965.ygu.1#1803953969.szm.1:0x0:724x400';
+  const expiresAt = 1819721986;
+
+  assert.equal(
+    updatedYandexFamilyCookie(existing, expiresAt),
+    `${existing}#${expiresAt}.sp.family%3A2`
+  );
+  assert.equal(
+    updatedYandexFamilyCookie(`${existing}#1700000000.sp.family%3A0`, expiresAt),
+    `${existing}#${expiresAt}.sp.family%3A2`
+  );
+  assert.equal(
+    updatedYandexFamilyCookie(`${existing}#1700000000.sp.family:1`, expiresAt),
+    `${existing}#${expiresAt}.sp.family%3A2`
+  );
 });
 
 test('safe-search rule ids are unique', () => {
