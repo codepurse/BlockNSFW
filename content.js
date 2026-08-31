@@ -1,6 +1,40 @@
 /* BlockNSFW content script - comprehensive content filtering */
 const browserAPI = typeof browser !== 'undefined' ? browser : chrome;
 
+// Yandex serves Search from several regional domains. Keep the list explicit:
+// a broad `hostname.includes('yandex.')` check would also trust lookalike hosts.
+const YANDEX_SEARCH_BASE_DOMAINS = [
+  'yandex.com.am', 'yandex.com.tr', 'yandex.com.ge', 'yandex.co.il',
+  'yandex.com', 'yandex.ru', 'yandex.ua', 'yandex.by', 'yandex.kz',
+  'yandex.uz', 'yandex.az', 'yandex.tj', 'yandex.ee', 'yandex.tm',
+  'yandex.fr', 'yandex.md', 'yandex.eu', 'yandex.lv', 'yandex.lt', 'ya.ru'
+];
+
+function getYandexSearchBaseDomain(hostname) {
+  const host = String(hostname || '').trim().toLowerCase();
+  return YANDEX_SEARCH_BASE_DOMAINS.find(domain => host === domain || host === `www.${domain}`) || '';
+}
+
+function isYandexSearchHost(hostname) {
+  return !!getYandexSearchBaseDomain(hostname);
+}
+
+function isYandexSafeSearchPath(pathname, search = '') {
+  const path = String(pathname || '/').toLowerCase();
+  return path === '/'
+    ? new URLSearchParams(search).has('text')
+    : ['/search', '/images', '/video', '/tune/search'].some(prefix =>
+        path === prefix || path.startsWith(`${prefix}/`));
+}
+
+function updateYandexFamilyCookieValue(currentValue, expiresAt) {
+  const blocks = String(currentValue || '')
+    .split('#')
+    .filter(block => block && !/\.sp\.family/i.test(block));
+  blocks.push(`${expiresAt}.sp.family%3A2`);
+  return blocks.join('#');
+}
+
 // ----------------------------------------------------------------------------
 // SafeSearch side-effect enforcement for cookie-backed engines.
 // Runs at document_start so the page's first request already sees the
@@ -13,6 +47,8 @@ const browserAPI = typeof browser !== 'undefined' ? browser : chrome;
     if (u.protocol !== 'http:' && u.protocol !== 'https:') return;
     const host = (u.hostname || '').toLowerCase().replace(/^www\./, '');
     const path = u.pathname || '/';
+    const isYandexSearchPage = isYandexSearchHost(u.hostname) &&
+      isYandexSafeSearchPath(path, u.search);
 
     const settingsKey = 'pblocker_settings';
     const isAolYahooHost = (hostname) => /(^|\.)search\.aol\./.test(hostname) || hostname === 'search.yahoo.com';
@@ -183,6 +219,24 @@ const browserAPI = typeof browser !== 'undefined' ? browser : chrome;
           }
         }
       }
+      if (isYandexSearchPage) {
+        // This is Yandex's current persisted representation of Family mode,
+        // verified against /tune/search. DNR also appends the same value to the
+        // first outgoing request; this stored copy keeps client-side state and
+        // subsequent form/API code aligned with what the server received.
+        try {
+          const baseDomain = getYandexSearchBaseDomain(u.hostname);
+          const expiresAt = Math.floor(Date.now() / 1000) + 31536000;
+          const ypCookie = document.cookie.split(';').find(part => part.trim().startsWith('yp='));
+          const currentValue = ypCookie ? ypCookie.trim().slice(3) : '';
+          const value = updateYandexFamilyCookieValue(currentValue, expiresAt);
+          document.cookie = `yp=${value}; Domain=.${baseDomain}; Path=/; Max-Age=31536000; SameSite=Lax; Secure`;
+        } catch (_) {}
+        // Only observe the settings document; running a whole-document
+        // MutationObserver on Yandex's live search results would be needless
+        // work on every result appended by the SPA.
+        if (path.startsWith('/tune/search')) injectYandexUiLockdown();
+      }
     };
 
     // Hide the "Filter adult content" row in Qwant's settings modal so the
@@ -237,10 +291,41 @@ const browserAPI = typeof browser !== 'undefined' ? browser : chrome;
       } catch (_) {}
     };
 
+    // Yandex's settings page offers free, mild and family values under the
+    // stable `filter_search_results` field. Keep Family selected and make the
+    // weaker choices unreachable while SafeSearch enforcement is enabled.
+    const injectYandexUiLockdown = () => {
+      const forceFamily = () => {
+        const radios = document.querySelectorAll('input[name="filter_search_results"]');
+        radios.forEach(radio => {
+          const isFamily = radio.value === 'family';
+          radio.checked = isFamily;
+          radio.disabled = true;
+          if (!isFamily) {
+            const row = radio.closest('li, label');
+            if (row) row.style.display = 'none';
+          }
+        });
+      };
+
+      const run = () => { try { forceFamily(); } catch (_) {} };
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', run, { once: true });
+      } else {
+        run();
+      }
+      try {
+        new MutationObserver(run).observe(document.documentElement, {
+          subtree: true, childList: true
+        });
+      } catch (_) {}
+    };
+
     // Only run on relevant hosts to keep startup cost ~zero elsewhere.
     const relevant = host.endsWith('presearch.com')
       || host.endsWith('qwant.com')
-      || isAolYahooHost(u.hostname.toLowerCase());
+      || isAolYahooHost(u.hostname.toLowerCase())
+      || isYandexSearchPage;
     if (!relevant) return;
 
     Promise.resolve(browserAPI.storage.local.get([settingsKey])).then((res) => {
@@ -2485,9 +2570,9 @@ function getSearchEngine() {
   if (hostname.includes('google.')) return 'google';
   if (hostname.includes('bing.')) return 'bing';
   if (hostname.includes('duckduckgo.') || hostname === 'duckduckgo.com' || hostname.includes('ddg.')) return 'duckduckgo';
-  if (hostname === 'search.brave.com') return 'brave';
+  if (hostname === 'search.brave.com' || hostname === 'safe.search.brave.com') return 'brave';
   if (hostname.includes('yahoo.')) return 'yahoo';
-  if ((hostname === 'ya.ru' || hostname.includes('yandex.')) &&
+  if (isYandexSearchHost(hostname) &&
       (pathname.startsWith('/search') || pathname.startsWith('/images') || params.has('text'))) {
     return 'yandex';
   }

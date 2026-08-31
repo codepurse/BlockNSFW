@@ -32,7 +32,7 @@ BlockNSFW combines several protection layers:
 - Domain blocking with local fallback rules plus cached remote blocklist updates. IDN / punycode hostnames (e.g. `xn--porn-tqa.net`) are retained at runtime, not silently dropped.
 - Hostname smart filter that scans both the ASCII / punycode form and the decoded Unicode form of a hostname, with multilingual adult-hostword coverage (Chinese, Korean, Russian, Arabic, Thai, plus transliterated Latin).
 - Page and visible-content filtering through a Manifest V3 content script
-- Search SafeSearch enforcement on Google, Bing, DuckDuckGo, Yahoo, Brave, Ecosia, Qwant, AOL Search, and Presearch
+- Search SafeSearch enforcement on Google, Bing, DuckDuckGo, Yahoo, Brave, Ecosia, Qwant, AOL Search, Presearch, and Yandex
 - Optional DNS-based blocking through Cloudflare for Families
 - Reddit NSFW subreddit checks for Reddit-specific filtering paths
 - Optional Facebook Reels and Instagram Reels blocking toggles
@@ -90,7 +90,7 @@ Privacy details live in `PRIVACY_POLICY.md`. Public docs should stay aligned wit
 Supported:
 
 - Chrome 88+
-- Firefox 109+
+- Firefox 113+
 - Chromium-based browsers that support MV3 and required permissions
 
 More detail: `BROWSER_COMPATIBILITY.md`
