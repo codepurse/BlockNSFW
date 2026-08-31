@@ -80,7 +80,7 @@
   "browser_specific_settings": {
     "gecko": {
       "id": "blocknsfw@extension.local",
-      "strict_min_version": "109.0"
+      "strict_min_version": "113.0"
     }
   }
 }
