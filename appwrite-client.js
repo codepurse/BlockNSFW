@@ -14,6 +14,20 @@ const REPORTED_KEYS_KEY = 'pblocker_reported_keys';
 const REPORT_COOLDOWN_MS = 120_000;
 const DAILY_REPORT_LIMIT = 5;
 
+// Which browser a submission came from. This used to be the literal string
+// 'chrome', so every report and story sent from Firefox showed up as Chrome.
+// shared/browser-key.js is loaded ahead of this file on both pages that submit
+// (options.html, community.html); the guard only keeps a submission from
+// failing outright if that ever stops being true.
+function reportBrowserKey() {
+  try {
+    if (typeof BrowserKey !== 'undefined' && BrowserKey && BrowserKey.detectBrowserKey) {
+      return BrowserKey.detectBrowserKey();
+    }
+  } catch (_) {}
+  return 'unknown';
+}
+
 const PBlockerReports = (() => {
   const api = typeof browser === 'undefined' ? chrome : browser;
 
@@ -133,7 +147,7 @@ const PBlockerReports = (() => {
           category,
           notes: (notes || '').slice(0, 500),
           deviceId,
-          browser: 'chrome',
+          browser: reportBrowserKey(),
           version,
         }),
       });
@@ -324,7 +338,7 @@ const PBlockerStories = (() => {
           nickname: 'Anonymous',
           status: 'pending',
           deviceId,
-          browser: 'chrome',
+          browser: reportBrowserKey(),
           version,
         }),
       });

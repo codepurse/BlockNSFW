@@ -13,6 +13,7 @@
   ],
   "background": {
     "scripts": [
+      "shared/browser-key.js",
       "shared/hostname.js",
       "shared/host-keywords.js",
       "shared/validate-domain.js",
