@@ -1,0 +1,37 @@
+Marqo NSFW Image Detection 384 — model weights
+==============================================
+
+The `group1-shard*of6.bin` files in this directory are the weights of
+
+    Marqo/nsfw-image-detection-384
+    https://huggingface.co/Marqo/nsfw-image-detection-384
+
+a `vit_tiny_patch16_384` fine-tune published by Marqo under the
+**Apache License, Version 2.0**:
+
+    https://www.apache.org/licenses/LICENSE-2.0
+
+IMPORTANT: these files are NOT covered by `data/LICENSE` (MIT), which applies
+to the blocklist and whitelist data in this repository. They remain under
+Apache-2.0, and that license travels with them.
+
+They were produced from the upstream Hugging Face weights by
+`tools/convert_vit384.py` in this repository. The conversion is a format change
+only — safetensors to a TensorFlow.js GraphModel — with no retraining and no
+modification of the learned parameters. Verified numerically: the converted
+graph reproduces the original model's logits to within 8.3e-7.
+
+Why they live here rather than in the extension package: the BlockNSFW
+extension fetches them on first use and caches them locally, so the ~22 MB is
+paid only by users who opt into the Vision Transformer classifier, not by
+everyone who installs the extension. The matching graph topology
+(`models/vit384/model.json`) does ship in the package.
+
+The accompanying graph topology is served from the extension itself; only these
+numeric weight files are served from this directory, via
+`VIT384_WEIGHTS_BASE_URL` in `shared/ai-image-models.js`. If these files are
+ever re-published, bump `VIT384_WEIGHTS_VERSION` in that same file — it is part
+of the client-side cache key, and without a bump clients keep serving the old
+weights from cache indefinitely.
+
+See also THIRD_PARTY_NOTICES.md in the repository root.
