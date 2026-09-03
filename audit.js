@@ -143,6 +143,15 @@ function setupEventListeners() {
     exportToCSV();
   });
 
+  // Pagination (delegated). The buttons are re-rendered on every view change,
+  // so bind once on the document rather than per-button.
+  document.addEventListener('click', (e) => {
+    const btn = e.target.closest && e.target.closest('.page-button[data-page]');
+    if (!btn || btn.disabled) return;
+    const page = parseInt(btn.dataset.page, 10);
+    if (Number.isFinite(page)) changePage(page);
+  });
+
   // Clear logs
   document.getElementById('clear-logs-btn').addEventListener('click', () => {
     if (confirm('Are you sure you want to clear all audit logs? This action cannot be undone.')) {
@@ -323,9 +332,13 @@ function renderPagination(paginationElement, page, totalPages, totalItems) {
   const startItem = (page - 1) * ITEMS_PER_PAGE + 1;
   const endItem = Math.min(page * ITEMS_PER_PAGE, totalItems);
 
+  // NOTE: pagination buttons carry their target page in `data-page` and are
+  // handled by a delegated listener (see setupEventListeners). Inline
+  // `onclick=` handlers are blocked by the MV3 extension-page CSP
+  // (script-src 'self'), which silently made every page button a no-op.
   let html = `
-    <button class="page-button" ${page === 1 ? 'disabled' : ''} onclick="changePage(1)">⏮️</button>
-    <button class="page-button" ${page === 1 ? 'disabled' : ''} onclick="changePage(${page - 1})">◀️</button>
+    <button class="page-button" ${page === 1 ? 'disabled' : ''} data-page="1">⏮️</button>
+    <button class="page-button" ${page === 1 ? 'disabled' : ''} data-page="${page - 1}">◀️</button>
     <span class="page-info">
       ${startItem}-${endItem} of ${totalItems}
     </span>
@@ -342,23 +355,28 @@ function renderPagination(paginationElement, page, totalPages, totalItems) {
 
   for (let i = startPage; i <= endPage; i++) {
     html += `
-      <button class="page-button ${i === page ? 'active' : ''}" onclick="changePage(${i})">
+      <button class="page-button ${i === page ? 'active' : ''}" data-page="${i}">
         ${i}
       </button>
     `;
   }
 
   html += `
-    <button class="page-button" ${page === totalPages ? 'disabled' : ''} onclick="changePage(${page + 1})">▶️</button>
-    <button class="page-button" ${page === totalPages ? 'disabled' : ''} onclick="changePage(${totalPages})">⏭️</button>
+    <button class="page-button" ${page === totalPages ? 'disabled' : ''} data-page="${page + 1}">▶️</button>
+    <button class="page-button" ${page === totalPages ? 'disabled' : ''} data-page="${totalPages}">⏭️</button>
   `;
 
   paginationElement.innerHTML = html;
 }
 
-// Change page
+// Change page. Clamped to the current result set so a stale button (the list
+// can shrink under a filter or a storage update between render and click) can
+// never land on an empty page.
 function changePage(page) {
-  currentPage = page;
+  const total = Math.max(1, Math.ceil(getFilteredEvents(currentTab).length / ITEMS_PER_PAGE));
+  const target = Math.min(Math.max(1, page), total);
+  if (target === currentPage) return;
+  currentPage = target;
   renderCurrentView();
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }

@@ -20,6 +20,13 @@
   -->
   <script src="vendor/tfjs/tf.es2017.js"></script>
   <script src="vendor/nsfwjs/nsfwjs.runtime.js"></script>
+  <!--
+    Model registry + the graph-model (vit384) classifier. Both are plain
+    scripts with no eval, and both must load before offscreen.js reads
+    self.AiImageModels / self.VitClassifier.
+  -->
+  <script src="shared/ai-image-models.js"></script>
+  <script src="shared/vit-classifier.js"></script>
   <script src="offscreen.js"></script>
 </body>
 </html>

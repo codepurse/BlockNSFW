@@ -12,6 +12,9 @@ try {
     self.importScripts('shared/validate-domain.js');
     self.importScripts('shared/keyword-pattern.js');
     self.importScripts('shared/ruleset.js');
+    self.importScripts('shared/dns-providers.js');
+    self.importScripts('shared/ai-image-models.js');
+    self.importScripts('shared/vit-classifier.js');
   }
 } catch (_) {
   // shared/hostname.js or shared/host-keywords.js could not be loaded
@@ -24,9 +27,13 @@ try {
 // classifier runtime. How the runtime gets loaded differs per browser
 // (importScripts in Chrome's service worker, <script> tags in Firefox's event
 // page) — see preloadAiRuntime() / loadAiRuntimeViaDom() below.
-let _aiModel = null;
-let _aiModelPromise = null;
-let _aiModelFailed = false;
+// One entry per model id (see shared/ai-image-models.js). Both models can be
+// resident at once, so switching the setting back and forth does not re-pay
+// either load. Failure state is per model too: vit384's first load needs the
+// network, so it can fail in ways the bundled MobileNet never will, and a
+// vit384 outage must not put the fallback model into cooldown.
+//   modelId -> { model, promise, failed, lastError, lastFailureAt }
+const _aiModels = new Map();
 // The TF.js backend the model actually ended up on ('webgl' | 'cpu'), reported
 // back to the content script so the ready log names something real.
 let _aiModelBackend = 'unknown';
@@ -35,18 +42,26 @@ let _aiRuntimeLoadError = '';
 // Firefox-only (<script>-tag) loading state; see loadAiRuntimeViaDom().
 let _aiRuntimeDomPromise = null;
 const _aiRuntimeScriptsLoaded = new Set();
-let _aiModelLastError = '';
-let _aiModelLastFailureAt = 0;
 const AI_MODEL_RETRY_COOLDOWN_MS = 5000;
-const AI_MODEL_INPUT_SIZE = 224;
+
+function aiModelState(modelId) {
+  const id = self.AiImageModels.normalizeModelId(modelId);
+  let entry = _aiModels.get(id);
+  if (!entry) {
+    entry = { model: null, promise: null, failed: false, lastError: '', lastFailureAt: 0 };
+    _aiModels.set(id, entry);
+  }
+  return entry;
+}
 
 function getAiModelErrorMessage(error) {
   return String(error && error.message || error || 'unknown error');
 }
 
-function getAiModelRetryAfterMs(now = Date.now()) {
-  if (!_aiModelFailed || !_aiModelLastFailureAt) return 0;
-  const remaining = AI_MODEL_RETRY_COOLDOWN_MS - (now - _aiModelLastFailureAt);
+function getAiModelRetryAfterMs(now = Date.now(), modelId) {
+  const state = aiModelState(modelId);
+  if (!state.failed || !state.lastFailureAt) return 0;
+  const remaining = AI_MODEL_RETRY_COOLDOWN_MS - (now - state.lastFailureAt);
   return remaining > 0 ? remaining : 0;
 }
 
@@ -158,14 +173,16 @@ async function ensureAiRuntimeLoaded() {
 
 async function loadAiModel(options = {}) {
   const forceRetry = options && options.forceRetry === true;
-  if (_aiModel) return _aiModel;
-  if (_aiModelPromise) return _aiModelPromise;
-  const retryAfterMs = getAiModelRetryAfterMs();
-  if (_aiModelFailed && !forceRetry && retryAfterMs > 0) {
-    const suffix = _aiModelLastError ? `: ${_aiModelLastError}` : '';
+  const descriptor = self.AiImageModels.resolveModel(options && options.model);
+  const state = aiModelState(descriptor.id);
+  if (state.model) return state.model;
+  if (state.promise) return state.promise;
+  const retryAfterMs = getAiModelRetryAfterMs(Date.now(), descriptor.id);
+  if (state.failed && !forceRetry && retryAfterMs > 0) {
+    const suffix = state.lastError ? `: ${state.lastError}` : '';
     throw new Error(`AI model cooling down after failure${suffix}`);
   }
-  _aiModelPromise = (async () => {
+  state.promise = (async () => {
     try {
       await ensureAiRuntimeLoaded();
       const tfLike = self.tf || null;
@@ -185,38 +202,47 @@ async function loadAiModel(options = {}) {
       if (tfLike && typeof tfLike.ready === 'function') {
         try { await tfLike.ready(); } catch (_) {}
       }
-      // Default MobileNetV2 is a layers model; nsfwjs.runtime.js (the CSP-safe
-      // build used here) only supports layers models, so load without options.
-      _aiModel = await self.nsfwjs.load(browserAPI.runtime.getURL('nsfwjs/'));
-      _aiModelFailed = false;
-      _aiModelLastError = '';
-      _aiModelLastFailureAt = 0;
+      if (descriptor.kind === 'tfjs-graph-binary') {
+        // Graph model: loaded directly with tf.loadGraphModel, because the
+        // CSP-safe nsfwjs.runtime.js build cannot load graph models. Its
+        // weights are fetched from the network on first use.
+        state.model = await self.VitClassifier.load(descriptor.id);
+      } else {
+        // MobileNetV2 is a layers model; nsfwjs.runtime.js (the CSP-safe build
+        // used here) only supports layers models, so load without options.
+        state.model = await self.nsfwjs.load(
+          browserAPI.runtime.getURL(descriptor.modelPath));
+      }
+      state.failed = false;
+      state.lastError = '';
+      state.lastFailureAt = 0;
       _aiModelBackend = (tfLike && typeof tfLike.getBackend === 'function' &&
         tfLike.getBackend()) || 'unknown';
-      console.log('[BlockNSFW] AI Image Blocker model loaded, backend:',
-        _aiModelBackend);
-      return _aiModel;
+      console.log('[BlockNSFW] AI Image Blocker model loaded:', descriptor.id,
+        'backend:', _aiModelBackend);
+      return state.model;
     } catch (err) {
-      _aiModel = null;
-      _aiModelFailed = true;
-      _aiModelLastError = getAiModelErrorMessage(err);
-      _aiModelLastFailureAt = Date.now();
+      state.model = null;
+      state.failed = true;
+      state.lastError = getAiModelErrorMessage(err);
+      state.lastFailureAt = Date.now();
       console.warn('[BlockNSFW] Failed to load NSFW model in SW:',
-        _aiModelLastError);
-      throw new Error(_aiModelLastError);
+        descriptor.id, state.lastError);
+      throw new Error(state.lastError);
     } finally {
-      _aiModelPromise = null;
+      state.promise = null;
     }
   })();
-  return _aiModelPromise;
+  return state.promise;
 }
 
-async function classifyImageBytes(blobOrArrayBuffer) {
-  const model = await loadAiModel();
+async function classifyImageBytes(blobOrArrayBuffer, modelId) {
+  const descriptor = self.AiImageModels.resolveModel(modelId);
+  const model = await loadAiModel({ model: descriptor.id });
   let bitmap;
   const bitmapOptions = {
-    resizeWidth: AI_MODEL_INPUT_SIZE,
-    resizeHeight: AI_MODEL_INPUT_SIZE,
+    resizeWidth: descriptor.inputSize,
+    resizeHeight: descriptor.inputSize,
     resizeQuality: 'high'
   };
   if (blobOrArrayBuffer instanceof ArrayBuffer ||
@@ -234,11 +260,17 @@ async function classifyImageBytes(blobOrArrayBuffer) {
       bitmap = await createImageBitmap(blobOrArrayBuffer);
     }
   }
-  const predictions = await model.classify(bitmap);
-  try { bitmap.close(); } catch (_) {}
-  const scores = {};
-  for (const p of predictions) scores[p.className] = p.probability;
-  return scores;
+  try {
+    if (descriptor.kind === 'tfjs-graph-binary') {
+      return await self.VitClassifier.classify(model, bitmap, descriptor.id);
+    }
+    const predictions = await model.classify(bitmap);
+    const scores = {};
+    for (const p of predictions) scores[p.className] = p.probability;
+    return scores;
+  } finally {
+    try { bitmap.close(); } catch (_) {}
+  }
 }
 
 // ============================================
@@ -306,6 +338,57 @@ function sendToOffscreen(payload, timeoutMs) {
   });
 }
 
+// A bundled model is a local file read; a model whose weights come off the
+// network is not. vit384's first load pulls ~22 MB, which on a slow connection
+// comfortably outlives the 30s that was fine when every model was packaged.
+//
+// The content script's own ping timeout (60s) can still fire during that first
+// download, and that is fine: its retry sends another ping, offscreen's
+// loadModel() hands back the SAME in-flight promise, so retries coalesce
+// instead of starting a second download. Images simply go unfiltered until the
+// weights land — the honest state, and the options page shows the progress.
+const MODEL_DOWNLOAD_TIMEOUT_MS = 300000;
+const MODEL_LOCAL_TIMEOUT_MS = 30000;
+
+function modelNeedsDownload(modelId) {
+  return !self.AiImageModels.resolveModel(modelId).bundled;
+}
+
+// If the selected model cannot load, fall back to the bundled one rather than
+// leaving the user with NO image filtering. vit384 depends on the network for
+// its first load, so "model unavailable" is a reachable everyday state (no
+// connection, weights not published yet, cache evicted mid-download) — and for
+// a content blocker, degrading to unfiltered is the worst possible outcome.
+//
+// The model that actually ran is reported back to the caller, so the content
+// script tags its cache with the truth rather than with the setting. verdictFor
+// dispatches on the score shape and ignores thresholds belonging to the other
+// model, so a fallback verdict is computed against the correct default bars.
+async function classifyWithFallback(blob, modelId) {
+  const descriptor = self.AiImageModels.resolveModel(modelId);
+  try {
+    const scores = await classifyImageBytes(blob, descriptor.id);
+    return { scores, model: descriptor.id };
+  } catch (err) {
+    const fallbackId = self.AiImageModels.DEFAULT_MODEL_ID;
+    if (descriptor.bundled || descriptor.id === fallbackId) throw err;
+    console.warn('[BlockNSFW] model', descriptor.id, 'unavailable, falling back to',
+      fallbackId + ':', getAiModelErrorMessage(err));
+    const scores = await classifyImageBytes(blob, fallbackId);
+    return { scores, model: fallbackId, fellBackFrom: descriptor.id };
+  }
+}
+
+function pingTimeoutFor(modelId) {
+  return modelNeedsDownload(modelId) ? MODEL_DOWNLOAD_TIMEOUT_MS : MODEL_LOCAL_TIMEOUT_MS;
+}
+
+function classifyTimeoutFor(modelId) {
+  // A classify request can be the one that triggers the initial load, so it
+  // needs the same headroom.
+  return modelNeedsDownload(modelId) ? MODEL_DOWNLOAD_TIMEOUT_MS : MODEL_LOCAL_TIMEOUT_MS;
+}
+
 // Storage keys
 const SETTINGS_KEY = 'pblocker_settings';
 const BLOCKED_STATS_KEY = 'pblocker_stats';
@@ -331,11 +414,15 @@ const DEFAULT_SETTINGS = {
   searchSummaryEnabled: true, // draw the "N results blocked" line on search pages
   blockCountDisplay: 'badge', // 'badge' (toolbar icon) | 'floating' (in-page pill)
   dnsFilterEnabled: false,
+  dnsProvider: 'cloudflare', // see shared/dns-providers.js for the roster
+  dnsCustomUrl: '', // DoH endpoint used when dnsProvider is 'custom'
   safeSearchEnabled: true,
   facebookReelsEnabled: false,
   instagramReelsEnabled: false,
   aiImageBlocker: false, // Beta — opt-in (off on fresh install)
   aiImageScanAllSites: true, // when AI image blocker is on, scan 1st-party too
+  aiImageModel: 'nsfwjs', // 'nsfwjs' (bundled) | 'vit384' (downloads weights)
+  aiStrictness: 'balanced',
   aiTextBlocker: false, // Beta — opt-in (off on fresh install)
   aiTextStrictness: 'balanced',
 };
@@ -1845,65 +1932,119 @@ function isUrlInDefaultBlocklist(urlStr) {
   return false;
 }
 
-// DNS-over-HTTPS filtering via Cloudflare for Families
+// DNS-over-HTTPS filtering. The roster of resolvers, the wireformat codec and
+// the tri-state query live in shared/dns-providers.js; this half owns caching,
+// failover between two providers, and not hammering a provider that is down.
 const dnsCache = new Map();
 const DNS_CACHE_TTL = 3600000; // 1 hour
 const DNS_CACHE_MAX = 2000;
-const DNS_DOH_URL = 'https://family.cloudflare-dns.com/dns-query';
 const DNS_TIMEOUT_MS = 3000;
 
-function isDnsCacheBlocked(hostname) {
-  const entry = dnsCache.get(hostname);
+// A resolver that is unreachable or rate-limiting us would otherwise add a full
+// DNS_TIMEOUT_MS stall to every navigation, because nothing remembers that the
+// last twenty lookups all timed out. After this many consecutive no-answers we
+// stop asking it until the cooldown expires and let the partner carry the load.
+const DNS_PROVIDER_FAILURE_LIMIT = 3;
+const DNS_PROVIDER_COOLDOWN_MS = 300000; // 5 minutes
+const dnsProviderHealth = new Map(); // providerId -> { failures, mutedUntil }
+
+// Two different custom endpoints both answer to the id 'custom', so keying on
+// the id alone would serve one resolver's verdicts for the other. Presets keep
+// their short id; a custom one is identified by its endpoint.
+function dnsProviderKey(provider) {
+  return provider.custom ? `custom|${provider.doh}` : provider.id;
+}
+
+function dnsCacheKey(providerId, hostname) {
+  // Keyed by provider: two resolvers disagree about plenty of domains, so a
+  // verdict from the old provider must not survive the user switching.
+  return `${providerId}|${hostname}`;
+}
+
+function isDnsCacheBlocked(providerId, hostname) {
+  const key = dnsCacheKey(providerId, hostname);
+  const entry = dnsCache.get(key);
   if (!entry) return undefined;
   if (Date.now() > entry.expiresAt) {
-    dnsCache.delete(hostname);
+    dnsCache.delete(key);
     return undefined;
   }
   return entry.blocked;
 }
 
-async function checkDnsFilter(hostname) {
-  const cached = isDnsCacheBlocked(hostname);
-  if (cached !== undefined) return cached;
+function rememberDnsVerdict(providerId, hostname, blocked) {
+  dnsCache.set(dnsCacheKey(providerId, hostname), {
+    blocked,
+    expiresAt: Date.now() + DNS_CACHE_TTL,
+  });
+  if (dnsCache.size > DNS_CACHE_MAX) {
+    const oldest = dnsCache.keys().next().value;
+    dnsCache.delete(oldest);
+  }
+}
 
-  try {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), DNS_TIMEOUT_MS);
-
-    const res = await fetch(
-      `${DNS_DOH_URL}?name=${encodeURIComponent(hostname)}&type=A`,
-      {
-        headers: { Accept: 'application/dns-json' },
-        signal: controller.signal,
-      }
-    );
-    clearTimeout(timer);
-
-    if (!res.ok) {
-      return false;
-    }
-
-    const data = await res.json();
-
-    // Status 3 = NXDOMAIN (domain blocked by the family filter)
-    // Status 0 but Answer with 0.0.0.0 = sinkholed / blocked
-    let blocked = data.Status === 3;
-    if (!blocked && data.Status === 0 && Array.isArray(data.Answer)) {
-      blocked = data.Answer.some(
-        (a) => a.type === 1 && (a.data === '0.0.0.0' || a.data === '127.0.0.1')
-      );
-    }
-
-    dnsCache.set(hostname, { blocked, expiresAt: Date.now() + DNS_CACHE_TTL });
-    if (dnsCache.size > DNS_CACHE_MAX) {
-      const oldest = dnsCache.keys().next().value;
-      dnsCache.delete(oldest);
-    }
-
-    return blocked;
-  } catch (_) {
+function isDnsProviderMuted(providerId) {
+  const health = dnsProviderHealth.get(providerId);
+  if (!health || !health.mutedUntil) return false;
+  if (Date.now() >= health.mutedUntil) {
+    dnsProviderHealth.delete(providerId); // cooldown served, give it another go
     return false;
   }
+  return true;
+}
+
+function noteDnsProviderResult(providerId, answered) {
+  if (answered) {
+    dnsProviderHealth.delete(providerId);
+    return;
+  }
+  const health = dnsProviderHealth.get(providerId) || { failures: 0, mutedUntil: 0 };
+  health.failures += 1;
+  if (health.failures >= DNS_PROVIDER_FAILURE_LIMIT) {
+    health.mutedUntil = Date.now() + DNS_PROVIDER_COOLDOWN_MS;
+    health.failures = 0;
+  }
+  dnsProviderHealth.set(providerId, health);
+}
+
+// Ask one provider, respecting its cache entry and its cooldown. Returns the
+// same tri-state as queryProvider: true / false / null (no answer).
+async function askDnsProvider(provider, hostname) {
+  if (!provider) return null;
+  const key = dnsProviderKey(provider);
+  const cached = isDnsCacheBlocked(key, hostname);
+  if (cached !== undefined) return cached;
+  if (isDnsProviderMuted(key)) return null;
+
+  const verdict = await self.DnsProviders.queryProvider(provider, hostname, DNS_TIMEOUT_MS);
+  noteDnsProviderResult(key, verdict !== null);
+  if (verdict !== null) rememberDnsVerdict(key, hostname, verdict);
+  return verdict;
+}
+
+/**
+ * Is this hostname filtered by the user's chosen DNS resolver?
+ *
+ * Consults the selected provider, and on a *no-answer* (timeout, HTTP error,
+ * SERVFAIL) falls through to a second provider on a different network. A plain
+ * "not blocked" is an answer and ends the lookup — we only fail over when
+ * nobody answered, otherwise the fallback would get a veto over the primary's
+ * verdict and the user's provider choice would mean nothing.
+ *
+ * Returns null when neither provider answers, so the caller can tell "both
+ * resolvers say this is fine" apart from "nobody answered" and decline to
+ * cache the latter. Treating a failed lookup as a clean bill of health is how
+ * a five-second outage turns into a domain that stays unblocked all session.
+ */
+async function checkDnsFilter(hostname, providerId, customUrl) {
+  if (!self.DnsProviders) return null;
+
+  const primary = self.DnsProviders.resolveProvider(providerId, customUrl);
+  const primaryVerdict = await askDnsProvider(primary, hostname);
+  if (primaryVerdict !== null) return primaryVerdict;
+
+  const fallback = self.DnsProviders.getFallbackProvider(primary.id);
+  return await askDnsProvider(fallback, hostname);
 }
 
 async function shouldBlock(urlStr) {
@@ -1959,18 +2100,27 @@ async function shouldBlock(urlStr) {
     shouldBlockResult = true;
   }
 
-  // DNS-over-HTTPS check via Cloudflare for Families (runs only if nothing else caught it)
+  // DNS-over-HTTPS check via the user's chosen filtering resolver (runs only
+  // if nothing else caught it).
+  let dnsAnswered = true;
   if (!shouldBlockResult && settings.dnsFilterEnabled) {
     try {
-      shouldBlockResult = await checkDnsFilter(hostname);
+      const verdict = await checkDnsFilter(hostname, settings.dnsProvider, settings.dnsCustomUrl);
+      if (verdict === null) dnsAnswered = false;
+      else shouldBlockResult = verdict;
     } catch (_) {
       // DNS failure should never break browsing
+      dnsAnswered = false;
     }
   }
-  
-  // Cache the result aggressively
-  urlCheckCache.set(cacheKey, shouldBlockResult);
-  limitCacheSize(urlCheckCache, MAX_CACHE_SIZE);
+
+  // Cache the result aggressively — but never cache a "not blocked" that only
+  // means the resolvers were unreachable, or a brief outage would whitelist the
+  // domain for the rest of this service worker's life.
+  if (dnsAnswered) {
+    urlCheckCache.set(cacheKey, shouldBlockResult);
+    limitCacheSize(urlCheckCache, MAX_CACHE_SIZE);
+  }
   return shouldBlockResult;
 }
 
@@ -2232,8 +2382,8 @@ browserAPI.runtime.onMessage.addListener((message, sender, sendResponse) => {
           sendResponse({ blocked: false });
           return;
         }
-        const blocked = await checkDnsFilter(message.hostname);
-        sendResponse({ blocked });
+        const blocked = await checkDnsFilter(message.hostname, settings.dnsProvider, settings.dnsCustomUrl);
+        sendResponse({ blocked: blocked === true });
       } catch (_) {
         sendResponse({ blocked: false });
       }
@@ -2272,11 +2422,25 @@ browserAPI.runtime.onMessage.addListener((message, sender, sendResponse) => {
       if (message.src && offscreenAvailable()) {
         try {
           await ensureOffscreenDocument();
-          const res = await sendToOffscreen({ op: 'classify', src: message.src });
+          const requested = self.AiImageModels.resolveModel(message.model);
+          let res = await sendToOffscreen({
+            op: 'classify', src: message.src, model: requested.id
+          }, classifyTimeoutFor(requested.id));
+          let servedBy = requested.id;
+          if ((!res || !res.success) && !requested.bundled) {
+            // See classifyWithFallback: never degrade to unfiltered.
+            const fallbackId = self.AiImageModels.DEFAULT_MODEL_ID;
+            console.warn('[BlockNSFW] offscreen', requested.id, 'classify failed,',
+              'falling back to', fallbackId + ':', res && res.error);
+            res = await sendToOffscreen({
+              op: 'classify', src: message.src, model: fallbackId
+            }, classifyTimeoutFor(fallbackId));
+            servedBy = fallbackId;
+          }
           if (!res || !res.success) {
             throw new Error(res && res.error ? res.error : 'offscreen classify failed');
           }
-          sendResponse({ success: true, scores: res.scores });
+          sendResponse({ success: true, scores: res.scores, model: servedBy });
           return;
         } catch (offErr) {
           console.warn('[BlockNSFW] offscreen classify failed, falling back to SW:',
@@ -2298,8 +2462,8 @@ browserAPI.runtime.onMessage.addListener((message, sender, sendResponse) => {
           if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
           blob = await resp.blob();
         }
-        const scores = await classifyImageBytes(blob);
-        sendResponse({ success: true, scores });
+        const result = await classifyWithFallback(blob, message.model);
+        sendResponse({ success: true, scores: result.scores, model: result.model });
       } catch (error) {
         console.warn('[BlockNSFW] SW classify failed:', error && error.message || error);
         sendResponse({ success: false, error: error.message || String(error) });
@@ -2309,29 +2473,141 @@ browserAPI.runtime.onMessage.addListener((message, sender, sendResponse) => {
   } else if (message.type === 'ai_ping_model') {
     (async () => {
       // Warm up the offscreen model when available; fall back to the SW model.
+      const requested = self.AiImageModels.resolveModel(message.model);
+      const fallbackId = self.AiImageModels.DEFAULT_MODEL_ID;
+      // Try the selected model, then the bundled one. A ping is the gate the
+      // content script waits on before it will classify anything, so a ping
+      // that reports "not ready" means the page goes completely unfiltered.
+      // Getting *a* working classifier ready matters more than getting the
+      // preferred one.
+      const candidates = requested.bundled ? [requested.id] : [requested.id, fallbackId];
+      // Why the SELECTED model failed, kept even when a fallback succeeds.
+      // Without this the options page can see "ready" and no error at all, so
+      // its download button appears to do nothing — the caller cannot tell
+      // "downloaded" from "a different model is filling in".
+      let requestedError = '';
+
       if (offscreenAvailable()) {
         try {
           await ensureOffscreenDocument();
-          const res = await sendToOffscreen(
-            { op: 'ping', forceRetry: message.forceRetry === true }, 30000);
-          if (res && res.ready) { sendResponse({ ready: true, backend: res.backend }); return; }
-          throw new Error(res && res.error ? res.error : 'offscreen model not ready');
+          for (const candidateId of candidates) {
+            const res = await sendToOffscreen({
+              op: 'ping',
+              forceRetry: message.forceRetry === true,
+              model: candidateId
+            }, pingTimeoutFor(candidateId));
+            if (res && res.ready) {
+              sendResponse({
+                ready: true,
+                backend: res.backend,
+                model: candidateId,
+                fellBackFrom: candidateId === requested.id ? null : requested.id,
+                requestedError: candidateId === requested.id ? '' : requestedError
+              });
+              return;
+            }
+            const why = (res && res.error) || 'model not ready';
+            if (candidateId === requested.id) requestedError = why;
+            console.warn('[BlockNSFW] offscreen model not ready:', candidateId, why);
+          }
+          throw new Error('no model ready in offscreen document');
         } catch (offErr) {
           console.warn('[BlockNSFW] offscreen model ping failed, falling back to SW:',
             offErr && offErr.message || offErr);
         }
       }
       try {
-        await loadAiModel({ forceRetry: message.forceRetry === true });
-        sendResponse({ ready: true, backend: _aiModelBackend });
+        let readyId = null;
+        let lastErr = null;
+        for (const candidateId of candidates) {
+          try {
+            await loadAiModel({
+              forceRetry: message.forceRetry === true,
+              model: candidateId
+            });
+            readyId = candidateId;
+            break;
+          } catch (err) {
+            lastErr = err;
+            if (candidateId === requested.id) {
+              requestedError = getAiModelErrorMessage(err);
+            }
+            console.warn('[BlockNSFW] SW model load failed:', candidateId,
+              getAiModelErrorMessage(err));
+          }
+        }
+        if (!readyId) throw lastErr || new Error('no model could be loaded');
+        sendResponse({
+          ready: true,
+          backend: _aiModelBackend,
+          model: readyId,
+          fellBackFrom: readyId === requested.id ? null : requested.id,
+          requestedError: readyId === requested.id ? '' : requestedError
+        });
       } catch (error) {
         console.warn('[BlockNSFW] SW model load failed:', error && error.message || error);
         sendResponse({
           ready: false,
           error: error.message || String(error),
-          retryAfterMs: getAiModelRetryAfterMs()
+          retryAfterMs: getAiModelRetryAfterMs(Date.now(), message.model)
         });
       }
+    })();
+    return true;
+  } else if (message.type === 'ai_model_status') {
+    // Used by the options page to say whether a model's weights are already
+    // local, and to show download progress while they are not.
+    (async () => {
+      const descriptor = self.AiImageModels.resolveModel(message.model);
+      if (descriptor.bundled) {
+        sendResponse({ success: true, model: descriptor.id, cached: true, bundled: true });
+        return;
+      }
+      if (offscreenAvailable()) {
+        try {
+          await ensureOffscreenDocument();
+          const res = await sendToOffscreen(
+            { op: 'model_status', model: descriptor.id }, 15000);
+          if (res && res.success) { sendResponse({ ...res, bundled: false }); return; }
+        } catch (_) {}
+      }
+      try {
+        const [cached, topology] = await Promise.all([
+          self.VitClassifier.isCached(descriptor.id),
+          self.VitClassifier.topologyStatus(descriptor.id)
+        ]);
+        sendResponse({
+          success: true,
+          model: descriptor.id,
+          cached,
+          bundled: false,
+          available: topology.available,
+          error: topology.error
+        });
+      } catch (error) {
+        sendResponse({ success: false, error: error.message || String(error) });
+      }
+    })();
+    return true;
+  } else if (message.type === 'ai_clear_model_weights') {
+    (async () => {
+      const descriptor = self.AiImageModels.resolveModel(message.model);
+      _aiModels.delete(descriptor.id);
+      let cleared = false;
+      if (offscreenAvailable()) {
+        try {
+          await ensureOffscreenDocument();
+          const res = await sendToOffscreen(
+            { op: 'clear_weights', model: descriptor.id }, 15000);
+          cleared = !!(res && res.cleared);
+        } catch (_) {}
+      }
+      if (!cleared) {
+        try {
+          cleared = await self.VitClassifier.clearCachedWeights(descriptor.id);
+        } catch (_) {}
+      }
+      sendResponse({ success: true, cleared });
     })();
     return true;
   }

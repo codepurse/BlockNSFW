@@ -1281,7 +1281,8 @@ function getBlockedReasonLabel(reasonKey) {
           return;
         }
 
-        // DNS-over-HTTPS check via background (Cloudflare for Families)
+        // DNS-over-HTTPS check via background, against whichever filtering
+        // resolver the user picked in settings (see shared/dns-providers.js)
         if (settings.dnsFilterEnabled) {
           try {
             const dnsResult = await new Promise((resolve) => {
@@ -1452,7 +1453,18 @@ function debounce(func, delay) {
 // Map a user-facing strictness preset to verdictFor() thresholds. Keep these
 // in sync with the labels in options.js (getAiStrictnessMeta). Lower numbers =
 // more aggressive (blocks more). `balanced` is the default.
-function getAiThresholds(level) {
+// The two models answer different questions, so a strictness preset means
+// different numbers for each: NSFW.js needs a Porn+Hentai bar and a separate
+// (deliberately high) Sexy bar, while the binary ViT needs one NSFW bar. Both
+// tables live in shared/ai-image-models.js so the content script, the
+// classifier and the tests cannot drift apart.
+//
+// The fallback below is only reachable if the shared module failed to load
+// (content scripts are injected as a list; one failure should not silently
+// disable filtering). It mirrors the balanced NSFW.js preset.
+function getAiThresholds(level, modelId) {
+  const registry = typeof AiImageModels !== 'undefined' ? AiImageModels : null;
+  if (registry) return registry.getThresholds(modelId, level);
   switch (String(level || '').toLowerCase()) {
     case 'relaxed': return { pornHentai: 0.80, sexy: 0.97 };
     case 'strict':  return { pornHentai: 0.45, sexy: 0.80 };
@@ -1516,6 +1528,7 @@ async function loadSettings() {
       instagramReelsEnabled: false,
       aiImageBlocker: false,
       aiImageScanAllSites: true,
+      aiImageModel: 'nsfwjs',
       aiStrictness: 'balanced',
       aiTextBlocker: false,
       aiTextStrictness: 'balanced'
@@ -1568,7 +1581,7 @@ async function loadSettings() {
       window.AIImageBlocker.init({
         ...settings,
         enabled: isEnabled,
-        aiThresholds: getAiThresholds(settings.aiStrictness)
+        aiThresholds: getAiThresholds(settings.aiStrictness, settings.aiImageModel)
       });
     }
 
@@ -4306,7 +4319,19 @@ function observeImage(img) {
   const previousObservedSrc = img.dataset.pblockerObservedSrc || '';
   if (img.dataset.pblockerObserved === 'true' && previousObservedSrc === effectiveUrl) return;
   if (previousObservedSrc && previousObservedSrc !== effectiveUrl && img.classList) {
-    img.classList.remove('pblocker-ai-blocked');
+    // The node now holds a different picture, so the old AI verdict is stale.
+    // Hand it to the AI blocker rather than unblurring here: on virtualised
+    // feeds (X/Twitter) the same <img> is recycled across posts, and simply
+    // dropping the blur exposed the new image for the whole classification
+    // round-trip. onImageSrcChanged() re-hides it until a fresh verdict lands
+    // and reveals it itself when the AI filter is off.
+    if (typeof window.AIImageBlocker !== 'undefined' &&
+        window.AIImageBlocker &&
+        typeof window.AIImageBlocker.onImageSrcChanged === 'function') {
+      window.AIImageBlocker.onImageSrcChanged(img);
+    } else {
+      img.classList.remove('pblocker-ai-blocked');
+    }
   }
   img.dataset.pblockerObserved = 'true';
   if (effectiveUrl) {

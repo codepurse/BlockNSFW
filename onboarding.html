@@ -190,6 +190,36 @@
     }
     .learn-link:hover { text-decoration: underline; }
 
+    /* Device-level resolver addresses (step 5). Same shell as .opt, but the
+       right-hand control is a copy button rather than a switch. */
+    .dns-row {
+      display: flex; align-items: center; gap: 14px;
+      padding: 13px 16px;
+      background: var(--surface-2);
+      border: 1px solid var(--card-border);
+      border-radius: var(--radius);
+      margin-bottom: 10px;
+      transition: var(--transition);
+    }
+    .dns-row:hover { border-color: var(--card-border-hover); }
+    .dns-row .info { flex: 1; min-width: 0; }
+    .dns-row .name { font-weight: 600; font-size: 14px; }
+    .dns-row .addr {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 12.5px; color: var(--foreground-muted); margin-top: 3px;
+      /* Two IPv4 addresses stay on one line at any wizard width. */
+      white-space: nowrap; overflow-x: auto;
+    }
+    .copy-btn {
+      flex: 0 0 auto; cursor: pointer;
+      background: var(--secondary); color: var(--secondary-foreground);
+      border: 1px solid var(--card-border); border-radius: var(--radius-sm);
+      padding: 7px 12px; font-size: 12.5px; font-weight: 600; font-family: inherit;
+      transition: var(--transition);
+    }
+    .copy-btn:hover { background: var(--secondary-hover); border-color: var(--card-border-hover); }
+    .copy-btn.copied { background: var(--success-soft); border-color: rgba(16,185,129,0.3); color: var(--success); }
+
     /* Footer / buttons */
     .wizard-foot {
       display: flex; align-items: center; gap: 10px;
@@ -230,7 +260,7 @@
         <span>BlockNSFW</span>
       </div>
       <div class="dots" id="dots">
-        <span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="dot"></span>
+        <span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="dot"></span>
       </div>
     </div>
 
@@ -328,6 +358,51 @@
         <div class="note">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
           <span>Now in beta for Windows &amp; Linux. &nbsp;<a class="learn-link" id="dg-link" href="https://github.com/codepurse/extension-guard" target="_blank" rel="noopener">Learn more →</a></span>
+        </div>
+      </section>
+
+      <!-- Step 5: DNS — inside the browser, and outside it -->
+      <section class="step" data-step="5">
+        <div class="step-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+        </div>
+        <h1>Block at the network level</h1>
+        <p class="lede">Domain blocking can happen before a page even starts loading. This works in two places — one inside BlockNSFW, one covering your whole device.</p>
+
+        <div class="opt">
+          <div class="opt-txt">
+            <div class="t">DNS check inside BlockNSFW</div>
+            <div class="d">Domains the local blocklist hasn't already decided on get a second opinion from a family-safe resolver. You choose which one in Settings.</div>
+          </div>
+          <label class="switch"><input type="checkbox" id="dns-filter"><span class="slider"></span></label>
+        </div>
+
+        <label class="field">Then cover the rest of your device</label>
+        <div class="detail" style="margin-bottom: 12px;">
+          BlockNSFW only protects this browser. Setting one of these in your
+          computer's or router's network settings filters every app — and keeps
+          working even if this extension is removed.
+        </div>
+
+        <div class="dns-row">
+          <div class="info">
+            <div class="name">CleanBrowsing Family</div>
+            <div class="addr">185.228.168.168 &nbsp;·&nbsp; 185.228.169.168</div>
+          </div>
+          <button class="copy-btn" type="button" data-copy="185.228.168.168, 185.228.169.168">Copy</button>
+        </div>
+
+        <div class="dns-row">
+          <div class="info">
+            <div class="name">DNS for Family</div>
+            <div class="addr">94.130.180.225 &nbsp;·&nbsp; 78.47.64.161</div>
+          </div>
+          <button class="copy-btn" type="button" data-copy="94.130.180.225, 78.47.64.161">Copy</button>
+        </div>
+
+        <div class="note">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+          <span>Both are free and need no account. &nbsp;<a class="learn-link" id="dns-link" href="https://cleanbrowsing.org/guides/" target="_blank" rel="noopener">How to set this up →</a></span>
         </div>
       </section>
 
