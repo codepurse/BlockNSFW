@@ -7,7 +7,7 @@ BlockNSFW ships as Manifest V3 extension for Chromium browsers and Firefox.
 ### Primary targets
 
 - Chrome 88+
-- Firefox 109+
+- Firefox 113+
 
 ### Expected to work
 

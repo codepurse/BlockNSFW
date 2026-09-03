@@ -45,6 +45,7 @@
         "shared/keyword-pattern.js",
         "shared/ruleset.js",
         "shared/text-classifier-core.js",
+        "shared/ai-image-models.js",
         "ai-image-blocker-core.js",
         "ai-image-blocker.js",
         "content.js"
@@ -80,7 +81,7 @@
   "browser_specific_settings": {
     "gecko": {
       "id": "blocknsfw@extension.local",
-      "strict_min_version": "109.0"
+      "strict_min_version": "113.0"
     }
   }
 }

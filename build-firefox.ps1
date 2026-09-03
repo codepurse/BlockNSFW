@@ -21,14 +21,14 @@ $RuntimeFolders = @(
     "icons",
     "shared",
     "vendor",
-    "nsfwjs"
+    "nsfwjs",
+    "models"
 )
 $RuntimeFiles   = @(
     "background.js",
     "content.js",
     "ai-image-blocker-core.js",
     "ai-image-blocker.js",
-    "classify.worker.js",
     "popup.html",
     "popup.js",
     "options.html",

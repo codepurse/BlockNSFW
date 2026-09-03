@@ -13,12 +13,16 @@
   ],
   "background": {
     "scripts": [
+      "shared/browser-key.js",
       "shared/hostname.js",
       "shared/host-keywords.js",
       "shared/validate-domain.js",
       "shared/version-compare.js",
       "shared/keyword-pattern.js",
       "shared/ruleset.js",
+      "shared/dns-providers.js",
+      "shared/ai-image-models.js",
+      "shared/vit-classifier.js",
       "background.js"
     ]
   },
@@ -55,6 +59,7 @@
         "shared/keyword-pattern.js",
         "shared/ruleset.js",
         "shared/text-classifier-core.js",
+        "shared/ai-image-models.js",
         "ai-image-blocker-core.js",
         "ai-image-blocker.js",
         "content.js"
@@ -76,9 +81,6 @@
         "icons/icon-16.png",
         "icons/icon-48.png",
         "icons/icon-128.png",
-        "classify.worker.js",
-        "vendor/tfjs/tf.min.js",
-        "vendor/nsfwjs/nsfwjs.min.js",
         "nsfwjs/model.json",
         "nsfwjs/group1-shard1of1.bin",
         "text-model.json"
@@ -89,7 +91,7 @@
   "browser_specific_settings": {
     "gecko": {
       "id": "blocknsfw@extension.local",
-      "strict_min_version": "109.0"
+      "strict_min_version": "113.0"
     }
   }
 }

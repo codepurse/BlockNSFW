@@ -7,41 +7,193 @@ All notable project changes should be documented here going forward.
 ## [1.7.6] - 2026-08-30
 
 ### Added
-- **Block a whole top-level domain.** `.xyz` on its own line blocks every site
-  ending in it. Some TLDs are used almost entirely for spam and malware, and
-  listing their sites one at a time is hopeless. It is the broadest entry the
-  blocklist accepts, so the settings page says so plainly next to it.
+- **DuckDuckGo and Brave now use their dedicated locked SafeSearch endpoints.**
+  Normal searches are rewritten by the browser's request engine to the
+  provider's safe host before the page loads, with permissive query values
+  replaced by strict mode. This mirrors the effective behavior of their
+  documented family-DNS mappings: strict filtering is enforced by the search
+  host and its client-side SafeSearch controls are disabled. DuckDuckGo HTML
+  and Lite searches retain their non-JavaScript layouts and continue to receive
+  a network-level strict parameter.
+- **Strict request enforcement now covers media-search verticals.** Bing,
+  Ecosia, and Presearch image, video, and news routes no longer fall outside the
+  rule that previously protected only their main web-search route.
+- **Yandex now runs in Family mode.** A network-level request rule appends
+  Yandex's current `yp` Family-mode preference before the first web, image, or
+  video request, without replacing account or session cookies. The content
+  script persists the same preference across Yandex's regional search domains
+  and locks the weaker choices on the Search settings page. Existing explicit
+  query blocking and per-result filtering remain as secondary layers.
+- **Firefox's documented minimum is now 113.** This matches the first Firefox
+  release with the dynamic request-header rules used by SafeSearch enforcement.
+- **The AI image blocker can now use a second, more accurate model, and the
+  extension download got smaller rather than bigger.** Settings offer a
+  detection-model picker: the bundled NSFW.js MobileNetV2 (still the default,
+  still works offline) or Marqo's `nsfw-image-detection-384` Vision Transformer.
 
-  Most of this already worked and nobody could reach it: a bare host entry
-  covers its subdomains, and `xyz` is only the shortest case of that. But
-  `.xyz` — the form anyone actually writes — matched nothing, on both the
-  navigation and the in-page path, and said nothing about it. A leading dot is
-  now stripped wherever a blocklist host is read, so `.xyz` and `xyz` are the
-  same entry, and `.example.com` works as well as `example.com`. Requested by
-  Maksim.
+  The reason to want the ViT is not a headline accuracy number — it is that it
+  answers one question (is this NSFW?) instead of five. NSFW.js's "Sexy" class
+  fires on beaches, fitness photos, fashion and ordinary portraits, which is why
+  its bar has to sit all the way up at 0.90 to avoid blurring holiday snaps. A
+  binary head has no such class to defend against.
 
-  Images from a blocked TLD are hidden page-side rather than by a network rule.
-  The network rule takes domains, not suffixes, and blocking every image request
-  under a TLD is broader than a rule at that level should be.
+  Getting there needed one long-standing belief corrected: the AI runtime was
+  documented as unable to load tfjs *graph* models, which ruled out every
+  model except the bundled MobileNet. That limit turned out to belong to the
+  CSP-safe `nsfwjs.runtime.js` shim, not to TensorFlow.js — the vendored
+  `tf.es2017.js` exports `loadGraphModel` and is eval-free. So the ViT bypasses
+  nsfwjs entirely and does its own preprocessing and softmax.
 
-### Changed
-- **Notes are dimmed in the list boxes.** A `#` or `!` line now reads in grey
-  while the entries stay bright, so a list with headings in it can be scanned at
-  a glance instead of being one wall of identical text. Nothing about what gets
-  saved or matched changed — a textarea cannot colour one line differently from
-  another, so the box is drawn in two layers, with the text painted underneath
-  and the real textarea kept on top for typing, selection, undo and spellcheck.
-  Suggested by Maksim.
-- **Whitelisting a whole site is now a critical action.** It unlocks every page
-  on the domain, which is as total as switching blocking off, so it faces the
-  access code in the default `critical` scope rather than only under "ask on
-  every change" — as does importing a whitelist file. Whitelisting a single
-  *page* (`example.com/r/Name`) opens one section and is not treated as
-  critical. Both entry points ask for the code after the input has been checked
-  and found not to be a duplicate, so a typo can no longer cost someone 256
-  characters of typing.
+  The conversion is reproducible via `tools/convert_vit384.py` and verified
+  numerically: the packaged graph reproduces the original timm model's logits
+  to within 8.3e-7, checked by loading it through the extension's own loader on
+  the vendored TensorFlow.js build. Output is a 341 KB graph plus six weight
+  shards totalling 21.4 MiB.
+
+  Those weights are **not** in the extension package. Bundling them
+  would have grown the store download about five-fold for a feature that is
+  opt-in and off by default. Instead the execution graph ships in the package
+  (the part worth reviewing) and the numeric weight shards are fetched once on
+  first use and cached locally by the browser. Images are still never uploaded —
+  the traffic goes one way, and the model comes to you.
+
+  Three things this shook out:
+  - The verdict cache stores raw *scores* and re-derives verdicts on every hit,
+    so that changing strictness applies immediately instead of being frozen for
+    24 hours. With two models that becomes a trap: a 0.8 from MobileNet's Sexy
+    class and a 0.8 NSFW probability are different claims. Entries are now
+    tagged with the model that produced them and are re-classified after a
+    switch, and `verdictFor()` dispatches on the score shape rather than
+    trusting whichever thresholds it was handed.
+  - If the selected model cannot load — no connection, weights not published,
+    cache evicted — classification falls back to the bundled model instead of
+    leaving the page unfiltered. The response reports which model actually ran,
+    so the cache records the truth rather than the setting.
+  - Strictness presets are per model now (one NSFW bar for the ViT, the
+    Porn+Hentai / Sexy pair for MobileNet), held in one table so the content
+    script, the three inference routes and the tests cannot drift apart.
+  - The ViT's thresholds are **calibrated rather than guessed**. The first cut
+    (strict/balanced/relaxed = 0.40/0.70/0.90) was invented by analogy with
+    NSFW.js and made the ViT *worse* in practice than the model it was meant to
+    beat: content the model scored 0.35-0.65 NSFW was sailing straight through,
+    and `relaxed: 0.90` sat exactly on the point where Marqo's published
+    evaluation shows recall collapsing. Two measurements fixed it — a local scan
+    of 18 varied safe photos (including people and sports) put ordinary content
+    in a tight 0.047-0.094 band, and Marqo's threshold curves hold ~98%
+    precision *and* recall anywhere from 0.1 to 0.9. The presets are now
+    0.15/0.30/0.60, all inside that plateau, and none of the 18 safe photos is
+    blurred at any of them.
+
+- **DNS Protection can now use one of four filtering resolvers, and falls back
+  to a second one when the first does not answer.** It was hardcoded to
+  Cloudflare for Families, which made a single company both the only option and
+  a single point of failure: when that resolver was unreachable or rate-limiting
+  us, `checkDnsFilter()` failed open and the layer quietly stopped working with
+  nothing in the UI to say so.
+
+  Settings now offer Cloudflare for Families, AdGuard DNS Family, Mullvad DNS
+  Family and the CleanBrowsing Adult Filter. All four are free, need no account,
+  and are queried straight from the user's own browser — nothing passes through
+  BlockNSFW's servers. Only resolvers whose terms permit this are listed;
+  OpenDNS and Control D forbid providing their service to third parties, so they
+  are recommended as device-level settings rather than queried by the extension.
+
+  Three things this shook out:
+  - AdGuard signals a block with its own block-page address (`94.140.14.35`)
+    rather than a `0.0.0.0` sinkhole, so a naive "did it resolve?" check reads
+    it as *nothing is ever blocked*. Block detection is now per-provider.
+  - A lookup that fails is no longer indistinguishable from one that came back
+    clean. `checkDnsFilter()` returns a tri-state, a no-answer is never cached,
+    and `shouldBlock()` skips its URL cache write in that case — an outage used
+    to whitelist the domain for the rest of the service worker's life.
+  - A resolver that stops responding is muted for five minutes after three
+    consecutive failures, so a dead provider costs one timeout rather than one
+    per navigation.
+
+  *Test DNS Connection* now checks that a known adult domain is actually
+  filtered and a benign one is not, instead of only checking reachability — a
+  resolver that answers but has stopped filtering used to look healthy.
+
+- **Or point DNS Protection at any resolver you like.** Picking *Custom* in the
+  resolver list reveals an address box that takes any DNS-over-HTTPS endpoint —
+  your own NextDNS config ID, a Control D profile, DNS for Family, or something
+  you run yourself. This is how the resolvers we cannot ship as presets become
+  usable anyway: OpenDNS and Control D forbid *us* from querying on a user's
+  behalf, but nothing stops a user pointing their own copy wherever they want.
+
+  Custom endpoints are spoken to in RFC 8484 wireformat rather than the JSON
+  dialect, because wireformat is the actual standard and the JSON one is a
+  Cloudflare extra most resolvers do not implement — guessing wrong would have
+  looked identical to "your resolver is broken". The address must be `https://`
+  and carry no embedded credentials, and a saved address that later fails to
+  parse degrades to the default resolver rather than to no DNS layer at all.
+
+  **A custom resolver has no fallback, deliberately.** The presets fail over to
+  a second network when one does not answer; a custom one does not. Someone who
+  typed in their own endpoint chose who gets to see their browsing, and quietly
+  redirecting those queries to Cloudflare the moment their resolver hiccuped
+  would override that choice without telling them.
+
+- **A fifth onboarding step covers network-level blocking.** It offers the
+  in-extension DNS check as a toggle (off by default, like every other feature
+  that sends anything off-device), and then gives copyable addresses for
+  CleanBrowsing Family and DNS for Family to set on the device or router.
+  That second half is the part the extension cannot do for the user: it covers
+  every app rather than one browser, and it survives the extension being
+  removed — which is the gap Desktop Guard exists to defend, approached from
+  the other side. The step is skippable.
 
 ### Fixed
+- **DNS Protection blocked every local development server.** With the setting
+  on, `http://localhost:3000` — and every other local address — was redirected
+  to the blocked page on every load, reason "Blocked by DNS filter". Neither the
+  blocklist nor the keyword filter was involved; the DNS check did it alone.
+
+  A filtering resolver signals a block three ways, and one of them is NXDOMAIN
+  (Mullvad's answer, and Cloudflare's for some domains). A *public* resolver
+  also returns NXDOMAIN for every name that does not exist in public DNS —
+  which is exactly what `localhost`, `app.test`, `nas.local`, a bare intranet
+  hostname and a private address all are. So "is this host filtered?" came back
+  yes, every time, for the whole local network.
+
+  The layer now declines to ask. Loopback and private addresses, the reserved
+  local TLDs (`.localhost`, `.local`, `.test`, `.example`, `.invalid`,
+  `.internal`, `home.arpa`), bare single-label hostnames and IP literals of any
+  kind are recognised by `isLocalHostname` in `shared/hostname.js` and answered
+  "not blocked" without a lookup — in the content script as well, so a dev page
+  does not pay for the round trip either. Public hostnames still go to the
+  resolvers exactly as before, and no other blocking layer changed.
+
+- **The AI image filter flagged explicit images on X/Twitter without blurring
+  them.** Reported in
+  [#17](https://github.com/codepurse/BlockNSFW/issues/17). The model was working
+  — the blocks were counted, which is why they showed up in the log — but the
+  blur kept coming straight back off.
+
+  X runs a virtualised timeline: it keeps a pool of `<img>` nodes and swaps
+  their `src` as you scroll, and the browser re-resolves `srcset` to a
+  higher-res candidate once an image is laid out. Either can change the picture
+  in a node *while* its classification is still in flight. `applyVerdict()`
+  applied whatever came back to whatever the node held by then, so a stale
+  `allow` from the node's previous occupant would strip the blur off an image
+  the model had just blocked — and a stale `block` would blur an innocent one.
+  A verdict now carries the URL it was computed for and is dropped if the node
+  has moved on. Its scores are still cached, so nothing is re-fetched.
+
+  `observeImage()` made it worse by unblurring a node the moment its `src`
+  changed, which left the new image fully visible for a whole classify
+  round-trip. It now hands the node to the blocker, which hides it until its own
+  verdict lands. Every path that declines to classify an image reveals it again,
+  so nothing can be stranded invisible.
+
+- **None of the buttons on the audit log's pagination worked.** Also reported in
+  [#17](https://github.com/codepurse/BlockNSFW/issues/17). They were rendered
+  with inline `onclick="changePage(n)"`, which the extension-page CSP
+  (`script-src 'self'`) blocks outright — so every one of them was a silent
+  no-op and the log was stuck on its first 20 entries. The target page moved to
+  `data-page` with a delegated listener, and `changePage()` now clamps to the
+  range that actually exists.
+
 - **The popup could unblock a site with nothing but the PIN, however the access
   code was configured.** Reported in
   [#29](https://github.com/codepurse/BlockNSFW/issues/29). The access code —
@@ -62,84 +214,39 @@ All notable project changes should be documented here going forward.
   Where the popup cannot show the modal it refuses the action rather than
   waving it through, and it never falls back to `prompt()` — that box accepts a
   paste, which is the one thing this feature must not allow.
-- **A blocklist entry written with a leading dot reached the image rule
-  verbatim.** `.xyz` passed the domain check that guards the image-blocking
-  rule, so the literal string `.xyz` was handed to the browser as a domain to
-  block requests from. It is not a domain, and one bad entry is enough to
-  invalidate the single rule that every other blocked host shares — so adding
-  `.xyz` to the list could stop image blocking working for the sites that were
-  blocking correctly before it.
-- **Sorting filed `/regex/` entries under their slash.** Saving sorts a list
-  A–Z, and a pattern entry was compared on its opening delimiter rather than on
-  the word inside it, so every pattern clumped at the top of the list. Notes are
-  attached to the entry written beneath them and travel with it, so a pattern
-  overtaking that entry dragged the whole block down — which is how notes
-  written at the top of a list ended up underneath it. (The locale order of the
-  three markers involved is `!`, then `/`, then `#`, which is why the result
-  looked arbitrary rather than merely wrong.) Entries are now filed under their
-  first letter or digit, so `/apricots?/` sorts beside `apricots` instead of
-  above the entire list. Reported by Maksim.
-- **DuckDuckGo's Images and Videos tabs were not filtered at all.** A blocked
-  word stopped the matching web results, then the same search on the Images or
-  Videos tab showed everything. The selectors the filter used —
-  `.tile--img`, `.tile__title`, `.result` — belong to DuckDuckGo's pre-React
-  layout and match nothing on the current site, so there was no result to
-  examine and no keyword check ever ran. Google was unaffected, which is why
-  this looked like a keyword bug rather than a DuckDuckGo one.
 
-  Both verticals now key on the `data-testid` attributes DuckDuckGo puts on
-  each one, and on the semantic tags inside them (`figure` for an image result,
-  `article` for a video result), because every class name on that page is a
-  build hash that changes on each deploy. The old class selectors are kept as
-  fallbacks so older self-hosted instances keep working.
+### Changed
+- **Whitelisting a whole site is now a critical action.** It unlocks every page
+  on the domain, which is as total as switching blocking off, so it faces the
+  access code in the default `critical` scope rather than only under "ask on
+  every change" — as does importing a whitelist file. Whitelisting a single
+  *page* (`example.com/r/Name`) opens one section and is not treated as
+  critical. Both entry points ask for the code after the input has been checked
+  and found not to be a duplicate, so a typo can no longer cost someone 256
+  characters of typing.
 
-  Two smaller things had to change with them. Image thumbnails are served
-  through DuckDuckGo's own proxy — `external-content.duckduckgo.com/iu/?u=…` —
-  so every picture on the page appeared to come from DuckDuckGo: the host and
-  path carry no information and the real address sits in a parameter. That
-  parameter is now unwrapped and scanned, as it already was for Yandex. And a
-  blocked image result now takes its whole tile with it rather than just the
-  picture, since the caption underneath spells out the title the block was
-  keyed on.
+### Removed
+- **The remote announcement banner at the top of Settings.** It rendered a
+  message fetched from `data/announcement.json` in this repo, so a notice could
+  be broadcast to every install by editing one file, with no store release. The
+  banner, its 6-hourly GitHub fetch and the `get_announcement` message route are
+  all gone — opening Settings now makes one fewer network request — and the two
+  keys the feature wrote (`pblocker_announcement_info`,
+  `pblocker_announcement_dismissed`) are cleared on update. The per-browser
+  override plumbing it needed (`lookupBrowserOverride`) went with it;
+  `detectBrowserKey()` stays, since the update check still picks a store URL
+  with it. `data/announcement.json` itself stays in the repo: copies already
+  installed keep polling it until they update.
 
-  The All tab needed one more thing: it carries an inline row of thumbnails for
-  the same query, and no result selector reached it, so the web results above it
-  were replaced while the pictures stayed. Each row on that page is an
-  `<li data-layout="…">` naming what it holds, so the images and videos rows are
-  now treated as results and replaced whole — while ads and related searches are
-  left alone.
-
-  The knowledge panel — the Wikipedia summary above the results — is covered
-  too, but judged differently. It is several hundred words of reference prose
-  rather than a snippet, and at that length the built-in keyword scoring
-  misreads legitimate text, so the panel is blocked only on a stated signal: a
-  link to a blocklisted site, or a word from your own blocked-word list. The
-  heuristics get no vote on it.
-- **A search result that arrived late was never filtered.** DuckDuckGo serves no
-  results in its HTML at all — the entire page is built in the browser, row by
-  row. A result row therefore exists for a moment with its title still missing,
-  and both filtering paths marked such a row as "inspected" on the way past, so
-  once it filled in nothing looked at it again. Whichever row happened to be
-  slowest that pageload was the one that survived. A row is now only marked off
-  once it has actually been recognised as a result, and is re-examined until
-  then.
-
-  The incremental path the page-change observer uses had drifted from the full
-  pass as well: it judged the raw changed element rather than the result row
-  around it, and did not know about the explicit-signals-only rule. Both now go
-  through one shared resolver, so they cannot disagree about what a result is,
-  which element to replace, or how to judge it.
-- **Custom blocked words were ignored in image search below the strictest
-  setting.** In image results, a word from your own list only counted when the
-  image filter was set to Strict; on Moderate or Lenient the built-in term list
-  was consulted and yours was not. A word you typed yourself is an instruction
-  rather than a heuristic, so it now applies at every level — the level still
-  decides how far the built-in lists reach.
-- **"Go Back" on the blocked page did nothing.** It was wired as an inline
-  `onclick`, which the extension's content-security policy (`script-src 'self'`)
-  blocks outright, so the click was silently discarded. It is now a real
-  listener — and when the blocked page is the only entry in a tab's history,
-  with nothing to go back to, it leaves the page instead of sitting there.
+- **~856 KB of dead code that shipped in every release.** `classify.worker.js`
+  and the `tf.min.js` / `nsfwjs.min.js` pair it imported were left behind by the
+  move to the service-worker-delegated classifier. Nothing had spawned that
+  worker in months (`new Worker` appears nowhere in the tree) and Chrome's
+  manifest never even exposed it, but the build copied all of `vendor/`
+  wholesale, so it went out anyway. The Chrome package drops from 4.99 MB to
+  4.13 MB. A new test asserts both directions of that drift: every path a
+  manifest declares must exist, and every vendored file must be referenced by
+  something.
 
 ## [1.7.5] - 2026-08-24
 
@@ -300,7 +407,112 @@ All notable project changes should be documented here going forward.
   Changing either setting re-does the results already on screen, so the picker
   does not appear to do nothing until the tab is reloaded.
 
+### Added
+- **Block a whole top-level domain.** `.xyz` on its own line blocks every site
+  ending in it. Some TLDs are used almost entirely for spam and malware, and
+  listing their sites one at a time is hopeless. It is the broadest entry the
+  blocklist accepts, so the settings page says so plainly next to it.
+
+  Most of this already worked and nobody could reach it: a bare host entry
+  covers its subdomains, and `xyz` is only the shortest case of that. But
+  `.xyz` — the form anyone actually writes — matched nothing, on both the
+  navigation and the in-page path, and said nothing about it. A leading dot is
+  now stripped wherever a blocklist host is read, so `.xyz` and `xyz` are the
+  same entry, and `.example.com` works as well as `example.com`. Requested by
+  Maksim.
+
+  Images from a blocked TLD are hidden page-side rather than by a network rule.
+  The network rule takes domains, not suffixes, and blocking every image request
+  under a TLD is broader than a rule at that level should be.
+
+### Changed
+- **Notes are dimmed in the list boxes.** A `#` or `!` line now reads in grey
+  while the entries stay bright, so a list with headings in it can be scanned at
+  a glance instead of being one wall of identical text. Nothing about what gets
+  saved or matched changed — a textarea cannot colour one line differently from
+  another, so the box is drawn in two layers, with the text painted underneath
+  and the real textarea kept on top for typing, selection, undo and spellcheck.
+  Suggested by Maksim.
+
 ### Fixed
+- **A blocklist entry written with a leading dot reached the image rule
+  verbatim.** `.xyz` passed the domain check that guards the image-blocking
+  rule, so the literal string `.xyz` was handed to the browser as a domain to
+  block requests from. It is not a domain, and one bad entry is enough to
+  invalidate the single rule that every other blocked host shares — so adding
+  `.xyz` to the list could stop image blocking working for the sites that were
+  blocking correctly before it.
+- **Sorting filed `/regex/` entries under their slash.** Saving sorts a list
+  A–Z, and a pattern entry was compared on its opening delimiter rather than on
+  the word inside it, so every pattern clumped at the top of the list. Notes are
+  attached to the entry written beneath them and travel with it, so a pattern
+  overtaking that entry dragged the whole block down — which is how notes
+  written at the top of a list ended up underneath it. (The locale order of the
+  three markers involved is `!`, then `/`, then `#`, which is why the result
+  looked arbitrary rather than merely wrong.) Entries are now filed under their
+  first letter or digit, so `/apricots?/` sorts beside `apricots` instead of
+  above the entire list. Reported by Maksim.
+- **DuckDuckGo's Images and Videos tabs were not filtered at all.** A blocked
+  word stopped the matching web results, then the same search on the Images or
+  Videos tab showed everything. The selectors the filter used —
+  `.tile--img`, `.tile__title`, `.result` — belong to DuckDuckGo's pre-React
+  layout and match nothing on the current site, so there was no result to
+  examine and no keyword check ever ran. Google was unaffected, which is why
+  this looked like a keyword bug rather than a DuckDuckGo one.
+
+  Both verticals now key on the `data-testid` attributes DuckDuckGo puts on
+  each one, and on the semantic tags inside them (`figure` for an image result,
+  `article` for a video result), because every class name on that page is a
+  build hash that changes on each deploy. The old class selectors are kept as
+  fallbacks so older self-hosted instances keep working.
+
+  Two smaller things had to change with them. Image thumbnails are served
+  through DuckDuckGo's own proxy — `external-content.duckduckgo.com/iu/?u=…` —
+  so every picture on the page appeared to come from DuckDuckGo: the host and
+  path carry no information and the real address sits in a parameter. That
+  parameter is now unwrapped and scanned, as it already was for Yandex. And a
+  blocked image result now takes its whole tile with it rather than just the
+  picture, since the caption underneath spells out the title the block was
+  keyed on.
+
+  The All tab needed one more thing: it carries an inline row of thumbnails for
+  the same query, and no result selector reached it, so the web results above it
+  were replaced while the pictures stayed. Each row on that page is an
+  `<li data-layout="…">` naming what it holds, so the images and videos rows are
+  now treated as results and replaced whole — while ads and related searches are
+  left alone.
+
+  The knowledge panel — the Wikipedia summary above the results — is covered
+  too, but judged differently. It is several hundred words of reference prose
+  rather than a snippet, and at that length the built-in keyword scoring
+  misreads legitimate text, so the panel is blocked only on a stated signal: a
+  link to a blocklisted site, or a word from your own blocked-word list. The
+  heuristics get no vote on it.
+- **A search result that arrived late was never filtered.** DuckDuckGo serves no
+  results in its HTML at all — the entire page is built in the browser, row by
+  row. A result row therefore exists for a moment with its title still missing,
+  and both filtering paths marked such a row as "inspected" on the way past, so
+  once it filled in nothing looked at it again. Whichever row happened to be
+  slowest that pageload was the one that survived. A row is now only marked off
+  once it has actually been recognised as a result, and is re-examined until
+  then.
+
+  The incremental path the page-change observer uses had drifted from the full
+  pass as well: it judged the raw changed element rather than the result row
+  around it, and did not know about the explicit-signals-only rule. Both now go
+  through one shared resolver, so they cannot disagree about what a result is,
+  which element to replace, or how to judge it.
+- **Custom blocked words were ignored in image search below the strictest
+  setting.** In image results, a word from your own list only counted when the
+  image filter was set to Strict; on Moderate or Lenient the built-in term list
+  was consulted and yours was not. A word you typed yourself is an instruction
+  rather than a heuristic, so it now applies at every level — the level still
+  decides how far the built-in lists reach.
+- **"Go Back" on the blocked page did nothing.** It was wired as an inline
+  `onclick`, which the extension's content-security policy (`script-src 'self'`)
+  blocks outright, so the click was silently discarded. It is now a real
+  listener — and when the blocked page is the only entry in a tab's history,
+  with nothing to go back to, it leaves the page instead of sitting there.
 - **AI image blocking never worked on Firefox.** Turning the beta on did
   nothing: no image was ever scanned, no image was ever blurred, and the only
   hint was `AI runtime was not preloaded` in the background console. The cause

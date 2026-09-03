@@ -1,25 +1,23 @@
 {
-  "id": "2026-07-sieve",
+  "id": "2026-09-sieve-live",
   "enabled": true,
   "type": "success",
   "title": "Making the internet clean again",
-  "message": "I built another free, on-device blocker — Sieve. It filters out scams, phishing, gambling, crypto/MLM schemes, fake shops, and other harmful or distracting content. Same promise: no account, no tracking, everything runs locally.",
-  "linkText": "Check out Sieve",
+  "message": "I built another free, on-device blocker — Sieve. It filters out scams, phishing, gambling, crypto and MLM schemes, fake shops, and other harmful or distracting content. It's out now, and it keeps the same promise: no account, no tracking, everything runs locally.",
+  "linkText": "Get Sieve",
   "browsers": {
     "firefox": {
-      "message": "I built another free, on-device blocker — Sieve. It filters out scams, phishing, gambling, crypto/MLM schemes, fake shops, and more harmful or distracting content. It's live on Firefox now — no account, no tracking, everything runs locally.",
       "link": "https://addons.mozilla.org/en-US/firefox/addon/sieve-site-content-blocker/",
       "linkText": "Get Sieve for Firefox"
     },
     "chrome": {
-      "message": "I want to make the internet clean again. So I built Sieve. It's a free, on-device blocker that filters out scams, phishing, gambling, crypto and MLM schemes, fake shops, and other harmful or distracting content. No account. No tracking. Everything runs locally. Coming soon to Chromium browsers.",
-      "link": "https://chromewebstore.google.com/detail/sieve-%E2%80%93-content-filter-si/ipdgekalafnmgejbgapendbhdidjgdeg?authuser=0&hl=en",
+      "link": "https://chromewebstore.google.com/detail/sieve-%E2%80%93-content-filter-si/ipdgekalafnmgejbgapendbhdidjgdeg",
       "linkText": "Get Sieve for Chrome"
     },
     "edge": {
-      "message": "I want to make the internet clean again. So I built Sieve. It's a free, on-device blocker that filters out scams, phishing, gambling, crypto and MLM schemes, fake shops, and other harmful or distracting content. No account. No tracking. Everything runs locally. Coming soon to Chromium browsers.",
-      "link": ""
+      "link": "https://microsoftedge.microsoft.com/addons/detail/sieve-%E2%80%93-content-filter-/flboopfbcclogcdpialeimionkkjliok",
+      "linkText": "Get Sieve for Edge"
     }
   },
-  "updatedAt": "2026-07-08"
+  "updatedAt": "2026-09-02"
 }

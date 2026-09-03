@@ -290,74 +290,151 @@
       <div class="release-head">
         <span class="release-version">1.7.6</span>
         <span class="tag tag-current">Current</span>
-        <span class="release-date">30 August 2026</span>
+        <span class="release-date">August 2026</span>
       </div>
 
       <div class="group">
         <div class="group-title">New</div>
 
         <div class="entry">
-          <div class="entry-title">Block a whole top-level domain</div>
+          <div class="entry-title">Choose which DNS resolver checks your browsing</div>
           <div class="entry-body">
-            Put <span class="code">.xyz</span> on a line of its own and every site ending in it is
-            blocked. Some domain endings are used almost entirely for spam and malware, and listing
-            their sites one at a time is hopeless. This is the broadest entry the blocklist accepts,
-            so the settings page says so plainly next to it. Most of this quietly worked already —
-            but <span class="code">.xyz</span>, the form anyone actually writes, matched nothing and
-            said nothing about it. Requested by Maksim.
+            DNS Protection was Cloudflare or nothing. Settings &rarr; Protection &rarr; <span class="code">DNS Protection</span> now offers four free resolvers, no account needed: <strong>Cloudflare for Families</strong> (the default, and the fastest), <strong>AdGuard DNS Family</strong> (also ads and trackers), <strong>Mullvad DNS Family</strong> (audited no-logging) and the <strong>CleanBrowsing Adult Filter</strong> (adult content only). Queries never pass through a server of ours.
           </div>
         </div>
 
         <div class="entry">
-          <div class="entry-title">Notes stand out from entries</div>
+          <div class="entry-title">Or use any resolver you like</div>
           <div class="entry-body">
-            A line starting with <span class="code">#</span> or <span class="code">!</span> now reads
-            in grey while your entries stay bright, so a long list with headings in it can be scanned
-            at a glance instead of being one wall of identical text. Nothing about what gets saved or
-            matched changed. Suggested by Maksim.
+            Picking <span class="code">Custom</span> reveals an address box that takes any DNS-over-HTTPS endpoint &mdash; your own NextDNS config, a Control D profile, or a resolver you run yourself. It is asked on its own with no fallback, so your choice stands. <span class="code">Test DNS Connection</span> checks that it answers <em>and</em> that it genuinely filters.
           </div>
         </div>
-      </div>
 
-      <div class="group">
+        <div class="entry">
+          <div class="entry-title">Setup now covers blocking beyond this browser</div>
+          <div class="entry-body">
+            First-run setup has a new, skippable step for network-level blocking: the in-extension DNS check as a toggle, plus copyable resolver addresses to set on your computer or router. That second half covers every app rather than one browser, and it survives BlockNSFW being removed.
+          </div>
+        </div>
+
+        <div class="entry">
+          <div class="entry-title">Block a whole top-level domain</div>
+          <div class="entry-body">
+            A line reading <span class="code">.xyz</span> now blocks every site ending in it &mdash; the broadest entry the blocklist accepts, and the settings page says so plainly next to it. Images from a blocked TLD are hidden in the page. Requested by Maksim.
+          </div>
+        </div>
+
+        <div class="entry">
+          <div class="entry-title">Notes are dimmed in your lists</div>
+          <div class="entry-body">
+            A line starting with <span class="code">#</span> or <span class="code">!</span> now reads in grey while your entries stay bright, so a list with section headings can be scanned at a glance. Suggested by Maksim.
+          </div>
+        </div>
+
+        <div class="entry">
+          <div class="entry-title">SafeSearch is locked on DuckDuckGo and Brave</div>
+          <div class="entry-body">
+            Searches now go to each provider's dedicated filtered address before the page loads, rather than asking the ordinary one to filter afterwards. Filtering there belongs to the search host, so the results-page toggle and links with SafeSearch turned off no longer undo it. DuckDuckGo's plain HTML and Lite pages keep their no-JavaScript layouts. Contributed by oathkeeper-dev.
+          </div>
+        </div>
+
+        <div class="entry">
+          <div class="entry-title">Image and video search is enforced like web search</div>
+          <div class="entry-body">
+            On Bing, Ecosia and Presearch, strict mode covered the main web search and nothing else &mdash; so the Images, Videos and News tabs stepped straight outside it. Those routes are now enforced too. Contributed by oathkeeper-dev.
+          </div>
+        </div>
+
+        <div class="entry">
+          <div class="entry-title">Yandex now searches in Family mode</div>
+          <div class="entry-body">
+            Family mode is set before the first search, image or video request instead of after the results have arrived, and it holds across Yandex's regional domains rather than just the one you started on. The weaker choices on Yandex's own settings page are locked. Your login and session are left untouched. Contributed by oathkeeper-dev.
+          </div>
+        </div>
+
+        <div class="entry">
+          <div class="entry-title">Firefox 113 or newer is now required</div>
+          <div class="entry-body">
+            Up from 109. Locking SafeSearch depends on rewriting a request before it leaves the browser, and 113 is the first Firefox that permits it. On anything older the rest of the extension still works, but that enforcement would silently do nothing &mdash; so the requirement now says so.
+          </div>
+        </div>
+
         <div class="group-title">Fixed</div>
 
         <div class="entry">
           <div class="entry-title">The access code did not guard "unblock this site"</div>
           <div class="entry-body">
-            If you had set an access code — the long random string you retype by hand, on top of your
-            PIN — it was only ever asked for on the settings page. Unblocking a site from the toolbar
-            popup asked for the four-digit PIN and nothing else, and unblocking a site opens every
-            page on it. So the strongest lock the extension offers was missing from the one place
-            most likely to be used in a weak moment. Whitelisting a site by hand and turning
-            SafeSearch off went the same way.
-            <br /><br />
-            The popup now asks for the code exactly as the settings page does. Unblocking a whole
-            site is treated as one of the decisive actions, alongside turning blocking off — so it
-            asks for the code even on the default setting, not only if you chose "ask on every
-            change". Unblocking a single page of a site is narrower and is not treated that way.
-            Re-blocking a site you had unblocked still needs only the PIN: tightening protection is
-            never made harder. Reported by Pattrattbarr (#29).
+            If you had set an access code &mdash; the long random string you retype by hand, on top of your PIN &mdash; it was only ever asked for on the settings page. Unblocking a site from the toolbar popup asked for the four-digit PIN and nothing else, and unblocking a site opens every page on it, so the strongest lock the extension offers was missing from the one place most likely to be used in a weak moment. Whitelisting a site by hand and turning SafeSearch off went the same way. The popup now asks for the code exactly as the settings page does, and unblocking a whole site is treated as one of the decisive actions &mdash; it asks for the code even on the default setting. Unblocking a single page is narrower and is not. Re-blocking a site still needs only the PIN: tightening protection is never made harder. Reported by Pattrattbarr (#29).
           </div>
         </div>
 
         <div class="entry">
-          <div class="entry-title">A blocklist entry starting with a dot could stop image blocking</div>
+          <div class="entry-title">DNS Protection could stop working without saying so</div>
           <div class="entry-body">
-            An entry like <span class="code">.xyz</span> was handed to the browser as though it were
-            a domain to block image requests from. It is not one, and a single bad entry is enough to
-            invalidate the rule every other blocked site shares — so adding one could stop image
-            blocking working for the sites that were blocking correctly before it.
+            A failed lookup &mdash; unreachable resolver, rate limit, timeout &mdash; was treated like a clean one, so the domain was remembered as safe while Settings still reported DNS as active. Failures are now told apart and never remembered, a second resolver is tried, and one that keeps failing is rested. <span class="code">Test DNS Connection</span> also checks that filtering really works.
           </div>
         </div>
 
         <div class="entry">
-          <div class="entry-title">Patterns were sorted under their slash</div>
+          <div class="entry-title">DNS Protection blocked local websites, including your own</div>
           <div class="entry-body">
-            Saving sorts a list A–Z, and a <span class="code">/regex/</span> entry was compared on its
-            opening slash rather than on the word inside it, so every pattern clumped at the top.
-            Notes travel with the entry written beneath them, which is how notes written at the top of
-            a list ended up underneath it.
+            With DNS Protection on, <span class="code">localhost</span>, home-network devices and intranet addresses were all blocked on sight. A public resolver cannot answer for a private address, and its "no such name" reply is also how a resolver signals a block. They are recognised as local now, and skipped.
+          </div>
+        </div>
+
+        <div class="entry">
+          <div class="entry-title">Sorting filed pattern entries under their punctuation</div>
+          <div class="entry-body">
+            A <span class="code">/regex/</span> entry was sorted under its opening slash, so patterns clumped at the top of a saved list and dragged the notes written beneath them along. Entries are now filed under their first letter &mdash; <span class="code">/apricots?/</span> sorts beside <span class="code">apricots</span>. Reported by Maksim.
+          </div>
+        </div>
+
+        <div class="entry">
+          <div class="entry-title">A blocklist entry written with a leading dot could break image blocking</div>
+          <div class="entry-body">
+            An entry such as <span class="code">.xyz</span> was handed to the browser as a domain to block images from, which it is not. Image blocking uses one rule shared by every blocked site, so a single entry like that could stop it working for all the rest.
+          </div>
+        </div>
+
+        <div class="entry">
+          <div class="entry-title">DuckDuckGo's Images and Videos tabs were not filtered at all</div>
+          <div class="entry-body">
+            A blocked word stopped the matching web results, then the same search on the Images or Videos tab showed everything &mdash; the filter was looking for parts of an old layout that no longer exist. Both tabs are filtered now, along with the thumbnail rows on the All tab, and a blocked image takes its whole tile with it.
+          </div>
+        </div>
+
+        <div class="entry">
+          <div class="entry-title">A search result that arrived late was never filtered</div>
+          <div class="entry-body">
+            DuckDuckGo builds its results row by row, and a row was being marked as inspected before its title had loaded &mdash; so whichever row was slowest survived. Rows are now re-examined until they are actually readable.
+          </div>
+        </div>
+
+        <div class="entry">
+          <div class="entry-title">Your own blocked words were ignored in image search</div>
+          <div class="entry-body">
+            In image results, a word from your own list only counted when the image filter was set to Strict; Moderate and Lenient consulted the built-in list instead. A word you typed yourself is an instruction rather than a guess, so it now applies at every level.
+          </div>
+        </div>
+
+        <div class="entry">
+          <div class="entry-title">"Go Back" on the blocked page did nothing</div>
+          <div class="entry-body">
+            The button's click was being discarded outright by the extension's own security policy. It works now &mdash; and when there is nothing in the tab's history to go back to, it leaves the page instead of sitting there.
+          </div>
+        </div>
+
+        <div class="entry">
+          <div class="entry-title">Explicit images on X were spotted but left unblurred</div>
+          <div class="entry-body">
+            The AI filter was recognising them &mdash; the blocks showed up in your stats &mdash; and then the blur came straight back off. X reuses picture frames as you scroll, so a verdict for one image could land on the next and uncover it. Verdicts now stick to the exact image they were about. Reported by tachangan.
+          </div>
+        </div>
+
+        <div class="entry">
+          <div class="entry-title">The audit log's page buttons did nothing</div>
+          <div class="entry-body">
+            Next, previous, first, last and the numbered pages were all being discarded by the extension's own security policy, the same way the blocked page's Go Back was &mdash; the log was stuck showing its first 20 entries. They work now. Reported by tachangan.
           </div>
         </div>
       </div>
@@ -488,46 +565,6 @@
             with nothing to explain why. Reported in
             <a href="https://github.com/codepurse/BlockNSFW/issues/26" target="_blank" rel="noopener">#26</a>
             on Firefox, though the same path affected Chrome and Edge.
-          </div>
-        </div>
-
-        <div class="entry">
-          <div class="entry-title">DuckDuckGo's Images and Videos tabs were not filtered at all</div>
-          <div class="entry-body">
-            A blocked word stopped the matching web results, then the same search on the Images or
-            Videos tab showed everything. The filter was looking for parts of DuckDuckGo's old
-            layout that no longer exist, so no result was ever examined. Both tabs are filtered
-            now, along with the rows of thumbnails that appear on the All tab. A blocked image
-            takes its whole tile with it rather than leaving the caption behind.
-          </div>
-        </div>
-
-        <div class="entry">
-          <div class="entry-title">A search result that arrived late was never filtered</div>
-          <div class="entry-body">
-            DuckDuckGo builds its results in the browser, row by row, so a row exists for a moment
-            with its title still missing — and it was being marked as already inspected on the way
-            past. Whichever row happened to be slowest was the one that survived. Rows are now
-            re-examined until they are actually readable.
-          </div>
-        </div>
-
-        <div class="entry">
-          <div class="entry-title">Your own blocked words were ignored in image search</div>
-          <div class="entry-body">
-            In image results, a word from your own list only counted when the image filter was set
-            to Strict; on Moderate or Lenient the built-in list was consulted and yours was not. A
-            word you typed yourself is an instruction rather than a guess, so it now applies at
-            every level.
-          </div>
-        </div>
-
-        <div class="entry">
-          <div class="entry-title">"Go Back" on the blocked page did nothing</div>
-          <div class="entry-body">
-            The button's click was being discarded outright by the extension's own security policy.
-            It works now — and when the blocked page is the only thing in a tab's history, with
-            nothing to go back to, it leaves the page instead of sitting there.
           </div>
         </div>
       </div>

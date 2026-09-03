@@ -78,14 +78,27 @@ BlockNSFW may download remote blocklist and whitelist files from GitHub-hosted U
 - Data involved: standard request metadata only
 - These update requests are not used for advertising or behavioral profiling
 
-### 3. Reddit API Checks
+### 3. Optional Detection Model Download
+
+If you switch the AI image blocker to the optional "Vision Transformer
+(ViT-384)" model, BlockNSFW downloads that model's weight files once from a
+GitHub-hosted URL and caches them in your browser.
+
+- Purpose: obtain the optional image classifier you selected
+- Data involved: standard request metadata only
+- The default model is bundled with the extension, so no download happens
+  unless you choose the optional one
+- **Your images are never uploaded.** The download goes in one direction: the
+  model comes to your device, and all image analysis happens locally
+
+### 4. Reddit API Checks
 
 When Reddit-related filtering features are used, BlockNSFW may query Reddit endpoints to determine whether a subreddit is marked as NSFW.
 
 - Purpose: help identify NSFW Reddit content
 - Data involved: subreddit name or Reddit URL needed for the check, plus standard request metadata
 
-### 4. Manual User Reports to Our Appwrite-Hosted Backend
+### 5. Manual User Reports to Our Appwrite-Hosted Backend
 
 If you choose to report a blocked or misblocked website, that report is sent to and stored in our Appwrite-hosted backend database for review.
 
@@ -102,6 +115,7 @@ We use the limited data handled by BlockNSFW only to:
 - analyze pages locally so filtering can work
 - keep local settings, logs, counters, and statistics working
 - refresh remote filtering rules
+- download the optional detection model you selected
 - perform optional DNS-based domain checks
 - perform optional Reddit NSFW checks
 - process and review manual user-submitted reports
@@ -116,7 +130,7 @@ We do not sell personal data to third parties.
 We share or transmit limited data only when needed to provide a feature or process a request you initiate. The parties that may receive data are:
 
 - **Cloudflare for Families**, when DNS Protection is enabled
-- **GitHub-hosted resources**, when blocklist or whitelist updates are downloaded
+- **GitHub-hosted resources**, when blocklist or whitelist updates are downloaded, or when the optional detection model is downloaded
 - **Reddit**, when Reddit NSFW checks are performed
 - **Our Appwrite-hosted backend**, when you manually submit a website report
 

@@ -32,9 +32,49 @@ const DEFAULT_THRESHOLDS = {
   sexy: 0.90
 };
 
+// The vit384 model answers a single question ("how likely is this NSFW?"), so
+// it needs one bar rather than the class arithmetic above.
+//
+// 0.30 is calibrated, not chosen for feel: safe photos score in a tight
+// 0.05-0.09 band on this model, and Marqo's own evaluation holds ~98% precision
+// AND recall anywhere from 0.1 to 0.9. A higher bar therefore buys no accuracy
+// and only loses borderline content — which is exactly how the first cut
+// (0.70) ended up less accurate in practice than the five-class MobileNet it
+// was meant to beat. See the threshold presets in shared/ai-image-models.js.
+const DEFAULT_BINARY_THRESHOLDS = {
+  nsfw: 0.30
+};
+
+// Score → verdict, for either model's score shape.
+//
+// Dispatch is on the SCORES, not on a caller-supplied model id, because the
+// scores are what get cached: a 24h-old entry has to be interpretable on its
+// own. The two shapes are disjoint (NSFW.js emits Porn/Hentai/Sexy/Drawing/
+// Neutral, the ViT emits NSFW/SFW), so presence of an `NSFW` key identifies
+// the binary model unambiguously.
+//
+// A `thresholds` object whose bars belong to the *other* model is ignored in
+// favour of that model's defaults, so a stale threshold object can never make
+// the bar accidentally unreachable (e.g. `{sexy: 0.9}` applied to a binary
+// score would otherwise leave `nsfw` undefined and block nothing).
 function verdictFor(scores, thresholds) {
   if (!scores) return 'allow';
-  const t = { ...DEFAULT_THRESHOLDS, ...(thresholds || {}) };
+
+  if (Object.prototype.hasOwnProperty.call(scores, 'NSFW')) {
+    const supplied = thresholds && typeof thresholds.nsfw === 'number'
+      ? { nsfw: thresholds.nsfw }
+      : null;
+    const t = { ...DEFAULT_BINARY_THRESHOLDS, ...(supplied || {}) };
+    return (scores.NSFW || 0) >= t.nsfw ? 'block' : 'allow';
+  }
+
+  const supplied = thresholds || {};
+  const t = {
+    pornHentai: typeof supplied.pornHentai === 'number'
+      ? supplied.pornHentai
+      : DEFAULT_THRESHOLDS.pornHentai,
+    sexy: typeof supplied.sexy === 'number' ? supplied.sexy : DEFAULT_THRESHOLDS.sexy
+  };
   const pornHentai = (scores.Porn || 0) + (scores.Hentai || 0);
   if (pornHentai >= t.pornHentai) return 'block';
   if ((scores.Sexy || 0) >= t.sexy) return 'block';

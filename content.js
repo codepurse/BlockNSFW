@@ -1,6 +1,40 @@
 /* BlockNSFW content script - comprehensive content filtering */
 const browserAPI = typeof browser !== 'undefined' ? browser : chrome;
 
+// Yandex serves Search from several regional domains. Keep the list explicit:
+// a broad `hostname.includes('yandex.')` check would also trust lookalike hosts.
+const YANDEX_SEARCH_BASE_DOMAINS = [
+  'yandex.com.am', 'yandex.com.tr', 'yandex.com.ge', 'yandex.co.il',
+  'yandex.com', 'yandex.ru', 'yandex.ua', 'yandex.by', 'yandex.kz',
+  'yandex.uz', 'yandex.az', 'yandex.tj', 'yandex.ee', 'yandex.tm',
+  'yandex.fr', 'yandex.md', 'yandex.eu', 'yandex.lv', 'yandex.lt', 'ya.ru'
+];
+
+function getYandexSearchBaseDomain(hostname) {
+  const host = String(hostname || '').trim().toLowerCase();
+  return YANDEX_SEARCH_BASE_DOMAINS.find(domain => host === domain || host === `www.${domain}`) || '';
+}
+
+function isYandexSearchHost(hostname) {
+  return !!getYandexSearchBaseDomain(hostname);
+}
+
+function isYandexSafeSearchPath(pathname, search = '') {
+  const path = String(pathname || '/').toLowerCase();
+  return path === '/'
+    ? new URLSearchParams(search).has('text')
+    : ['/search', '/images', '/video', '/tune/search'].some(prefix =>
+        path === prefix || path.startsWith(`${prefix}/`));
+}
+
+function updateYandexFamilyCookieValue(currentValue, expiresAt) {
+  const blocks = String(currentValue || '')
+    .split('#')
+    .filter(block => block && !/\.sp\.family/i.test(block));
+  blocks.push(`${expiresAt}.sp.family%3A2`);
+  return blocks.join('#');
+}
+
 // ----------------------------------------------------------------------------
 // SafeSearch side-effect enforcement for cookie-backed engines.
 // Runs at document_start so the page's first request already sees the
@@ -13,6 +47,8 @@ const browserAPI = typeof browser !== 'undefined' ? browser : chrome;
     if (u.protocol !== 'http:' && u.protocol !== 'https:') return;
     const host = (u.hostname || '').toLowerCase().replace(/^www\./, '');
     const path = u.pathname || '/';
+    const isYandexSearchPage = isYandexSearchHost(u.hostname) &&
+      isYandexSafeSearchPath(path, u.search);
 
     const settingsKey = 'pblocker_settings';
     const isAolYahooHost = (hostname) => /(^|\.)search\.aol\./.test(hostname) || hostname === 'search.yahoo.com';
@@ -183,6 +219,24 @@ const browserAPI = typeof browser !== 'undefined' ? browser : chrome;
           }
         }
       }
+      if (isYandexSearchPage) {
+        // This is Yandex's current persisted representation of Family mode,
+        // verified against /tune/search. DNR also appends the same value to the
+        // first outgoing request; this stored copy keeps client-side state and
+        // subsequent form/API code aligned with what the server received.
+        try {
+          const baseDomain = getYandexSearchBaseDomain(u.hostname);
+          const expiresAt = Math.floor(Date.now() / 1000) + 31536000;
+          const ypCookie = document.cookie.split(';').find(part => part.trim().startsWith('yp='));
+          const currentValue = ypCookie ? ypCookie.trim().slice(3) : '';
+          const value = updateYandexFamilyCookieValue(currentValue, expiresAt);
+          document.cookie = `yp=${value}; Domain=.${baseDomain}; Path=/; Max-Age=31536000; SameSite=Lax; Secure`;
+        } catch (_) {}
+        // Only observe the settings document; running a whole-document
+        // MutationObserver on Yandex's live search results would be needless
+        // work on every result appended by the SPA.
+        if (path.startsWith('/tune/search')) injectYandexUiLockdown();
+      }
     };
 
     // Hide the "Filter adult content" row in Qwant's settings modal so the
@@ -237,10 +291,41 @@ const browserAPI = typeof browser !== 'undefined' ? browser : chrome;
       } catch (_) {}
     };
 
+    // Yandex's settings page offers free, mild and family values under the
+    // stable `filter_search_results` field. Keep Family selected and make the
+    // weaker choices unreachable while SafeSearch enforcement is enabled.
+    const injectYandexUiLockdown = () => {
+      const forceFamily = () => {
+        const radios = document.querySelectorAll('input[name="filter_search_results"]');
+        radios.forEach(radio => {
+          const isFamily = radio.value === 'family';
+          radio.checked = isFamily;
+          radio.disabled = true;
+          if (!isFamily) {
+            const row = radio.closest('li, label');
+            if (row) row.style.display = 'none';
+          }
+        });
+      };
+
+      const run = () => { try { forceFamily(); } catch (_) {} };
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', run, { once: true });
+      } else {
+        run();
+      }
+      try {
+        new MutationObserver(run).observe(document.documentElement, {
+          subtree: true, childList: true
+        });
+      } catch (_) {}
+    };
+
     // Only run on relevant hosts to keep startup cost ~zero elsewhere.
     const relevant = host.endsWith('presearch.com')
       || host.endsWith('qwant.com')
-      || isAolYahooHost(u.hostname.toLowerCase());
+      || isAolYahooHost(u.hostname.toLowerCase())
+      || isYandexSearchPage;
     if (!relevant) return;
 
     Promise.resolve(browserAPI.storage.local.get([settingsKey])).then((res) => {
@@ -764,6 +849,30 @@ function hasModerateContextSignals(text) {
   return false;
 }
 
+// Can a public resolver meaningfully answer for this hostname?
+//
+// No, for anything public DNS has no record of: `localhost`, a bare intranet
+// label, a reserved local TLD (`app.test`, `nas.local`), a private or loopback
+// address, or an IP literal of any kind (nothing can look up an address).
+//
+// Those all come back NXDOMAIN, and the block detector reads NXDOMAIN as
+// "filtered" (see shared/dns-providers.js), so with DNS Protection on every
+// local development server was redirected to the blocked page on every single
+// load. The background worker refuses these too — this check just saves the
+// round trip. Mirrors isDnsCheckableHost in background.js.
+function isDnsCheckableHost(host) {
+  const helpers = (typeof HostnameNormalize !== 'undefined') ? HostnameNormalize : null;
+  if (helpers && helpers.isLocalHostname && helpers.isIpLiteral) {
+    return !helpers.isLocalHostname(host) && !helpers.isIpLiteral(host);
+  }
+  // Mirror of the shared predicate, for the case where the module did not load.
+  const h = normalizeHost(host).replace(/^\[/, '').replace(/\]$/, '').replace(/\.+$/, '');
+  if (!h || !h.includes('.')) return false;
+  if (h.includes(':')) return false;
+  if (/^(?:\d{1,3}\.){3}\d{1,3}$/.test(h)) return false;
+  return !/\.(?:localhost|local|test|example|invalid|internal|home\.arpa)$/.test(h);
+}
+
 function hostMatchesDomain(host, domain) {
   const d = normalizeHost(domain);
   const h = normalizeHost(host);
@@ -1196,8 +1305,11 @@ function getBlockedReasonLabel(reasonKey) {
           return;
         }
 
-        // DNS-over-HTTPS check via background (Cloudflare for Families)
-        if (settings.dnsFilterEnabled) {
+        // DNS-over-HTTPS check via background, against whichever filtering
+        // resolver the user picked in settings (see shared/dns-providers.js).
+        // Local hosts are excluded: public DNS has no record for them, and a
+        // no-record answer reads as a block. See isDnsCheckableHost.
+        if (settings.dnsFilterEnabled && isDnsCheckableHost(normalizedHost)) {
           try {
             const dnsResult = await new Promise((resolve) => {
               browserAPI.runtime.sendMessage(
@@ -1367,7 +1479,18 @@ function debounce(func, delay) {
 // Map a user-facing strictness preset to verdictFor() thresholds. Keep these
 // in sync with the labels in options.js (getAiStrictnessMeta). Lower numbers =
 // more aggressive (blocks more). `balanced` is the default.
-function getAiThresholds(level) {
+// The two models answer different questions, so a strictness preset means
+// different numbers for each: NSFW.js needs a Porn+Hentai bar and a separate
+// (deliberately high) Sexy bar, while the binary ViT needs one NSFW bar. Both
+// tables live in shared/ai-image-models.js so the content script, the
+// classifier and the tests cannot drift apart.
+//
+// The fallback below is only reachable if the shared module failed to load
+// (content scripts are injected as a list; one failure should not silently
+// disable filtering). It mirrors the balanced NSFW.js preset.
+function getAiThresholds(level, modelId) {
+  const registry = typeof AiImageModels !== 'undefined' ? AiImageModels : null;
+  if (registry) return registry.getThresholds(modelId, level);
   switch (String(level || '').toLowerCase()) {
     case 'relaxed': return { pornHentai: 0.80, sexy: 0.97 };
     case 'strict':  return { pornHentai: 0.45, sexy: 0.80 };
@@ -1431,6 +1554,7 @@ async function loadSettings() {
       instagramReelsEnabled: false,
       aiImageBlocker: false,
       aiImageScanAllSites: true,
+      aiImageModel: 'nsfwjs',
       aiStrictness: 'balanced',
       aiTextBlocker: false,
       aiTextStrictness: 'balanced'
@@ -1483,7 +1607,7 @@ async function loadSettings() {
       window.AIImageBlocker.init({
         ...settings,
         enabled: isEnabled,
-        aiThresholds: getAiThresholds(settings.aiStrictness)
+        aiThresholds: getAiThresholds(settings.aiStrictness, settings.aiImageModel)
       });
     }
 
@@ -2485,9 +2609,9 @@ function getSearchEngine() {
   if (hostname.includes('google.')) return 'google';
   if (hostname.includes('bing.')) return 'bing';
   if (hostname.includes('duckduckgo.') || hostname === 'duckduckgo.com' || hostname.includes('ddg.')) return 'duckduckgo';
-  if (hostname === 'search.brave.com') return 'brave';
+  if (hostname === 'search.brave.com' || hostname === 'safe.search.brave.com') return 'brave';
   if (hostname.includes('yahoo.')) return 'yahoo';
-  if ((hostname === 'ya.ru' || hostname.includes('yandex.')) &&
+  if (isYandexSearchHost(hostname) &&
       (pathname.startsWith('/search') || pathname.startsWith('/images') || params.has('text'))) {
     return 'yandex';
   }
@@ -4221,7 +4345,19 @@ function observeImage(img) {
   const previousObservedSrc = img.dataset.pblockerObservedSrc || '';
   if (img.dataset.pblockerObserved === 'true' && previousObservedSrc === effectiveUrl) return;
   if (previousObservedSrc && previousObservedSrc !== effectiveUrl && img.classList) {
-    img.classList.remove('pblocker-ai-blocked');
+    // The node now holds a different picture, so the old AI verdict is stale.
+    // Hand it to the AI blocker rather than unblurring here: on virtualised
+    // feeds (X/Twitter) the same <img> is recycled across posts, and simply
+    // dropping the blur exposed the new image for the whole classification
+    // round-trip. onImageSrcChanged() re-hides it until a fresh verdict lands
+    // and reveals it itself when the AI filter is off.
+    if (typeof window.AIImageBlocker !== 'undefined' &&
+        window.AIImageBlocker &&
+        typeof window.AIImageBlocker.onImageSrcChanged === 'function') {
+      window.AIImageBlocker.onImageSrcChanged(img);
+    } else {
+      img.classList.remove('pblocker-ai-blocked');
+    }
   }
   img.dataset.pblockerObserved = 'true';
   if (effectiveUrl) {

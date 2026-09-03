@@ -1523,56 +1523,6 @@
       font-style: italic;
     }
 
-    /* ===== Desktop Guard — compact highlight inside "What's New" ===== */
-    .dg-callout {
-      position: relative;
-      margin-bottom: 1rem;
-      padding: 0.85rem 1rem;
-      border-radius: var(--radius-sm);
-      background:
-        radial-gradient(130% 180% at 0% 0%, rgba(99, 102, 241, 0.16), transparent 60%),
-        var(--surface-2);
-      border: 1px solid rgba(99, 102, 241, 0.28);
-      overflow: hidden;
-    }
-    /* animated accent rail along the top edge */
-    .dg-callout::after {
-      content: '';
-      position: absolute;
-      top: 0; left: 0; right: 0;
-      height: 2px;
-      background: linear-gradient(90deg, transparent, var(--primary), #2575fc, var(--primary), transparent);
-      background-size: 200% 100%;
-      animation: dg-slide 3.5s linear infinite;
-    }
-    @keyframes dg-slide {
-      from { background-position: 0 0; }
-      to   { background-position: 200% 0; }
-    }
-    .dg-callout-head { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.4rem; }
-    /* small, gently pulsing shield */
-    .dg-callout-icon {
-      width: 30px; height: 30px; flex-shrink: 0;
-      border-radius: 9px;
-      display: flex; align-items: center; justify-content: center;
-      color: #fff;
-      background: linear-gradient(135deg, var(--primary), #2575fc);
-      animation: dg-pulse 2.6s ease-in-out infinite;
-    }
-    .dg-callout-icon svg { width: 17px; height: 17px; }
-    @keyframes dg-pulse {
-      0%, 100% { box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.40); }
-      50%      { box-shadow: 0 0 0 7px rgba(99, 102, 241, 0); }
-    }
-    .dg-callout-title { font-weight: 600; color: var(--foreground); font-size: 0.92rem; letter-spacing: -0.01em; }
-    .dg-callout-text { margin: 0; font-size: 0.86rem; color: var(--foreground-muted); line-height: 1.55; }
-    .dg-callout-text strong { color: var(--foreground); font-weight: 600; }
-    .dg-callout-link { color: var(--primary-hover); text-decoration: none; font-weight: 600; white-space: nowrap; }
-    .dg-callout-link:hover { text-decoration: underline; }
-    @media (prefers-reduced-motion: reduce) {
-      .dg-callout::after, .dg-callout-icon { animation: none; }
-    }
-
     /* ===== App Layout: sidebar + grouped sections ===== */
     .app {
       max-width: 1160px;
@@ -1590,7 +1540,18 @@
       display: flex;
       flex-direction: column;
       gap: 1.25rem;
+      max-height: calc(100vh - 3.5rem);
+      overflow-y: auto;
+      scrollbar-width: thin;
+      scrollbar-color: rgba(255, 255, 255, 0.14) transparent;
     }
+    .sidebar::-webkit-scrollbar { width: 6px; }
+    .sidebar::-webkit-scrollbar-track { background: transparent; }
+    .sidebar::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.10);
+      border-radius: 999px;
+    }
+    .sidebar:hover::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.18); }
 
     .sidebar-brand {
       display: flex;
@@ -1614,6 +1575,7 @@
 
     .nav { display: flex; flex-direction: column; gap: 0.125rem; }
     .nav-link {
+      position: relative;
       display: flex;
       align-items: center;
       gap: 0.625rem;
@@ -1645,6 +1607,17 @@
       background: var(--primary-soft);
       color: var(--primary-hover);
       border-color: rgba(99, 102, 241, 0.25);
+    }
+    .nav-link.active::before {
+      content: "";
+      position: absolute;
+      left: 0;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 3px;
+      height: 17px;
+      border-radius: 0 3px 3px 0;
+      background: var(--primary);
     }
     .nav-icon {
       width: 18px;
@@ -1688,6 +1661,101 @@
       border-color: rgba(245, 158, 11, 0.5);
     }
 
+    /* ===== "Beyond this browser" promos (sidebar) ===== */
+    .sidebar-promos {
+      display: flex;
+      flex-direction: column;
+      gap: 0.375rem;
+      margin: 0.625rem 0 0.5rem;
+    }
+    .sidebar-promos-label {
+      font-size: 0.62rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.09em;
+      color: var(--foreground-dim);
+      padding-left: 0.2rem;
+      margin: 0 0 0.125rem;
+    }
+    .sidebar-promo {
+      display: block;
+      padding: 0.625rem 0.7rem 0.7rem;
+      border-radius: var(--radius);
+      text-decoration: none;
+      background:
+        radial-gradient(130% 120% at 0% 0%, rgba(99, 102, 241, 0.14), transparent 62%),
+        var(--surface-2);
+      border: 1px solid rgba(99, 102, 241, 0.20);
+      transition: var(--transition);
+    }
+    .sidebar-promo:hover {
+      border-color: rgba(99, 102, 241, 0.45);
+      background:
+        radial-gradient(130% 120% at 0% 0%, rgba(99, 102, 241, 0.24), transparent 62%),
+        var(--surface-2);
+      transform: translateY(-1px);
+      box-shadow: 0 6px 16px rgba(0, 0, 0, 0.30);
+    }
+    .sidebar-promo-head {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .sidebar-promo-icon {
+      width: 26px;
+      height: 26px;
+      flex-shrink: 0;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 7px;
+      background: var(--primary-soft);
+      border: 1px solid rgba(99, 102, 241, 0.30);
+      color: var(--primary-hover);
+    }
+    .sidebar-promo-icon svg { width: 15px; height: 15px; display: block; }
+    .sidebar-promo-title {
+      font-size: 0.78rem;
+      font-weight: 650;
+      letter-spacing: -0.01em;
+      line-height: 1.25;
+      color: var(--foreground);
+    }
+    .sidebar-promo-tag {
+      font-size: 0.52rem;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--primary-hover);
+      background: var(--primary-soft);
+      border: 1px solid rgba(99, 102, 241, 0.30);
+      padding: 0.1rem 0.28rem;
+      border-radius: 999px;
+      line-height: 1.4;
+    }
+    .sidebar-promo-text {
+      display: block;
+      margin-top: 0.45rem;
+      font-size: 0.69rem;
+      line-height: 1.5;
+      color: var(--foreground-dim);
+    }
+    .sidebar-promo-text em {
+      font-style: normal;
+      color: var(--foreground-muted);
+    }
+    .sidebar-promo-arrow {
+      flex-shrink: 0;
+      margin-left: auto;
+      color: var(--foreground-dim);
+      transition: var(--transition-fast);
+    }
+    .sidebar-promo-arrow svg { width: 13px; height: 13px; display: block; }
+    .sidebar-promo:hover .sidebar-promo-arrow {
+      color: var(--primary-hover);
+      transform: translateX(2px);
+    }
+
     .main { min-width: 0; }
 
     .section { scroll-margin-top: 1.5rem; }
@@ -1727,6 +1795,8 @@
         position: static;
         min-width: 0;
         gap: 1rem;
+        max-height: none;
+        overflow: visible;
       }
       .nav {
         flex-direction: row;
@@ -1739,6 +1809,7 @@
         padding: 0.4rem 0.75rem;
       }
       .nav-icon { display: none; }
+      .nav-link.active::before { display: none; }
       .sidebar-footer {
         flex-direction: row;
         flex-wrap: wrap;
@@ -1748,6 +1819,10 @@
       }
       .sidebar-action { padding: 0.4rem 0.75rem; }
       .sidebar-action-coffee { margin-top: 0; }
+      .sidebar-promos {
+        flex: 1 0 100%;
+        margin: 0;
+      }
       .section + .section { margin-top: 1.5rem; }
     }
 
@@ -1783,6 +1858,27 @@
     .dev-details[open] > summary::after { content: "Show less  ▴"; }
     .dev-details > summary:hover { color: var(--primary); }
     .dev-details .dev-message-body { margin-top: 0.75rem; }
+    /* What's New "show more" toggle. Same affordance as .dev-details, but the
+       label lives in the markup rather than CSS content: it carries a count,
+       and that count has to change when the release notes do. */
+    .wn-details { margin: 0.5rem 0 0; }
+    .wn-details > summary {
+      list-style: none;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      width: fit-content;
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: var(--primary-hover);
+      transition: var(--transition-fast);
+    }
+    .wn-details > summary::-webkit-details-marker { display: none; }
+    .wn-details > summary:hover { color: var(--primary); }
+    .wn-details[open] > summary .wn-toggle-closed,
+    .wn-details > summary .wn-toggle-open { display: none; }
+    .wn-details[open] > summary .wn-toggle-open { display: inline; }
+    .wn-details > ul { margin-top: 0.55rem !important; }
     /* Update Available Banner */
     .update-banner {
       display: flex;
@@ -1861,7 +1957,7 @@
       background: rgba(255, 255, 255, 0.06);
     }
 
-    /* Remote Info / Announcement Banner (message fetched from the repo) */
+    /* Info banner (the toolbar-pin prompt) */
     .info-banner {
       display: flex;
       align-items: center;
@@ -1891,25 +1987,6 @@
       flex-shrink: 0;
     }
 
-    .info-banner .btn-info-link {
-      background: var(--primary);
-      color: var(--primary-foreground);
-      border: 1px solid var(--primary);
-      font-size: 13px;
-      font-weight: 600;
-      padding: 8px 16px;
-      border-radius: var(--radius-sm);
-      cursor: pointer;
-      text-decoration: none;
-      white-space: nowrap;
-      transition: var(--transition-fast);
-    }
-
-    .info-banner .btn-info-link:hover {
-      background: var(--primary-hover);
-      box-shadow: 0 0 12px var(--primary-glow);
-    }
-
     .info-banner .btn-dismiss {
       background: transparent;
       border: none;
@@ -1927,20 +2004,6 @@
       background: rgba(255, 255, 255, 0.06);
     }
 
-    /* Type accents override the default (info) indigo look */
-    .info-banner.type-warning {
-      background: linear-gradient(135deg, rgba(245, 158, 11, 0.12), rgba(245, 158, 11, 0.04));
-      border-color: rgba(245, 158, 11, 0.4);
-    }
-    .info-banner.type-warning > svg { color: var(--warning); filter: none; }
-    .info-banner.type-warning .btn-info-link { background: var(--warning); border-color: var(--warning); color: #1a1205; }
-
-    .info-banner.type-success {
-      background: linear-gradient(135deg, rgba(16, 185, 129, 0.12), rgba(16, 185, 129, 0.04));
-      border-color: rgba(16, 185, 129, 0.4);
-    }
-    .info-banner.type-success > svg { color: var(--success); filter: none; }
-    .info-banner.type-success .btn-info-link { background: var(--success); border-color: var(--success); color: #04140d; }
   </style>
 </head>
 <body>
@@ -1967,6 +2030,46 @@
       <div class="sidebar-footer">
         <a href="stats.html" class="sidebar-action"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg></span><span>Statistics</span></a>
         <a href="changelog.html" class="sidebar-action"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="13" y2="17"/></svg></span><span>Changelog</span></a>
+        <div class="sidebar-promos">
+          <p class="sidebar-promos-label">Beyond this browser</p>
+          <a href="https://github.com/codepurse/extension-guard" target="_blank" rel="noopener noreferrer" class="sidebar-promo">
+            <span class="sidebar-promo-head">
+              <span class="sidebar-promo-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="4" width="20" height="13" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/><path fill="currentColor" stroke="none" d="M12 7.05l3.25 1.18v2.32c0 1.78-1.38 3.1-3.25 3.6-1.87-.5-3.25-1.82-3.25-3.6V8.23z"/></svg></span>
+              <span class="sidebar-promo-title">Desktop Guard</span>
+              <span class="sidebar-promo-tag">Beta</span>
+              <span class="sidebar-promo-arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h13"/><path d="m12 5 7 7-7 7"/></svg></span>
+            </span>
+            <span class="sidebar-promo-text">A companion app for Windows &amp; Linux. It greys out the browser&rsquo;s <em>Remove</em> and <em>Disable</em> buttons, so switching protection off needs a password someone else holds.</span>
+          </a>
+          <a href="https://play.google.com/store/apps/details?id=com.blocknsfw.android" target="_blank" rel="noopener noreferrer" class="sidebar-promo">
+            <span class="sidebar-promo-head">
+              <span class="sidebar-promo-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="6" y="2" width="12" height="20" rx="2.5"/><path fill="currentColor" stroke="none" d="M12 7.4l2.7.98v1.93c0 1.48-1.14 2.58-2.7 3-1.56-.42-2.7-1.52-2.7-3V8.38z"/><path d="M10.6 19h2.8"/></svg></span>
+              <span class="sidebar-promo-title">Android app</span>
+              <span class="sidebar-promo-arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h13"/><path d="m12 5 7 7-7 7"/></svg></span>
+            </span>
+            <span class="sidebar-promo-text">Blocks adult content across your whole phone &mdash; every app, not just this browser. Free on Google Play.</span>
+          </a>
+        </div>
+        <!-- The Sieve store link differs per browser and options.html ships
+             verbatim to every bundle, so the href is picked at runtime from the
+             data-store-* attributes. The Chrome URL stays in href as the
+             fallback for when scripting never runs. -->
+        <div class="sidebar-promos">
+          <p class="sidebar-promos-label">Also from the developer</p>
+          <a href="https://chromewebstore.google.com/detail/sieve-%E2%80%93-content-filter-si/ipdgekalafnmgejbgapendbhdidjgdeg"
+             data-store-chrome="https://chromewebstore.google.com/detail/sieve-%E2%80%93-content-filter-si/ipdgekalafnmgejbgapendbhdidjgdeg"
+             data-store-edge="https://microsoftedge.microsoft.com/addons/detail/sieve-%E2%80%93-content-filter-/flboopfbcclogcdpialeimionkkjliok"
+             data-store-firefox="https://addons.mozilla.org/en-US/firefox/addon/sieve-site-content-blocker/"
+             target="_blank" rel="noopener noreferrer" class="sidebar-promo" id="sieve-promo">
+            <span class="sidebar-promo-head">
+              <span class="sidebar-promo-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg></span>
+              <span class="sidebar-promo-title">Sieve</span>
+              <span class="sidebar-promo-tag">New</span>
+              <span class="sidebar-promo-arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h13"/><path d="m12 5 7 7-7 7"/></svg></span>
+            </span>
+            <span class="sidebar-promo-text">My other blocker, for everything BlockNSFW does not cover &mdash; scams, phishing, gambling, crypto and MLM schemes, and fake shops. Same promise: no account, no tracking, all on your device.</span>
+          </a>
+        </div>
         <a href="https://github.com/codepurse/BlockNSFW" target="_blank" rel="noopener noreferrer" class="sidebar-action"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .5C5.65.5.5 5.65.5 12c0 5.08 3.29 9.39 7.86 10.92.58.1.79-.25.79-.56 0-.28-.01-1.02-.02-2-3.2.7-3.88-1.54-3.88-1.54-.52-1.32-1.27-1.67-1.27-1.67-1.04-.71.08-.7.08-.7 1.15.08 1.76 1.18 1.76 1.18 1.02 1.75 2.68 1.24 3.34.95.1-.74.4-1.24.73-1.53-2.55-.29-5.24-1.28-5.24-5.69 0-1.26.45-2.29 1.19-3.1-.12-.29-.52-1.47.11-3.06 0 0 .97-.31 3.18 1.18a11 11 0 0 1 5.79 0c2.21-1.49 3.18-1.18 3.18-1.18.63 1.59.23 2.77.11 3.06.74.81 1.19 1.84 1.19 3.1 0 4.42-2.69 5.39-5.25 5.68.41.36.78 1.05.78 2.12 0 1.53-.01 2.76-.01 3.13 0 .31.21.67.8.56 4.57-1.53 7.85-5.84 7.85-10.92C23.5 5.65 18.35.5 12 .5z"/></svg></span><span>GitHub</span></a>
         <a href="https://buymeacoffee.com/monolab.co" target="_blank" class="sidebar-action sidebar-action-coffee"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 8h1a4 4 0 0 1 0 8h-1"/><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/><line x1="6" y1="2" x2="6" y2="4"/><line x1="10" y1="2" x2="10" y2="4"/><line x1="14" y1="2" x2="14" y2="4"/></svg></span><span>Buy Me a Coffee</span></a>
       </div>
@@ -2009,36 +2112,13 @@
         </div>
       </div>
 
-      <!-- Remote Info Banner (message fetched from the repo's data/announcement.json) -->
-      <div class="info-banner hidden" id="info-banner" role="status">
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <circle cx="12" cy="12" r="10"></circle>
-          <line x1="12" y1="16" x2="12" y2="12"></line>
-          <line x1="12" y1="8" x2="12.01" y2="8"></line>
-        </svg>
-        <div class="info-banner-text">
-          <div class="info-banner-title" id="info-banner-title">Announcement</div>
-          <div class="info-banner-sub" id="info-banner-sub"></div>
-        </div>
-        <div class="info-banner-actions">
-          <a href="#" target="_blank" rel="noopener noreferrer" class="btn-info-link hidden" id="info-banner-link">Learn more</a>
-          <button class="btn-dismiss" id="info-banner-dismiss" title="Dismiss" aria-label="Dismiss">&times;</button>
-        </div>
-      </div>
-
       <section class="section" id="section-welcome">
-        <div class="section-head">
-          <h2 class="section-title">Welcome</h2>
-          <p class="section-desc">A note from the developer, and what’s new in BlockNSFW.</p>
-          <p class="section-desc" style="margin-top:6px"><a href="onboarding.html" target="_blank" rel="noopener" style="color: var(--primary-hover); font-weight: 600; text-decoration: none;">↻ Re-run setup wizard</a></p>
-        </div>
-
     <div class="card dev-message fade-in">
       <div class="card-header">
         <h2 class="card-title">Message from the Dev</h2>
       </div>
       <p class="dev-teaser">This is it — we’ve reached another milestone! 🎉 From the bottom of my heart, thank you to everyone who supports and uses this extension. <strong>It’s 100% free, always — no account, everything stays on your device.</strong></p>
-      <details class="dev-details" open>
+      <details class="dev-details">
         <summary aria-label="Read the full message from the developer"></summary>
         <div class="dev-message-body">
           <p>I’m so excited to share a fresh wave of features with you: smarter AI detection that catches even more adult content, and a brand-new desktop version of the app that keeps the extension safe from being uninstalled.</p>
@@ -2057,21 +2137,23 @@
           The headlines from this release. <a href="changelog.html" target="_blank" rel="noopener" style="color: var(--primary-hover); font-weight: 600; text-decoration: none;">📜 See the full changelog →</a>
         </p>
         <div class="card-description">
-          <div class="dg-callout">
-            <div class="dg-callout-head">
-              <span class="dg-callout-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><rect x="9.2" y="11" width="5.6" height="4.6" rx="1"/><path d="M10 11V9.5a2 2 0 0 1 4 0V11"/></svg></span>
-              <span class="dg-callout-title">Take BlockNSFW beyond this browser</span>
-              <span class="badge-new">New</span>
-            </div>
-            <p class="dg-callout-text"><strong>Android —</strong> blocks adult sites across your whole phone, not just one browser. <a class="dg-callout-link" href="https://play.google.com/store/apps/details?id=com.blocknsfw.android" target="_blank" rel="noopener">Get it on Google Play →</a></p>
-            <p class="dg-callout-text" style="margin-top: 0.5rem;"><strong>Desktop Guard <span class="badge-beta">Beta</span> —</strong> a native companion app for Windows &amp; Linux that force-installs the extension so the browser's <em>Remove</em> and <em>Disable</em> buttons are greyed out, and re-applies protection if anything tampers with it. Uninstalling needs a password held by a parent or accountability partner. <a class="dg-callout-link" href="https://github.com/codepurse/extension-guard" target="_blank" rel="noopener">Learn more →</a></p>
-          </div>
           <ul style="margin: 0; padding-left: 1.1rem">
-            <li><strong>The access code now guards “unblock this site”</strong> — If you had set an access code, it was only ever asked for on this page. Unblocking a site from the toolbar popup asked for the four-digit PIN and nothing else — so the strongest lock here was missing from the one place most likely to be used in a weak moment. The popup now asks for it exactly as this page does. Unblocking a <em>whole site</em> counts as a decisive action alongside turning blocking off, so it asks for the code even on the default setting; unblocking a single page does not. Re-blocking a site still needs only the PIN — tightening is never made harder. Reported by Pattrattbarr.</li>
-            <li><strong>Block a whole top-level domain <span class="badge-new">New</span></strong> — Put <em>.xyz</em> on a line of its own and every site ending in it is blocked. Some domain endings are used almost entirely for spam and malware, and listing their sites one at a time is hopeless. It is the broadest entry the blocklist accepts, so the field says so plainly next to it. Requested by Maksim.</li>
-            <li><strong>Notes stand out from entries</strong> — A line starting with <em>#</em> or <em>!</em> reads in grey while your entries stay bright, so a long list with headings in it can be scanned at a glance. Nothing about what gets saved or matched changed. Suggested by Maksim.</li>
-            <li><strong>Fixes</strong> — A blocklist entry written with a leading dot reached the image-blocking rule verbatim, where one bad entry was enough to stop image blocking for every site that was working before it. And saving a list sorted <em>/regex/</em> entries under their opening slash, which clumped every pattern at the top and dragged the notes attached to them along.</li>
+            <li><strong>The access code now guards “unblock this site”</strong> &mdash; Unblocking a whole site from the toolbar popup asked only for the PIN, skipping the access code this page requires. The popup asks for it now too. Reported by Pattrattbarr.</li>
+            <li><strong>Choose your DNS resolver <span class="badge-new">New</span></strong> &mdash; Four free resolvers instead of just Cloudflare, picked under <em>Protection &rarr; DNS Protection</em>. Queries never pass through our servers.</li>
+            <li><strong>Or bring your own resolver <span class="badge-new">New</span></strong> &mdash; <em>Custom</em> accepts any DNS-over-HTTPS endpoint: your NextDNS config, a Control D profile, or one you run yourself.</li>
+            <li><strong>Block a whole top-level domain <span class="badge-new">New</span></strong> &mdash; A line reading <code class="code">.xyz</code> blocks every site ending in it. Suggested by Maksim.</li>
           </ul>
+          <details class="wn-details">
+            <summary aria-label="Show the rest of this release&rsquo;s changes"><span class="wn-toggle-closed">Show 6 more &#9662;</span><span class="wn-toggle-open">Show less &#9652;</span></summary>
+            <ul style="margin: 0; padding-left: 1.1rem">
+              <li><strong>Setup covers blocking beyond this browser <span class="badge-new">New</span></strong> &mdash; First-run setup now hands you copyable addresses for device-level resolvers, covering every app rather than one browser.</li>
+              <li><strong>Notes are dimmed in your lists <span class="badge-new">New</span></strong> &mdash; A line starting with <code class="code">#</code> or <code class="code">!</code> reads in grey, so a list with section headings can be scanned at a glance. Suggested by Maksim.</li>
+              <li><strong>Sorting no longer strands your notes</strong> &mdash; A <code class="code">/pattern/</code> entry is filed under its first letter now, not its opening slash, so it stops jumping above everything on save. Reported by Maksim.</li>
+              <li><strong>DuckDuckGo is filtered properly at last</strong> &mdash; The Images and Videos tabs, the thumbnail row and the Wikipedia panel are all covered, and a late-loading result is no longer skipped for good.</li>
+              <li><strong>Local sites are no longer blocked by DNS Protection</strong> &mdash; <code class="code">localhost</code>, home-network devices and intranet addresses were blocked on sight whenever DNS Protection was on. They are recognised as local now, and skipped.</li>
+              <li><strong>Other fixes</strong> &mdash; A <code class="code">.xyz</code> entry no longer breaks image blocking for other sites, your blocked words apply in image search at every filter level, and Go Back works on the blocked page.</li>
+            </ul>
+          </details>
         </div>
       </div>
     </div>
@@ -2158,6 +2240,23 @@
         <span class="status-badge" id="ai-image-blocker-status">🖼 AI Blocker: Active</span>
       </div>
       <div class="form-group" style="margin-top: 1rem;">
+        <label class="pin-input-label" for="ai-image-model">Detection model</label>
+        <select class="input" id="ai-image-model">
+          <option value="nsfwjs">NSFW.js (MobileNetV2) - bundled, works offline</option>
+          <option value="vit384">Vision Transformer (ViT-384) - more accurate, downloads once</option>
+        </select>
+        <div class="pin-hint" id="ai-image-model-detail" style="margin-top: 0.5rem;"></div>
+        <div id="ai-image-model-download" style="margin-top: 0.5rem; display: none;">
+          <button class="button button-primary" id="ai-image-model-download-btn" type="button">
+            Download model now
+          </button>
+          <button class="button" id="ai-image-model-clear-btn" type="button"
+                  style="display: none;">
+            Remove downloaded model
+          </button>
+        </div>
+      </div>
+      <div class="form-group" style="margin-top: 1rem;">
         <label class="pin-input-label" for="ai-strictness">Image detection strictness</label>
         <select class="input" id="ai-strictness">
           <option value="relaxed">Relaxed - Block only clearly explicit images</option>
@@ -2228,7 +2327,7 @@
       <div class="card-header">
         <h2 class="card-title">DNS Protection</h2>
         <p class="card-description">
-          Block adult domains at the DNS level using Cloudflare for Families.
+          Block adult domains at the DNS level using a family-safe resolver.
           This adds an extra layer of protection by checking domains against
           a constantly-updated global filter before the page even loads.
         </p>
@@ -2237,12 +2336,39 @@
       <div class="switch-container">
         <div class="switch-label">
           <span class="label">Enable DNS Filtering</span>
-          <span class="description">Query Cloudflare's family-safe DNS to detect and block adult domains automatically</span>
+          <span class="description">Query a family-safe DNS resolver to detect and block adult domains automatically</span>
         </div>
         <label class="switch">
           <input type="checkbox" id="dns-filter-enabled" />
           <span class="slider"></span>
         </label>
+      </div>
+
+      <div style="margin-top: 1rem;">
+        <label class="label" for="dns-provider">Resolver</label>
+        <select class="input" id="dns-provider" style="margin-top: 0.5rem;">
+          <!-- populated from shared/dns-providers.js -->
+        </select>
+        <div class="pin-hint" id="dns-provider-detail" style="margin-top: 0.5rem;"></div>
+
+        <div id="dns-custom-row" style="margin-top: 0.75rem;" hidden>
+          <label class="label" for="dns-custom-url">DNS-over-HTTPS address</label>
+          <input
+            class="input"
+            type="url"
+            id="dns-custom-url"
+            style="margin-top: 0.5rem;"
+            placeholder="https://dns.nextdns.io/abc123"
+            spellcheck="false"
+            autocomplete="off" />
+          <div class="pin-hint" id="dns-custom-hint" style="margin-top: 0.5rem;">
+            Any DoH endpoint — your own NextDNS config, a Control D profile, or a
+            resolver you run yourself. Press <strong>Test DNS Connection</strong>
+            afterwards: it confirms the address answers <em>and</em> that it
+            actually filters adult domains.
+          </div>
+          <div class="pin-hint" id="dns-custom-error" style="margin-top: 0.5rem; color: var(--destructive);"></div>
+        </div>
       </div>
 
       <div style="margin-top: 1rem; display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: center;">
@@ -2251,6 +2377,15 @@
       </div>
 
       <div id="dns-test-result" class="pin-hint" style="margin-top: 0.5rem"></div>
+
+      <div class="pin-hint" style="margin-top: 1rem;">
+        Queries go straight from your browser to the resolver you pick — they
+        never pass through BlockNSFW's servers. Only domains that the local
+        blocklist has not already decided on are looked up, and each answer is
+        cached for an hour. If one of the built-in resolvers is unreachable,
+        BlockNSFW asks a second one before giving up so this layer does not fail
+        silently — a custom resolver is asked on its own, and nothing else.
+      </div>
     </div>
 
     <div class="card card-featured fade-in" id="safe-search-card">
@@ -2266,7 +2401,7 @@
       <div class="switch-container">
         <div class="switch-label">
           <span class="label">Enforce Safe Search</span>
-          <span class="description">Google, Bing, DuckDuckGo, Yahoo, Brave, Ecosia, Qwant, AOL Search, Presearch — safe results are injected into the URL and the SafeSearch toggle is locked from being disabled</span>
+          <span class="description">Google, Bing, DuckDuckGo, Yahoo, Brave, Ecosia, Qwant, AOL Search, Presearch, Yandex — DuckDuckGo and Brave are forced through dedicated safe sites; other engines have strict filtering enforced at the network-request layer and their SafeSearch controls are locked where supported</span>
         </div>
         <label class="switch">
           <input type="checkbox" id="safe-search-enabled" />
@@ -2877,10 +3012,13 @@ title/Example Domain/"></textarea>
     </div>
   </div>
 
+  <script src="shared/browser-key.js"></script>
   <script src="appwrite-client.js"></script>
   <script src="shared/validate-domain.js"></script>
   <script src="shared/access-code.js"></script>
   <script src="shared/keyword-pattern.js"></script>
+  <script src="shared/dns-providers.js"></script>
+  <script src="shared/ai-image-models.js"></script>
   <!-- Loaded for its template registry only, so the style picker below and the
        blocked page itself can never drift out of sync. -->
   <script src="options.js"></script>
