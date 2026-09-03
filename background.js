@@ -5,6 +5,7 @@ const browserAPI = typeof browser !== 'undefined' ? browser : chrome;
 // decoder, IDN-aware variant helper). See shared/hostname.js.
 try {
   if (typeof self !== 'undefined' && typeof self.importScripts === 'function') {
+    self.importScripts('shared/browser-key.js');
     self.importScripts('shared/hostname.js');
     self.importScripts('shared/host-keywords.js');
     self.importScripts('shared/version-compare.js');
@@ -552,21 +553,12 @@ const ANNOUNCEMENT_INFO_KEY = 'pblocker_announcement_info';
 const ANNOUNCEMENT_CHECK_TTL = 1000 * 60 * 60 * 6; // 6 hours
 let announcementCheckPromise = null;
 
-// Bucket the running browser from the user agent. We do NOT use `typeof browser`
-// as a Firefox signal: recent Chrome/Chromium also expose a `browser` global, so
-// that test misfires and hands Chrome the Firefox override. The UA is reliable
-// in the MV3 service worker (WorkerNavigator exposes userAgent). Order matters —
-// Edge's UA also contains "Chrome/", so it must be checked first.
-function detectBrowserKey() {
-  const ua = (typeof navigator !== 'undefined' && navigator.userAgent) || '';
-  if (/\bEdg(?:e|A|iOS)?\//.test(ua)) return 'edge';
-  if (/\bFirefox\//.test(ua)) return 'firefox';
-  if (/\bChrom(?:e|ium)\//.test(ua)) return 'chrome';
-  // UA unavailable/unrecognized: fall back to the API-shim signal, treating a
-  // `browser` global without Chrome's `chrome.runtime` as Firefox.
-  if (typeof browser !== 'undefined' && !(typeof chrome !== 'undefined' && chrome.runtime)) return 'firefox';
-  return 'chrome';
-}
+// Which browser we are running in, from shared/browser-key.js (loaded above
+// in Chrome, listed in `background.scripts` in Firefox). Called through a
+// wrapper rather than aliased: the importScripts() above is deliberately
+// failure-tolerant, and a top-level read of a missing global would abort the
+// rest of this worker instead of just this one lookup.
+const detectBrowserKey = () => BrowserKey.detectBrowserKey();
 
 // Author-facing key aliases per bucket, matched case-insensitively so the
 // `browsers` map can say "chrome"/"chromium"/"Chromium" (etc.) interchangeably.
