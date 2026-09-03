@@ -12,6 +12,10 @@ const ANNOUNCEMENT_DISMISSED_KEY = 'pblocker_announcement_dismissed';
 // Note: unrelated to PIN_KEY — this is the toolbar-pin prompt, not the PIN lock.
 const PIN_BANNER_DISMISSED_KEY = 'pblocker_pin_banner_dismissed';
 
+// Mirrors DnsProviders.CUSTOM_PROVIDER_ID, with a literal fallback so the DNS
+// card still renders if the shared script failed to load.
+const CUSTOM_DNS_ID = (self.DnsProviders && self.DnsProviders.CUSTOM_PROVIDER_ID) || 'custom';
+
 const DEFAULT_SETTINGS = {
   enabled: true,
   useSmartBlocking: true,
@@ -27,11 +31,14 @@ const DEFAULT_SETTINGS = {
   customBlockedPageUrl: '',
   plainBlockedPageHtml: '',
   dnsFilterEnabled: false,
+  dnsProvider: 'cloudflare', // see shared/dns-providers.js for the roster
+  dnsCustomUrl: '', // DoH endpoint used when dnsProvider is 'custom'
   safeSearchEnabled: true,
   facebookReelsEnabled: false,
   instagramReelsEnabled: false,
   aiImageBlocker: false,
   aiImageScanAllSites: true,
+  aiImageModel: 'nsfwjs',
   aiStrictness: 'balanced',
   aiTextBlocker: false,
   aiTextStrictness: 'balanced',
@@ -74,6 +81,81 @@ function normalizeAiStrictness(level) {
   const value = String(level || '').toLowerCase();
   if (value === 'relaxed' || value === 'strict') return value;
   return 'balanced';
+}
+
+// ── AI image model picker ────────────────────────────────────────────────
+// Two classifiers, one of which is not in the extension package: vit384's
+// weights (~22 MB) are fetched on first use and cached locally, so the store
+// download stays small for the majority who never enable the AI blocker.
+// This section has to make that download visible rather than have the feature
+// mysteriously do nothing on a metered connection.
+
+function normalizeAiImageModel(id) {
+  return typeof AiImageModels !== 'undefined'
+    ? AiImageModels.normalizeModelId(id)
+    : (id === 'vit384' ? 'vit384' : 'nsfwjs');
+}
+
+function askBackground(message) {
+  return new Promise((resolve) => {
+    try {
+      chrome.runtime.sendMessage(message, (res) => {
+        if (chrome.runtime.lastError) return resolve(null);
+        resolve(res || null);
+      });
+    } catch (_) {
+      resolve(null);
+    }
+  });
+}
+
+function describeAiImageModel(modelId, status) {
+  const model = typeof AiImageModels !== 'undefined'
+    ? AiImageModels.resolveModel(modelId)
+    : null;
+  const blurb = model ? model.blurb : '';
+  if (!model || model.bundled) return blurb;
+  // This build may predate the model conversion, in which case there is
+  // nothing to download and retrying can never help. Say that plainly rather
+  // than offering a button that silently does nothing.
+  if (status && status.available === false) {
+    return 'Not available in this build — the model files have not been ' +
+      'published yet, so the bundled NSFW.js model is being used instead.';
+  }
+  if (status && status.progress && status.progress.phase === 'weights') {
+    const { loaded, total } = status.progress;
+    return blurb + ' Downloading weights (' + loaded + ' of ' + total + ' parts)...';
+  }
+  if (status && status.cached) return blurb + ' Downloaded and ready.';
+  return blurb + ' Not downloaded yet — it will fetch the first time an image ' +
+    'is scanned, and images go unfiltered until it finishes.';
+}
+
+async function renderAiImageModel(settings) {
+  const select = $('ai-image-model');
+  const detail = $('ai-image-model-detail');
+  const actions = $('ai-image-model-download');
+  const downloadBtn = $('ai-image-model-download-btn');
+  const clearBtn = $('ai-image-model-clear-btn');
+  const modelId = normalizeAiImageModel(settings.aiImageModel);
+
+  if (select) select.value = modelId;
+
+  const bundled = modelId === 'nsfwjs';
+  let status = null;
+  if (!bundled) status = await askBackground({ type: 'ai_model_status', model: modelId });
+
+  if (detail) detail.textContent = describeAiImageModel(modelId, status);
+  if (actions) actions.style.display = bundled ? 'none' : 'block';
+  const cached = !!(status && status.cached);
+  const unavailable = !!(status && status.available === false);
+  if (actions && unavailable) actions.style.display = 'none';
+  if (downloadBtn) {
+    downloadBtn.style.display = bundled || cached || unavailable ? 'none' : 'inline-flex';
+    downloadBtn.disabled = false;
+    downloadBtn.textContent = 'Download model now';
+  }
+  if (clearBtn) clearBtn.style.display = !bundled && cached ? 'inline-flex' : 'none';
 }
 
 function getAiStrictnessMeta(level) {
@@ -1477,10 +1559,53 @@ async function render() {
   if (dnsToggle) {
     dnsToggle.checked = !!settings.dnsFilterEnabled;
   }
+  const dnsProviders = (self.DnsProviders && self.DnsProviders.DNS_PROVIDERS) || [];
+  const isCustomDns = settings.dnsProvider === CUSTOM_DNS_ID;
+  const activeDnsProvider =
+    dnsProviders.find((p) => p.id === settings.dnsProvider) || dnsProviders[0] || null;
+
+  const dnsProviderSelect = $('dns-provider');
+  if (dnsProviderSelect) {
+    // Built from the shared registry rather than hardcoded <option>s so adding
+    // a resolver is a one-line change in shared/dns-providers.js.
+    if (dnsProviderSelect.options.length !== dnsProviders.length + 1) {
+      dnsProviderSelect.innerHTML = '';
+      dnsProviders.forEach((provider) => {
+        const option = document.createElement('option');
+        option.value = provider.id;
+        option.textContent = `${provider.label} — ${provider.blocks}`;
+        dnsProviderSelect.appendChild(option);
+      });
+      const customOption = document.createElement('option');
+      customOption.value = CUSTOM_DNS_ID;
+      customOption.textContent = 'Custom — your own DoH address';
+      dnsProviderSelect.appendChild(customOption);
+    }
+    dnsProviderSelect.value = isCustomDns ? CUSTOM_DNS_ID : (activeDnsProvider ? activeDnsProvider.id : '');
+    dnsProviderSelect.disabled = !settings.dnsFilterEnabled;
+  }
+
+  const dnsProviderDetail = $('dns-provider-detail');
+  if (dnsProviderDetail) {
+    dnsProviderDetail.textContent = isCustomDns
+      ? 'Queries go only to the address below. Unlike the presets, a custom resolver has no second resolver to fall back on — that is deliberate, so your choice of who sees your browsing is never quietly overridden.'
+      : (activeDnsProvider ? activeDnsProvider.note : '');
+  }
+
+  const dnsCustomRow = $('dns-custom-row');
+  if (dnsCustomRow) dnsCustomRow.hidden = !isCustomDns;
+  const dnsCustomInput = $('dns-custom-url');
+  if (dnsCustomInput && document.activeElement !== dnsCustomInput) {
+    dnsCustomInput.value = settings.dnsCustomUrl || '';
+    dnsCustomInput.disabled = !settings.dnsFilterEnabled;
+  }
+
   const dnsBadge = $('dns-status');
   if (dnsBadge) {
     if (settings.dnsFilterEnabled) {
-      dnsBadge.textContent = '🟢 DNS: Active';
+      dnsBadge.textContent = isCustomDns
+        ? '🟢 DNS: Custom resolver'
+        : (activeDnsProvider ? `🟢 DNS: ${activeDnsProvider.label}` : '🟢 DNS: Active');
       dnsBadge.style.background = 'rgba(16, 185, 129, 0.1)';
       dnsBadge.style.borderColor = 'rgba(16, 185, 129, 0.2)';
       dnsBadge.style.color = 'var(--success)';
@@ -1576,6 +1701,8 @@ async function render() {
   if (aiImageScanAllToggle) {
     aiImageScanAllToggle.checked = settings.aiImageScanAllSites !== false;
   }
+  renderAiImageModel(settings);
+
   const aiStrictness = normalizeAiStrictness(settings.aiStrictness);
   const aiStrictnessSelect = $('ai-strictness');
   if (aiStrictnessSelect) {
@@ -1906,6 +2033,22 @@ function requestAnnouncement() {
   } catch (_) {}
 }
 
+// --- Sieve sidebar promo --------------------------------------------------
+// options.html ships byte-identical to every bundle, so the store link for the
+// companion extension has to be chosen here. Mirrors detectBrowserKey() in
+// background.js: Edge's UA also carries "Chrome/", so it must be tested first.
+// Chromium forks (Brave, Opera, Vivaldi) fall through to the Chrome Web Store,
+// which is where they install from anyway.
+function applySievePromoLink() {
+  const promo = $('sieve-promo');
+  if (!promo) return;
+  const key = BrowserKey.detectBrowserKey();
+  const url = promo.dataset[`store${key.charAt(0).toUpperCase()}${key.slice(1)}`];
+  // Leave the markup's Chrome fallback in place if this browser has no entry.
+  if (url) promo.href = url;
+}
+
+
 async function init() {
   // Before the first render, so the boxes never show an unmigrated list.
   await migrateCommentSyntaxOnce();
@@ -1924,6 +2067,9 @@ async function init() {
   if (infoDismissBtn) infoDismissBtn.addEventListener('click', dismissAnnouncementBanner);
   await renderAnnouncementBanner();
   requestAnnouncement();
+
+  // Companion-extension promo in the sidebar
+  applySievePromoLink();
 
   // Toolbar pin prompt
   const pinDismissBtn = $('pin-banner-dismiss');
@@ -2173,12 +2319,76 @@ async function init() {
       settings.dnsFilterEnabled = e.target.checked;
       await setSettings(settings);
       await render();
+      const enabledProvider =
+        self.DnsProviders && self.DnsProviders.getProviderOrDefault(settings.dnsProvider);
       showToast(
         e.target.checked
-          ? 'DNS Protection enabled — domains will be checked via Cloudflare for Families'
+          ? `DNS Protection enabled — domains will be checked via ${
+              enabledProvider ? enabledProvider.label : 'a family-safe resolver'
+            }`
           : 'DNS Protection disabled',
         e.target.checked ? 'success' : 'info'
       );
+    });
+  }
+
+  // DNS resolver choice. Not PIN-gated: every resolver in the list blocks adult
+  // content, so switching between them swaps who answers the query rather than
+  // weakening the layer — unlike turning DNS off entirely, which is gated above.
+  const dnsProviderSelectEl = $('dns-provider');
+  if (dnsProviderSelectEl) {
+    dnsProviderSelectEl.addEventListener('change', async (e) => {
+      const settings = await getSettings();
+      settings.dnsProvider = e.target.value;
+      await setSettings(settings);
+      await render();
+      if (settings.dnsProvider === CUSTOM_DNS_ID) {
+        const input = $('dns-custom-url');
+        if (input) input.focus();
+        showToast('Enter your DNS-over-HTTPS address below', 'info');
+        return;
+      }
+      const chosen =
+        self.DnsProviders && self.DnsProviders.getProviderOrDefault(settings.dnsProvider);
+      showToast(`DNS resolver set to ${chosen ? chosen.label : settings.dnsProvider}`, 'success');
+    });
+  }
+
+  // Custom DoH address. Saved on blur / Enter rather than on every keystroke —
+  // validating mid-typing would flag every half-written URL as an error.
+  const dnsCustomInputEl = $('dns-custom-url');
+  if (dnsCustomInputEl) {
+    const saveCustomDns = async () => {
+      const errorEl = $('dns-custom-error');
+      const raw = dnsCustomInputEl.value.trim();
+      const settings = await getSettings();
+
+      if (!raw) {
+        // An empty box is not an error, it is just unfinished. Clear it and say
+        // nothing; the resolver stays whatever was last saved.
+        if (errorEl) errorEl.textContent = '';
+        settings.dnsCustomUrl = '';
+        await setSettings(settings);
+        return;
+      }
+
+      const check = self.DnsProviders
+        ? self.DnsProviders.validateCustomDohUrl(raw)
+        : { ok: true, url: raw };
+      if (!check.ok) {
+        if (errorEl) errorEl.textContent = check.error;
+        return;
+      }
+
+      if (errorEl) errorEl.textContent = '';
+      settings.dnsCustomUrl = check.url;
+      await setSettings(settings);
+      showToast('Custom resolver saved — run Test DNS Connection to check it', 'success');
+    };
+
+    dnsCustomInputEl.addEventListener('blur', saveCustomDns);
+    dnsCustomInputEl.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); dnsCustomInputEl.blur(); }
     });
   }
 
@@ -2269,6 +2479,68 @@ async function init() {
     });
   }
 
+  const aiImageModelEl = $('ai-image-model');
+  if (aiImageModelEl) {
+    aiImageModelEl.addEventListener('change', async (e) => {
+      const settings = await getSettings();
+      settings.aiImageModel = normalizeAiImageModel(e.target.value);
+      await setSettings(settings);
+      await render();
+      // Warming the model here means the download starts while the user is
+      // still on this page looking at the progress, instead of silently on
+      // whatever page they happen to open next.
+      if (settings.aiImageModel !== 'nsfwjs' && settings.aiImageBlocker !== false) {
+        askBackground({ type: 'ai_ping_model', model: settings.aiImageModel });
+      }
+    });
+  }
+
+  const aiImageModelDownloadEl = $('ai-image-model-download-btn');
+  if (aiImageModelDownloadEl) {
+    aiImageModelDownloadEl.addEventListener('click', async () => {
+      const settings = await getSettings();
+      const modelId = normalizeAiImageModel(settings.aiImageModel);
+      aiImageModelDownloadEl.disabled = true;
+      aiImageModelDownloadEl.textContent = 'Downloading...';
+      // ai_ping_model resolves only once the weights are loaded, so awaiting
+      // it is the download finishing (or failing).
+      const res = await askBackground({ type: 'ai_ping_model', model: modelId, forceRetry: true });
+      // `ready` alone is NOT success: the service worker falls back to the
+      // bundled model rather than leave pages unfiltered, so a fallback also
+      // answers ready:true. Only treat this as a completed download if the
+      // model we asked for is the one that came up — otherwise the button
+      // silently resets and looks broken.
+      const succeeded = !!(res && res.ready && res.model === modelId && !res.fellBackFrom);
+      if (!succeeded) {
+        const detail = $('ai-image-model-detail');
+        if (detail) {
+          const why = (res && (res.requestedError || res.error)) ||
+            'could not reach the model host';
+          detail.textContent = 'Download failed: ' + why +
+            '. The bundled model is still filtering in the meantime.';
+        }
+        aiImageModelDownloadEl.disabled = false;
+        aiImageModelDownloadEl.textContent = 'Retry download';
+        return;
+      }
+      await render();
+    });
+  }
+
+  const aiImageModelClearEl = $('ai-image-model-clear-btn');
+  if (aiImageModelClearEl) {
+    aiImageModelClearEl.addEventListener('click', async () => {
+      const settings = await getSettings();
+      const modelId = normalizeAiImageModel(settings.aiImageModel);
+      // Removing the weights leaves the selected model unusable, so this also
+      // narrows protection — gate it like the other weakening actions.
+      const ok = await requirePINIfSet('remove the downloaded detection model');
+      if (!ok) return;
+      await askBackground({ type: 'ai_clear_model_weights', model: modelId });
+      await render();
+    });
+  }
+
   const aiImageScanAllEl = $('ai-image-scan-all');
   if (aiImageScanAllEl) {
     aiImageScanAllEl.addEventListener('change', async (e) => {
@@ -2313,17 +2585,41 @@ async function init() {
       resultEl.style.color = 'var(--foreground-muted)';
       dnsTestBtn.disabled = true;
       try {
-        const res = await fetch(
-          'https://family.cloudflare-dns.com/dns-query?name=example.com&type=A',
-          { headers: { Accept: 'application/dns-json' } }
+        if (!self.DnsProviders) throw new Error('DNS provider list failed to load');
+        const settings = await getSettings();
+        const provider = self.DnsProviders.resolveProvider(
+          settings.dnsProvider,
+          settings.dnsCustomUrl
         );
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const data = await res.json();
-        if (typeof data.Status === 'number') {
-          resultEl.textContent = 'Cloudflare Family DNS is reachable and working correctly.';
-          resultEl.style.color = 'var(--success)';
+
+        // Two probes, because reachability alone proves nothing. A resolver
+        // that answers but has stopped filtering — hijacked by the network,
+        // over quota, or misconfigured — looks identical to a healthy one
+        // unless we check that something which *should* be blocked actually is.
+        const [adultVerdict, benignVerdict] = await Promise.all([
+          self.DnsProviders.queryProvider(provider, 'pornhub.com', 5000),
+          self.DnsProviders.queryProvider(provider, 'example.com', 5000),
+        ]);
+
+        if (adultVerdict === null && benignVerdict === null) {
+          resultEl.textContent =
+            `${provider.label} did not respond. Check your internet connection, ` +
+            'or pick a different resolver above.';
+          resultEl.style.color = 'var(--destructive)';
+        } else if (adultVerdict !== true) {
+          resultEl.textContent =
+            `${provider.label} is reachable but did not filter a known adult domain. ` +
+            'Something on your network may be intercepting DNS. Try another resolver.';
+          resultEl.style.color = 'var(--destructive)';
+        } else if (benignVerdict === true) {
+          resultEl.textContent =
+            `${provider.label} blocked a domain that should be safe. ` +
+            'That usually means a captive portal is answering instead of the resolver.';
+          resultEl.style.color = 'var(--destructive)';
         } else {
-          throw new Error('Unexpected response');
+          resultEl.textContent =
+            `${provider.label} is reachable and filtering correctly.`;
+          resultEl.style.color = 'var(--success)';
         }
       } catch (err) {
         resultEl.textContent = `DNS test failed: ${err.message}. Check your internet connection.`;

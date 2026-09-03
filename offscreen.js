@@ -1,69 +1,108 @@
 // Offscreen document worker for the AI image blocker.
 //
-// Runs the NSFW.js (MobileNetV2Mid graph) model on the WebGL backend in a
-// persistent DOM context. The service worker relays classify/ping requests
-// here so inference is GPU-fast and the model only loads once.
+// Runs the selected image classifier on the WebGL backend in a persistent DOM
+// context. The service worker relays classify/ping requests here so inference
+// is GPU-fast and each model only loads once.
+//
+// Two models are supported (see shared/ai-image-models.js):
+//   nsfwjs  MobileNetV2 layers model, loaded through nsfwjs. Bundled.
+//   vit384  ViT-Tiny-384 graph model, loaded by shared/vit-classifier.js with
+//           tf.loadGraphModel. Weights fetched on first use, then cached.
+//
+// Both stay loaded once initialised, keyed by model id, so toggling the
+// setting back and forth in the options page does not re-pay either load.
 //
 // Protocol (from background.js): { target: 'offscreen-ai', op, ... }
-//   op:'classify' { src }  -> { success, scores } | { success:false, error }
-//   op:'ping'     { }      -> { ready:true, backend } | { ready:false, error }
+//   op:'classify' { src, model }        -> { success, scores } | { success:false, error }
+//   op:'ping'     { model }             -> { ready:true, backend } | { ready:false, error }
+//   op:'model_status' { model }         -> { success, cached }
+//   op:'clear_weights' { model }        -> { success, cleared }
 
-const MODEL_URL = chrome.runtime.getURL('nsfwjs/');
-const INPUT_SIZE = 224; // MobileNetV2Mid input dimension
+const Models = self.AiImageModels;
 
-let model = null;
-let loadPromise = null;
+// modelId -> { model, promise } so each model loads at most once.
+const loaded = new Map();
 let activeBackend = 'unknown';
+// Progress of the most recent vit384 weight download, polled by the options
+// page through the service worker.
+let lastProgress = null;
 
-async function ensureModel() {
-  if (model) return model;
-  if (loadPromise) return loadPromise;
-  loadPromise = (async () => {
-    try {
-      // Offscreen documents have a real WebGL context (the service worker does
-      // not), so prefer GPU; fall back to CPU only if WebGL init fails.
-      try {
-        await tf.setBackend('webgl');
-      } catch (_) {
-        try { await tf.setBackend('cpu'); } catch (_) {}
-      }
-      await tf.ready();
-      activeBackend = (typeof tf.getBackend === 'function' && tf.getBackend()) || 'unknown';
-      // Default MobileNetV2 is a tfjs *layers* model; nsfwjs.load() (which calls
-      // loadLayersModel) handles it. The CSP-safe nsfwjs.runtime.js build does
-      // NOT support graph models, so the model bundled in nsfwjs/ must be layers.
-      const loaded = await nsfwjs.load(MODEL_URL);
-      model = loaded;
-      console.log('[BlockNSFW] offscreen AI model ready, backend:', activeBackend);
-      return model;
-    } catch (err) {
-      console.error('[BlockNSFW] offscreen AI model FAILED to load:', err);
-      throw err;
-    }
-  })();
+async function ensureBackend() {
+  // Offscreen documents have a real WebGL context (the service worker does
+  // not), so prefer GPU; fall back to CPU only if WebGL init fails.
   try {
-    return await loadPromise;
-  } finally {
-    loadPromise = null;
+    await tf.setBackend('webgl');
+  } catch (_) {
+    try { await tf.setBackend('cpu'); } catch (_) {}
   }
+  await tf.ready();
+  activeBackend = (typeof tf.getBackend === 'function' && tf.getBackend()) || 'unknown';
+  return activeBackend;
 }
 
-async function classify(src) {
-  const m = await ensureModel();
+function loadModel(modelId) {
+  const descriptor = Models.resolveModel(modelId);
+  const id = descriptor.id;
+  const entry = loaded.get(id);
+  if (entry && entry.model) return Promise.resolve(entry.model);
+  if (entry && entry.promise) return entry.promise;
+
+  const promise = (async () => {
+    await ensureBackend();
+    let model;
+    if (descriptor.kind === 'tfjs-graph-binary') {
+      model = await self.VitClassifier.load(id, (progress) => {
+        lastProgress = { model: id, ...progress };
+      });
+    } else {
+      // MobileNetV2 is a tfjs *layers* model; nsfwjs.load() (which calls
+      // loadLayersModel) handles it. The CSP-safe nsfwjs.runtime.js build does
+      // NOT support graph models, which is exactly why vit384 bypasses nsfwjs.
+      model = await nsfwjs.load(chrome.runtime.getURL(descriptor.modelPath));
+    }
+    loaded.set(id, { model, promise: null });
+    console.log('[BlockNSFW] offscreen model ready:', id, 'backend:', activeBackend);
+    return model;
+  })().catch((err) => {
+    // Drop the failed entry so a later ping retries instead of resolving the
+    // same rejected promise forever.
+    loaded.delete(id);
+    console.error('[BlockNSFW] offscreen model FAILED to load:', id, err);
+    throw err;
+  });
+
+  loaded.set(id, { model: null, promise });
+  return promise;
+}
+
+async function classify(src, modelId) {
+  const descriptor = Models.resolveModel(modelId);
+  const model = await loadModel(descriptor.id);
+
   // Fetch with extension permissions (page CSP / hotlink rules don't apply).
   // force-cache reuses the image the page just loaded, so this is usually free.
   const resp = await fetch(src, { credentials: 'omit', cache: 'force-cache' });
   if (!resp.ok) throw new Error('HTTP ' + resp.status);
   const blob = await resp.blob();
+
   let bitmap;
-  const opts = { resizeWidth: INPUT_SIZE, resizeHeight: INPUT_SIZE, resizeQuality: 'high' };
+  // Decode straight to the model's input size where the decoder supports it.
+  const opts = {
+    resizeWidth: descriptor.inputSize,
+    resizeHeight: descriptor.inputSize,
+    resizeQuality: 'high'
+  };
   try {
     bitmap = await createImageBitmap(blob, opts);
   } catch (_) {
     bitmap = await createImageBitmap(blob);
   }
+
   try {
-    const predictions = await m.classify(bitmap);
+    if (descriptor.kind === 'tfjs-graph-binary') {
+      return await self.VitClassifier.classify(model, bitmap, descriptor.id);
+    }
+    const predictions = await model.classify(bitmap);
     const scores = {};
     for (const p of predictions) scores[p.className] = p.probability;
     return scores;
@@ -74,17 +113,52 @@ async function classify(src) {
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (!message || message.target !== 'offscreen-ai') return; // not for us
+
   if (message.op === 'classify') {
-    classify(message.src)
+    classify(message.src, message.model)
       .then((scores) => sendResponse({ success: true, scores }))
       .catch((err) => sendResponse({ success: false, error: err && err.message || String(err) }));
     return true; // async
   }
+
   if (message.op === 'ping') {
-    ensureModel()
+    loadModel(message.model)
       .then(() => sendResponse({ ready: true, backend: activeBackend }))
       .catch((err) => sendResponse({ ready: false, error: err && err.message || String(err) }));
     return true; // async
   }
+
+  if (message.op === 'model_status') {
+    const descriptor = Models.resolveModel(message.model);
+    (async () => {
+      const cached = descriptor.bundled
+        ? true
+        : await self.VitClassifier.isCached(descriptor.id);
+      // `available` distinguishes "not downloaded yet" from "this build has no
+      // graph for the model", which no amount of retrying can fix.
+      const topology = await self.VitClassifier.topologyStatus(descriptor.id);
+      sendResponse({
+        success: true,
+        model: descriptor.id,
+        cached,
+        available: topology.available,
+        error: topology.error,
+        loaded: loaded.has(descriptor.id) && !!loaded.get(descriptor.id).model,
+        progress: lastProgress && lastProgress.model === descriptor.id ? lastProgress : null
+      });
+    })().catch((err) => sendResponse({ success: false, error: err && err.message || String(err) }));
+    return true; // async
+  }
+
+  if (message.op === 'clear_weights') {
+    (async () => {
+      const descriptor = Models.resolveModel(message.model);
+      loaded.delete(descriptor.id);
+      const cleared = await self.VitClassifier.clearCachedWeights(descriptor.id);
+      sendResponse({ success: true, cleared });
+    })().catch((err) => sendResponse({ success: false, error: err && err.message || String(err) }));
+    return true; // async
+  }
+
   return false;
 });

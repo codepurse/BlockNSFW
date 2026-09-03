@@ -1,7 +1,7 @@
 // onboarding.js — first-run setup wizard for BlockNSFW.
 // Opened once on fresh install (see background.js onInstalled). Writes the same
 // storage keys the rest of the extension reads:
-//   pblocker_settings  — aiImageBlocker / aiTextBlocker / aiStrictness / aiTextStrictness
+//   pblocker_settings  — aiImageBlocker / aiTextBlocker / aiStrictness / aiTextStrictness / dnsFilterEnabled
 //   pblocker_pin       — plaintext PIN (matches options.js semantics)
 //   pblocker_onboarding_completed — guard so the wizard never re-opens
 // CSP forbids inline scripts, so every handler is attached here via addEventListener.
@@ -50,7 +50,7 @@
   }
 
   // ---- wizard state --------------------------------------------------------
-  const STEPS = [1, 2, 3, 4];
+  const STEPS = [1, 2, 3, 4, 5];
   let idx = 0; // 0-based index into STEPS
 
   const els = {
@@ -65,6 +65,7 @@
     aiText: $('ai-text'),
     strictness: $('strictness'),
     strictnessDetail: $('strictness-detail'),
+    dnsFilter: $('dns-filter'),
     pin: $('pin'),
     pin2: $('pin2'),
     pinErr: $('pin-err')
@@ -75,7 +76,8 @@
     1: { back: false, skip: false, next: 'Get started' },
     2: { back: true, skip: false, next: 'Continue' },
     3: { back: true, skip: true, next: 'Set PIN & Continue' },
-    4: { back: true, skip: false, next: 'Finish setup' }
+    4: { back: true, skip: false, next: 'Continue' },
+    5: { back: true, skip: true, next: 'Finish setup' }
   };
 
   function render() {
@@ -103,6 +105,10 @@
     });
   }
 
+  async function saveDnsStep() {
+    await patchSettings({ dnsFilterEnabled: !!els.dnsFilter.checked });
+  }
+
   // Returns true if the PIN step is satisfied (valid PIN saved, or nothing entered).
   async function trySavePin() {
     const a = els.pin.value || '';
@@ -127,6 +133,7 @@
     if (img || txt) parts.push('(' + normalizeStrictness(els.strictness.value) + ')');
     const hasPin = await getStored(PIN_KEY);
     if (hasPin[PIN_KEY]) parts.push('· PIN set');
+    if (els.dnsFilter.checked) parts.push('· DNS check on');
 
     const summary = $('done-summary');
     if (summary) summary.textContent = parts.join(' ') + '. You can change any of this in Settings.';
@@ -147,7 +154,8 @@
       } else if (step === 3) {
         const ok = await trySavePin();
         if (!ok) return; // validation failed — stay on step
-      } else if (step === 4) {
+      } else if (step === 5) {
+        await saveDnsStep();
         await finish();
         return;
       }
@@ -158,7 +166,14 @@
   }
 
   async function goSkip() {
-    // Only the PIN step shows Skip: advance without setting a PIN.
+    // Skip appears on the PIN step and the DNS step. On the last step there is
+    // nothing to advance to, so skipping means "finish without enabling this".
+    if (STEPS[idx] === 5) {
+      els.dnsFilter.checked = false;
+      await saveDnsStep();
+      await finish();
+      return;
+    }
     els.pin.value = '';
     els.pin2.value = '';
     els.pinErr.textContent = '';
@@ -181,6 +196,24 @@
     els.strictness.addEventListener('change', () => {
       els.strictnessDetail.textContent = STRICTNESS[normalizeStrictness(els.strictness.value)];
     });
+    els.dnsFilter.checked = cur.dnsFilterEnabled === true; // off unless already on
+
+    // Copy buttons for the device-level resolver addresses.
+    document.querySelectorAll('.copy-btn').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const text = btn.getAttribute('data-copy') || '';
+        try {
+          await navigator.clipboard.writeText(text);
+        } catch (_) {
+          return; // clipboard blocked — the addresses are on screen to type
+        }
+        const original = btn.textContent;
+        btn.textContent = 'Copied';
+        btn.classList.add('copied');
+        setTimeout(() => { btn.textContent = original; btn.classList.remove('copied'); }, 1600);
+      });
+    });
+
     els.next.addEventListener('click', goNext);
     els.back.addEventListener('click', goBack);
     els.skip.addEventListener('click', goSkip);

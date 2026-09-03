@@ -4,7 +4,155 @@ All notable project changes should be documented here going forward.
 
 ## [Unreleased]
 
+### Added
+- **The AI image blocker can now use a second, more accurate model, and the
+  extension download got smaller rather than bigger.** Settings offer a
+  detection-model picker: the bundled NSFW.js MobileNetV2 (still the default,
+  still works offline) or Marqo's `nsfw-image-detection-384` Vision Transformer.
+
+  The reason to want the ViT is not a headline accuracy number — it is that it
+  answers one question (is this NSFW?) instead of five. NSFW.js's "Sexy" class
+  fires on beaches, fitness photos, fashion and ordinary portraits, which is why
+  its bar has to sit all the way up at 0.90 to avoid blurring holiday snaps. A
+  binary head has no such class to defend against.
+
+  Getting there needed one long-standing belief corrected: the AI runtime was
+  documented as unable to load tfjs *graph* models, which ruled out every
+  model except the bundled MobileNet. That limit turned out to belong to the
+  CSP-safe `nsfwjs.runtime.js` shim, not to TensorFlow.js — the vendored
+  `tf.es2017.js` exports `loadGraphModel` and is eval-free. So the ViT bypasses
+  nsfwjs entirely and does its own preprocessing and softmax.
+
+  The conversion is reproducible via `tools/convert_vit384.py` and verified
+  numerically: the packaged graph reproduces the original timm model's logits
+  to within 8.3e-7, checked by loading it through the extension's own loader on
+  the vendored TensorFlow.js build. Output is a 341 KB graph plus six weight
+  shards totalling 21.4 MiB.
+
+  Those weights are **not** in the extension package. Bundling them
+  would have grown the store download about five-fold for a feature that is
+  opt-in and off by default. Instead the execution graph ships in the package
+  (the part worth reviewing) and the numeric weight shards are fetched once on
+  first use and cached locally by the browser. Images are still never uploaded —
+  the traffic goes one way, and the model comes to you.
+
+  Three things this shook out:
+  - The verdict cache stores raw *scores* and re-derives verdicts on every hit,
+    so that changing strictness applies immediately instead of being frozen for
+    24 hours. With two models that becomes a trap: a 0.8 from MobileNet's Sexy
+    class and a 0.8 NSFW probability are different claims. Entries are now
+    tagged with the model that produced them and are re-classified after a
+    switch, and `verdictFor()` dispatches on the score shape rather than
+    trusting whichever thresholds it was handed.
+  - If the selected model cannot load — no connection, weights not published,
+    cache evicted — classification falls back to the bundled model instead of
+    leaving the page unfiltered. The response reports which model actually ran,
+    so the cache records the truth rather than the setting.
+  - Strictness presets are per model now (one NSFW bar for the ViT, the
+    Porn+Hentai / Sexy pair for MobileNet), held in one table so the content
+    script, the three inference routes and the tests cannot drift apart.
+  - The ViT's thresholds are **calibrated rather than guessed**. The first cut
+    (strict/balanced/relaxed = 0.40/0.70/0.90) was invented by analogy with
+    NSFW.js and made the ViT *worse* in practice than the model it was meant to
+    beat: content the model scored 0.35-0.65 NSFW was sailing straight through,
+    and `relaxed: 0.90` sat exactly on the point where Marqo's published
+    evaluation shows recall collapsing. Two measurements fixed it — a local scan
+    of 18 varied safe photos (including people and sports) put ordinary content
+    in a tight 0.047-0.094 band, and Marqo's threshold curves hold ~98%
+    precision *and* recall anywhere from 0.1 to 0.9. The presets are now
+    0.15/0.30/0.60, all inside that plateau, and none of the 18 safe photos is
+    blurred at any of them.
+
+- **DNS Protection can now use one of four filtering resolvers, and falls back
+  to a second one when the first does not answer.** It was hardcoded to
+  Cloudflare for Families, which made a single company both the only option and
+  a single point of failure: when that resolver was unreachable or rate-limiting
+  us, `checkDnsFilter()` failed open and the layer quietly stopped working with
+  nothing in the UI to say so.
+
+  Settings now offer Cloudflare for Families, AdGuard DNS Family, Mullvad DNS
+  Family and the CleanBrowsing Adult Filter. All four are free, need no account,
+  and are queried straight from the user's own browser — nothing passes through
+  BlockNSFW's servers. Only resolvers whose terms permit this are listed;
+  OpenDNS and Control D forbid providing their service to third parties, so they
+  are recommended as device-level settings rather than queried by the extension.
+
+  Three things this shook out:
+  - AdGuard signals a block with its own block-page address (`94.140.14.35`)
+    rather than a `0.0.0.0` sinkhole, so a naive "did it resolve?" check reads
+    it as *nothing is ever blocked*. Block detection is now per-provider.
+  - A lookup that fails is no longer indistinguishable from one that came back
+    clean. `checkDnsFilter()` returns a tri-state, a no-answer is never cached,
+    and `shouldBlock()` skips its URL cache write in that case — an outage used
+    to whitelist the domain for the rest of the service worker's life.
+  - A resolver that stops responding is muted for five minutes after three
+    consecutive failures, so a dead provider costs one timeout rather than one
+    per navigation.
+
+  *Test DNS Connection* now checks that a known adult domain is actually
+  filtered and a benign one is not, instead of only checking reachability — a
+  resolver that answers but has stopped filtering used to look healthy.
+
+- **Or point DNS Protection at any resolver you like.** Picking *Custom* in the
+  resolver list reveals an address box that takes any DNS-over-HTTPS endpoint —
+  your own NextDNS config ID, a Control D profile, DNS for Family, or something
+  you run yourself. This is how the resolvers we cannot ship as presets become
+  usable anyway: OpenDNS and Control D forbid *us* from querying on a user's
+  behalf, but nothing stops a user pointing their own copy wherever they want.
+
+  Custom endpoints are spoken to in RFC 8484 wireformat rather than the JSON
+  dialect, because wireformat is the actual standard and the JSON one is a
+  Cloudflare extra most resolvers do not implement — guessing wrong would have
+  looked identical to "your resolver is broken". The address must be `https://`
+  and carry no embedded credentials, and a saved address that later fails to
+  parse degrades to the default resolver rather than to no DNS layer at all.
+
+  **A custom resolver has no fallback, deliberately.** The presets fail over to
+  a second network when one does not answer; a custom one does not. Someone who
+  typed in their own endpoint chose who gets to see their browsing, and quietly
+  redirecting those queries to Cloudflare the moment their resolver hiccuped
+  would override that choice without telling them.
+
+- **A fifth onboarding step covers network-level blocking.** It offers the
+  in-extension DNS check as a toggle (off by default, like every other feature
+  that sends anything off-device), and then gives copyable addresses for
+  CleanBrowsing Family and DNS for Family to set on the device or router.
+  That second half is the part the extension cannot do for the user: it covers
+  every app rather than one browser, and it survives the extension being
+  removed — which is the gap Desktop Guard exists to defend, approached from
+  the other side. The step is skippable.
+
 ### Fixed
+- **The AI image filter flagged explicit images on X/Twitter without blurring
+  them.** Reported in
+  [#17](https://github.com/codepurse/BlockNSFW/issues/17). The model was working
+  — the blocks were counted, which is why they showed up in the log — but the
+  blur kept coming straight back off.
+
+  X runs a virtualised timeline: it keeps a pool of `<img>` nodes and swaps
+  their `src` as you scroll, and the browser re-resolves `srcset` to a
+  higher-res candidate once an image is laid out. Either can change the picture
+  in a node *while* its classification is still in flight. `applyVerdict()`
+  applied whatever came back to whatever the node held by then, so a stale
+  `allow` from the node's previous occupant would strip the blur off an image
+  the model had just blocked — and a stale `block` would blur an innocent one.
+  A verdict now carries the URL it was computed for and is dropped if the node
+  has moved on. Its scores are still cached, so nothing is re-fetched.
+
+  `observeImage()` made it worse by unblurring a node the moment its `src`
+  changed, which left the new image fully visible for a whole classify
+  round-trip. It now hands the node to the blocker, which hides it until its own
+  verdict lands. Every path that declines to classify an image reveals it again,
+  so nothing can be stranded invisible.
+
+- **None of the buttons on the audit log's pagination worked.** Also reported in
+  [#17](https://github.com/codepurse/BlockNSFW/issues/17). They were rendered
+  with inline `onclick="changePage(n)"`, which the extension-page CSP
+  (`script-src 'self'`) blocks outright — so every one of them was a silent
+  no-op and the log was stuck on its first 20 entries. The target page moved to
+  `data-page` with a delegated listener, and `changePage()` now clamps to the
+  range that actually exists.
+
 - **The popup could unblock a site with nothing but the PIN, however the access
   code was configured.** Reported in
   [#29](https://github.com/codepurse/BlockNSFW/issues/29). The access code —
@@ -35,6 +183,17 @@ All notable project changes should be documented here going forward.
   critical. Both entry points ask for the code after the input has been checked
   and found not to be a duplicate, so a typo can no longer cost someone 256
   characters of typing.
+
+### Removed
+- **~856 KB of dead code that shipped in every release.** `classify.worker.js`
+  and the `tf.min.js` / `nsfwjs.min.js` pair it imported were left behind by the
+  move to the service-worker-delegated classifier. Nothing had spawned that
+  worker in months (`new Worker` appears nowhere in the tree) and Chrome's
+  manifest never even exposed it, but the build copied all of `vendor/`
+  wholesale, so it went out anyway. The Chrome package drops from 4.99 MB to
+  4.13 MB. A new test asserts both directions of that drift: every path a
+  manifest declares must exist, and every vendored file must be referenced by
+  something.
 
 ## [1.7.5] - 2026-08-24
 

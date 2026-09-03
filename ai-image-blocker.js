@@ -10,7 +10,10 @@
 
   const MAX_INFLIGHT = 4;
   const MAX_CACHE_ENTRIES = 2000;
-  const CACHE_KEY = 'pblocker_ai_image_cache_v1';
+  // v2 adds a per-entry model tag. v1 entries carry raw scores with no record
+  // of which model produced them, and the two models' scores are not
+  // comparable, so v1 is abandoned rather than migrated.
+  const CACHE_KEY = 'pblocker_ai_image_cache_v2';
   const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
   const STYLE_ID = 'pblocker-ai-blocker-styles';
   const MODEL_PING_TIMEOUT_MS = 60000;
@@ -149,8 +152,18 @@
     });
   }
 
-  function applyVerdict(img, verdict, scores) {
+  // `expectedSrc` is the URL this verdict was computed for. Virtualised feeds
+  // (X/Twitter, Instagram, Reddit) recycle the same <img> node for a different
+  // post while a classification is still in flight, and lazy-loaders swap in a
+  // higher-res candidate mid-flight, so by the time a verdict lands the node
+  // may be showing a different picture. Applying it blind is how an explicit
+  // image ends up unblurred on X: the previous occupant's stale `allow` verdict
+  // arrives and strips the blur off the image that replaced it. When the node
+  // has moved on, drop the verdict — the URL it now holds has its own
+  // classification pending.
+  function applyVerdict(img, verdict, scores, expectedSrc) {
     if (!img || !img.classList) return;
+    if (expectedSrc && (img.currentSrc || img.src) !== expectedSrc) return;
     const alreadyBlocked = img.classList.contains('pblocker-ai-blocked');
     if (verdict === 'block') {
       if (!alreadyBlocked) {
@@ -195,6 +208,32 @@
     return !!(state.settings &&
       state.settings.enabled !== false &&
       state.settings.aiImageBlocker !== false);
+  }
+
+  function activeModelId() {
+    const requested = state.settings && state.settings.aiImageModel;
+    if (typeof AiImageModels !== 'undefined') {
+      return AiImageModels.normalizeModelId(requested);
+    }
+    return requested || 'nsfwjs';
+  }
+
+  // A cache entry is usable only if it is fresh AND was produced by the model
+  // that is active now. Without the model check, switching models would keep
+  // serving the old model's scores for up to 24h — and because verdicts are
+  // re-derived from raw scores against the *current* thresholds, a 0.8 from
+  // MobileNet's Sexy class would be read against the ViT's single NSFW bar.
+  // That silently blocks or unblocks the wrong images, with no error anywhere.
+  function usableCacheEntry(src) {
+    const cached = state.lru.get(src);
+    if (!cached) return null;
+    if ((Date.now() - cached.ts) >= CACHE_TTL_MS) return null;
+    if (typeof AiImageModels !== 'undefined') {
+      if (!AiImageModels.scoresMatchModel(cached.scores, activeModelId())) return null;
+    } else if (cached.m && cached.m !== activeModelId()) {
+      return null;
+    }
+    return cached;
   }
 
   function clearAIBlockedImages() {
@@ -270,14 +309,19 @@
     // Send just URL; service worker fetches + classifies with extension
     // permissions so page CSP and hotlink restrictions do not block us.
     const res = await sendRuntimeMessage(
-      { type: 'ai_classify_image', src },
+      { type: 'ai_classify_image', src, model: activeModelId() },
       CLASSIFY_TIMEOUT_MS,
       'classify timeout'
     );
     if (!res || !res.success) {
       throw new Error(res && res.error ? res.error : 'classify failed');
     }
-    return res.scores;
+    // `res.model` is the model that ACTUALLY produced these scores, which is
+    // not always the one we asked for: the service worker falls back to the
+    // bundled model rather than leave a page unfiltered. The cache is tagged
+    // with what ran, so a later switch back to the selected model correctly
+    // treats these entries as belonging to something else.
+    return { scores: res.scores, model: res.model || activeModelId() };
   }
 
   // Recompute the verdict from cached *scores* using the CURRENT thresholds, so
@@ -312,6 +356,7 @@
     if (!isAiActive()) {
       state.pendingQueue.length = 0;
       state.queuedImages = new WeakSet();
+      revealAllPending();
       return;
     }
 
@@ -331,9 +376,9 @@
       return;
     }
 
-    const cached = state.lru.get(src);
-    if (cached && (Date.now() - cached.ts) < CACHE_TTL_MS) {
-      applyVerdict(img, verdictFromCache(cached), cached.scores);
+    const cached = usableCacheEntry(src);
+    if (cached) {
+      applyVerdict(img, verdictFromCache(cached), cached.scores, src);
       drainQueue();
       return;
     }
@@ -343,16 +388,21 @@
     }
 
     try {
-      const scores = await getOrStartClassification(src);
-      if (!isAiActive()) {
-        applyVerdict(img, 'allow');
-        return;
-      }
+      const result = await getOrStartClassification(src);
+      const scores = result && result.scores;
+      const servedBy = (result && result.model) || activeModelId();
       const thresholds = (state.settings && state.settings.aiThresholds) || null;
       const verdict = verdictFor(scores, thresholds);
-      setWithCap(src, { scores, verdict, ts: Date.now() });
-      applyVerdict(img, verdict, scores);
+      // Cache the scores even if this node moved on — the next image to use
+      // this URL gets an instant verdict instead of a fresh round-trip.
+      setWithCap(src, { scores, verdict, ts: Date.now(), m: servedBy });
       flushCacheToStorage();
+      if (!isAiActive()) {
+        clearPending(img);
+        if (img.classList) img.classList.remove('pblocker-ai-blocked');
+        return;
+      }
+      applyVerdict(img, verdict, scores, src);
     } catch (_) {
       // Classification failed (CORS, network, SW error) - reveal the image
       // rather than leaving it hidden forever.
@@ -360,22 +410,45 @@
     }
   }
 
+  // Called by content.js when an <img> starts pointing at a different picture
+  // (lazy-load upgrade, srcset re-resolution, or an SPA recycling the node for
+  // another post). The previous verdict no longer describes what is on screen.
+  // Crucially this does NOT just unblur: dropping the blur while the fresh
+  // verdict is a network round-trip away is what left explicit images visible
+  // on X's virtualised timeline. Hide the node instead and let the new verdict
+  // decide. Every classification path clears the pending state, and
+  // onImageVisible below clears it on each of its skip paths, so an image can
+  // never be stranded hidden.
+  function onImageSrcChanged(img) {
+    if (!img || !img.classList) return;
+    img.classList.remove('pblocker-ai-blocked');
+    if (!isAiActive()) {
+      clearPending(img);
+      return;
+    }
+    img.classList.add(PENDING_CLASS);
+  }
+
   function onImageVisible(img) {
-    if (!isAiActive()) return;
+    // Any path that declines to classify must reveal the image, otherwise a
+    // node hidden by onImageSrcChanged/markPending stays blank forever.
+    const skip = () => { clearPending(img); };
+
+    if (!isAiActive()) return skip();
 
     const src = img.currentSrc || img.src;
-    if (!src) return;
+    if (!src) return skip();
     const minDimension = typeof MIN_NATURAL_DIMENSION === 'number'
       ? MIN_NATURAL_DIMENSION
       : 64;
-    if (img.naturalWidth > 0 && img.naturalWidth < minDimension) return;
-    if (img.naturalHeight > 0 && img.naturalHeight < minDimension) return;
+    if (img.naturalWidth > 0 && img.naturalWidth < minDimension) return skip();
+    if (img.naturalHeight > 0 && img.naturalHeight < minDimension) return skip();
 
     const hostname = (() => {
       try { return new URL(src).hostname.toLowerCase(); } catch (_) { return ''; }
     })();
 
-    if (src.startsWith('data:') || src.startsWith('blob:')) return;
+    if (src.startsWith('data:') || src.startsWith('blob:')) return skip();
 
     // By default the AI filter scans images from ALL origins — including the
     // site you are on — so adult sites (which serve their own images) are
@@ -384,22 +457,22 @@
     const scanAllSites = !state.settings || state.settings.aiImageScanAllSites !== false;
     const pageHost = (window.location && window.location.hostname || '').toLowerCase();
     if (!scanAllSites && hostname && pageHost) {
-      if (hostname === pageHost) return;
-      if (hostname.endsWith('.' + pageHost)) return;
-      if (pageHost.endsWith('.' + hostname)) return;
+      if (hostname === pageHost) return skip();
+      if (hostname.endsWith('.' + pageHost)) return skip();
+      if (pageHost.endsWith('.' + hostname)) return skip();
     }
 
     const trustedDomains = (state.settings && state.settings.trustedImageDomains) || [];
     if (trustedDomains.length > 0 && hostname) {
       for (const d of trustedDomains) {
         const td = String(d).toLowerCase();
-        if (hostname === td || hostname.endsWith('.' + td)) return;
+        if (hostname === td || hostname.endsWith('.' + td)) return skip();
       }
     }
 
-    const cached = state.lru.get(src);
-    if (cached && (Date.now() - cached.ts) < CACHE_TTL_MS) {
-      applyVerdict(img, verdictFromCache(cached), cached.scores);
+    const cached = usableCacheEntry(src);
+    if (cached) {
+      applyVerdict(img, verdictFromCache(cached), cached.scores, src);
       return;
     }
 
@@ -417,7 +490,7 @@
     state.modelPingInFlight = true;
     try {
       const result = await sendRuntimeMessage(
-        { type: 'ai_ping_model', forceRetry },
+        { type: 'ai_ping_model', forceRetry, model: activeModelId() },
         MODEL_PING_TIMEOUT_MS,
         'ping timeout'
       );
@@ -477,6 +550,7 @@
       }
     },
     onImageVisible,
+    onImageSrcChanged,
     isReady() { return state.modelReady; },
     isDegraded() { return state.modelFailed; }
   };
