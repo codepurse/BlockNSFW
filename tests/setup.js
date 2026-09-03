@@ -18,6 +18,7 @@ const SHARED_HOSTNAME_PATH = path.join(__dirname, '..', 'shared', 'hostname.js')
 const SHARED_HOST_KEYWORDS_PATH = path.join(__dirname, '..', 'shared', 'host-keywords.js');
 const SHARED_VALIDATE_DOMAIN_PATH = path.join(__dirname, '..', 'shared', 'validate-domain.js');
 const SHARED_KEYWORD_PATTERN_PATH = path.join(__dirname, '..', 'shared', 'keyword-pattern.js');
+const SHARED_DNS_PROVIDERS_PATH = path.join(__dirname, '..', 'shared', 'dns-providers.js');
 const SHARED_AI_IMAGE_MODELS_PATH = path.join(__dirname, '..', 'shared', 'ai-image-models.js');
 const SHARED_VIT_CLASSIFIER_PATH = path.join(__dirname, '..', 'shared', 'vit-classifier.js');
 
@@ -85,6 +86,7 @@ function loadBackgroundContext() {
   const sharedHostKeywordsSource = fs.readFileSync(SHARED_HOST_KEYWORDS_PATH, 'utf8');
   const sharedValidateDomainSource = fs.readFileSync(SHARED_VALIDATE_DOMAIN_PATH, 'utf8');
   const sharedKeywordPatternSource = fs.readFileSync(SHARED_KEYWORD_PATTERN_PATH, 'utf8');
+  const sharedDnsProvidersSource = fs.readFileSync(SHARED_DNS_PROVIDERS_PATH, 'utf8');
   const sharedAiImageModelsSource = fs.readFileSync(SHARED_AI_IMAGE_MODELS_PATH, 'utf8');
   const sharedVitClassifierSource = fs.readFileSync(SHARED_VIT_CLASSIFIER_PATH, 'utf8');
   const sandbox = {
@@ -93,6 +95,9 @@ function loadBackgroundContext() {
     self: undefined, // populated below
     console,
     fetch: () => Promise.reject(new Error('fetch is not available in tests')),
+    // The DoH client aborts its own requests on a timeout, so the resolver
+    // path is unreachable without this.
+    AbortController,
     crypto: { randomUUID: () => '00000000-0000-0000-0000-000000000000' },
     setTimeout,
     clearTimeout,
@@ -115,7 +120,7 @@ function loadBackgroundContext() {
   vm.createContext(sandbox);
   // Pre-load the shared hostname helper so background.js sees HostnameNormalize
   // on the global, just as it would in production via importScripts.
-  for (const [file, label] of [[sharedBrowserKeySource, 'shared/browser-key.js'], [sharedHostnameSource, 'shared/hostname.js'], [sharedHostKeywordsSource, 'shared/host-keywords.js'], [sharedValidateDomainSource, 'shared/validate-domain.js'], [sharedKeywordPatternSource, 'shared/keyword-pattern.js'], [sharedAiImageModelsSource, 'shared/ai-image-models.js'], [sharedVitClassifierSource, 'shared/vit-classifier.js']]) {
+  for (const [file, label] of [[sharedBrowserKeySource, 'shared/browser-key.js'], [sharedHostnameSource, 'shared/hostname.js'], [sharedHostKeywordsSource, 'shared/host-keywords.js'], [sharedValidateDomainSource, 'shared/validate-domain.js'], [sharedKeywordPatternSource, 'shared/keyword-pattern.js'], [sharedDnsProvidersSource, 'shared/dns-providers.js'], [sharedAiImageModelsSource, 'shared/ai-image-models.js'], [sharedVitClassifierSource, 'shared/vit-classifier.js']]) {
     try {
       vm.runInContext(file, sandbox, { filename: label });
     } catch (err) {

@@ -849,6 +849,30 @@ function hasModerateContextSignals(text) {
   return false;
 }
 
+// Can a public resolver meaningfully answer for this hostname?
+//
+// No, for anything public DNS has no record of: `localhost`, a bare intranet
+// label, a reserved local TLD (`app.test`, `nas.local`), a private or loopback
+// address, or an IP literal of any kind (nothing can look up an address).
+//
+// Those all come back NXDOMAIN, and the block detector reads NXDOMAIN as
+// "filtered" (see shared/dns-providers.js), so with DNS Protection on every
+// local development server was redirected to the blocked page on every single
+// load. The background worker refuses these too — this check just saves the
+// round trip. Mirrors isDnsCheckableHost in background.js.
+function isDnsCheckableHost(host) {
+  const helpers = (typeof HostnameNormalize !== 'undefined') ? HostnameNormalize : null;
+  if (helpers && helpers.isLocalHostname && helpers.isIpLiteral) {
+    return !helpers.isLocalHostname(host) && !helpers.isIpLiteral(host);
+  }
+  // Mirror of the shared predicate, for the case where the module did not load.
+  const h = normalizeHost(host).replace(/^\[/, '').replace(/\]$/, '').replace(/\.+$/, '');
+  if (!h || !h.includes('.')) return false;
+  if (h.includes(':')) return false;
+  if (/^(?:\d{1,3}\.){3}\d{1,3}$/.test(h)) return false;
+  return !/\.(?:localhost|local|test|example|invalid|internal|home\.arpa)$/.test(h);
+}
+
 function hostMatchesDomain(host, domain) {
   const d = normalizeHost(domain);
   const h = normalizeHost(host);
@@ -1282,8 +1306,10 @@ function getBlockedReasonLabel(reasonKey) {
         }
 
         // DNS-over-HTTPS check via background, against whichever filtering
-        // resolver the user picked in settings (see shared/dns-providers.js)
-        if (settings.dnsFilterEnabled) {
+        // resolver the user picked in settings (see shared/dns-providers.js).
+        // Local hosts are excluded: public DNS has no record for them, and a
+        // no-record answer reads as a block. See isDnsCheckableHost.
+        if (settings.dnsFilterEnabled && isDnsCheckableHost(normalizedHost)) {
           try {
             const dnsResult = await new Promise((resolve) => {
               browserAPI.runtime.sendMessage(

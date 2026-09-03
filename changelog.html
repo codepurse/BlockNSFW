@@ -299,71 +299,63 @@
         <div class="entry">
           <div class="entry-title">Choose which DNS resolver checks your browsing</div>
           <div class="entry-body">
-            DNS Protection used to be Cloudflare or nothing. Settings → Protection → <span class="code">DNS Protection</span> now offers four: <strong>Cloudflare for Families</strong> (adult content and malware, the fastest and the default), <strong>AdGuard DNS Family</strong> (also ads, trackers and forced SafeSearch), <strong>Mullvad DNS Family</strong> (adult content and gambling, with independently audited no-logging and servers that run entirely in RAM), and the <strong>CleanBrowsing Adult Filter</strong> (adult content only, leaving ads and social media alone). All four are free and need no account.
-            <br><br>
-            Which company answers your DNS is a real choice, not a detail — so it is yours to make rather than ours. Queries go straight from your browser to the resolver you pick and never pass through any server of ours; only domains the local blocklist has not already decided on are looked up, and each answer is cached for an hour.
+            DNS Protection was Cloudflare or nothing. Settings &rarr; Protection &rarr; <span class="code">DNS Protection</span> now offers four free resolvers, no account needed: <strong>Cloudflare for Families</strong> (the default, and the fastest), <strong>AdGuard DNS Family</strong> (also ads and trackers), <strong>Mullvad DNS Family</strong> (audited no-logging) and the <strong>CleanBrowsing Adult Filter</strong> (adult content only). Queries never pass through a server of ours.
           </div>
         </div>
 
         <div class="entry">
           <div class="entry-title">Or use any resolver you like</div>
           <div class="entry-body">
-            Choosing <span class="code">Custom</span> in the resolver list reveals an address box that accepts any DNS-over-HTTPS endpoint — your own NextDNS config, a Control D profile, DNS for Family, or a resolver you run yourself. Some services do not permit an extension to query them on your behalf, but nothing stops you pointing your own copy wherever you want, and this is how you do that.
-            <br><br>
-            Unlike the four built-in choices, a custom resolver is asked on its own with nothing to fall back on. That is deliberate: if you went to the trouble of naming your own resolver, quietly handing those queries to someone else the moment yours went quiet would undo the reason you chose it. Press <span class="code">Test DNS Connection</span> after saving — it checks that the address answers <em>and</em> that it genuinely filters adult domains, which catches a resolver that is reachable but not actually a filtering one.
+            Picking <span class="code">Custom</span> reveals an address box that takes any DNS-over-HTTPS endpoint &mdash; your own NextDNS config, a Control D profile, or a resolver you run yourself. It is asked on its own with no fallback, so your choice stands. <span class="code">Test DNS Connection</span> checks that it answers <em>and</em> that it genuinely filters.
           </div>
         </div>
 
         <div class="entry">
           <div class="entry-title">Setup now covers blocking beyond this browser</div>
           <div class="entry-body">
-            First-run setup has a new step for network-level blocking. It offers the in-extension DNS check as a toggle, and then gives you copyable addresses for two resolvers you can set on the computer or router itself. That second half is the part an extension cannot do for you: it covers every app rather than one browser, and it keeps working even if BlockNSFW is removed. The step is skippable, and the DNS check stays off unless you turn it on.
+            First-run setup has a new, skippable step for network-level blocking: the in-extension DNS check as a toggle, plus copyable resolver addresses to set on your computer or router. That second half covers every app rather than one browser, and it survives BlockNSFW being removed.
           </div>
         </div>
 
         <div class="entry">
           <div class="entry-title">Block a whole top-level domain</div>
           <div class="entry-body">
-            Some top-level domains are used almost entirely for spam and malware, and listing their sites one at a time is hopeless. A line reading <span class="code">.xyz</span> now blocks every site ending in it. It is the broadest entry the blocklist accepts, so the settings page says so plainly next to it. Images from a blocked TLD are hidden in the page rather than by a network rule. Requested by Maksim.
+            A line reading <span class="code">.xyz</span> now blocks every site ending in it &mdash; the broadest entry the blocklist accepts, and the settings page says so plainly next to it. Images from a blocked TLD are hidden in the page. Requested by Maksim.
           </div>
         </div>
 
         <div class="entry">
           <div class="entry-title">Notes are dimmed in your lists</div>
           <div class="entry-body">
-            A line starting with <span class="code">#</span> or <span class="code">!</span> now reads in grey while your entries stay bright, so a list with section headings in it can be scanned at a glance instead of being one wall of identical text. Typing, selection and undo all behave exactly as before. Suggested by Maksim.
+            A line starting with <span class="code">#</span> or <span class="code">!</span> now reads in grey while your entries stay bright, so a list with section headings can be scanned at a glance. Suggested by Maksim.
           </div>
         </div>
 
         <div class="entry">
           <div class="entry-title">SafeSearch is locked on DuckDuckGo and Brave</div>
           <div class="entry-body">
-            Both providers run a separate address that only ever returns filtered results, and searches are now sent there before the page loads rather than being asked nicely to filter afterwards. The difference matters: on the ordinary address, SafeSearch is a preference, and a link with the setting turned off in it — or the toggle on the results page — undoes it in one click. On the safe address the filtering belongs to the search host, so a request to turn it off does nothing at all.
-            <br><br>
-            DuckDuckGo's plain HTML and Lite pages keep their no-JavaScript layouts and are still forced to strict, so nothing that relied on them stops working. Contributed by oathkeeper-dev.
+            Searches now go to each provider's dedicated filtered address before the page loads, rather than asking the ordinary one to filter afterwards. Filtering there belongs to the search host, so the results-page toggle and links with SafeSearch turned off no longer undo it. DuckDuckGo's plain HTML and Lite pages keep their no-JavaScript layouts. Contributed by oathkeeper-dev.
           </div>
         </div>
 
         <div class="entry">
           <div class="entry-title">Image and video search is enforced like web search</div>
           <div class="entry-body">
-            On Bing, Ecosia and Presearch, strict mode was being applied to the main web search and nowhere else — so switching to the Images, Videos or News tab stepped outside it, which is the tab where an unfiltered result is most likely to be a picture you cannot unsee. Those routes are now covered by the same enforcement. Contributed by oathkeeper-dev.
+            On Bing, Ecosia and Presearch, strict mode covered the main web search and nothing else &mdash; so the Images, Videos and News tabs stepped straight outside it. Those routes are now enforced too. Contributed by oathkeeper-dev.
           </div>
         </div>
 
         <div class="entry">
           <div class="entry-title">Yandex now searches in Family mode</div>
           <div class="entry-body">
-            Yandex's Family mode is now set before the first search, image or video request rather than after the results have already arrived, and it is kept in place across the regional Yandex domains instead of only the one you happened to start on. The weaker choices on Yandex's own Search settings page are locked, so it cannot be switched back off from there.
-            <br><br>
-            Your Yandex login and session are left alone — only the family preference is written, and anything else stored alongside it is preserved. This applies to Yandex search itself; Mail, Disk and the account pages are untouched. The existing search-term blocking and per-result filtering still run underneath as a second layer. Contributed by oathkeeper-dev.
+            Family mode is set before the first search, image or video request instead of after the results have arrived, and it holds across Yandex's regional domains rather than just the one you started on. The weaker choices on Yandex's own settings page are locked. Your login and session are left untouched. Contributed by oathkeeper-dev.
           </div>
         </div>
 
         <div class="entry">
           <div class="entry-title">Firefox 113 or newer is now required</div>
           <div class="entry-body">
-            The documented minimum moves up from 109. Locking SafeSearch on the engines above depends on rewriting a request before it leaves the browser, and Firefox 113 is the first release that permits it. On anything older the rest of the extension still works, but that enforcement would silently do nothing — so the requirement now says so rather than leaving you to find out.
+            Up from 109. Locking SafeSearch depends on rewriting a request before it leaves the browser, and 113 is the first Firefox that permits it. On anything older the rest of the extension still works, but that enforcement would silently do nothing &mdash; so the requirement now says so.
           </div>
         </div>
 
@@ -372,91 +364,70 @@
         <div class="entry">
           <div class="entry-title">DNS Protection could stop working without saying so</div>
           <div class="entry-body">
-            A resolver that was unreachable, rate-limiting, or simply slow answered nothing — and a lookup that failed was treated exactly like one that came back clean. The domain was then remembered as safe, so a few seconds of trouble could leave a site unblocked for as long as the browser kept the extension awake, with the settings page still reporting DNS as active the whole time.
-            <br><br>
-            A failed lookup is now told apart from a clean one and is never remembered. If your resolver does not answer, a second one on a different network is asked before giving up, and a resolver that keeps failing is rested for five minutes rather than being waited on at every page you open. <span class="code">Test DNS Connection</span> now also checks that a known adult domain is genuinely filtered instead of only checking that the resolver replies — one that answers but has quietly stopped filtering used to look perfectly healthy.
+            A failed lookup &mdash; unreachable resolver, rate limit, timeout &mdash; was treated like a clean one, so the domain was remembered as safe while Settings still reported DNS as active. Failures are now told apart and never remembered, a second resolver is tried, and one that keeps failing is rested. <span class="code">Test DNS Connection</span> also checks that filtering really works.
+          </div>
+        </div>
+
+        <div class="entry">
+          <div class="entry-title">DNS Protection blocked local websites, including your own</div>
+          <div class="entry-body">
+            With DNS Protection on, <span class="code">localhost</span>, home-network devices and intranet addresses were all blocked on sight. A public resolver cannot answer for a private address, and its "no such name" reply is also how a resolver signals a block. They are recognised as local now, and skipped.
           </div>
         </div>
 
         <div class="entry">
           <div class="entry-title">Sorting filed pattern entries under their punctuation</div>
           <div class="entry-body">
-            Saving a list sorts it A-Z, and a <span class="code">/regex/</span> entry was filed under its opening slash rather than under the word inside it, so patterns clumped at the top. Notes travel with the entry written beneath them, so a pattern jumping the queue dragged that whole block with it — which is how notes written at the top of a list ended up underneath it. Entries are now filed under their first letter, so <span class="code">/apricots?/</span> sorts beside <span class="code">apricots</span>. Reported by Maksim.
+            A <span class="code">/regex/</span> entry was sorted under its opening slash, so patterns clumped at the top of a saved list and dragged the notes written beneath them along. Entries are now filed under their first letter &mdash; <span class="code">/apricots?/</span> sorts beside <span class="code">apricots</span>. Reported by Maksim.
           </div>
         </div>
 
         <div class="entry">
           <div class="entry-title">A blocklist entry written with a leading dot could break image blocking</div>
           <div class="entry-body">
-            An entry such as <span class="code">.xyz</span> was passed to the browser as a domain to block image requests from. It is not a domain, and image blocking uses one rule shared by every blocked site — so a single entry like that could stop image blocking working for the sites that were blocking correctly before it.
+            An entry such as <span class="code">.xyz</span> was handed to the browser as a domain to block images from, which it is not. Image blocking uses one rule shared by every blocked site, so a single entry like that could stop it working for all the rest.
           </div>
         </div>
 
         <div class="entry">
           <div class="entry-title">DuckDuckGo's Images and Videos tabs were not filtered at all</div>
           <div class="entry-body">
-            A blocked word stopped the matching web results, then the same search on the Images or
-            Videos tab showed everything. The filter was looking for parts of DuckDuckGo's old
-            layout that no longer exist, so no result was ever examined. Both tabs are filtered
-            now, along with the rows of thumbnails that appear on the All tab. A blocked image
-            takes its whole tile with it rather than leaving the caption behind.
+            A blocked word stopped the matching web results, then the same search on the Images or Videos tab showed everything &mdash; the filter was looking for parts of an old layout that no longer exist. Both tabs are filtered now, along with the thumbnail rows on the All tab, and a blocked image takes its whole tile with it.
           </div>
         </div>
 
         <div class="entry">
           <div class="entry-title">A search result that arrived late was never filtered</div>
           <div class="entry-body">
-            DuckDuckGo builds its results in the browser, row by row, so a row exists for a moment
-            with its title still missing — and it was being marked as already inspected on the way
-            past. Whichever row happened to be slowest was the one that survived. Rows are now
-            re-examined until they are actually readable.
+            DuckDuckGo builds its results row by row, and a row was being marked as inspected before its title had loaded &mdash; so whichever row was slowest survived. Rows are now re-examined until they are actually readable.
           </div>
         </div>
 
         <div class="entry">
           <div class="entry-title">Your own blocked words were ignored in image search</div>
           <div class="entry-body">
-            In image results, a word from your own list only counted when the image filter was set
-            to Strict; on Moderate or Lenient the built-in list was consulted and yours was not. A
-            word you typed yourself is an instruction rather than a guess, so it now applies at
-            every level.
+            In image results, a word from your own list only counted when the image filter was set to Strict; Moderate and Lenient consulted the built-in list instead. A word you typed yourself is an instruction rather than a guess, so it now applies at every level.
           </div>
         </div>
 
         <div class="entry">
           <div class="entry-title">"Go Back" on the blocked page did nothing</div>
           <div class="entry-body">
-            The button's click was being discarded outright by the extension's own security policy.
-            It works now — and when the blocked page is the only thing in a tab's history, with
-            nothing to go back to, it leaves the page instead of sitting there.
+            The button's click was being discarded outright by the extension's own security policy. It works now &mdash; and when there is nothing in the tab's history to go back to, it leaves the page instead of sitting there.
           </div>
         </div>
 
         <div class="entry">
           <div class="entry-title">Explicit images on X were spotted but left unblurred</div>
           <div class="entry-body">
-            The AI image filter was recognising them — they were counted, which is why they turned
-            up in your stats — and then the blur came straight back off. X reuses the same picture
-            frames over and over as you scroll, dropping a new image into a frame the moment the old
-            one leaves the screen, and each image is also swapped for a sharper copy once it has
-            been measured. Either can happen while the filter is still deciding about the picture
-            that was there a moment ago, and the answer was being applied to whatever the frame held
-            by the time it arrived. A verdict for one image could therefore uncover a different one.
-            <br><br>
-            Each answer now belongs to the exact picture it was about and is discarded if the frame
-            has moved on. A frame that changes picture is hidden until its own answer arrives, rather
-            than being uncovered while the filter is still looking — which is what left explicit
-            images on screen. Reported by tachangan.
+            The AI filter was recognising them &mdash; the blocks showed up in your stats &mdash; and then the blur came straight back off. X reuses picture frames as you scroll, so a verdict for one image could land on the next and uncover it. Verdicts now stick to the exact image they were about. Reported by tachangan.
           </div>
         </div>
 
         <div class="entry">
           <div class="entry-title">The audit log's page buttons did nothing</div>
           <div class="entry-body">
-            Every button along the bottom of the log — next, previous, first, last and the numbered
-            pages — was being discarded by the extension's own security policy, the same way the
-            blocked page's "Go Back" was. The log was stuck showing its first 20 entries, with no way
-            to reach the rest. They work now. Reported by tachangan.
+            Next, previous, first, last and the numbered pages were all being discarded by the extension's own security policy, the same way the blocked page's Go Back was &mdash; the log was stuck showing its first 20 entries. They work now. Reported by tachangan.
           </div>
         </div>
       </div>

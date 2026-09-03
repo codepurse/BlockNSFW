@@ -10,6 +10,8 @@
 //   - decodePunycodeLabel(label)  decode a single "xn--"-stripped label
 //   - decodePunycodeHostname(h)  decode every "xn--"-prefixed label in h
 //   - getHostnameVariants(h)     return { ascii, unicode } normalized forms
+//   - isLocalHostname(h)         loopback / private / reserved-local name?
+//   - isIpLiteral(h)             an address rather than a name?
 //
 // Callers should keep the ASCII / punycode form as the primary lookup key
 // (matches what URLs expose, the blocklist stores, and what DNR sees) and
@@ -159,10 +161,98 @@
     return { ascii: ascii, unicode: unicode };
   }
 
+  // --- Local / non-public hostnames -----------------------------------------
+  //
+  // Names that cannot exist in public DNS: loopback and private-range
+  // addresses, the reserved local TLDs, and bare intranet labels.
+  //
+  // These need naming because a *public* resolver has no record for any of
+  // them and says so with NXDOMAIN — which the DNS block detector reads as
+  // "this domain is filtered" (see interpret() in shared/dns-providers.js).
+  // Asking a filtering resolver about `localhost`, `app.test` or
+  // `192.168.1.10` is therefore not merely useless but actively wrong: it
+  // blocks every local dev server, on every load, for as long as DNS
+  // Protection is on. Callers use this to skip the lookup, not to interpret
+  // its answer.
+
+  // RFC 6761 (localhost / test / example / invalid), RFC 6762 (.local mDNS),
+  // RFC 8375 (home.arpa), plus .internal, which ICANN reserves for private use.
+  var RESERVED_LOCAL_SUFFIXES = [
+    'localhost', 'local', 'test', 'example', 'invalid', 'internal', 'home.arpa'
+  ];
+
+  var IPV4_RE = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/;
+
+  // URL.hostname keeps the brackets on an IPv6 literal ("[::1]"), so every
+  // check here has to see through them.
+  function normalizeHostForKind(hostname) {
+    return String(hostname == null ? '' : hostname)
+      .trim()
+      .toLowerCase()
+      .replace(/^\[/, '')
+      .replace(/\]$/, '')
+      // A trailing dot is the same name, fully qualified: "localhost." is "localhost".
+      .replace(/\.+$/, '');
+  }
+
+  // Is this hostname a literal address rather than a name? Nothing can look up
+  // an address, so an IP literal has no DNS verdict to read either way.
+  function isIpLiteral(hostname) {
+    var host = normalizeHostForKind(hostname);
+    if (!host) return false;
+    if (IPV4_RE.test(host)) return true;
+    return host.indexOf(':') !== -1 && /^[0-9a-f:.]+$/.test(host);
+  }
+
+  function isPrivateIpv4(host) {
+    var m = host.match(IPV4_RE);
+    if (!m) return false;
+    var a = +m[1];
+    var b = +m[2];
+    if (a > 255 || b > 255 || +m[3] > 255 || +m[4] > 255) return false;
+    if (a === 0) return true;                           // 0.0.0.0/8, "this host"
+    if (a === 10) return true;                          // 10/8
+    if (a === 127) return true;                         // loopback 127/8
+    if (a === 169 && b === 254) return true;            // link-local 169.254/16
+    if (a === 172 && b >= 16 && b <= 31) return true;   // 172.16/12
+    if (a === 192 && b === 168) return true;            // 192.168/16
+    return false;
+  }
+
+  function isPrivateIpv6(host) {
+    if (host.indexOf(':') === -1) return false;
+    if (host === '::1' || host === '::') return true;   // loopback, unspecified
+    if (/^f[cd]/.test(host)) return true;               // unique local fc00::/7
+    if (/^fe[89ab]/.test(host)) return true;            // link-local fe80::/10
+    return false;
+  }
+
+  function isLocalHostname(hostname) {
+    var host = normalizeHostForKind(hostname);
+    if (!host) return false;
+
+    if (host.indexOf(':') !== -1) return isPrivateIpv6(host);
+    if (IPV4_RE.test(host)) return isPrivateIpv4(host);
+
+    // No dot at all: a bare label is not resolvable on the public internet, so
+    // it is either `localhost` or an intranet short name ("build-box", "nas").
+    if (host.indexOf('.') === -1) return true;
+
+    for (var i = 0; i < RESERVED_LOCAL_SUFFIXES.length; i++) {
+      var suffix = RESERVED_LOCAL_SUFFIXES[i];
+      if (host === suffix || host.slice(-(suffix.length + 1)) === '.' + suffix) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   var exported = {
     decodePunycodeLabel: decodePunycodeLabel,
     decodePunycodeHostname: decodePunycodeHostname,
     getHostnameVariants: getHostnameVariants,
+    isLocalHostname: isLocalHostname,
+    isIpLiteral: isIpLiteral,
   };
 
   if (typeof module !== 'undefined' && module.exports) {
