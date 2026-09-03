@@ -2143,12 +2143,13 @@
             <li><strong>Block a whole top-level domain <span class="badge-new">New</span></strong> &mdash; A line reading <code class="code">.xyz</code> blocks every site ending in it. Suggested by Maksim.</li>
           </ul>
           <details class="wn-details">
-            <summary aria-label="Show the rest of this release&rsquo;s changes"><span class="wn-toggle-closed">Show 5 more &#9662;</span><span class="wn-toggle-open">Show less &#9652;</span></summary>
+            <summary aria-label="Show the rest of this release&rsquo;s changes"><span class="wn-toggle-closed">Show 6 more &#9662;</span><span class="wn-toggle-open">Show less &#9652;</span></summary>
             <ul style="margin: 0; padding-left: 1.1rem">
               <li><strong>Setup covers blocking beyond this browser <span class="badge-new">New</span></strong> &mdash; First-run setup now hands you copyable addresses for device-level resolvers, covering every app rather than one browser.</li>
               <li><strong>Notes are dimmed in your lists <span class="badge-new">New</span></strong> &mdash; A line starting with <code class="code">#</code> or <code class="code">!</code> reads in grey, so a list with section headings can be scanned at a glance. Suggested by Maksim.</li>
               <li><strong>Sorting no longer strands your notes</strong> &mdash; A <code class="code">/pattern/</code> entry is filed under its first letter now, not its opening slash, so it stops jumping above everything on save. Reported by Maksim.</li>
               <li><strong>DuckDuckGo is filtered properly at last</strong> &mdash; The Images and Videos tabs, the thumbnail row and the Wikipedia panel are all covered, and a late-loading result is no longer skipped for good.</li>
+              <li><strong>Local sites are no longer blocked by DNS Protection</strong> &mdash; <code class="code">localhost</code>, home-network devices and intranet addresses were blocked on sight whenever DNS Protection was on. They are recognised as local now, and skipped.</li>
               <li><strong>Other fixes</strong> &mdash; A <code class="code">.xyz</code> entry no longer breaks image blocking for other sites, your blocked words apply in image search at every filter level, and Go Back works on the blocked page.</li>
             </ul>
           </details>
