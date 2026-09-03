@@ -2619,13 +2619,17 @@ browserAPI.runtime.onMessage.addListener((message, sender, sendResponse) => {
 // ============================================
 // Uses declarativeNetRequest dynamic rules to force family-safe parameters on
 // major search engines and to set YouTube's documented Restricted Mode request
-// header (https://support.google.com/a/answer/6214622). Rules only apply to
-// main_frame navigations so the user's URL bar / history stays accurate.
+// header (https://support.google.com/a/answer/6214622). URL rewrites apply to
+// main-frame navigations; header rules can also cover the engines' API calls.
 
 const SAFE_SEARCH_RULE_IDS = [
   10001, 10002, 10003, 10004, 10005, 10006, 10007,
   // AOL Search (10008), Presearch (10009)
   10008, 10009,
+  // DuckDuckGo non-JavaScript frontends (10011)
+  10011,
+  // Yandex Family-mode request cookie (10012)
+  10012,
   // Set-Cookie injection for cookie-based engines
   10020, 10021, 10022,
   // Block direct access to safesearch settings pages on cookie-based engines
@@ -2666,6 +2670,33 @@ function buildSafeSearchRules() {
     }
   });
 
+  // Unlike Google/Bing's SafeSearch VIPs, DuckDuckGo and Brave expose real,
+  // browsable safe endpoints. Rewriting the host at the network layer gives us
+  // the useful part of their documented DNS CNAME enforcement without needing
+  // access to the browser's DNS resolver.
+  const mkSafeHostRedirect = (id, regexFilter, host, params) => ({
+    id,
+    priority: 3,
+    action: {
+      type: 'redirect',
+      redirect: {
+        transform: {
+          scheme: 'https',
+          host,
+          queryTransform: {
+            addOrReplaceParams: params.map(([key, value]) => ({ key, value }))
+          }
+        }
+      }
+    },
+    condition: {
+      // Each caller's source regex deliberately excludes its target host so a
+      // navigation cannot enter a redirect loop.
+      regexFilter,
+      resourceTypes: ['main_frame']
+    }
+  });
+
   // Cookie value used to force SafeSearch on engines whose toggle is cookie-backed.
   // Appended via Set-Cookie response header injection (see buildSafeSearchCookieRules).
   const mkSetCookie = (id, requestDomains, cookieValue) => ({
@@ -2679,6 +2710,25 @@ function buildSafeSearchRules() {
     },
     condition: {
       requestDomains,
+      resourceTypes: ['main_frame', 'sub_frame', 'xmlhttprequest']
+    }
+  });
+
+  // Add a provider preference to the outgoing Cookie header without replacing
+  // unrelated login/session cookies. This is stronger than response-side
+  // Set-Cookie injection: the very first search request already sees it.
+  const mkAppendRequestCookie = (id, requestDomains, regexFilter, cookieValue) => ({
+    id,
+    priority: 3,
+    action: {
+      type: 'modifyHeaders',
+      requestHeaders: [
+        { header: 'cookie', operation: 'append', value: cookieValue }
+      ]
+    },
+    condition: {
+      requestDomains,
+      regexFilter,
       resourceTypes: ['main_frame', 'sub_frame', 'xmlhttprequest']
     }
   });
@@ -2701,22 +2751,43 @@ function buildSafeSearchRules() {
   return [
     // Google (all TLDs: .com, .co.uk, .com.ph, etc.)
     mkRedirect(10001, '^https?://(www\\.)?google\\.[a-z.]+/search\\?', [['safe', 'active']]),
-    // Bing
-    mkRedirect(10002, '^https?://(www\\.)?bing\\.com/search\\?', [['adlt', 'strict']]),
-    // DuckDuckGo (search is served from root ?q= and from /?q=)
-    mkRedirect(10003, '^https?://(www\\.|duckduckgo\\.com|html\\.duckduckgo\\.com|safe\\.duckduckgo\\.com)/\\?', [['kp', '1']]),
+    // Bing web, image, video and news verticals
+    mkRedirect(10002, '^https?://(www\\.)?bing\\.com/(search|images/search|videos/search|news/search)\\?', [['adlt', 'strict']]),
+    // DuckDuckGo's dedicated safe host is stronger than its kp preference:
+    // it is always strict and removes the control that can turn filtering off.
+    mkSafeHostRedirect(10003, String.raw`^https?://(www\.)?duckduckgo\.com/`,
+      'safe.duckduckgo.com', [['kp', '1']]),
+    // Keep the non-JavaScript variants on their intended layouts while
+    // replacing any explicit kp=-1/kp=-2 override before the request is sent.
+    mkRedirect(10011, String.raw`^https?://(html|lite)\.duckduckgo\.com/(html|lite)?/?\?`, [['kp', '1']]),
     // Yahoo (including AOL portal traffic routed through Yahoo's /yhs/search)
     mkRedirect(10004, String.raw`^https?://([a-z0-9.-]+\.)?search\.yahoo\.com/(search|yhs/search)`, [['vm', 'r']]),
-    // Brave Search
-    mkRedirect(10005, '^https?://search\\.brave\\.com/search\\?', [['safesearch', 'strict']]),
-    // Ecosia
-    mkRedirect(10006, '^https?://(www\\.)?ecosia\\.org/search\\?', [['safesearch', 'strict']]),
+    // Brave also exposes a browsable, locked safe endpoint. Its documented
+    // forcesafe.search.brave.com DNS target resolves/redirects to this host.
+    mkSafeHostRedirect(10005, String.raw`^https?://search\.brave\.com/`,
+      'safe.search.brave.com', [['safesearch', 'strict']]),
+    // Ecosia web, image, video and news verticals. Its published strict DNS
+    // target is DNS-only, so a visible host redirect would break search.
+    mkRedirect(10006, '^https?://(www\\.)?ecosia\\.org/(search|images|videos|news)\\?', [['safesearch', 'strict']]),
     // Qwant page URLs — `www.qwant.com` uses `s=2` for strict mode in the UI
     mkRedirect(10007, String.raw`^https?://(www\.)?qwant\.com/(\?|search\?|images\?|videos\?|news\?)(.*&)?q=`, [['s', '2']]),
     // AOL Search — Yahoo backend uses `vm=r` for strict mode
     mkRedirect(10008, String.raw`^https?://search\.aol\.(com|co\.uk|co\.[a-z]+)/aol/search\?`, [['vm', 'r']]),
     // Presearch — supplements the cookie-based enforcement below
-    mkRedirect(10009, String.raw`^https?://(www\.)?presearch\.com/search\?`, [['safe', 'true']]),
+    mkRedirect(10009, String.raw`^https?://(www\.)?presearch\.com/(search|images|videos|news)\?`, [['safe', 'true']]),
+
+    // Yandex stores its documented Family mode in the composite `yp` cookie as
+    // `<expiry>.sp.family:2`. Append it after any existing preference so the
+    // server uses Family mode on the first web/image/video request. The rule is
+    // rebuilt on browser startup, keeping the internal one-year expiry fresh.
+    mkAppendRequestCookie(10012, [
+      'yandex.com', 'yandex.ru', 'yandex.ua', 'yandex.by', 'yandex.kz',
+      'yandex.com.am', 'yandex.com.tr', 'yandex.com.ge', 'yandex.uz',
+      'yandex.az', 'yandex.tj', 'yandex.ee', 'yandex.tm', 'yandex.fr',
+      'yandex.md', 'yandex.eu', 'yandex.co.il', 'yandex.lv', 'yandex.lt',
+      'ya.ru'
+    ], String.raw`^https?://(www\.)?(yandex\.(com(\.am|\.tr|\.ge)?|co\.il|ru|ua|by|kz|uz|az|tj|ee|tm|fr|md|eu|lv|lt)|ya\.ru)/(search|images|video|tune/search)(/|\?|$)`,
+    `yp=${Math.floor(Date.now() / 1000) + 31536000}.sp.family%3A2`),
 
     // ---- Cookie-based enforcement (response Set-Cookie injection) ----
     // Presearch SafeSearch is stored in `use_safe_search` cookie (SearXNG ref).

@@ -5,6 +5,25 @@ All notable project changes should be documented here going forward.
 ## [Unreleased]
 
 ### Added
+- **DuckDuckGo and Brave now use their dedicated locked SafeSearch endpoints.**
+  Normal searches are rewritten by the browser's request engine to the
+  provider's safe host before the page loads, with permissive query values
+  replaced by strict mode. This mirrors the effective behavior of their
+  documented family-DNS mappings: strict filtering is enforced by the search
+  host and its client-side SafeSearch controls are disabled. DuckDuckGo HTML
+  and Lite searches retain their non-JavaScript layouts and continue to receive
+  a network-level strict parameter.
+- **Strict request enforcement now covers media-search verticals.** Bing,
+  Ecosia, and Presearch image, video, and news routes no longer fall outside the
+  rule that previously protected only their main web-search route.
+- **Yandex now runs in Family mode.** A network-level request rule appends
+  Yandex's current `yp` Family-mode preference before the first web, image, or
+  video request, without replacing account or session cookies. The content
+  script persists the same preference across Yandex's regional search domains
+  and locks the weaker choices on the Search settings page. Existing explicit
+  query blocking and per-result filtering remain as secondary layers.
+- **Firefox's documented minimum is now 113.** This matches the first Firefox
+  release with the dynamic request-header rules used by SafeSearch enforcement.
 - **The AI image blocker can now use a second, more accurate model, and the
   extension download got smaller rather than bigger.** Settings offer a
   detection-model picker: the bundled NSFW.js MobileNetV2 (still the default,

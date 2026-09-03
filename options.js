@@ -2409,7 +2409,7 @@ async function init() {
       await render();
       showToast(
         e.target.checked
-          ? 'Safe Search enforced on Google, Bing, DuckDuckGo, Yahoo, Brave, Ecosia, Qwant, AOL Search & Presearch'
+          ? 'Safe Search enforced on Google, Bing, DuckDuckGo, Yahoo, Brave, Ecosia, Qwant, AOL Search, Presearch & Yandex'
           : 'Safe Search enforcement disabled',
         e.target.checked ? 'success' : 'info'
       );
