@@ -362,6 +362,13 @@
         <div class="group-title">Fixed</div>
 
         <div class="entry">
+          <div class="entry-title">The access code did not guard "unblock this site"</div>
+          <div class="entry-body">
+            If you had set an access code &mdash; the long random string you retype by hand, on top of your PIN &mdash; it was only ever asked for on the settings page. Unblocking a site from the toolbar popup asked for the four-digit PIN and nothing else, and unblocking a site opens every page on it, so the strongest lock the extension offers was missing from the one place most likely to be used in a weak moment. Whitelisting a site by hand and turning SafeSearch off went the same way. The popup now asks for the code exactly as the settings page does, and unblocking a whole site is treated as one of the decisive actions &mdash; it asks for the code even on the default setting. Unblocking a single page is narrower and is not. Re-blocking a site still needs only the PIN: tightening protection is never made harder. Reported by Pattrattbarr (#29).
+          </div>
+        </div>
+
+        <div class="entry">
           <div class="entry-title">DNS Protection could stop working without saying so</div>
           <div class="entry-body">
             A failed lookup &mdash; unreachable resolver, rate limit, timeout &mdash; was treated like a clean one, so the domain was remembered as safe while Settings still reported DNS as active. Failures are now told apart and never remembered, a second resolver is tried, and one that keeps failing is rested. <span class="code">Test DNS Connection</span> also checks that filtering really works.

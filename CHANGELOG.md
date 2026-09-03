@@ -4,6 +4,8 @@ All notable project changes should be documented here going forward.
 
 ## [Unreleased]
 
+## [1.7.6] - 2026-08-30
+
 ### Added
 - **DuckDuckGo and Brave now use their dedicated locked SafeSearch endpoints.**
   Normal searches are rewritten by the browser's request engine to the
