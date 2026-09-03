@@ -1913,6 +1913,34 @@ async function askDnsProvider(provider, hostname) {
 }
 
 /**
+ * Can a public resolver meaningfully answer for this hostname?
+ *
+ * No, for anything that does not exist in public DNS: `localhost`, a bare
+ * intranet label, a reserved local TLD (`app.test`, `nas.local`), a private or
+ * loopback address, or an IP literal of any kind. Those all come back NXDOMAIN,
+ * and interpret() in shared/dns-providers.js reads NXDOMAIN as "this domain is
+ * filtered" — which is correct for a resolver that sinkholes by refusing to
+ * answer, and catastrophic here: with DNS Protection on it blocked every local
+ * development server on every load, and every intranet host with it.
+ *
+ * The shared predicate is mirrored in a fallback because importScripts can fail
+ * (see the top of this file). Guessing "not checkable" when the helper is
+ * missing is the safe direction: the cost is one skipped DNS lookup, where the
+ * cost of the opposite is a browser that cannot reach localhost.
+ */
+function isDnsCheckableHost(hostname) {
+  const helpers = self.HostnameNormalize;
+  if (helpers && helpers.isLocalHostname && helpers.isIpLiteral) {
+    return !helpers.isLocalHostname(hostname) && !helpers.isIpLiteral(hostname);
+  }
+  const host = String(hostname || '').trim().toLowerCase().replace(/^\[/, '').replace(/\]$/, '').replace(/\.+$/, '');
+  if (!host || !host.includes('.')) return false;
+  if (host.includes(':')) return false;
+  if (/^(?:\d{1,3}\.){3}\d{1,3}$/.test(host)) return false;
+  return !/\.(?:localhost|local|test|example|invalid|internal|home\.arpa)$/.test(host);
+}
+
+/**
  * Is this hostname filtered by the user's chosen DNS resolver?
  *
  * Consults the selected provider, and on a *no-answer* (timeout, HTTP error,
@@ -1928,6 +1956,11 @@ async function askDnsProvider(provider, hostname) {
  */
 async function checkDnsFilter(hostname, providerId, customUrl) {
   if (!self.DnsProviders) return null;
+  // Never ask about a name public DNS cannot have a record for; see
+  // isDnsCheckableHost. Answered false rather than null because "no DNS
+  // filter blocks this" is a definite verdict for a local name, and the
+  // caller should cache it as one instead of re-deciding every navigation.
+  if (!isDnsCheckableHost(hostname)) return false;
 
   const primary = self.DnsProviders.resolveProvider(providerId, customUrl);
   const primaryVerdict = await askDnsProvider(primary, hostname);

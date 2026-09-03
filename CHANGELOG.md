@@ -142,6 +142,26 @@ All notable project changes should be documented here going forward.
   the other side. The step is skippable.
 
 ### Fixed
+- **DNS Protection blocked every local development server.** With the setting
+  on, `http://localhost:3000` — and every other local address — was redirected
+  to the blocked page on every load, reason "Blocked by DNS filter". Neither the
+  blocklist nor the keyword filter was involved; the DNS check did it alone.
+
+  A filtering resolver signals a block three ways, and one of them is NXDOMAIN
+  (Mullvad's answer, and Cloudflare's for some domains). A *public* resolver
+  also returns NXDOMAIN for every name that does not exist in public DNS —
+  which is exactly what `localhost`, `app.test`, `nas.local`, a bare intranet
+  hostname and a private address all are. So "is this host filtered?" came back
+  yes, every time, for the whole local network.
+
+  The layer now declines to ask. Loopback and private addresses, the reserved
+  local TLDs (`.localhost`, `.local`, `.test`, `.example`, `.invalid`,
+  `.internal`, `home.arpa`), bare single-label hostnames and IP literals of any
+  kind are recognised by `isLocalHostname` in `shared/hostname.js` and answered
+  "not blocked" without a lookup — in the content script as well, so a dev page
+  does not pay for the round trip either. Public hostnames still go to the
+  resolvers exactly as before, and no other blocking layer changed.
+
 - **The AI image filter flagged explicit images on X/Twitter without blurring
   them.** Reported in
   [#17](https://github.com/codepurse/BlockNSFW/issues/17). The model was working
