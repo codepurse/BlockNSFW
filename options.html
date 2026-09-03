@@ -1957,7 +1957,7 @@
       background: rgba(255, 255, 255, 0.06);
     }
 
-    /* Remote Info / Announcement Banner (message fetched from the repo) */
+    /* Info banner (the toolbar-pin prompt) */
     .info-banner {
       display: flex;
       align-items: center;
@@ -1987,25 +1987,6 @@
       flex-shrink: 0;
     }
 
-    .info-banner .btn-info-link {
-      background: var(--primary);
-      color: var(--primary-foreground);
-      border: 1px solid var(--primary);
-      font-size: 13px;
-      font-weight: 600;
-      padding: 8px 16px;
-      border-radius: var(--radius-sm);
-      cursor: pointer;
-      text-decoration: none;
-      white-space: nowrap;
-      transition: var(--transition-fast);
-    }
-
-    .info-banner .btn-info-link:hover {
-      background: var(--primary-hover);
-      box-shadow: 0 0 12px var(--primary-glow);
-    }
-
     .info-banner .btn-dismiss {
       background: transparent;
       border: none;
@@ -2023,20 +2004,6 @@
       background: rgba(255, 255, 255, 0.06);
     }
 
-    /* Type accents override the default (info) indigo look */
-    .info-banner.type-warning {
-      background: linear-gradient(135deg, rgba(245, 158, 11, 0.12), rgba(245, 158, 11, 0.04));
-      border-color: rgba(245, 158, 11, 0.4);
-    }
-    .info-banner.type-warning > svg { color: var(--warning); filter: none; }
-    .info-banner.type-warning .btn-info-link { background: var(--warning); border-color: var(--warning); color: #1a1205; }
-
-    .info-banner.type-success {
-      background: linear-gradient(135deg, rgba(16, 185, 129, 0.12), rgba(16, 185, 129, 0.04));
-      border-color: rgba(16, 185, 129, 0.4);
-    }
-    .info-banner.type-success > svg { color: var(--success); filter: none; }
-    .info-banner.type-success .btn-info-link { background: var(--success); border-color: var(--success); color: #04140d; }
   </style>
 </head>
 <body>
@@ -2142,23 +2109,6 @@
         </div>
         <div class="info-banner-actions">
           <button class="btn-dismiss" id="pin-banner-dismiss" title="Dismiss" aria-label="Dismiss">&times;</button>
-        </div>
-      </div>
-
-      <!-- Remote Info Banner (message fetched from the repo's data/announcement.json) -->
-      <div class="info-banner hidden" id="info-banner" role="status">
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <circle cx="12" cy="12" r="10"></circle>
-          <line x1="12" y1="16" x2="12" y2="12"></line>
-          <line x1="12" y1="8" x2="12.01" y2="8"></line>
-        </svg>
-        <div class="info-banner-text">
-          <div class="info-banner-title" id="info-banner-title">Announcement</div>
-          <div class="info-banner-sub" id="info-banner-sub"></div>
-        </div>
-        <div class="info-banner-actions">
-          <a href="#" target="_blank" rel="noopener noreferrer" class="btn-info-link hidden" id="info-banner-link">Learn more</a>
-          <button class="btn-dismiss" id="info-banner-dismiss" title="Dismiss" aria-label="Dismiss">&times;</button>
         </div>
       </div>
 

@@ -629,122 +629,12 @@ async function checkForUpdate(options = {}) {
   return updateCheckPromise;
 }
 
-// Announcement banner. A small announcement.json lives next to version.json in
-// the maintainer's repo; we fetch it (TTL-guarded, like the update check) and
-// stash the normalized payload so the options page can render a dismissible info
-// banner. This lets the maintainer broadcast a message (notice, event, tip) by
-// editing a single file in the repo — no store update required. Self-hosted so
-// the same code path works on Chrome and Firefox.
-const REMOTE_ANNOUNCEMENT_URL = 'https://raw.githubusercontent.com/codepurse/BlockNSFW/refs/heads/main/data/announcement.json';
-const ANNOUNCEMENT_INFO_KEY = 'pblocker_announcement_info';
-const ANNOUNCEMENT_CHECK_TTL = 1000 * 60 * 60 * 6; // 6 hours
-let announcementCheckPromise = null;
-
 // Which browser we are running in, from shared/browser-key.js (loaded above
 // in Chrome, listed in `background.scripts` in Firefox). Called through a
 // wrapper rather than aliased: the importScripts() above is deliberately
 // failure-tolerant, and a top-level read of a missing global would abort the
 // rest of this worker instead of just this one lookup.
 const detectBrowserKey = () => BrowserKey.detectBrowserKey();
-
-// Author-facing key aliases per bucket, matched case-insensitively so the
-// `browsers` map can say "chrome"/"chromium"/"Chromium" (etc.) interchangeably.
-const BROWSER_KEY_ALIASES = {
-  firefox: ['firefox'],
-  chrome: ['chrome', 'chromium'],
-  edge: ['edge']
-};
-
-// Look up the override object for the running browser in a `browsers` map,
-// tolerant of key casing and the chrome/chromium alias. Returns null when the
-// map is absent or has no entry for this browser.
-function lookupBrowserOverride(browsers) {
-  if (!browsers || typeof browsers !== 'object') return null;
-  const lower = {};
-  for (const k of Object.keys(browsers)) lower[k.toLowerCase()] = browsers[k];
-  for (const alias of (BROWSER_KEY_ALIASES[detectBrowserKey()] || [])) {
-    if (lower[alias] != null) return lower[alias];
-  }
-  return null;
-}
-
-// Resolve the announcement for the running browser. A per-browser override in
-// `browsers.<firefox|chrome|edge>` wins over the shared top-level fields, so
-// each browser can have its own title/message/link/linkText/type; any field the
-// override omits falls back to the shared value. `link` is special: when a
-// `browsers` map is present we use ONLY this browser's link (never the shared
-// one) so we can't route a user to another browser's store — a missing/blank
-// link yields '' and the banner hides the button. Without a `browsers` map the
-// shared `link` is treated as a generic link (plain single-link announcements
-// keep working).
-function resolveAnnouncement(data) {
-  const shared = (data && typeof data === 'object') ? data : {};
-  const browsers = (shared.browsers && typeof shared.browsers === 'object') ? shared.browsers : null;
-  const ovRaw = browsers ? lookupBrowserOverride(browsers) : null;
-  const ov = (ovRaw && typeof ovRaw === 'object') ? ovRaw : {};
-
-  const str = (v) => (typeof v === 'string' ? v.trim() : '');
-  const merged = (field) => str(ov[field]) || str(shared[field]);
-
-  return {
-    title: merged('title'),
-    message: merged('message'),
-    linkText: merged('linkText'),
-    type: str(ov.type) || str(shared.type),
-    link: browsers ? str(ov.link) : str(shared.link)
-  };
-}
-
-// Fetch announcement.json (TTL-guarded) and write a sanitized payload to storage.
-// Returns the info object, or null on failure (callers fail silently — a broken
-// announcement fetch must never surface an error to the user).
-async function fetchAnnouncement(options = {}) {
-  const { forceRefresh = false } = options;
-  if (announcementCheckPromise) return announcementCheckPromise;
-
-  announcementCheckPromise = (async () => {
-    try {
-      const { [ANNOUNCEMENT_INFO_KEY]: cached } = await browserAPI.storage.local.get(ANNOUNCEMENT_INFO_KEY);
-      const isFresh = cached && cached.checkedAt &&
-        (Date.now() - cached.checkedAt) < ANNOUNCEMENT_CHECK_TTL;
-      if (isFresh && !forceRefresh) return cached;
-
-      const response = await fetch(REMOTE_ANNOUNCEMENT_URL, { cache: 'no-store' });
-      if (!response.ok) throw new Error(`announcement fetch failed (${response.status})`);
-      const data = await response.json();
-
-      const str = (v) => (typeof v === 'string' ? v.trim() : '');
-      // Collapse the per-browser payload down to the fields for THIS browser.
-      const resolved = resolveAnnouncement(data);
-      // Only http(s) links pass through — never javascript:/data: schemes. The
-      // options page renders title/message as text (never innerHTML), but we
-      // sanitize the link here so a bad value can't produce a dangerous href.
-      const safeLink = /^https?:\/\//i.test(resolved.link) ? resolved.link : '';
-      const rawType = resolved.type.toLowerCase();
-      const type = (rawType === 'warning' || rawType === 'success') ? rawType : 'info';
-
-      const info = {
-        id: str(data && data.id),
-        enabled: !!(data && data.enabled),
-        type,
-        title: resolved.title,
-        message: resolved.message,
-        link: safeLink,
-        linkText: resolved.linkText,
-        checkedAt: Date.now()
-      };
-      await browserAPI.storage.local.set({ [ANNOUNCEMENT_INFO_KEY]: info });
-      return info;
-    } catch (error) {
-      console.warn('BlockNSFW: announcement fetch failed', error);
-      return null;
-    } finally {
-      announcementCheckPromise = null;
-    }
-  })();
-
-  return announcementCheckPromise;
-}
 
 // Cache management functions
 function clearAllCaches() {
@@ -2362,18 +2252,6 @@ browserAPI.runtime.onMessage.addListener((message, sender, sendResponse) => {
       }
     })();
     return true;
-  } else if (message.type === 'get_announcement') {
-    // Options page asks for the current announcement. Returns the cached payload
-    // immediately if fresh, otherwise refreshes (TTL-guarded).
-    (async () => {
-      try {
-        const info = await fetchAnnouncement({ forceRefresh: message.forceRefresh === true });
-        sendResponse({ success: true, info });
-      } catch (error) {
-        sendResponse({ success: false, error: error && error.message });
-      }
-    })();
-    return true;
   } else if (message.type === 'check_dns_filter' && typeof message.hostname === 'string') {
     (async () => {
       try {
@@ -3008,7 +2886,6 @@ function initializeBackground() {
     // initialisation, and the rules already on disk are in use meanwhile.
     refreshAllSubscriptions().catch(e => console.warn('BlockNSFW: subscription sync failed', e));
     checkForUpdate().catch(e => console.warn('BlockNSFW: initial update check failed', e));
-    fetchAnnouncement().catch(e => console.warn('BlockNSFW: initial announcement fetch failed', e));
     console.log('BlockNSFW: Background initialized for Manifest V3');
   })().finally(markReady);
   return backgroundInitializationPromise;
@@ -3017,6 +2894,15 @@ function initializeBackground() {
 browserAPI.runtime.onInstalled.addListener(async (details) => {
   try {
     await initializeBackground();
+
+    // The remote announcement banner is gone; drop the two keys it wrote so
+    // they do not sit in every user's local storage forever.
+    try {
+      await browserAPI.storage.local.remove([
+        'pblocker_announcement_info',
+        'pblocker_announcement_dismissed'
+      ]);
+    } catch (_) {}
 
     // Fresh install only: open the first-run onboarding wizard once. Updates
     // keep using the in-page "What's New" card, so we don't nag on every bump.

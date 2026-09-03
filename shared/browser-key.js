@@ -1,8 +1,8 @@
 // shared/browser-key.js
 // Single source of truth for "which browser are we running in?".
 //
-// Every surface that needs this — the announcement fetcher, the store links on
-// the options page, and the `browser` field on a community report — used to
+// Every surface that needs this — the update check's store URL, the store links
+// on the options page, and the `browser` field on a community report — used to
 // answer it on its own, and the community report answered it with the literal
 // string 'chrome'. So every report and story submitted from Firefox arrived at
 // the backend labelled as a Chrome report.

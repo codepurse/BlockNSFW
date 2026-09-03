@@ -204,6 +204,18 @@ All notable project changes should be documented here going forward.
   characters of typing.
 
 ### Removed
+- **The remote announcement banner at the top of Settings.** It rendered a
+  message fetched from `data/announcement.json` in this repo, so a notice could
+  be broadcast to every install by editing one file, with no store release. The
+  banner, its 6-hourly GitHub fetch and the `get_announcement` message route are
+  all gone — opening Settings now makes one fewer network request — and the two
+  keys the feature wrote (`pblocker_announcement_info`,
+  `pblocker_announcement_dismissed`) are cleared on update. The per-browser
+  override plumbing it needed (`lookupBrowserOverride`) went with it;
+  `detectBrowserKey()` stays, since the update check still picks a store URL
+  with it. `data/announcement.json` itself stays in the repo: copies already
+  installed keep polling it until they update.
+
 - **~856 KB of dead code that shipped in every release.** `classify.worker.js`
   and the `tf.min.js` / `nsfwjs.min.js` pair it imported were left behind by the
   move to the service-worker-delegated classifier. Nothing had spawned that

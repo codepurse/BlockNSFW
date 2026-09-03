@@ -7,8 +7,6 @@ const PIN_KEY = 'pblocker_pin';
 const STREAK_START_KEY = 'pblocker_streak_start';
 const UPDATE_INFO_KEY = 'pblocker_update_info';
 const UPDATE_DISMISSED_KEY = 'pblocker_update_dismissed';
-const ANNOUNCEMENT_INFO_KEY = 'pblocker_announcement_info';
-const ANNOUNCEMENT_DISMISSED_KEY = 'pblocker_announcement_dismissed';
 // Note: unrelated to PIN_KEY — this is the toolbar-pin prompt, not the PIN lock.
 const PIN_BANNER_DISMISSED_KEY = 'pblocker_pin_banner_dismissed';
 
@@ -1967,72 +1965,6 @@ function requestUpdateCheck() {
   } catch (_) {}
 }
 
-// --- Remote info banner ----------------------------------------------------
-// The background worker fetches data/announcement.json from the repo and writes
-// the payload to ANNOUNCEMENT_INFO_KEY. We render it as a dismissible info
-// banner and remember dismissals per announcement id — bump the id in the repo
-// to re-show it after someone has dismissed the previous one.
-async function renderAnnouncementBanner() {
-  const banner = $('info-banner');
-  if (!banner) return;
-  try {
-    const store = await browserAPI.storage.local.get([ANNOUNCEMENT_INFO_KEY, ANNOUNCEMENT_DISMISSED_KEY]);
-    const info = store[ANNOUNCEMENT_INFO_KEY];
-    const dismissed = store[ANNOUNCEMENT_DISMISSED_KEY];
-    const show = info && info.enabled && info.id && info.message && info.id !== dismissed;
-    if (!show) { banner.classList.add('hidden'); return; }
-
-    // Reset then apply the type accent (info | warning | success).
-    banner.classList.remove('type-info', 'type-warning', 'type-success');
-    banner.classList.add(`type-${info.type || 'info'}`);
-
-    const title = $('info-banner-title');
-    if (title) title.textContent = info.title || 'Announcement';
-
-    // Rendered as text (not innerHTML) — the message is remote content.
-    const sub = $('info-banner-sub');
-    if (sub) sub.textContent = info.message;
-
-    const link = $('info-banner-link');
-    if (link) {
-      if (info.link) {
-        link.href = info.link;
-        link.textContent = info.linkText || 'Learn more';
-        link.classList.remove('hidden');
-      } else {
-        link.classList.add('hidden');
-      }
-    }
-    banner.classList.remove('hidden');
-  } catch (_) {
-    banner.classList.add('hidden');
-  }
-}
-
-async function dismissAnnouncementBanner() {
-  try {
-    const { [ANNOUNCEMENT_INFO_KEY]: info } = await browserAPI.storage.local.get(ANNOUNCEMENT_INFO_KEY);
-    if (info && info.id) {
-      await browserAPI.storage.local.set({ [ANNOUNCEMENT_DISMISSED_KEY]: info.id });
-    }
-  } catch (_) {}
-  const banner = $('info-banner');
-  if (banner) banner.classList.add('hidden');
-}
-
-function requestAnnouncement() {
-  try {
-    // forceRefresh bypasses the background's 6h TTL: opening this page always
-    // pulls the latest announcement.json (it's tiny), so edits go live for the
-    // user on their next Settings visit instead of waiting out the cache.
-    browserAPI.runtime.sendMessage({ type: 'get_announcement', forceRefresh: true }, () => {
-      void browserAPI.runtime.lastError;
-      // Re-render once the refreshed payload has landed in storage.
-      renderAnnouncementBanner();
-    });
-  } catch (_) {}
-}
-
 // --- Sieve sidebar promo --------------------------------------------------
 // options.html ships byte-identical to every bundle, so the store link for the
 // companion extension has to be chosen here. Mirrors detectBrowserKey() in
@@ -2061,12 +1993,6 @@ async function init() {
   if (dismissBtn) dismissBtn.addEventListener('click', dismissUpdateBanner);
   await renderUpdateBanner();
   requestUpdateCheck();
-
-  // Remote info/announcement banner
-  const infoDismissBtn = $('info-banner-dismiss');
-  if (infoDismissBtn) infoDismissBtn.addEventListener('click', dismissAnnouncementBanner);
-  await renderAnnouncementBanner();
-  requestAnnouncement();
 
   // Companion-extension promo in the sidebar
   applySievePromoLink();
