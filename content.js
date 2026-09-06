@@ -4615,6 +4615,7 @@ function shouldBlockImageQuickly(img) {
 // --- Iframe scanning ---
 function processIframe(iframe) {
   try {
+    if (!iframe) return;
     const src = iframe.getAttribute('src') || '';
     const srcdoc = iframe.getAttribute('srcdoc') || '';
     // Keyed on the src that was judged, not a bare flag: a clean iframe has to
@@ -4622,7 +4623,6 @@ function processIframe(iframe) {
     // parse, three host matchers, a keyword scan of srcdoc and another
     // background round-trip for it), but an iframe that is later re-pointed at
     // a different src must still be re-checked.
-    if (!iframe) return;
     if (iframe.dataset.pblockerProcessed === 'true' &&
         (iframe.dataset.pblockerCheckedSrc || '') === src) return;
 
