@@ -27,3 +27,6 @@ __pycache__/
 *.pyc
 *.pyo
 
+
+# Benchmark output
+artifacts/

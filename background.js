@@ -1338,6 +1338,46 @@ async function setSettings(newSettings) {
   await browserAPI.storage.local.set({ [SETTINGS_KEY]: newSettings });
 }
 
+/**
+ * Persist any missing defaults, but ONLY when something is actually missing.
+ *
+ * This used to be an unconditional `setSettings(await getSettings())` on every
+ * background start. storage.local.set fires storage.onChanged whether or not
+ * the value changed, and that event has two expensive subscribers: this file
+ * (rebuildCompiledPatterns + checkExtensionStateChange + updateDnrRules) and
+ * every content script in every open tab (loadSettings + a full
+ * processContent). Firefox and Chrome both suspend an idle MV3 background, so
+ * every wake-up re-ran initialization here and forced a full page re-scan in
+ * each open tab — the cost scaling with how many tabs the user had open.
+ *
+ * A wake must be observationally silent: starting up is not a settings change.
+ */
+async function ensureSettingsDefaults() {
+  const { [SETTINGS_KEY]: stored } = await browserAPI.storage.local.get(SETTINGS_KEY);
+  const merged = { ...DEFAULT_SETTINGS, ...(stored || {}) };
+  if (!settingsEqual(stored, merged)) {
+    await browserAPI.storage.local.set({ [SETTINGS_KEY]: merged });
+  }
+  return merged;
+}
+
+function settingsEqual(stored, merged) {
+  if (!stored || typeof stored !== 'object') return false;
+  const storedKeys = Object.keys(stored);
+  const mergedKeys = Object.keys(merged);
+  // A key present in defaults but absent from storage must still be written,
+  // which is what makes this safe for profiles that predate a new setting.
+  if (storedKeys.length !== mergedKeys.length) return false;
+  for (const key of mergedKeys) {
+    const a = stored[key];
+    const b = merged[key];
+    if (a === b) continue;
+    // Arrays (customPatterns, trustedImageDomains) need a value comparison.
+    if (JSON.stringify(a) !== JSON.stringify(b)) return false;
+  }
+  return true;
+}
+
 async function getStats() {
   const { [BLOCKED_STATS_KEY]: stats } = await browserAPI.storage.local.get(BLOCKED_STATS_KEY);
   return { ...DEFAULT_STATS, ...(stats || {}) };
@@ -2907,8 +2947,7 @@ let backgroundInitializationPromise = null;
 function initializeBackground() {
   if (backgroundInitializationPromise) return backgroundInitializationPromise;
   backgroundInitializationPromise = (async () => {
-    const settings = await getSettings();
-    await setSettings(settings); // ensure defaults saved
+    await ensureSettingsDefaults();
     await loadDefaultBlocklist();
     await rebuildCompiledPatterns();
     await initializeExtensionStateTracking();

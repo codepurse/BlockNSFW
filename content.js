@@ -2101,6 +2101,10 @@ function getPageTextLinesForScan() {
     .slice(0, PAGE_TEXT_SCAN_MAX_LINES);
 }
 
+// Last text slice this page was judged on, so an unchanged page is not
+// re-scanned. Reset on SPA navigation alongside the other per-page caches.
+let lastPageTextSignature = '';
+
 function checkPageBodyText() {
   if (blockedTriggered) return false;
   if (getSearchEngine()) return false;
@@ -2110,6 +2114,13 @@ function checkPageBodyText() {
 
   const lines = getPageTextLinesForScan();
   if (lines.length === 0) return false;
+
+  // A feed that appends below the fold does not change the first 48 lines, so
+  // re-analysing an identical slice is pure waste — 48 lines x 166 multilingual
+  // substring scans x 7 compiled regexes, for a verdict already reached.
+  const signature = `${lines.length} ${lines[0]} ${lines[lines.length - 1]}`;
+  if (signature === lastPageTextSignature) return false;
+  lastPageTextSignature = signature;
 
   let matchedLines = 0;
   const matchedKeywords = new Set();
@@ -4345,35 +4356,14 @@ function maybeBlockImage(img) {
 }
 
 const IMAGE_OBSERVER_ROOT_MARGIN_PX = 1400;
-const IMAGE_EARLY_ANALYSIS_MARGIN_PX = 900;
 
-function isImageNearViewport(img, marginPx = IMAGE_EARLY_ANALYSIS_MARGIN_PX) {
-  try {
-    if (!img || typeof img.getBoundingClientRect !== 'function') return false;
-    const rect = img.getBoundingClientRect();
-    const viewportHeight = window.innerHeight || document.documentElement.clientHeight || 0;
-    const viewportWidth = window.innerWidth || document.documentElement.clientWidth || 0;
-    if (viewportHeight <= 0 || viewportWidth <= 0) return false;
-    if (rect.bottom < -marginPx) return false;
-    if (rect.top > viewportHeight + marginPx) return false;
-    if (rect.right < 0 || rect.left > viewportWidth) return false;
-    return true;
-  } catch (_) {
-    return false;
-  }
-}
-
-function prewarmImageAnalysis(img) {
-  if (!isEnabled || !isImageNearViewport(img)) return false;
-  maybeBlockImage(img);
-  if (img.dataset.pblockerHidden === 'true') return true;
-  if (typeof window.AIImageBlocker !== 'undefined' &&
-      window.AIImageBlocker &&
-      typeof window.AIImageBlocker.onImageVisible === 'function') {
-    window.AIImageBlocker.onImageVisible(img);
-  }
-  return true;
-}
+// isImageNearViewport() and prewarmImageAnalysis() lived here. They ran
+// getBoundingClientRect() per <img> from inside observeImage(), interleaved
+// with hideElement()'s style writes — a forced layout flush per image. The
+// IntersectionObserver below already covers the same ground: its 1400px bottom
+// margin fires it well before an image is on screen, it delivers an initial
+// callback for targets already visible, and it does its work off the main
+// thread. Do not reintroduce a layout read on this path.
 
 function setupIntersectionObserver() {
   if (imageObserver) {
@@ -4457,9 +4447,20 @@ function observeImage(img) {
   // For images that pass quick check, use IntersectionObserver for deeper analysis
   if (!imageObserver) setupIntersectionObserver();
   try { imageObserver.observe(img); } catch (_) {}
-  if (prewarmImageAnalysis(img)) {
-    try { imageObserver.unobserve(img); } catch (_) {}
-  }
+  // Deliberately no prewarmImageAnalysis() here.
+  //
+  // It called isImageNearViewport(), i.e. getBoundingClientRect(), once per
+  // <img> — a forced synchronous layout — while the same loop was writing
+  // `display: none` and inserting placeholders through hideElement(). Read,
+  // write, read, write is the textbook layout-thrash pattern, and on an image
+  // grid of a few hundred pictures it meant a few hundred full-document layout
+  // flushes in one task, repeated on every processContent().
+  //
+  // Nothing is lost. IMAGE_OBSERVER_ROOT_MARGIN_PX gives the observer 1400px of
+  // bottom margin, so it fires well over a screen before an image is visible,
+  // off the main thread, and it delivers an initial callback for targets that
+  // are already on screen. The synchronous URL/keyword guard above still hides
+  // obvious matches at parse time, and it never touches layout.
 }
 
 // Quick synchronous check for obvious adult content in URL
@@ -4522,9 +4523,16 @@ function shouldBlockImageQuickly(img) {
 // --- Iframe scanning ---
 function processIframe(iframe) {
   try {
-    if (!iframe || iframe.dataset.pblockerProcessed === 'true') return;
     const src = iframe.getAttribute('src') || '';
     const srcdoc = iframe.getAttribute('srcdoc') || '';
+    // Keyed on the src that was judged, not a bare flag: a clean iframe has to
+    // be marked too (otherwise every scheduleMediaDiscovery pass re-ran the URL
+    // parse, three host matchers, a keyword scan of srcdoc and another
+    // background round-trip for it), but an iframe that is later re-pointed at
+    // a different src must still be re-checked.
+    if (!iframe) return;
+    if (iframe.dataset.pblockerProcessed === 'true' &&
+        (iframe.dataset.pblockerCheckedSrc || '') === src) return;
 
     let shouldHide = false;
     if (src) {
@@ -4543,15 +4551,22 @@ function processIframe(iframe) {
       shouldHide = containsAdultKeywords(srcdoc);
     }
 
+    // Record what was judged before the async check resolves, so a re-entrant
+    // discovery pass over the same clean iframe returns at the guard above.
+    iframe.dataset.pblockerProcessed = 'true';
+    iframe.dataset.pblockerCheckedSrc = src;
+
     if (shouldHide) {
       hideElement(iframe, 'iframe');
-      iframe.dataset.pblockerProcessed = 'true';
       notifyBackground('iframe_filtered', { src });
     } else if (src) {
       isUrlBlockedByBackground(src).then(blocked => {
-        if (!blocked || !iframe.isConnected || iframe.dataset.pblockerProcessed === 'true') return;
+        // Bails on `pblockerHidden`, not `pblockerProcessed` — the latter is now
+        // set for clean iframes too, and checking it here would stop this
+        // verdict from ever being applied.
+        if (!blocked || !iframe.isConnected || iframe.dataset.pblockerHidden === 'true') return;
+        if ((iframe.getAttribute('src') || '') !== src) return; // re-pointed meanwhile
         hideElement(iframe, 'iframe');
-        iframe.dataset.pblockerProcessed = 'true';
         notifyBackground('iframe_filtered', { src });
       }).catch(() => {});
     }
@@ -4740,13 +4755,30 @@ function redirectToBlockedPage(reason = 'content', detail) {
 
 // Batch processing for performance
 const debouncedProcess = debounce(processContent, DEBOUNCE_DELAY);
-const debouncedPageTextScan = debounce(async () => {
-  if (!isEnabled || blockedTriggered) return;
-  const whitelisted = await isCurrentPageWhitelisted();
-  if (whitelisted) return;
-  if (checkPageBodyText()) return;
-  checkPageTextWithModel();
-}, DEBOUNCE_DELAY);
+// The page-text scan reads document.body.innerText, which is layout-dependent:
+// reading it forces a full style + layout flush of the document. It was armed
+// off EVERY element insertion at DEBOUNCE_DELAY (100ms), and useSmartBlocking
+// defaults on, so any page with an ad rotator, a live feed or a chat widget
+// re-flushed layout ten times a second for as long as it was open.
+//
+// This is a page-level verdict, not a per-element one — it does not need 100ms
+// latency. Debounce it far longer and take it during idle time.
+const PAGE_TEXT_SCAN_DEBOUNCE = 750;
+
+function whenIdle(run) {
+  if (typeof requestIdleCallback === 'function') requestIdleCallback(run, { timeout: 1500 });
+  else setTimeout(run, 0);
+}
+
+const debouncedPageTextScan = debounce(() => {
+  whenIdle(async () => {
+    if (!isEnabled || blockedTriggered) return;
+    const whitelisted = await isCurrentPageWhitelisted();
+    if (whitelisted) return;
+    if (checkPageBodyText()) return;
+    checkPageTextWithModel();
+  });
+}, PAGE_TEXT_SCAN_DEBOUNCE);
 
 // Incremental processor for newly added search result containers
 async function processPendingResults() {
@@ -4878,6 +4910,59 @@ function scheduleMediaDiscovery() {
   }
 }
 
+/**
+ * Stop observing media inside a subtree that has left the document.
+ *
+ * IntersectionObserver holds a STRONG reference to every target, and the only
+ * paths that unobserve are "it intersected" and "filtering was switched off".
+ * On a virtualised feed (X, Reddit, Instagram) nodes are created and discarded
+ * by the hundred without most of them ever intersecting, so without this the
+ * observer pinned every <img> the tab had ever rendered — an unbounded leak
+ * that only shows up after a long browsing session, which is exactly when
+ * users reported the browser getting slow.
+ */
+function releaseObservedMedia(el) {
+  try {
+    if (el.tagName === 'IMG') { imageObserver && imageObserver.unobserve(el); return; }
+    if (el.tagName === 'VIDEO') { mediaObserver && mediaObserver.unobserve(el); return; }
+    if (typeof el.querySelectorAll !== 'function') return;
+    if (imageObserver) {
+      el.querySelectorAll('img').forEach(node => {
+        try { imageObserver.unobserve(node); } catch (_) {}
+      });
+    }
+    if (mediaObserver) {
+      el.querySelectorAll('video').forEach(node => {
+        try { mediaObserver.unobserve(node); } catch (_) {}
+      });
+    }
+  } catch (_) {}
+}
+
+// Removed subtrees are drained on idle, never inside the observer callback.
+// A virtualised feed removes rows on every frame, and querySelectorAll() per
+// removal in the synchronous callback measurably raised mutation p95 — the
+// same mistake this whole change set exists to remove.
+let pendingReleaseNodes = new Set();
+let mediaReleaseScheduled = false;
+
+function scheduleMediaRelease() {
+  if (mediaReleaseScheduled) return;
+  mediaReleaseScheduled = true;
+  const run = () => {
+    mediaReleaseScheduled = false;
+    const nodes = pendingReleaseNodes;
+    pendingReleaseNodes = new Set();
+    for (const node of nodes) {
+      // Re-parented rather than discarded: still in the document, still wanted.
+      if (node.isConnected) continue;
+      releaseObservedMedia(node);
+    }
+  };
+  if (typeof requestIdleCallback === 'function') requestIdleCallback(run, { timeout: 1000 });
+  else setTimeout(run, 200);
+}
+
 // Mutation observer for dynamic content
 function setupMutationObserver() {
   if (observer) {
@@ -4961,6 +5046,14 @@ function setupMutationObserver() {
               }
             }
           }
+        }
+
+        if (mutation.removedNodes.length > 0) {
+          for (const node of mutation.removedNodes) {
+            if (node.nodeType !== Node.ELEMENT_NODE) continue;
+            pendingReleaseNodes.add(node);
+          }
+          scheduleMediaRelease();
         }
 
         if (addedElements.length > 0) {
