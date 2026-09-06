@@ -661,15 +661,22 @@ function normalizeDomainForCache(domain) {
   return (domain || '').trim().toLowerCase().replace(/^www\./, '');
 }
 
+// Accept ASCII labels, including ACE-encoded punycode labels that begin with
+// "xn--". Each label must be 1-63 chars, alphanumeric or hyphen, may not start
+// or end with a hyphen. The TLD may also be a punycode TLD ("xn--...").
+//
+// Hoisted: this was constructed inside isLikelyDomain, which runs once per
+// domain — 204,222 RegExp constructions per blocklist load, and a load happens
+// on every background wake.
+const DOMAIN_LABEL_PATTERN = '(?!-)(?:xn--[a-z0-9-]{2,61}|[a-z0-9-]{1,63})(?<!-)';
+const LIKELY_DOMAIN_RE = new RegExp(
+  `^(?:${DOMAIN_LABEL_PATTERN}\\.)+${DOMAIN_LABEL_PATTERN}$`, 'i'
+);
+
 function isLikelyDomain(candidate) {
   if (!candidate) return false;
   if (candidate.length > 253) return false;
-  // Accept ASCII labels, including ACE-encoded punycode labels that begin with
-  // "xn--". Each label must be 1-63 chars, alphanumeric or hyphen, may not
-  // start or end with a hyphen. The TLD may also be a punycode TLD ("xn--...").
-  const label = '(?!-)(?:xn--[a-z0-9-]{2,61}|[a-z0-9-]{1,63})(?<!-)';
-  const domainPattern = new RegExp(`^(?:${label}\\.)+${label}$`, 'i');
-  return domainPattern.test(candidate);
+  return LIKELY_DOMAIN_RE.test(candidate);
 }
 
 function parseHostsFile(text) {
@@ -814,11 +821,12 @@ async function loadBlocklistFromCache() {
     const key = chunkKeys[index];
     const chunk = storedChunks[key];
     if (!Array.isArray(chunk)) return [];
+    // storeBlocklistInCache() normalized and validated every entry before it was
+    // written, and metadata is committed last so a partial generation is never
+    // read as current. Re-normalizing and re-validating 204k strings on every
+    // background wake was re-verifying our own output.
     for (let j = 0; j < chunk.length; j++) {
-      const normalized = normalizeDomainForCache(chunk[j]);
-      if (isLikelyDomain(normalized)) {
-        domains.push(normalized);
-      }
+      domains.push(chunk[j]);
     }
   }
 
@@ -1794,16 +1802,31 @@ async function loadDefaultBlocklist() {
     // multi-megabyte data while the first browsing pages are rendering.
     const previousMeta = blocklistMeta || (await loadBlocklistMeta());
     if (!previousMeta) {
-      blocklistMeta = {
-        updatedAt: BUNDLED_BLOCKLIST_BUILT_AT || Date.now(),
-        // No remote cache generation exists yet; the bundled snapshot is
-        // authoritative until updatedAt reaches the normal refresh TTL.
-        chunkCount: 0,
-        version: 1,
-        source: 'bundled',
-        domainCount: defaultBlocklist.length
-      };
-      await browserAPI.storage.local.set({ [BLOCKLIST_CACHE_META_KEY]: blocklistMeta });
+      // Write the bundled snapshot into the chunk cache, then backdate it to the
+      // build time so PR #22's deferred remote refresh still holds.
+      //
+      // Declaring chunkCount: 0 instead — as this did — makes
+      // loadBlocklistFromCache() report "no cache", so every subsequent wake
+      // fell back to fetch(blocklist.json) + JSON.parse of 4.1 MB + normalizing
+      // 204k domains, while ensureRemoteBlocklistUpToDate() returned early
+      // because the metadata was not stale. The chunk cache, whose entire
+      // purpose is to make a wake cheap, was never populated at all.
+      const meta = await storeBlocklistInCache(defaultBlocklist);
+      if (meta) {
+        meta.source = 'bundled';
+        meta.updatedAt = BUNDLED_BLOCKLIST_BUILT_AT || Date.now();
+        blocklistMeta = meta;
+        await browserAPI.storage.local.set({ [BLOCKLIST_CACHE_META_KEY]: meta });
+      } else {
+        blocklistMeta = {
+          updatedAt: BUNDLED_BLOCKLIST_BUILT_AT || Date.now(),
+          chunkCount: 0,
+          version: 1,
+          source: 'bundled',
+          domainCount: defaultBlocklist.length
+        };
+        await browserAPI.storage.local.set({ [BLOCKLIST_CACHE_META_KEY]: blocklistMeta });
+      }
     } else {
       // Preserve the original bundled timestamp across restarts so its normal
       // TTL can expire and trigger a remote refresh.
