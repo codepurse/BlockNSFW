@@ -83,6 +83,22 @@ function preloadAiRuntime() {
   if (typeof self === 'undefined' || typeof self.importScripts !== 'function') {
     return;
   }
+  // Chrome 109+ classifies in the offscreen document, which is where the WebGL
+  // context is and where the classify handler already prefers to go. The worker
+  // never needs the runtime there, so importing it is 4.31 MB of TF.js pulled
+  // into the worker synchronously on EVERY service-worker start — and the AI
+  // image blocker is opt-in and off by default, so almost nobody who paid that
+  // was using it. The comment on loadAiRuntimeViaDom() below spells out exactly
+  // this cost as the reason Firefox loads lazily; Chrome simply never got the
+  // same treatment.
+  //
+  // Older Chrome has no chrome.offscreen and genuinely needs the worker
+  // fallback, and importScripts() may only run during initial synchronous
+  // evaluation — so the decision has to be made here, and offscreenAvailable()
+  // is synchronous.
+  if (offscreenAvailable()) {
+    return;
+  }
   try {
     self.importScripts(...AI_RUNTIME_SCRIPTS);
     syncAiRuntimeStateFromGlobals();
@@ -318,7 +334,36 @@ async function ensureOffscreenDocument() {
     }
   }
   _offscreenCreating = null;
+  touchOffscreenDocument();
   return true;
+}
+
+// The offscreen document persists for the browser session once created, holding
+// a live WebGL context and — by design, see offscreen.js — every model that has
+// been initialised, so switching model in settings leaves both resident. That
+// persistence is right while the feature is in use; nothing was releasing it
+// when it stopped being used. Firefox reclaims the equivalent automatically by
+// suspending its event page, so this is a Chromium-only leak.
+const OFFSCREEN_IDLE_MS = 5 * 60 * 1000;
+let _offscreenIdleTimer = null;
+
+function touchOffscreenDocument() {
+  if (!offscreenAvailable()) return;
+  clearTimeout(_offscreenIdleTimer);
+  _offscreenIdleTimer = setTimeout(closeOffscreenDocument, OFFSCREEN_IDLE_MS);
+}
+
+async function closeOffscreenDocument() {
+  clearTimeout(_offscreenIdleTimer);
+  _offscreenIdleTimer = null;
+  if (!offscreenAvailable() || typeof chrome.offscreen.closeDocument !== 'function') return;
+  try {
+    if (await hasOffscreenDocument()) await chrome.offscreen.closeDocument();
+  } catch (_) {
+    // Already gone, or closed by a concurrent call. Either way there is nothing
+    // to release, and a cosmetic teardown must never break classification.
+  }
+  _offscreenCreating = null;
 }
 
 function sendToOffscreen(payload, timeoutMs) {
@@ -3116,6 +3161,12 @@ browserAPI.storage.onChanged.addListener(async (changes, area) => {
     // Re-apply safe-search rules and the custom-site image block if the
     // relevant toggles or the user's blocked-site list changed
     await updateDnrRules();
+    // Turning the AI image blocker off should release the offscreen document's
+    // WebGL context and resident models now, not in five minutes.
+    try {
+      const settings = await getSettings();
+      if (settings.aiImageBlocker !== true) await closeOffscreenDocument();
+    } catch (_) {}
     console.log('BlockNSFW: Settings updated - patterns rebuilt');
   }
   // Clear URL caches when whitelist changes (patterns don't need rebuilding)

@@ -83,17 +83,52 @@
     } catch (_) {}
   }
 
-  function flushCacheToStorage() {
+  // storage.session needs Chrome 102 / Firefox 115, but the manifests declare
+  // minimum_chrome_version 88 and strict_min_version 113. Below those the API is
+  // undefined, the bare try/catch swallowed it, and the verdict cache silently
+  // never persisted — so every image was reclassified on every page, which is
+  // the most expensive thing this file can do. Fall back to storage.local
+  // rather than raising the floors and dropping those users.
+  function cacheArea() {
     try {
-      const obj = {};
-      for (const [k, v] of state.lru) obj[k] = v;
-      chrome.storage.session.set({ [CACHE_KEY]: obj }).catch(() => {});
+      if (chrome.storage && chrome.storage.session) return chrome.storage.session;
     } catch (_) {}
+    try {
+      if (chrome.storage && chrome.storage.local) return chrome.storage.local;
+    } catch (_) {}
+    return null;
+  }
+
+  // Debounced and taken during idle. This ran after EVERY classification,
+  // serializing the whole LRU — up to MAX_CACHE_ENTRIES entries of scores — so
+  // classifying 100 images on a feed meant 100 serializations of a structure
+  // growing toward 2000 entries, in the content process, while the user scrolls.
+  let flushTimer = null;
+
+  function flushCacheToStorage() {
+    if (flushTimer) return;
+    const write = () => {
+      flushTimer = null;
+      const area = cacheArea();
+      if (!area) return;
+      try {
+        const obj = {};
+        for (const [k, v] of state.lru) obj[k] = v;
+        const result = area.set({ [CACHE_KEY]: obj });
+        if (result && typeof result.catch === 'function') result.catch(() => {});
+      } catch (_) {}
+    };
+    flushTimer = setTimeout(() => {
+      if (typeof requestIdleCallback === 'function') requestIdleCallback(write, { timeout: 2000 });
+      else write();
+    }, 3000);
   }
 
   function loadCacheFromStorage() {
     try {
-      chrome.storage.session.get(CACHE_KEY, (res) => {
+      const area = cacheArea();
+      if (!area) return;
+      area.get(CACHE_KEY, (res) => {
         const data = res && res[CACHE_KEY];
         if (!data || typeof data !== 'object') return;
         const entries = Object.entries(data)
