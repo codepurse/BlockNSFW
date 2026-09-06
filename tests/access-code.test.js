@@ -61,6 +61,37 @@ test('requiredFor: a corrupted scope falls back to critical', () => {
   assert.equal(AccessCode.requiredFor({ enabled: true, scope: 'everything' }, false), false);
 });
 
+test('requiredFor: tuning never prompts, under either scope', () => {
+  // The sensitivity dials. Users on the 'all' scope were made to retype the
+  // whole code just to nudge image detection strictness down after a false
+  // positive — the loosest setting still blocks clearly explicit content, so
+  // there is nothing here to guard the way out of.
+  assert.equal(AccessCode.requiredFor({ enabled: true, scope: 'all' }, 'tuning'), false);
+  assert.equal(AccessCode.requiredFor({ enabled: true, scope: 'critical' }, 'tuning'), false);
+});
+
+test('requiredFor: named tiers match the booleans they replace', () => {
+  const critical = { enabled: true, scope: 'critical' };
+  const all = { enabled: true, scope: 'all' };
+  assert.equal(AccessCode.requiredFor(critical, 'critical'), true);
+  assert.equal(AccessCode.requiredFor(critical, 'normal'), false);
+  assert.equal(AccessCode.requiredFor(all, 'critical'), true);
+  assert.equal(AccessCode.requiredFor(all, 'normal'), true);
+});
+
+test('normalizeTier: unknown and missing tiers fall back to normal', () => {
+  // Never to 'tuning' — an unrecognized value must not skip the code.
+  assert.equal(AccessCode.normalizeTier(undefined), 'normal');
+  assert.equal(AccessCode.normalizeTier(null), 'normal');
+  assert.equal(AccessCode.normalizeTier('lenient'), 'normal');
+  assert.equal(AccessCode.normalizeTier(0), 'normal');
+});
+
+test('normalizeTier: the legacy isCritical boolean still works', () => {
+  assert.equal(AccessCode.normalizeTier(true), 'critical');
+  assert.equal(AccessCode.normalizeTier(false), 'normal');
+});
+
 test('generate: returns exactly the requested length', () => {
   for (const length of [32, 64, 128, 256]) {
     assert.equal(AccessCode.generate(length).length, length);

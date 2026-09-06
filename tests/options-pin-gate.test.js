@@ -156,6 +156,23 @@ test('options.js delegates the access-code decision to the shared module', () =>
   assert.equal(ctx.generateAccessCode(32).length, 32);
 });
 
+test('accessCodeTier: maps the gate options onto the shared tiers', () => {
+  assert.equal(ctx.accessCodeTier({ tier: 'tuning' }), 'tuning');
+  assert.equal(ctx.accessCodeTier({ critical: true }), 'critical');
+  // A plain gate call stays 'normal' — the default must never be 'tuning'.
+  assert.equal(ctx.accessCodeTier(undefined), 'normal');
+  assert.equal(ctx.accessCodeTier({}), 'normal');
+  assert.equal(ctx.accessCodeTier({ critical: false }), 'normal');
+});
+
+test('the sensitivity dials are tuning, so they skip the code entirely', () => {
+  // The complaint this fixes: on the 'all' scope, lowering image detection
+  // strictness demanded the full 32-256 character code. The PIN still applies.
+  const all = { enabled: true, scope: 'all' };
+  assert.equal(ctx.accessCodeRequiredFor(all, ctx.accessCodeTier({ tier: 'tuning' })), false);
+  assert.equal(ctx.accessCodeRequiredFor(all, ctx.accessCodeTier({})), true);
+});
+
 test('weakensImageFilter: lowering the level weakens', () => {
   assert.equal(ctx.weakensImageFilter('strict', 'moderate'), true);
   assert.equal(ctx.weakensImageFilter('strict', 'lenient'), true);
