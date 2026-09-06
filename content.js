@@ -2159,6 +2159,34 @@ function getPageTextLinesForScan() {
 // re-scanned. Reset on SPA navigation alongside the other per-page caches.
 let lastPageTextSignature = '';
 
+/**
+ * Identify a slice of page text cheaply enough to run before every scan.
+ *
+ * Deliberately hashes ALL the lines, not just the count and the two ends. A
+ * page that keeps a stable header and footer inside the scanned window while
+ * its middle changes — an SPA swapping routes under fixed chrome — produces an
+ * identical first line, last line and line count. Keying on those alone would
+ * skip the scan for exactly that page, and a skipped scan here is a page that
+ * does not get blocked. A false negative in a blocker is worse than the work it
+ * saves, and hashing a few thousand characters is far cheaper than the 48 lines
+ * x 166 substring searches it guards.
+ */
+function pageTextSignature(lines) {
+  let hash = 0x811c9dc5; // FNV-1a offset basis
+  let length = 0;
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    length += line.length;
+    for (let j = 0; j < line.length; j++) {
+      hash ^= line.charCodeAt(j);
+      hash = Math.imul(hash, 0x01000193);
+    }
+    hash ^= 10; // line separator, so re-splitting the same text differs
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return `${lines.length}:${length}:${(hash >>> 0).toString(36)}`;
+}
+
 function checkPageBodyText() {
   if (blockedTriggered) return false;
   if (getSearchEngine()) return false;
@@ -2172,7 +2200,7 @@ function checkPageBodyText() {
   // A feed that appends below the fold does not change the first 48 lines, so
   // re-analysing an identical slice is pure waste — 48 lines x 166 multilingual
   // substring scans x 7 compiled regexes, for a verdict already reached.
-  const signature = `${lines.length} ${lines[0]} ${lines[lines.length - 1]}`;
+  const signature = pageTextSignature(lines);
   if (signature === lastPageTextSignature) return false;
   lastPageTextSignature = signature;
 
