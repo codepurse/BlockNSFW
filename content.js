@@ -1642,7 +1642,13 @@ async function loadSettings() {
     debugMode = settings.debugMode === true;
     facebookReelsEnabled = settings.facebookReelsEnabled === true;
     instagramReelsEnabled = settings.instagramReelsEnabled === true;
-    aiTextBlocker = settings.aiTextBlocker !== false;
+    // `=== true`, matching every other opt-in beta flag above and
+    // DEFAULT_SETTINGS.aiTextBlocker === false. It was `!== false`, so an absent
+    // key read as ON — and when on it fetches and parses a 228 KB model per page
+    // and scores character n-grams over 8000 chars per scan, for a verdict the
+    // v3 safety catch below then discards unless the AI *image* blocker (also
+    // off by default) flagged something on the same page.
+    aiTextBlocker = settings.aiTextBlocker === true;
     aiTextStrictness = settings.aiTextStrictness || 'balanced';
     anyTextFeatureOn = !!(useSmartBlocking || aiTextBlocker);
 
@@ -1973,7 +1979,37 @@ async function warmCurrentPageBlocklistHost() {
 }
 
 // Check if current page hostname is whitelisted (respects temporary expirations + remote global whitelist)
+// processContent() runs from init, a timer, DOMContentLoaded, popstate, form
+// submit, three storage.onChanged branches and the debounced path — and each
+// one paid a fresh two-key storage read to answer a question that only changes
+// when the whitelist does. Cached per URL; invalidated by the whitelist
+// listener in setupEventListeners and by any temporary-disable change.
+//
+// A time-limited entry is deliberately not cached past its own expiry.
+let _whitelistCache = null; // { href, value, expiresAt }
+
+function resetWhitelistCache() {
+  _whitelistCache = null;
+}
+
 async function isCurrentPageWhitelisted() {
+  const href = window.location.href;
+  const cached = _whitelistCache;
+  if (cached && cached.href === href && (!cached.expiresAt || Date.now() < cached.expiresAt)) {
+    return cached.value;
+  }
+  const value = await computeCurrentPageWhitelisted();
+  _whitelistCache = { href, value, expiresAt: _whitelistNearestExpiry };
+  return value;
+}
+
+// Set by computeCurrentPageWhitelisted: the soonest expiry among the entries
+// that matched this host, so a temporary allowance stops being cached when it
+// stops being true.
+let _whitelistNearestExpiry = 0;
+
+async function computeCurrentPageWhitelisted() {
+  _whitelistNearestExpiry = 0;
   try {
     const result = await browserAPI.storage.local.get(['pblocker_whitelist', 'pblocker_remote_whitelist_v1']);
     const list = result.pblocker_whitelist || [];
@@ -1988,7 +2024,15 @@ async function isCurrentPageWhitelisted() {
       const valid = item.type === 'permanent' || (item.expiresAt && item.expiresAt > now);
       if (!valid) return false;
       const hostOk = hostname === domain || hostname.endsWith('.' + domain);
-      return hostOk && pathMatches(pathname, item.path);
+      const match = hostOk && pathMatches(pathname, item.path);
+      // Remember the soonest expiry that mattered, so a temporary allowance is
+      // never cached beyond the moment it lapses.
+      if (match && item.type !== 'permanent' && item.expiresAt) {
+        _whitelistNearestExpiry = _whitelistNearestExpiry
+          ? Math.min(_whitelistNearestExpiry, item.expiresAt)
+          : item.expiresAt;
+      }
+      return match;
     });
     if (userWhitelisted) return true;
     const remoteWL = result.pblocker_remote_whitelist_v1 || [];
@@ -2675,7 +2719,24 @@ async function shouldBlockElement(element, backgroundBlockedLink, opts) {
 }
 
 // Search engine specific filtering
+// Memoised on the full href, so any navigation — including a pushState that
+// only changes the query — recomputes. The uncached version allocated a
+// URLSearchParams and two lowercased strings on every call, and it is called
+// once per MutationObserver batch and once per search-result container: on a
+// results page with ~100 containers that is ~100 query-string parses per pass,
+// all answering a question that is fixed for the URL.
+let _searchEngineHref = null;
+let _searchEngineValue = null;
+
 function getSearchEngine() {
+  const href = window.location.href;
+  if (href === _searchEngineHref) return _searchEngineValue;
+  _searchEngineHref = href;
+  _searchEngineValue = computeSearchEngine();
+  return _searchEngineValue;
+}
+
+function computeSearchEngine() {
   const hostname = window.location.hostname.toLowerCase();
   const pathname = window.location.pathname.toLowerCase();
   const params = new URLSearchParams(window.location.search);
@@ -2757,7 +2818,28 @@ function isLikelyImageSearchResultImage(img) {
 }
 
 // Social site detection
+// Memoised for the document. The uncached version fell through to two
+// document-wide querySelector calls (meta[name="generator"] and
+// meta[property="og:site_name"]) on every host that is not Reddit, Twitter/X or
+// Mastodon — i.e. on essentially every page — and it runs once per
+// MutationObserver batch. In Firefox those queries also cross the content
+// script's Xray wrapper, which is not free.
+//
+// Reset once at DOMContentLoaded so a generator meta tag that had not parsed
+// yet is still seen; the hostname half cannot change without a navigation.
+let _socialSiteCache;
+
 function getSocialSite() {
+  if (_socialSiteCache !== undefined) return _socialSiteCache;
+  _socialSiteCache = computeSocialSite();
+  return _socialSiteCache;
+}
+
+function resetSocialSiteCache() {
+  _socialSiteCache = undefined;
+}
+
+function computeSocialSite() {
   try {
     const host = window.location.hostname.toLowerCase();
     // Reddit
@@ -5153,10 +5235,31 @@ function setupMutationObserver() {
 }
 
 // Event listeners
+/**
+ * Drop everything memoised for the current page. getSearchEngine keys on href
+ * so it looks after itself; these do not.
+ */
+function resetPerPageCaches() {
+  resetWhitelistCache();
+  resetSocialSiteCache();
+  _cleanPageHostCache = null;
+  lastPageTextSignature = '';
+}
+
 function setupEventListeners() {
   // Listen for storage changes
   browserAPI.storage.onChanged.addListener((changes, area) => {
     if (area !== 'local') return;
+
+    // The whitelist verdict is cached per URL, so adding or removing an entry —
+    // or a temporary allowance being cleared — has to drop it, or the page keeps
+    // filtering a site the user just allowed until it is reloaded.
+    if (changes.pblocker_whitelist ||
+        changes.pblocker_remote_whitelist_v1 ||
+        changes.pblocker_temp_disable_until) {
+      resetWhitelistCache();
+      processContent();
+    }
 
     if (changes.pblocker_settings) {
       const previousLevel = imageFilterLevel;
@@ -5222,7 +5325,14 @@ function setupEventListeners() {
   // Handle dynamic content changes
   setTimeout(setupMutationObserver, 500);
   
+  // A generator meta tag may not have parsed when getSocialSite() was first
+  // asked, so give the memo exactly one chance to see a completed head.
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', resetSocialSiteCache, { once: true });
+  }
+
   // Re-process on navigation (for SPAs)
+  window.addEventListener('popstate', resetPerPageCaches);
   window.addEventListener('popstate', debouncedProcess);
   window.addEventListener('popstate', () => consoleLogPageTitle('popstate'));
 
