@@ -5013,21 +5013,36 @@ function scheduleMediaDiscovery() {
  * that only shows up after a long browsing session, which is exactly when
  * users reported the browser getting slow.
  */
+function releaseObservedImage(img) {
+  try {
+    if (imageObserver) imageObserver.unobserve(img);
+    // Clearing the marker matters as much as the unobserve. observeImage()
+    // early-returns on pblockerObserved, so a node that is detached and then
+    // re-attached — which is exactly what a virtualised feed does when it
+    // recycles a row — would come back unobserved AND be refused a fresh
+    // observe, silently losing its viewport check and AI classification on the
+    // sites this release path exists for.
+    delete img.dataset.pblockerObserved;
+    delete img.dataset.pblockerObservedSrc;
+    // pblockerHidden is deliberately left alone: something already blocked
+    // stays blocked if it comes back.
+  } catch (_) {}
+}
+
+function releaseObservedVideo(video) {
+  try {
+    if (mediaObserver) mediaObserver.unobserve(video);
+    delete video.dataset.pblockerObserved;
+  } catch (_) {}
+}
+
 function releaseObservedMedia(el) {
   try {
-    if (el.tagName === 'IMG') { imageObserver && imageObserver.unobserve(el); return; }
-    if (el.tagName === 'VIDEO') { mediaObserver && mediaObserver.unobserve(el); return; }
+    if (el.tagName === 'IMG') { releaseObservedImage(el); return; }
+    if (el.tagName === 'VIDEO') { releaseObservedVideo(el); return; }
     if (typeof el.querySelectorAll !== 'function') return;
-    if (imageObserver) {
-      el.querySelectorAll('img').forEach(node => {
-        try { imageObserver.unobserve(node); } catch (_) {}
-      });
-    }
-    if (mediaObserver) {
-      el.querySelectorAll('video').forEach(node => {
-        try { mediaObserver.unobserve(node); } catch (_) {}
-      });
-    }
+    el.querySelectorAll('img').forEach(releaseObservedImage);
+    el.querySelectorAll('video').forEach(releaseObservedVideo);
   } catch (_) {}
 }
 
