@@ -41,6 +41,28 @@
   // decisive moments are the ones worth guarding.
   var SCOPES = ['critical', 'all'];
 
+  // Tier: how much a given change actually gives away. The caller picks one;
+  // the scope above decides how many of them face the code.
+  //   'critical' — a master switch that unlocks everything at once.
+  //   'normal'   — a change that genuinely loosens protection: removing a
+  //     blocked word, trusting an image domain.
+  //   'tuning'   — a sensitivity dial: detection strictness and the image
+  //     filter level. These never face the code, under either scope. At its
+  //     loosest setting the layer is still on and still blocks clearly
+  //     explicit content, so the dial is not a way out — it's how someone
+  //     corrects a false positive of ours. Charging 64+ characters of typing
+  //     to undo our own mistake is exactly the friction that makes people
+  //     switch the whole feature off. Reported by users on the 'all' scope,
+  //     who met the full code every time they nudged image strictness down.
+  var TIERS = ['tuning', 'normal', 'critical'];
+
+  // Callers written before the tiers existed pass a boolean `isCritical`.
+  function normalizeTier(tier) {
+    if (tier === true) return 'critical';
+    if (typeof tier === 'string' && TIERS.indexOf(tier) >= 0) return tier;
+    return 'normal';
+  }
+
   function normalizeConfig(raw) {
     var config = raw && typeof raw === 'object' ? raw : {};
     var length = Number(config.length);
@@ -52,11 +74,14 @@
   }
 
   // Pure decision, kept separate from the modal so it can be tested directly.
-  function requiredFor(config, isCritical) {
+  // `tier` is one of TIERS (or the legacy `isCritical` boolean).
+  function requiredFor(config, tier) {
     var normalized = normalizeConfig(config);
     if (!normalized.enabled) return false;
+    var level = normalizeTier(tier);
+    if (level === 'tuning') return false;
     if (normalized.scope === 'all') return true;
-    return isCritical === true;
+    return level === 'critical';
   }
 
   // Rejection sampling so every character is equally likely — modulo would
@@ -118,6 +143,8 @@
     CHARS: CHARS,
     LENGTHS: LENGTHS,
     SCOPES: SCOPES,
+    TIERS: TIERS,
+    normalizeTier: normalizeTier,
     normalizeConfig: normalizeConfig,
     requiredFor: requiredFor,
     generate: generate,

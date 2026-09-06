@@ -158,32 +158,44 @@ test('the background guard and the shared helper agree on every host', () => {
 // that round trip for local pages using its own copy of the predicate, so that
 // copy needs the same coverage — including its no-shared-module fallback.
 
-function loadContentDnsCheckableHost({ withSharedModule }) {
-  const source = fs.readFileSync(path.join(__dirname, '..', 'content.js'), 'utf8');
-  const start = source.indexOf('function isDnsCheckableHost(');
-  assert.notEqual(start, -1, 'isDnsCheckableHost should exist in content.js');
+const CONTENT_SOURCE = fs.readFileSync(path.join(__dirname, '..', 'content.js'), 'utf8');
+
+function contentFunctionSource(name) {
+  const start = CONTENT_SOURCE.indexOf(`function ${name}(`);
+  assert.notEqual(start, -1, `${name} should exist in content.js`);
   let depth = 0;
-  let end = -1;
-  for (let index = source.indexOf('{', start); index < source.length; index++) {
-    if (source[index] === '{') depth++;
-    if (source[index] === '}') depth--;
-    if (depth === 0) { end = index + 1; break; }
+  for (let index = CONTENT_SOURCE.indexOf('{', start); index < CONTENT_SOURCE.length; index++) {
+    if (CONTENT_SOURCE[index] === '{') depth++;
+    if (CONTENT_SOURCE[index] === '}') depth--;
+    if (depth === 0) return CONTENT_SOURCE.slice(start, index + 1);
   }
+  throw new Error(`could not parse ${name}`);
+}
+
+function loadContentHostHelpers({ withSharedModule, hostname = 'page.example' }) {
   const sandbox = {
     normalizeHost: value => String(value || '').trim().toLowerCase().replace(/^www\./, ''),
     HostnameNormalize: withSharedModule ? require('../shared/hostname.js') : undefined,
+    window: { location: { hostname } },
     RegExp,
     String
   };
   vm.createContext(sandbox);
-  vm.runInContext(source.slice(start, end), sandbox, { filename: 'content.js' });
-  return sandbox.isDnsCheckableHost;
+  vm.runInContext(`
+    ${contentFunctionSource('hostIsLocal')}
+    ${contentFunctionSource('hostIsIpLiteral')}
+    ${contentFunctionSource('isDnsCheckableHost')}
+    let _localPageCache = null;
+    ${contentFunctionSource('isLocalPage')}
+  `, sandbox, { filename: 'content.js' });
+  return sandbox;
 }
 
 for (const withSharedModule of [true, false]) {
   const label = withSharedModule ? 'via the shared module' : 'via its fallback';
+
   test(`content.js skips the DNS round trip for a local page ${label}`, () => {
-    const isDnsCheckableHost = loadContentDnsCheckableHost({ withSharedModule });
+    const { isDnsCheckableHost } = loadContentHostHelpers({ withSharedModule });
     for (const host of [...LOCAL_HOSTS, ...PUBLIC_IPS]) {
       assert.equal(isDnsCheckableHost(host), false, `${host} must not be queried`);
     }
@@ -191,4 +203,73 @@ for (const withSharedModule of [true, false]) {
       assert.equal(isDnsCheckableHost(host), true, `${host} should be queried`);
     }
   });
+
+  test(`content.js recognizes a local host ${label}`, () => {
+    const { hostIsLocal } = loadContentHostHelpers({ withSharedModule });
+    for (const host of LOCAL_HOSTS) {
+      assert.equal(hostIsLocal(host), true, `${host} should be local`);
+    }
+    // A routable address is not local: it can serve anything, so the heuristic
+    // scans must still run there.
+    for (const host of [...PUBLIC_NAMES, ...PUBLIC_IPS]) {
+      assert.equal(hostIsLocal(host), false, `${host} should not be local`);
+    }
+  });
 }
+
+test('isLocalPage reads the page host and is memoized', () => {
+  const local = loadContentHostHelpers({ withSharedModule: true, hostname: 'localhost' });
+  assert.equal(local.isLocalPage(), true);
+  // Memoized: a second call must not re-read a host that cannot change without
+  // a navigation. Move the hostname and the answer should stand.
+  local.window.location.hostname = 'example.com';
+  assert.equal(local.isLocalPage(), true);
+
+  const remote = loadContentHostHelpers({ withSharedModule: true, hostname: 'example.com' });
+  assert.equal(remote.isLocalPage(), false);
+
+  const privateIp = loadContentHostHelpers({ withSharedModule: true, hostname: '192.168.1.10' });
+  assert.equal(privateIp.isLocalPage(), true);
+
+  // A public IP page is not local.
+  const publicIp = loadContentHostHelpers({ withSharedModule: true, hostname: '8.8.8.8' });
+  assert.equal(publicIp.isLocalPage(), false);
+});
+
+// The three heuristic scans infer what an unknown site is about from a few
+// keywords, which is meaningless on localhost. checkPageMetadata in particular
+// blocks on a *single* keyword in the title or meta tags, which is what put
+// every dev page on the blocked page. If one of these guards is ever removed,
+// that regression comes straight back, so each is asserted by name.
+for (const fn of ['checkPageMetadata', 'checkPageBodyText', 'checkPageTextWithModel']) {
+  test(`${fn} skips local pages`, () => {
+    assert.match(
+      contentFunctionSource(fn),
+      /if \(isLocalPage\(\)\) return false;/,
+      `${fn} must bail out on a local page`
+    );
+  });
+}
+
+// Explicitly NOT exempted, so a rule the user wrote themselves still applies on
+// localhost, and images are still judged on the picture rather than on a word.
+for (const fn of ['checkCustomTitlePatterns', 'shouldBlockImage']) {
+  test(`${fn} still runs on local pages`, () => {
+    assert.doesNotMatch(
+      contentFunctionSource(fn),
+      /isLocalPage\(\)/,
+      `${fn} should not have been exempted`
+    );
+  });
+}
+
+test('the metadata block names the keyword that fired', () => {
+  // It used to pass no detail at all, so the blocked page could only say "its
+  // title or metadata matched" — undiagnosable, and the reason this bug took a
+  // second round to find.
+  assert.match(
+    contentFunctionSource('checkPageMetadata'),
+    /redirectToBlockedPage\('metadata_scan', \{ matched:/,
+    'metadata_scan must report its matched keywords like page_text_scan does'
+  );
+});

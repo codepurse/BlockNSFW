@@ -615,8 +615,17 @@ function normalizeAccessCodeConfig(raw) {
   return AccessCode.normalizeConfig(raw);
 }
 
-function accessCodeRequiredFor(config, isCritical) {
-  return AccessCode.requiredFor(config, isCritical);
+function accessCodeRequiredFor(config, tier) {
+  return AccessCode.requiredFor(config, tier);
+}
+
+// Gate callers pass `{ critical: true }` for a master switch or
+// `{ tier: 'tuning' }` for a sensitivity dial; plain calls are 'normal'.
+// See TIERS in shared/access-code.js.
+function accessCodeTier(opts) {
+  if (!opts) return 'normal';
+  if (opts.tier) return opts.tier;
+  return opts.critical === true ? 'critical' : 'normal';
 }
 
 function generateAccessCode(length) {
@@ -689,10 +698,11 @@ async function showAccessCodeModal(actionLabel = 'this action') {
 }
 
 // Runs after the PIN check, so the two layers stack rather than replace.
-// `critical` marks the master switches — see SCOPES in shared/access-code.js.
-async function requireAccessCodeIfEnabled(actionLabel = 'this action', critical = false) {
+// `tier` says how much the action gives away — see TIERS in
+// shared/access-code.js.
+async function requireAccessCodeIfEnabled(actionLabel = 'this action', tier = 'normal') {
   const config = await getAccessCodeConfig();
-  if (!accessCodeRequiredFor(config, critical)) return true;
+  if (!accessCodeRequiredFor(config, tier)) return true;
   return await showAccessCodeModal(actionLabel);
 }
 
@@ -701,18 +711,19 @@ async function requirePIN(actionLabel = 'this action', opts) {
   if (!hasPin) return false;
   const verified = await showVerifyPINModal(actionLabel);
   if (verified !== true) return false;
-  return await requireAccessCodeIfEnabled(actionLabel, !!(opts && opts.critical));
+  return await requireAccessCodeIfEnabled(actionLabel, accessCodeTier(opts));
 }
 
 // Only require PIN if one is already set (doesn't prompt to create one).
-// The access code stands on its own, so it still applies when no PIN is set.
+// The access code stands on its own, so it still applies when no PIN is set —
+// unless the change is 'tuning', which never faces it.
 async function requirePINIfSet(actionLabel = 'this action', opts) {
   const stored = await getPIN();
   if (stored) {
     const verified = await showVerifyPINModal(actionLabel);
     if (verified !== true) return false;
   }
-  return await requireAccessCodeIfEnabled(actionLabel, !!(opts && opts.critical));
+  return await requireAccessCodeIfEnabled(actionLabel, accessCodeTier(opts));
 }
 
 // Streak tracking
@@ -2164,9 +2175,11 @@ async function init() {
     imageFilterLevelEl.addEventListener('change', async (e) => {
       const settings = await getSettings();
       const nextLevel = normalizeImageFilterLevel(e.target.value);
-      // Raising the level is free; lowering it loosens protection.
+      // Raising the level is free; lowering it loosens protection. It's a
+      // sensitivity dial, not a way out, so the PIN guards it but the access
+      // code never does — see TIERS in shared/access-code.js.
       if (weakensImageFilter(settings.imageFilterLevel, nextLevel)) {
-        const ok = await requirePINIfSet('lower image filtering');
+        const ok = await requirePINIfSet('lower image filtering', { tier: 'tuning' });
         if (!ok) {
           e.target.value = normalizeImageFilterLevel(settings.imageFilterLevel);
           return;
@@ -2187,8 +2200,10 @@ async function init() {
     aiStrictnessEl.addEventListener('change', async (e) => {
       const settings = await getSettings();
       const nextStrictness = normalizeAiStrictness(e.target.value);
+      // A dial, not a switch: at Relaxed the blocker is still on and still
+      // catches clearly explicit images, so this is 'tuning' (no access code).
       if (weakensAiStrictness(settings.aiStrictness, nextStrictness)) {
-        const ok = await requirePINIfSet('lower AI image strictness');
+        const ok = await requirePINIfSet('lower AI image strictness', { tier: 'tuning' });
         if (!ok) {
           e.target.value = normalizeAiStrictness(settings.aiStrictness);
           return;
@@ -2212,7 +2227,7 @@ async function init() {
       const settings = await getSettings();
       const nextStrictness = normalizeAiStrictness(e.target.value);
       if (weakensAiStrictness(settings.aiTextStrictness, nextStrictness)) {
-        const ok = await requirePINIfSet('lower AI text strictness');
+        const ok = await requirePINIfSet('lower AI text strictness', { tier: 'tuning' });
         if (!ok) {
           e.target.value = normalizeAiStrictness(settings.aiTextStrictness);
           return;
@@ -2923,22 +2938,23 @@ async function init() {
     // PIN. Anything that loosens protection is gated — mirroring the popup's
     // append-only "Block" button (#11). One prompt covers the whole save; the
     // label names the first weakening change found so the reason is clear.
-    let weakenLabel = '';
-    if (hasRemovals(settings.customPatterns, nextCustomPatterns)) {
-      weakenLabel = 'remove from custom blocklist';
-    } else if (hasRemovals(settings.customKeywordList, nextKeywords)) {
-      weakenLabel = 'remove custom blocked words';
-    } else if (hasAdditions(settings.trustedImageDomains, nextTrusted)) {
-      weakenLabel = 'add a trusted image domain';
-    } else if (weakensImageFilter(settings.imageFilterLevel, nextImageFilterLevel)) {
-      weakenLabel = 'lower image filtering';
-    } else if (weakensAiStrictness(settings.aiStrictness, nextAiStrictness)) {
-      weakenLabel = 'lower AI image strictness';
-    } else if (weakensAiStrictness(settings.aiTextStrictness, nextAiTextStrictness)) {
-      weakenLabel = 'lower AI text strictness';
-    }
-    if (weakenLabel) {
-      const ok = await requirePINIfSet(weakenLabel);
+    //
+    // The tier decides whether the access code joins the PIN: the sensitivity
+    // dials are 'tuning' and never face it. A save that mixes a dial with a
+    // real loosening takes the stronger of the two, so listing order here
+    // can't quietly downgrade the gate.
+    const weakenings = [
+      [hasRemovals(settings.customPatterns, nextCustomPatterns), 'remove from custom blocklist', 'normal'],
+      [hasRemovals(settings.customKeywordList, nextKeywords), 'remove custom blocked words', 'normal'],
+      [hasAdditions(settings.trustedImageDomains, nextTrusted), 'add a trusted image domain', 'normal'],
+      [weakensImageFilter(settings.imageFilterLevel, nextImageFilterLevel), 'lower image filtering', 'tuning'],
+      [weakensAiStrictness(settings.aiStrictness, nextAiStrictness), 'lower AI image strictness', 'tuning'],
+      [weakensAiStrictness(settings.aiTextStrictness, nextAiTextStrictness), 'lower AI text strictness', 'tuning']
+    ].filter(([applies]) => applies);
+
+    if (weakenings.length) {
+      const tier = weakenings.some(([, , t]) => t === 'normal') ? 'normal' : 'tuning';
+      const ok = await requirePINIfSet(weakenings[0][1], { tier });
       if (!ok) return;
     }
 
