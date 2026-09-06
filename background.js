@@ -357,11 +357,15 @@ async function closeOffscreenDocument() {
   clearTimeout(_offscreenIdleTimer);
   _offscreenIdleTimer = null;
   if (!offscreenAvailable() || typeof chrome.offscreen.closeDocument !== 'function') return;
+  // Deliberately does NOT gate on hasOffscreenDocument(): that reads
+  // chrome.runtime.getContexts, which is Chrome 116+, so on 109-115 it always
+  // reports false and the document would never be released — the exact leak
+  // this function exists to close. Just close it and treat "there wasn't one"
+  // as success; a cosmetic teardown must never break classification.
   try {
-    if (await hasOffscreenDocument()) await chrome.offscreen.closeDocument();
+    await chrome.offscreen.closeDocument();
   } catch (_) {
-    // Already gone, or closed by a concurrent call. Either way there is nothing
-    // to release, and a cosmetic teardown must never break classification.
+    // No document, or a concurrent close won. Nothing to release either way.
   }
   _offscreenCreating = null;
 }

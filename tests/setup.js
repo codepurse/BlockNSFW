@@ -82,7 +82,12 @@ function makeChromeStub() {
 // `sourcePath` lets a caller load a background.js from somewhere other than the
 // working tree — a git worktree at an older commit, say — so two revisions can
 // be driven through the identical stub and compared. Defaults to this tree.
-function loadBackgroundContext(sourcePath = SOURCE_PATH) {
+// `customize` runs against the sandbox after the shared modules load but BEFORE
+// background.js executes, so a test can shape the environment the module sees at
+// evaluation time — whether importScripts exists, whether chrome.offscreen is
+// present. Those decide branches that run once, at load, and cannot be reached
+// afterwards.
+function loadBackgroundContext(sourcePath = SOURCE_PATH, customize) {
   const source = fs.readFileSync(sourcePath, 'utf8');
   const sharedBrowserKeySource = fs.readFileSync(SHARED_BROWSER_KEY_PATH, 'utf8');
   const sharedHostnameSource = fs.readFileSync(SHARED_HOSTNAME_PATH, 'utf8');
@@ -132,6 +137,7 @@ function loadBackgroundContext(sourcePath = SOURCE_PATH) {
       }
     }
   }
+  if (typeof customize === 'function') customize(sandbox);
   try {
     vm.runInContext(source, sandbox, { filename: 'background.js' });
   } catch (err) {
