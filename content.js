@@ -465,6 +465,16 @@ const ADULT_CONTEXT_KEYWORDS = [
   'porn', 'porno', 'pornography', 'xxx', 'nsfw', 'fetish', 'erotic'
 ];
 
+// Compiled once. Both analyzeTextForAdultContent and containsAdultKeywords built
+// `new RegExp('\\b' + keyword + '\\b', 'gi')` per keyword per call, and the page
+// scan calls them once per line for up to 48 lines — ~336 compilations from
+// constant strings per scan. These are /g and therefore stateful, so every use
+// resets lastIndex.
+const ADULT_CONTEXT_PATTERNS = ADULT_CONTEXT_KEYWORDS.map(keyword => ({
+  keyword,
+  regex: new RegExp(`\\b${keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'gi')
+}));
+
 // Multilingual STRONG adult-signal keywords. Substring match (no word boundary)
 // because CJK / Thai / Arabic / Devanagari scripts have no whitespace tokenization
 // and JS `\b` is ASCII-only.
@@ -2470,11 +2480,11 @@ function analyzeTextForAdultContent(text) {
     }
   };
 
-  const processWordBoundaryMatches = keyword => {
+  const processWordBoundaryMatches = ({ keyword, regex }) => {
     if (!keyword) return;
-    const pattern = new RegExp(`\\b${keyword}\\b`, 'gi');
+    regex.lastIndex = 0; // shared /g regex: state must not leak between calls
     let match;
-    while ((match = pattern.exec(lowerText)) !== null) {
+    while ((match = regex.exec(lowerText)) !== null) {
       totalMatches++;
       matchedKeywords.add(keyword);
       evaluateContextWindow(match.index, keyword.length, { assumeRiskWhenNeutral: false });
@@ -2482,7 +2492,7 @@ function analyzeTextForAdultContent(text) {
   };
 
   ADULT_CONTENT_KEYWORDS.forEach(keyword => processLiteralMatches(keyword, { assumeRiskWhenNeutral: true }));
-  ADULT_CONTEXT_KEYWORDS.forEach(keyword => processWordBoundaryMatches(keyword));
+  ADULT_CONTEXT_PATTERNS.forEach(processWordBoundaryMatches);
 
   if (totalMatches === 0) {
     return { isAdult: false, riskMatches, safeMatches, totalMatches, matchedKeywords: [] };
@@ -2579,23 +2589,23 @@ function containsAdultKeywords(text, opts) {
     }
   };
 
-  const processWordBoundaryMatches = (keyword) => {
+  const processWordBoundaryMatches = ({ keyword, regex }) => {
     if (!keyword) return;
 
     if (benignDetected && AMBIGUOUS_PATH_KEYWORDS.test(keyword)) {
       return;
     }
 
-    const pattern = new RegExp(`\\b${keyword}\\b`, 'gi');
+    regex.lastIndex = 0; // shared /g regex: state must not leak between calls
     let match;
-    while ((match = pattern.exec(lowerText)) !== null) {
+    while ((match = regex.exec(lowerText)) !== null) {
       totalMatches++;
       evaluateContextWindow(match.index, keyword.length, { assumeRiskWhenNeutral: false });
     }
   };
 
   ADULT_CONTENT_KEYWORDS.forEach(keyword => processLiteralMatches(keyword, { assumeRiskWhenNeutral: true }));
-  ADULT_CONTEXT_KEYWORDS.forEach(keyword => processWordBoundaryMatches(keyword));
+  ADULT_CONTEXT_PATTERNS.forEach(processWordBoundaryMatches);
 
   if (totalMatches === 0) {
     return false;
@@ -5313,18 +5323,18 @@ function setupEventListeners() {
     }
   });
   
-  // Process content when DOM is ready
+  // Process content once the DOM exists. init() has already made a first pass
+  // and already called setupMutationObserver(), so neither is repeated here:
+  // the observer used to be rebuilt at +500ms, which disconnected the live one
+  // and dropped every mutation in the gap, and processContent — which walks
+  // every image and reads the page text — used to run two or three times per
+  // load for no added coverage.
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', () => {
       setTimeout(processContent, 100);
-    });
-  } else {
-    setTimeout(processContent, 100);
+    }, { once: true });
   }
-  
-  // Handle dynamic content changes
-  setTimeout(setupMutationObserver, 500);
-  
+
   // A generator meta tag may not have parsed when getSocialSite() was first
   // asked, so give the memo exactly one chance to see a completed head.
   if (document.readyState === 'loading') {
