@@ -144,6 +144,26 @@ All notable project changes should be documented here going forward.
   the other side. The step is skippable.
 
 ### Fixed
+- **The AI text classifier could switch itself on.** It is an opt-in beta and
+  documented as off by default, but a settings check read a missing value as
+  "enabled". Where that happened it downloaded and parsed a 228 KB model on
+  every page and scored the page's text — for a verdict the current model is
+  not trusted to act on alone, so the work was discarded.
+- **Embedded frames were re-examined on every pass.** A frame that had already
+  been checked and cleared was never marked as such, so each sweep of the page
+  re-parsed its address, re-ran three separate matchers over it, re-scanned any
+  inline content and asked the background process about it again. A frame that
+  is later pointed at a different address is still re-checked.
+- **Images and videos are released when a page discards them.** Feeds that
+  recycle rows as you scroll — X, Reddit, Instagram — left every picture the
+  tab had ever shown held in memory for the life of the tab, which is why the
+  browser felt slower the longer a session ran. A recycled row that comes back
+  is checked again rather than being skipped.
+- **A page that changed only in the middle could escape the text scan.** The
+  scan skips pages whose text it has already judged, and it recognised them by
+  their first line, last line and line count — which a single-page app swapping
+  its content under a fixed header and footer leaves untouched. It now
+  recognises the whole text.
 - **Changing detection strictness demanded the full access code.** With the
   access code on and "Ask for the code on every settings change" enabled,
   nudging image detection strictness down by one step made you retype 32-256
@@ -264,6 +284,40 @@ All notable project changes should be documented here going forward.
   paste, which is the one thing this feature must not allow.
 
 ### Changed
+- **The extension no longer slows the browser down while it works.** Users
+  reported Firefox feeling janky and, on busier pages, the whole machine
+  lagging. The cause was not one hot loop but four costs that multiplied each
+  other, all of them now gone:
+  - Blocking an image used to cost about thirteen storage operations, and on
+    Firefox each one is a disk transaction against the same disk the page is
+    loading from. A page that blocked 150 images issued roughly 1,950 of them;
+    it now issues six, and that number no longer grows with how much the page
+    blocks.
+  - Every time the browser woke the extension's background process — which
+    happens after any idle pause — it re-saved its settings, and that told
+    every open tab to re-scan its page from scratch. One wake used to cost a
+    full re-scan in every tab you had open. It now costs nothing.
+  - The image scan measured each picture's position on the page while it was
+    hiding others, forcing the browser to recalculate the whole page layout
+    once per image. On an image grid that meant hundreds of recalculations in a
+    row, repeated on every pass.
+  - The page-text scan re-read the entire rendered page — another full layout
+    recalculation — as often as ten times a second on any site with a live
+    feed, a chat widget or a rotating ad.
+
+  Measured on a dynamic-feed benchmark in Firefox: median frame rate 27 to 34
+  frames per second, average frame time down 22%, and the worst frame of a run
+  down 41%, with the same number of elements blocked before and after.
+- **The blocklist is no longer rebuilt every time the background wakes.** A
+  fresh install now files the bundled list where later wake-ups can read it
+  cheaply, instead of re-reading and re-parsing all four megabytes each time.
+- **Chrome no longer loads the image-classifier runtime unless it is used.**
+  Chrome 109 and newer classify in a separate document that has its own copy,
+  so the 4.3 MB library was being pulled into the background process on every
+  start for a feature that is off by default. Older Chrome versions keep the
+  fallback and lose nothing. The classifier's document is also released after
+  five idle minutes, and immediately when the AI image blocker is switched off,
+  rather than being held for the rest of the browser session.
 - **Whitelisting a whole site is now a critical action.** It unlocks every page
   on the domain, which is as total as switching blocking off, so it faces the
   access code in the default `critical` scope rather than only under "ask on

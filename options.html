@@ -2138,14 +2138,18 @@
         </p>
         <div class="card-description">
           <ul style="margin: 0; padding-left: 1.1rem">
+            <li><strong>The extension no longer slows your browser down</strong> &mdash; Blocking an image used to cost about thirteen writes to disk; a page blocking 150 images made roughly 1,950 of them, and now makes six. Waking the extension no longer forces every open tab to re-scan its page, and the image and text scans no longer make the browser recalculate the whole page layout over and over. Reported by several of you.</li>
+            <li><strong>Long sessions stay fast</strong> &mdash; Feeds that recycle rows as you scroll left every picture the tab had ever shown held in memory, which is why things got slower the longer you browsed. They are released now.</li>
             <li><strong>The access code now guards “unblock this site”</strong> &mdash; Unblocking a whole site from the toolbar popup asked only for the PIN, skipping the access code this page requires. The popup asks for it now too. Reported by Pattrattbarr.</li>
             <li><strong>Choose your DNS resolver <span class="badge-new">New</span></strong> &mdash; Four free resolvers instead of just Cloudflare, picked under <em>Protection &rarr; DNS Protection</em>. Queries never pass through our servers.</li>
             <li><strong>Or bring your own resolver <span class="badge-new">New</span></strong> &mdash; <em>Custom</em> accepts any DNS-over-HTTPS endpoint: your NextDNS config, a Control D profile, or one you run yourself.</li>
             <li><strong>Block a whole top-level domain <span class="badge-new">New</span></strong> &mdash; A line reading <code class="code">.xyz</code> blocks every site ending in it. Suggested by Maksim.</li>
           </ul>
           <details class="wn-details">
-            <summary aria-label="Show the rest of this release&rsquo;s changes"><span class="wn-toggle-closed">Show 6 more &#9662;</span><span class="wn-toggle-open">Show less &#9652;</span></summary>
+            <summary aria-label="Show the rest of this release&rsquo;s changes"><span class="wn-toggle-closed">Show 8 more &#9662;</span><span class="wn-toggle-open">Show less &#9652;</span></summary>
             <ul style="margin: 0; padding-left: 1.1rem">
+              <li><strong>A page that changed only in the middle could escape the text scan</strong> &mdash; The scan recognised pages it had already judged by their first and last lines, which a site swapping content under a fixed header and footer leaves untouched. It reads the whole page now.</li>
+              <li><strong>The AI text classifier could switch itself on</strong> &mdash; It is an opt-in beta, but a missing setting read as “enabled”, downloading and scoring a model on every page for a result that was then discarded.</li>
               <li><strong>Setup covers blocking beyond this browser <span class="badge-new">New</span></strong> &mdash; First-run setup now hands you copyable addresses for device-level resolvers, covering every app rather than one browser.</li>
               <li><strong>Notes are dimmed in your lists <span class="badge-new">New</span></strong> &mdash; A line starting with <code class="code">#</code> or <code class="code">!</code> reads in grey, so a list with section headings can be scanned at a glance. Suggested by Maksim.</li>
               <li><strong>Sorting no longer strands your notes</strong> &mdash; A <code class="code">/pattern/</code> entry is filed under its first letter now, not its opening slash, so it stops jumping above everything on save. Reported by Maksim.</li>

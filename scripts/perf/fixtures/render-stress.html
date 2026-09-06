@@ -4,7 +4,14 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="generator" content="Mastodon benchmark fixture">
-  <title>BlockNSFW Firefox rendering benchmark</title>
+  <!--
+    Deliberately does NOT name the extension. checkPageMetadata scans the title
+    for adult keywords, and the product name contains one, so a title of
+    "BlockNSFW ... benchmark" makes the extension redirect its own benchmark to
+    the blocked page. That only shows up now that the fixture is served from a
+    non-local host, because isLocalPage() used to disable the metadata scan.
+  -->
+  <title>Deterministic feed rendering workload</title>
   <style>
     * { box-sizing: border-box; }
     html { background: #f4f5f7; color: #20242b; font: 14px/1.4 system-ui, sans-serif; }
@@ -50,10 +57,27 @@
       const feed = document.getElementById('feed');
       let sequence = 0;
 
+      // Share of cards carrying content the extension is supposed to block.
+      // Without any, nothing reaches hideElement, notifyBackground, the
+      // placeholder insert, or the background's per-block storage path — which
+      // is most of the extension's real cost. 0 reproduces the old fixture.
+      const params = new URLSearchParams(location.search);
+      const blockableEvery = Number(params.get('blockableEvery') || 8);
+      const cdnHost = params.get('cdn') || '';
+
+      // The page host is a plain remote name (see BENCH_HOST in the harness),
+      // so a "nsfw" path segment trips HIGH_CONFIDENCE_PATH_KEYWORDS in
+      // shouldBlockImageQuickly. That exercises the block path without putting
+      // any real adult domain in the repository.
+      function isBlockable(index) {
+        return blockableEvery > 0 && index % blockableEvery === 0;
+      }
+
       function makeCard(index) {
         const card = document.createElement('article');
         card.className = 'card status';
         card.dataset.index = String(index);
+        const blockable = isBlockable(index);
         const title = document.createElement('strong');
         title.textContent = `Feed item ${index}`;
         const copy = document.createElement('span');
@@ -63,7 +87,15 @@
         link.textContent = `Reference ${index % 64}`;
         const image = document.createElement('img');
         image.alt = 'Benign benchmark thumbnail';
-        image.src = 'data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=';
+        if (blockable && cdnHost) {
+          // Third-party origin on purpose: isKnownSafeImageHost() allows any
+          // image served from the page's own host, so a same-origin URL can
+          // never be blocked however explicit its path. The harness maps this
+          // name to loopback and answers any *.jpg with a 1x1 GIF.
+          image.src = `http://${cdnHost}:${location.port}/media/nsfw/thumb-${index}.jpg`;
+        } else {
+          image.src = 'data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=';
+        }
         card.append(title, copy, link, image);
         return card;
       }
@@ -154,7 +186,15 @@
           mutationMeanMs: sortedMutations.length ? sum(sortedMutations) / sortedMutations.length : 0,
           mutationP95Ms: percentile(sortedMutations, .95),
           mutationMaxMs: sortedMutations.at(-1) || 0,
-          finalCards: feed.childElementCount
+          finalCards: feed.childElementCount,
+          // Extension-side effects, readable from the page because the content
+          // script marks the shared DOM. `blockedElements` is the guard that
+          // matters: if it is 0 in the "on" variant, the run measured an
+          // extension that never blocked anything, and every metric above is
+          // blind to the block path regardless of how good it looks.
+          blockedElements: document.querySelectorAll('[data-pblocker-hidden="true"]').length,
+          blockedPlaceholders: document.querySelectorAll('.pblocker-image-placeholder, [id^="pblocker-"]').length,
+          observedImages: document.querySelectorAll('img[data-pblocker-observed="true"]').length
         };
       };
     })();

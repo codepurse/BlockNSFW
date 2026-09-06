@@ -465,6 +465,16 @@ const ADULT_CONTEXT_KEYWORDS = [
   'porn', 'porno', 'pornography', 'xxx', 'nsfw', 'fetish', 'erotic'
 ];
 
+// Compiled once. Both analyzeTextForAdultContent and containsAdultKeywords built
+// `new RegExp('\\b' + keyword + '\\b', 'gi')` per keyword per call, and the page
+// scan calls them once per line for up to 48 lines — ~336 compilations from
+// constant strings per scan. These are /g and therefore stateful, so every use
+// resets lastIndex.
+const ADULT_CONTEXT_PATTERNS = ADULT_CONTEXT_KEYWORDS.map(keyword => ({
+  keyword,
+  regex: new RegExp(`\\b${keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'gi')
+}));
+
 // Multilingual STRONG adult-signal keywords. Substring match (no word boundary)
 // because CJK / Thai / Arabic / Devanagari scripts have no whitespace tokenization
 // and JS `\b` is ASCII-only.
@@ -1642,7 +1652,13 @@ async function loadSettings() {
     debugMode = settings.debugMode === true;
     facebookReelsEnabled = settings.facebookReelsEnabled === true;
     instagramReelsEnabled = settings.instagramReelsEnabled === true;
-    aiTextBlocker = settings.aiTextBlocker !== false;
+    // `=== true`, matching every other opt-in beta flag above and
+    // DEFAULT_SETTINGS.aiTextBlocker === false. It was `!== false`, so an absent
+    // key read as ON — and when on it fetches and parses a 228 KB model per page
+    // and scores character n-grams over 8000 chars per scan, for a verdict the
+    // v3 safety catch below then discards unless the AI *image* blocker (also
+    // off by default) flagged something on the same page.
+    aiTextBlocker = settings.aiTextBlocker === true;
     aiTextStrictness = settings.aiTextStrictness || 'balanced';
     anyTextFeatureOn = !!(useSmartBlocking || aiTextBlocker);
 
@@ -1973,7 +1989,37 @@ async function warmCurrentPageBlocklistHost() {
 }
 
 // Check if current page hostname is whitelisted (respects temporary expirations + remote global whitelist)
+// processContent() runs from init, a timer, DOMContentLoaded, popstate, form
+// submit, three storage.onChanged branches and the debounced path — and each
+// one paid a fresh two-key storage read to answer a question that only changes
+// when the whitelist does. Cached per URL; invalidated by the whitelist
+// listener in setupEventListeners and by any temporary-disable change.
+//
+// A time-limited entry is deliberately not cached past its own expiry.
+let _whitelistCache = null; // { href, value, expiresAt }
+
+function resetWhitelistCache() {
+  _whitelistCache = null;
+}
+
 async function isCurrentPageWhitelisted() {
+  const href = window.location.href;
+  const cached = _whitelistCache;
+  if (cached && cached.href === href && (!cached.expiresAt || Date.now() < cached.expiresAt)) {
+    return cached.value;
+  }
+  const value = await computeCurrentPageWhitelisted();
+  _whitelistCache = { href, value, expiresAt: _whitelistNearestExpiry };
+  return value;
+}
+
+// Set by computeCurrentPageWhitelisted: the soonest expiry among the entries
+// that matched this host, so a temporary allowance stops being cached when it
+// stops being true.
+let _whitelistNearestExpiry = 0;
+
+async function computeCurrentPageWhitelisted() {
+  _whitelistNearestExpiry = 0;
   try {
     const result = await browserAPI.storage.local.get(['pblocker_whitelist', 'pblocker_remote_whitelist_v1']);
     const list = result.pblocker_whitelist || [];
@@ -1988,7 +2034,15 @@ async function isCurrentPageWhitelisted() {
       const valid = item.type === 'permanent' || (item.expiresAt && item.expiresAt > now);
       if (!valid) return false;
       const hostOk = hostname === domain || hostname.endsWith('.' + domain);
-      return hostOk && pathMatches(pathname, item.path);
+      const match = hostOk && pathMatches(pathname, item.path);
+      // Remember the soonest expiry that mattered, so a temporary allowance is
+      // never cached beyond the moment it lapses.
+      if (match && item.type !== 'permanent' && item.expiresAt) {
+        _whitelistNearestExpiry = _whitelistNearestExpiry
+          ? Math.min(_whitelistNearestExpiry, item.expiresAt)
+          : item.expiresAt;
+      }
+      return match;
     });
     if (userWhitelisted) return true;
     const remoteWL = result.pblocker_remote_whitelist_v1 || [];
@@ -2101,6 +2155,38 @@ function getPageTextLinesForScan() {
     .slice(0, PAGE_TEXT_SCAN_MAX_LINES);
 }
 
+// Last text slice this page was judged on, so an unchanged page is not
+// re-scanned. Reset on SPA navigation alongside the other per-page caches.
+let lastPageTextSignature = '';
+
+/**
+ * Identify a slice of page text cheaply enough to run before every scan.
+ *
+ * Deliberately hashes ALL the lines, not just the count and the two ends. A
+ * page that keeps a stable header and footer inside the scanned window while
+ * its middle changes — an SPA swapping routes under fixed chrome — produces an
+ * identical first line, last line and line count. Keying on those alone would
+ * skip the scan for exactly that page, and a skipped scan here is a page that
+ * does not get blocked. A false negative in a blocker is worse than the work it
+ * saves, and hashing a few thousand characters is far cheaper than the 48 lines
+ * x 166 substring searches it guards.
+ */
+function pageTextSignature(lines) {
+  let hash = 0x811c9dc5; // FNV-1a offset basis
+  let length = 0;
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    length += line.length;
+    for (let j = 0; j < line.length; j++) {
+      hash ^= line.charCodeAt(j);
+      hash = Math.imul(hash, 0x01000193);
+    }
+    hash ^= 10; // line separator, so re-splitting the same text differs
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return `${lines.length}:${length}:${(hash >>> 0).toString(36)}`;
+}
+
 function checkPageBodyText() {
   if (blockedTriggered) return false;
   if (getSearchEngine()) return false;
@@ -2110,6 +2196,13 @@ function checkPageBodyText() {
 
   const lines = getPageTextLinesForScan();
   if (lines.length === 0) return false;
+
+  // A feed that appends below the fold does not change the first 48 lines, so
+  // re-analysing an identical slice is pure waste — 48 lines x 166 multilingual
+  // substring scans x 7 compiled regexes, for a verdict already reached.
+  const signature = pageTextSignature(lines);
+  if (signature === lastPageTextSignature) return false;
+  lastPageTextSignature = signature;
 
   let matchedLines = 0;
   const matchedKeywords = new Set();
@@ -2415,11 +2508,11 @@ function analyzeTextForAdultContent(text) {
     }
   };
 
-  const processWordBoundaryMatches = keyword => {
+  const processWordBoundaryMatches = ({ keyword, regex }) => {
     if (!keyword) return;
-    const pattern = new RegExp(`\\b${keyword}\\b`, 'gi');
+    regex.lastIndex = 0; // shared /g regex: state must not leak between calls
     let match;
-    while ((match = pattern.exec(lowerText)) !== null) {
+    while ((match = regex.exec(lowerText)) !== null) {
       totalMatches++;
       matchedKeywords.add(keyword);
       evaluateContextWindow(match.index, keyword.length, { assumeRiskWhenNeutral: false });
@@ -2427,7 +2520,7 @@ function analyzeTextForAdultContent(text) {
   };
 
   ADULT_CONTENT_KEYWORDS.forEach(keyword => processLiteralMatches(keyword, { assumeRiskWhenNeutral: true }));
-  ADULT_CONTEXT_KEYWORDS.forEach(keyword => processWordBoundaryMatches(keyword));
+  ADULT_CONTEXT_PATTERNS.forEach(processWordBoundaryMatches);
 
   if (totalMatches === 0) {
     return { isAdult: false, riskMatches, safeMatches, totalMatches, matchedKeywords: [] };
@@ -2524,23 +2617,23 @@ function containsAdultKeywords(text, opts) {
     }
   };
 
-  const processWordBoundaryMatches = (keyword) => {
+  const processWordBoundaryMatches = ({ keyword, regex }) => {
     if (!keyword) return;
 
     if (benignDetected && AMBIGUOUS_PATH_KEYWORDS.test(keyword)) {
       return;
     }
 
-    const pattern = new RegExp(`\\b${keyword}\\b`, 'gi');
+    regex.lastIndex = 0; // shared /g regex: state must not leak between calls
     let match;
-    while ((match = pattern.exec(lowerText)) !== null) {
+    while ((match = regex.exec(lowerText)) !== null) {
       totalMatches++;
       evaluateContextWindow(match.index, keyword.length, { assumeRiskWhenNeutral: false });
     }
   };
 
   ADULT_CONTENT_KEYWORDS.forEach(keyword => processLiteralMatches(keyword, { assumeRiskWhenNeutral: true }));
-  ADULT_CONTEXT_KEYWORDS.forEach(keyword => processWordBoundaryMatches(keyword));
+  ADULT_CONTEXT_PATTERNS.forEach(processWordBoundaryMatches);
 
   if (totalMatches === 0) {
     return false;
@@ -2664,7 +2757,24 @@ async function shouldBlockElement(element, backgroundBlockedLink, opts) {
 }
 
 // Search engine specific filtering
+// Memoised on the full href, so any navigation — including a pushState that
+// only changes the query — recomputes. The uncached version allocated a
+// URLSearchParams and two lowercased strings on every call, and it is called
+// once per MutationObserver batch and once per search-result container: on a
+// results page with ~100 containers that is ~100 query-string parses per pass,
+// all answering a question that is fixed for the URL.
+let _searchEngineHref = null;
+let _searchEngineValue = null;
+
 function getSearchEngine() {
+  const href = window.location.href;
+  if (href === _searchEngineHref) return _searchEngineValue;
+  _searchEngineHref = href;
+  _searchEngineValue = computeSearchEngine();
+  return _searchEngineValue;
+}
+
+function computeSearchEngine() {
   const hostname = window.location.hostname.toLowerCase();
   const pathname = window.location.pathname.toLowerCase();
   const params = new URLSearchParams(window.location.search);
@@ -2746,7 +2856,28 @@ function isLikelyImageSearchResultImage(img) {
 }
 
 // Social site detection
+// Memoised for the document. The uncached version fell through to two
+// document-wide querySelector calls (meta[name="generator"] and
+// meta[property="og:site_name"]) on every host that is not Reddit, Twitter/X or
+// Mastodon — i.e. on essentially every page — and it runs once per
+// MutationObserver batch. In Firefox those queries also cross the content
+// script's Xray wrapper, which is not free.
+//
+// Reset once at DOMContentLoaded so a generator meta tag that had not parsed
+// yet is still seen; the hostname half cannot change without a navigation.
+let _socialSiteCache;
+
 function getSocialSite() {
+  if (_socialSiteCache !== undefined) return _socialSiteCache;
+  _socialSiteCache = computeSocialSite();
+  return _socialSiteCache;
+}
+
+function resetSocialSiteCache() {
+  _socialSiteCache = undefined;
+}
+
+function computeSocialSite() {
   try {
     const host = window.location.hostname.toLowerCase();
     // Reddit
@@ -4345,35 +4476,14 @@ function maybeBlockImage(img) {
 }
 
 const IMAGE_OBSERVER_ROOT_MARGIN_PX = 1400;
-const IMAGE_EARLY_ANALYSIS_MARGIN_PX = 900;
 
-function isImageNearViewport(img, marginPx = IMAGE_EARLY_ANALYSIS_MARGIN_PX) {
-  try {
-    if (!img || typeof img.getBoundingClientRect !== 'function') return false;
-    const rect = img.getBoundingClientRect();
-    const viewportHeight = window.innerHeight || document.documentElement.clientHeight || 0;
-    const viewportWidth = window.innerWidth || document.documentElement.clientWidth || 0;
-    if (viewportHeight <= 0 || viewportWidth <= 0) return false;
-    if (rect.bottom < -marginPx) return false;
-    if (rect.top > viewportHeight + marginPx) return false;
-    if (rect.right < 0 || rect.left > viewportWidth) return false;
-    return true;
-  } catch (_) {
-    return false;
-  }
-}
-
-function prewarmImageAnalysis(img) {
-  if (!isEnabled || !isImageNearViewport(img)) return false;
-  maybeBlockImage(img);
-  if (img.dataset.pblockerHidden === 'true') return true;
-  if (typeof window.AIImageBlocker !== 'undefined' &&
-      window.AIImageBlocker &&
-      typeof window.AIImageBlocker.onImageVisible === 'function') {
-    window.AIImageBlocker.onImageVisible(img);
-  }
-  return true;
-}
+// isImageNearViewport() and prewarmImageAnalysis() lived here. They ran
+// getBoundingClientRect() per <img> from inside observeImage(), interleaved
+// with hideElement()'s style writes — a forced layout flush per image. The
+// IntersectionObserver below already covers the same ground: its 1400px bottom
+// margin fires it well before an image is on screen, it delivers an initial
+// callback for targets already visible, and it does its work off the main
+// thread. Do not reintroduce a layout read on this path.
 
 function setupIntersectionObserver() {
   if (imageObserver) {
@@ -4457,9 +4567,20 @@ function observeImage(img) {
   // For images that pass quick check, use IntersectionObserver for deeper analysis
   if (!imageObserver) setupIntersectionObserver();
   try { imageObserver.observe(img); } catch (_) {}
-  if (prewarmImageAnalysis(img)) {
-    try { imageObserver.unobserve(img); } catch (_) {}
-  }
+  // Deliberately no prewarmImageAnalysis() here.
+  //
+  // It called isImageNearViewport(), i.e. getBoundingClientRect(), once per
+  // <img> — a forced synchronous layout — while the same loop was writing
+  // `display: none` and inserting placeholders through hideElement(). Read,
+  // write, read, write is the textbook layout-thrash pattern, and on an image
+  // grid of a few hundred pictures it meant a few hundred full-document layout
+  // flushes in one task, repeated on every processContent().
+  //
+  // Nothing is lost. IMAGE_OBSERVER_ROOT_MARGIN_PX gives the observer 1400px of
+  // bottom margin, so it fires well over a screen before an image is visible,
+  // off the main thread, and it delivers an initial callback for targets that
+  // are already on screen. The synchronous URL/keyword guard above still hides
+  // obvious matches at parse time, and it never touches layout.
 }
 
 // Quick synchronous check for obvious adult content in URL
@@ -4522,9 +4643,16 @@ function shouldBlockImageQuickly(img) {
 // --- Iframe scanning ---
 function processIframe(iframe) {
   try {
-    if (!iframe || iframe.dataset.pblockerProcessed === 'true') return;
+    if (!iframe) return;
     const src = iframe.getAttribute('src') || '';
     const srcdoc = iframe.getAttribute('srcdoc') || '';
+    // Keyed on the src that was judged, not a bare flag: a clean iframe has to
+    // be marked too (otherwise every scheduleMediaDiscovery pass re-ran the URL
+    // parse, three host matchers, a keyword scan of srcdoc and another
+    // background round-trip for it), but an iframe that is later re-pointed at
+    // a different src must still be re-checked.
+    if (iframe.dataset.pblockerProcessed === 'true' &&
+        (iframe.dataset.pblockerCheckedSrc || '') === src) return;
 
     let shouldHide = false;
     if (src) {
@@ -4543,15 +4671,22 @@ function processIframe(iframe) {
       shouldHide = containsAdultKeywords(srcdoc);
     }
 
+    // Record what was judged before the async check resolves, so a re-entrant
+    // discovery pass over the same clean iframe returns at the guard above.
+    iframe.dataset.pblockerProcessed = 'true';
+    iframe.dataset.pblockerCheckedSrc = src;
+
     if (shouldHide) {
       hideElement(iframe, 'iframe');
-      iframe.dataset.pblockerProcessed = 'true';
       notifyBackground('iframe_filtered', { src });
     } else if (src) {
       isUrlBlockedByBackground(src).then(blocked => {
-        if (!blocked || !iframe.isConnected || iframe.dataset.pblockerProcessed === 'true') return;
+        // Bails on `pblockerHidden`, not `pblockerProcessed` — the latter is now
+        // set for clean iframes too, and checking it here would stop this
+        // verdict from ever being applied.
+        if (!blocked || !iframe.isConnected || iframe.dataset.pblockerHidden === 'true') return;
+        if ((iframe.getAttribute('src') || '') !== src) return; // re-pointed meanwhile
         hideElement(iframe, 'iframe');
-        iframe.dataset.pblockerProcessed = 'true';
         notifyBackground('iframe_filtered', { src });
       }).catch(() => {});
     }
@@ -4740,13 +4875,30 @@ function redirectToBlockedPage(reason = 'content', detail) {
 
 // Batch processing for performance
 const debouncedProcess = debounce(processContent, DEBOUNCE_DELAY);
-const debouncedPageTextScan = debounce(async () => {
-  if (!isEnabled || blockedTriggered) return;
-  const whitelisted = await isCurrentPageWhitelisted();
-  if (whitelisted) return;
-  if (checkPageBodyText()) return;
-  checkPageTextWithModel();
-}, DEBOUNCE_DELAY);
+// The page-text scan reads document.body.innerText, which is layout-dependent:
+// reading it forces a full style + layout flush of the document. It was armed
+// off EVERY element insertion at DEBOUNCE_DELAY (100ms), and useSmartBlocking
+// defaults on, so any page with an ad rotator, a live feed or a chat widget
+// re-flushed layout ten times a second for as long as it was open.
+//
+// This is a page-level verdict, not a per-element one — it does not need 100ms
+// latency. Debounce it far longer and take it during idle time.
+const PAGE_TEXT_SCAN_DEBOUNCE = 750;
+
+function whenIdle(run) {
+  if (typeof requestIdleCallback === 'function') requestIdleCallback(run, { timeout: 1500 });
+  else setTimeout(run, 0);
+}
+
+const debouncedPageTextScan = debounce(() => {
+  whenIdle(async () => {
+    if (!isEnabled || blockedTriggered) return;
+    const whitelisted = await isCurrentPageWhitelisted();
+    if (whitelisted) return;
+    if (checkPageBodyText()) return;
+    checkPageTextWithModel();
+  });
+}, PAGE_TEXT_SCAN_DEBOUNCE);
 
 // Incremental processor for newly added search result containers
 async function processPendingResults() {
@@ -4878,6 +5030,74 @@ function scheduleMediaDiscovery() {
   }
 }
 
+/**
+ * Stop observing media inside a subtree that has left the document.
+ *
+ * IntersectionObserver holds a STRONG reference to every target, and the only
+ * paths that unobserve are "it intersected" and "filtering was switched off".
+ * On a virtualised feed (X, Reddit, Instagram) nodes are created and discarded
+ * by the hundred without most of them ever intersecting, so without this the
+ * observer pinned every <img> the tab had ever rendered — an unbounded leak
+ * that only shows up after a long browsing session, which is exactly when
+ * users reported the browser getting slow.
+ */
+function releaseObservedImage(img) {
+  try {
+    if (imageObserver) imageObserver.unobserve(img);
+    // Clearing the marker matters as much as the unobserve. observeImage()
+    // early-returns on pblockerObserved, so a node that is detached and then
+    // re-attached — which is exactly what a virtualised feed does when it
+    // recycles a row — would come back unobserved AND be refused a fresh
+    // observe, silently losing its viewport check and AI classification on the
+    // sites this release path exists for.
+    delete img.dataset.pblockerObserved;
+    delete img.dataset.pblockerObservedSrc;
+    // pblockerHidden is deliberately left alone: something already blocked
+    // stays blocked if it comes back.
+  } catch (_) {}
+}
+
+function releaseObservedVideo(video) {
+  try {
+    if (mediaObserver) mediaObserver.unobserve(video);
+    delete video.dataset.pblockerObserved;
+  } catch (_) {}
+}
+
+function releaseObservedMedia(el) {
+  try {
+    if (el.tagName === 'IMG') { releaseObservedImage(el); return; }
+    if (el.tagName === 'VIDEO') { releaseObservedVideo(el); return; }
+    if (typeof el.querySelectorAll !== 'function') return;
+    el.querySelectorAll('img').forEach(releaseObservedImage);
+    el.querySelectorAll('video').forEach(releaseObservedVideo);
+  } catch (_) {}
+}
+
+// Removed subtrees are drained on idle, never inside the observer callback.
+// A virtualised feed removes rows on every frame, and querySelectorAll() per
+// removal in the synchronous callback measurably raised mutation p95 — the
+// same mistake this whole change set exists to remove.
+let pendingReleaseNodes = new Set();
+let mediaReleaseScheduled = false;
+
+function scheduleMediaRelease() {
+  if (mediaReleaseScheduled) return;
+  mediaReleaseScheduled = true;
+  const run = () => {
+    mediaReleaseScheduled = false;
+    const nodes = pendingReleaseNodes;
+    pendingReleaseNodes = new Set();
+    for (const node of nodes) {
+      // Re-parented rather than discarded: still in the document, still wanted.
+      if (node.isConnected) continue;
+      releaseObservedMedia(node);
+    }
+  };
+  if (typeof requestIdleCallback === 'function') requestIdleCallback(run, { timeout: 1000 });
+  else setTimeout(run, 200);
+}
+
 // Mutation observer for dynamic content
 function setupMutationObserver() {
   if (observer) {
@@ -4961,6 +5181,14 @@ function setupMutationObserver() {
               }
             }
           }
+        }
+
+        if (mutation.removedNodes.length > 0) {
+          for (const node of mutation.removedNodes) {
+            if (node.nodeType !== Node.ELEMENT_NODE) continue;
+            pendingReleaseNodes.add(node);
+          }
+          scheduleMediaRelease();
         }
 
         if (addedElements.length > 0) {
@@ -5060,10 +5288,31 @@ function setupMutationObserver() {
 }
 
 // Event listeners
+/**
+ * Drop everything memoised for the current page. getSearchEngine keys on href
+ * so it looks after itself; these do not.
+ */
+function resetPerPageCaches() {
+  resetWhitelistCache();
+  resetSocialSiteCache();
+  _cleanPageHostCache = null;
+  lastPageTextSignature = '';
+}
+
 function setupEventListeners() {
   // Listen for storage changes
   browserAPI.storage.onChanged.addListener((changes, area) => {
     if (area !== 'local') return;
+
+    // The whitelist verdict is cached per URL, so adding or removing an entry —
+    // or a temporary allowance being cleared — has to drop it, or the page keeps
+    // filtering a site the user just allowed until it is reloaded.
+    if (changes.pblocker_whitelist ||
+        changes.pblocker_remote_whitelist_v1 ||
+        changes.pblocker_temp_disable_until) {
+      resetWhitelistCache();
+      processContent();
+    }
 
     if (changes.pblocker_settings) {
       const previousLevel = imageFilterLevel;
@@ -5117,19 +5366,26 @@ function setupEventListeners() {
     }
   });
   
-  // Process content when DOM is ready
+  // Process content once the DOM exists. init() has already made a first pass
+  // and already called setupMutationObserver(), so neither is repeated here:
+  // the observer used to be rebuilt at +500ms, which disconnected the live one
+  // and dropped every mutation in the gap, and processContent — which walks
+  // every image and reads the page text — used to run two or three times per
+  // load for no added coverage.
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', () => {
       setTimeout(processContent, 100);
-    });
-  } else {
-    setTimeout(processContent, 100);
+    }, { once: true });
   }
-  
-  // Handle dynamic content changes
-  setTimeout(setupMutationObserver, 500);
-  
+
+  // A generator meta tag may not have parsed when getSocialSite() was first
+  // asked, so give the memo exactly one chance to see a completed head.
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', resetSocialSiteCache, { once: true });
+  }
+
   // Re-process on navigation (for SPAs)
+  window.addEventListener('popstate', resetPerPageCaches);
   window.addEventListener('popstate', debouncedProcess);
   window.addEventListener('popstate', () => consoleLogPageTitle('popstate'));
 

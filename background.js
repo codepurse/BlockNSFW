@@ -83,6 +83,22 @@ function preloadAiRuntime() {
   if (typeof self === 'undefined' || typeof self.importScripts !== 'function') {
     return;
   }
+  // Chrome 109+ classifies in the offscreen document, which is where the WebGL
+  // context is and where the classify handler already prefers to go. The worker
+  // never needs the runtime there, so importing it is 4.31 MB of TF.js pulled
+  // into the worker synchronously on EVERY service-worker start — and the AI
+  // image blocker is opt-in and off by default, so almost nobody who paid that
+  // was using it. The comment on loadAiRuntimeViaDom() below spells out exactly
+  // this cost as the reason Firefox loads lazily; Chrome simply never got the
+  // same treatment.
+  //
+  // Older Chrome has no chrome.offscreen and genuinely needs the worker
+  // fallback, and importScripts() may only run during initial synchronous
+  // evaluation — so the decision has to be made here, and offscreenAvailable()
+  // is synchronous.
+  if (offscreenAvailable()) {
+    return;
+  }
   try {
     self.importScripts(...AI_RUNTIME_SCRIPTS);
     syncAiRuntimeStateFromGlobals();
@@ -318,7 +334,40 @@ async function ensureOffscreenDocument() {
     }
   }
   _offscreenCreating = null;
+  touchOffscreenDocument();
   return true;
+}
+
+// The offscreen document persists for the browser session once created, holding
+// a live WebGL context and — by design, see offscreen.js — every model that has
+// been initialised, so switching model in settings leaves both resident. That
+// persistence is right while the feature is in use; nothing was releasing it
+// when it stopped being used. Firefox reclaims the equivalent automatically by
+// suspending its event page, so this is a Chromium-only leak.
+const OFFSCREEN_IDLE_MS = 5 * 60 * 1000;
+let _offscreenIdleTimer = null;
+
+function touchOffscreenDocument() {
+  if (!offscreenAvailable()) return;
+  clearTimeout(_offscreenIdleTimer);
+  _offscreenIdleTimer = setTimeout(closeOffscreenDocument, OFFSCREEN_IDLE_MS);
+}
+
+async function closeOffscreenDocument() {
+  clearTimeout(_offscreenIdleTimer);
+  _offscreenIdleTimer = null;
+  if (!offscreenAvailable() || typeof chrome.offscreen.closeDocument !== 'function') return;
+  // Deliberately does NOT gate on hasOffscreenDocument(): that reads
+  // chrome.runtime.getContexts, which is Chrome 116+, so on 109-115 it always
+  // reports false and the document would never be released — the exact leak
+  // this function exists to close. Just close it and treat "there wasn't one"
+  // as success; a cosmetic teardown must never break classification.
+  try {
+    await chrome.offscreen.closeDocument();
+  } catch (_) {
+    // No document, or a concurrent close won. Nothing to release either way.
+  }
+  _offscreenCreating = null;
 }
 
 function sendToOffscreen(payload, timeoutMs) {
@@ -661,15 +710,22 @@ function normalizeDomainForCache(domain) {
   return (domain || '').trim().toLowerCase().replace(/^www\./, '');
 }
 
+// Accept ASCII labels, including ACE-encoded punycode labels that begin with
+// "xn--". Each label must be 1-63 chars, alphanumeric or hyphen, may not start
+// or end with a hyphen. The TLD may also be a punycode TLD ("xn--...").
+//
+// Hoisted: this was constructed inside isLikelyDomain, which runs once per
+// domain — 204,222 RegExp constructions per blocklist load, and a load happens
+// on every background wake.
+const DOMAIN_LABEL_PATTERN = '(?!-)(?:xn--[a-z0-9-]{2,61}|[a-z0-9-]{1,63})(?<!-)';
+const LIKELY_DOMAIN_RE = new RegExp(
+  `^(?:${DOMAIN_LABEL_PATTERN}\\.)+${DOMAIN_LABEL_PATTERN}$`, 'i'
+);
+
 function isLikelyDomain(candidate) {
   if (!candidate) return false;
   if (candidate.length > 253) return false;
-  // Accept ASCII labels, including ACE-encoded punycode labels that begin with
-  // "xn--". Each label must be 1-63 chars, alphanumeric or hyphen, may not
-  // start or end with a hyphen. The TLD may also be a punycode TLD ("xn--...").
-  const label = '(?!-)(?:xn--[a-z0-9-]{2,61}|[a-z0-9-]{1,63})(?<!-)';
-  const domainPattern = new RegExp(`^(?:${label}\\.)+${label}$`, 'i');
-  return domainPattern.test(candidate);
+  return LIKELY_DOMAIN_RE.test(candidate);
 }
 
 function parseHostsFile(text) {
@@ -814,11 +870,12 @@ async function loadBlocklistFromCache() {
     const key = chunkKeys[index];
     const chunk = storedChunks[key];
     if (!Array.isArray(chunk)) return [];
+    // storeBlocklistInCache() normalized and validated every entry before it was
+    // written, and metadata is committed last so a partial generation is never
+    // read as current. Re-normalizing and re-validating 204k strings on every
+    // background wake was re-verifying our own output.
     for (let j = 0; j < chunk.length; j++) {
-      const normalized = normalizeDomainForCache(chunk[j]);
-      if (isLikelyDomain(normalized)) {
-        domains.push(normalized);
-      }
+      domains.push(chunk[j]);
     }
   }
 
@@ -1338,6 +1395,46 @@ async function setSettings(newSettings) {
   await browserAPI.storage.local.set({ [SETTINGS_KEY]: newSettings });
 }
 
+/**
+ * Persist any missing defaults, but ONLY when something is actually missing.
+ *
+ * This used to be an unconditional `setSettings(await getSettings())` on every
+ * background start. storage.local.set fires storage.onChanged whether or not
+ * the value changed, and that event has two expensive subscribers: this file
+ * (rebuildCompiledPatterns + checkExtensionStateChange + updateDnrRules) and
+ * every content script in every open tab (loadSettings + a full
+ * processContent). Firefox and Chrome both suspend an idle MV3 background, so
+ * every wake-up re-ran initialization here and forced a full page re-scan in
+ * each open tab — the cost scaling with how many tabs the user had open.
+ *
+ * A wake must be observationally silent: starting up is not a settings change.
+ */
+async function ensureSettingsDefaults() {
+  const { [SETTINGS_KEY]: stored } = await browserAPI.storage.local.get(SETTINGS_KEY);
+  const merged = { ...DEFAULT_SETTINGS, ...(stored || {}) };
+  if (!settingsEqual(stored, merged)) {
+    await browserAPI.storage.local.set({ [SETTINGS_KEY]: merged });
+  }
+  return merged;
+}
+
+function settingsEqual(stored, merged) {
+  if (!stored || typeof stored !== 'object') return false;
+  const storedKeys = Object.keys(stored);
+  const mergedKeys = Object.keys(merged);
+  // A key present in defaults but absent from storage must still be written,
+  // which is what makes this safe for profiles that predate a new setting.
+  if (storedKeys.length !== mergedKeys.length) return false;
+  for (const key of mergedKeys) {
+    const a = stored[key];
+    const b = merged[key];
+    if (a === b) continue;
+    // Arrays (customPatterns, trustedImageDomains) need a value comparison.
+    if (JSON.stringify(a) !== JSON.stringify(b)) return false;
+  }
+  return true;
+}
+
 async function getStats() {
   const { [BLOCKED_STATS_KEY]: stats } = await browserAPI.storage.local.get(BLOCKED_STATS_KEY);
   return { ...DEFAULT_STATS, ...(stats || {}) };
@@ -1345,74 +1442,6 @@ async function getStats() {
 
 async function setStats(newStats) {
   await browserAPI.storage.local.set({ [BLOCKED_STATS_KEY]: newStats });
-}
-
-async function updateStats(type = 'blocked', details = {}) {
-  try {
-    // Update total stats
-    const { [BLOCKED_STATS_KEY]: stats } = await browserAPI.storage.local.get(BLOCKED_STATS_KEY);
-    const newStats = stats || { blockedCount: 0, websiteBlockedCount: 0, imageBlockedCount: 0, searchResultBlockedCount: 0, lastBlocked: null, lastWebsiteBlocked: null };
-    newStats.blockedCount++;
-    newStats.lastBlocked = new Date().toISOString();
-    
-    // Update counters based on type
-    switch (type) {
-      case 'website_blocked':
-        newStats.websiteBlockedCount++;
-        newStats.lastWebsiteBlocked = {
-          url: details.url,
-          title: details.title,
-          reason: details.reason,
-          timestamp: new Date().toISOString()
-        };
-        break;
-      case 'image_filtered':
-        newStats.imageBlockedCount++;
-        break;
-      case 'image_ai_filtered':
-        newStats.aiImageBlockedCount++;
-        break;
-      case 'search_result_filtered':
-        newStats.searchResultBlockedCount++;
-        break;
-    }
-    
-    // Update daily stats
-    const { [DAILY_STATS_KEY]: dailyStats } = await browserAPI.storage.local.get(DAILY_STATS_KEY);
-    const today = new Date().toDateString();
-    let newDailyStats = dailyStats || { date: today, blockedToday: 0, websiteBlocked: 0, imageBlocked: 0, searchResultBlocked: 0 };
-    
-    // Reset daily stats if it's a new day
-    if (newDailyStats.date !== today) {
-      newDailyStats = { date: today, blockedToday: 0, websiteBlocked: 0, imageBlocked: 0, searchResultBlocked: 0 };
-    }
-    
-    newDailyStats.blockedToday++;
-    
-    switch (type) {
-      case 'website_blocked':
-        newDailyStats.websiteBlocked++;
-        break;
-      case 'image_filtered':
-        newDailyStats.imageBlocked++;
-        break;
-      case 'image_ai_filtered':
-        newDailyStats.imageAiBlocked = (newDailyStats.imageAiBlocked || 0) + 1;
-        break;
-      case 'search_result_filtered':
-        newDailyStats.searchResultBlocked++;
-        break;
-    }
-    
-    // Save both stats
-    await browserAPI.storage.local.set({
-      [BLOCKED_STATS_KEY]: newStats,
-      [DAILY_STATS_KEY]: newDailyStats
-    });
-    
-  } catch (error) {
-    console.error('BlockNSFW: Error updating stats', error);
-  }
 }
 
 async function getWhitelist() {
@@ -1424,94 +1453,233 @@ async function getWhitelist() {
 // AUDIT LOGGING SYSTEM
 // ============================================
 
+// ============================================
+// BLOCK EVENT BATCHING
+// ============================================
+//
+// One blocked image used to cost roughly eleven storage/IPC round-trips:
+// updateStats (2 reads + 1 write), logBlockedPage (a read of a 1000-entry
+// array, a filter over it, a write, then updateTopDomains' read + sort + write
+// and updateDailyHistory's read + write) and bumpTabBadge (a badge read and two
+// writes). None of them awaited each other, so a page that blocked forty images
+// issued hundreds of concurrent transactions — and, being unserialised
+// read-modify-writes on shared keys, they also lost counts.
+//
+// Firefox's storage.local is IndexedDB-backed and commits each set as its own
+// transaction against the same disk the page is loading from, which is why this
+// read as whole-machine lag rather than one slow tab.
+//
+// Everything accumulates in memory and commits in a single write. Batching is
+// also what makes the counters correct: one reader, one writer, no interleaving.
+const BLOCK_FLUSH_MS = 1500;
+const BADGE_FLUSH_MS = 250;
+const PENDING_AUDIT_MAX = AUDIT_MAX_ENTRIES;
+
+const pendingBlocks = {
+  stats: Object.create(null),      // stat type -> count
+  audit: [],                       // {url, timestamp, reason}
+  domains: Object.create(null),    // hostname -> count
+  days: Object.create(null),       // YYYY-MM-DD -> count
+  lastWebsiteBlocked: null,
+  lastBlockedAt: null
+};
+const pendingBadges = new Map();   // tabId -> delta
+let blockFlushTimer = null;
+let badgeFlushTimer = null;
+// Serialised so two flushes can never interleave their read-modify-write.
+let blockFlushChain = Promise.resolve();
+
+function hasPendingBlocks() {
+  return pendingBlocks.audit.length > 0 ||
+    Object.keys(pendingBlocks.stats).length > 0 ||
+    Object.keys(pendingBlocks.domains).length > 0 ||
+    Object.keys(pendingBlocks.days).length > 0;
+}
+
+/**
+ * Record one block. Cheap and synchronous: no storage, no IPC.
+ */
+function queueBlockEvent(type, { url = '', title = '', reason = '', tabId, count = 1 } = {}) {
+  const n = Number.isFinite(count) && count > 0 ? Math.floor(count) : 1;
+  pendingBlocks.stats[type] = (pendingBlocks.stats[type] || 0) + 1;
+  pendingBlocks.lastBlockedAt = new Date().toISOString();
+
+  if (type === 'website_blocked') {
+    pendingBlocks.lastWebsiteBlocked = {
+      url, title, reason, timestamp: pendingBlocks.lastBlockedAt
+    };
+  }
+
+  if (url) {
+    pendingBlocks.audit.push({ url, timestamp: Date.now(), reason: reason || type });
+    // Bounded in memory as well as on disk, so a hostile page cannot grow this
+    // between flushes. The tail is what the log keeps anyway.
+    if (pendingBlocks.audit.length > PENDING_AUDIT_MAX) {
+      pendingBlocks.audit.splice(0, pendingBlocks.audit.length - PENDING_AUDIT_MAX);
+    }
+    const domain = auditDomainFor(url);
+    if (domain) pendingBlocks.domains[domain] = (pendingBlocks.domains[domain] || 0) + 1;
+    const day = new Date().toISOString().slice(0, 10);
+    pendingBlocks.days[day] = (pendingBlocks.days[day] || 0) + 1;
+  }
+
+  if (typeof tabId === 'number' && tabId >= 0) {
+    pendingBadges.set(tabId, (pendingBadges.get(tabId) || 0) + n);
+    if (!badgeFlushTimer) badgeFlushTimer = setTimeout(flushBadges, BADGE_FLUSH_MS);
+  }
+
+  if (!blockFlushTimer) blockFlushTimer = setTimeout(flushBlockEvents, BLOCK_FLUSH_MS);
+}
+
+function auditDomainFor(url) {
+  try {
+    return new URL(url).hostname.replace(/^www\./, '');
+  } catch (_) {
+    return '';
+  }
+}
+
+function flushBlockEvents() {
+  if (blockFlushTimer) { clearTimeout(blockFlushTimer); blockFlushTimer = null; }
+  blockFlushChain = blockFlushChain
+    .then(commitPendingBlocks)
+    .catch(error => console.error('BlockNSFW: failed to flush block events', error));
+  return blockFlushChain;
+}
+
+async function commitPendingBlocks() {
+  if (!hasPendingBlocks()) return;
+
+  // Take the buffer first: anything recorded while this awaits belongs to the
+  // next flush, not this one, and must not be dropped by the reset below.
+  const batch = {
+    stats: pendingBlocks.stats,
+    audit: pendingBlocks.audit,
+    domains: pendingBlocks.domains,
+    days: pendingBlocks.days,
+    lastWebsiteBlocked: pendingBlocks.lastWebsiteBlocked,
+    lastBlockedAt: pendingBlocks.lastBlockedAt
+  };
+  pendingBlocks.stats = Object.create(null);
+  pendingBlocks.audit = [];
+  pendingBlocks.domains = Object.create(null);
+  pendingBlocks.days = Object.create(null);
+  pendingBlocks.lastWebsiteBlocked = null;
+  pendingBlocks.lastBlockedAt = null;
+
+  const totalEvents = Object.values(batch.stats).reduce((sum, n) => sum + n, 0);
+
+  // ONE read and ONE write for the whole batch, where there used to be five
+  // read-modify-write pairs per blocked element.
+  const store = await browserAPI.storage.local.get([
+    BLOCKED_STATS_KEY, DAILY_STATS_KEY, AUDIT_BLOCKED_KEY, TOP_DOMAINS_KEY, DAILY_HISTORY_KEY
+  ]);
+
+  const stats = { ...DEFAULT_STATS, ...(store[BLOCKED_STATS_KEY] || {}) };
+  stats.blockedCount = (stats.blockedCount || 0) + totalEvents;
+  if (batch.lastBlockedAt) stats.lastBlocked = batch.lastBlockedAt;
+  if (batch.lastWebsiteBlocked) stats.lastWebsiteBlocked = batch.lastWebsiteBlocked;
+  for (const [type, n] of Object.entries(batch.stats)) {
+    const field = STAT_FIELD_BY_TYPE[type];
+    if (field) stats[field] = (stats[field] || 0) + n;
+  }
+
+  // toDateString(), not an ISO date: popup.js compares this field against
+  // `new Date().toDateString()` and treats any mismatch as a new day, so an
+  // ISO key here would make the popup read zero all day.
+  const today = new Date().toDateString();
+  const storedDaily = store[DAILY_STATS_KEY] || {};
+  const daily = storedDaily.date === today
+    ? { ...storedDaily }
+    : { date: today, blockedToday: 0, websiteBlocked: 0, imageBlocked: 0, imageAiBlocked: 0, searchResultBlocked: 0 };
+  daily.blockedToday = (daily.blockedToday || 0) + totalEvents;
+  for (const [type, n] of Object.entries(batch.stats)) {
+    const field = DAILY_FIELD_BY_TYPE[type];
+    if (field) daily[field] = (daily[field] || 0) + n;
+  }
+
+  const cutoff = Date.now() - (AUDIT_RETENTION_DAYS * 24 * 60 * 60 * 1000);
+  let auditLog = (store[AUDIT_BLOCKED_KEY] || []).concat(batch.audit)
+    .filter(item => item && item.timestamp >= cutoff);
+  if (auditLog.length > AUDIT_MAX_ENTRIES) auditLog = auditLog.slice(-AUDIT_MAX_ENTRIES);
+
+  const domains = { ...(store[TOP_DOMAINS_KEY] || {}) };
+  for (const [domain, n] of Object.entries(batch.domains)) {
+    domains[domain] = (domains[domain] || 0) + n;
+  }
+  const topDomains = Object.fromEntries(
+    Object.entries(domains).sort((a, b) => b[1] - a[1]).slice(0, 100)
+  );
+
+  const history = { ...(store[DAILY_HISTORY_KEY] || {}) };
+  for (const [day, n] of Object.entries(batch.days)) {
+    history[day] = (history[day] || 0) + n;
+  }
+  const historyCutoff = new Date();
+  historyCutoff.setDate(historyCutoff.getDate() - 30);
+  const historyCutoffKey = historyCutoff.toISOString().slice(0, 10);
+  for (const day of Object.keys(history)) {
+    if (day < historyCutoffKey) delete history[day];
+  }
+
+  await browserAPI.storage.local.set({
+    [BLOCKED_STATS_KEY]: stats,
+    [DAILY_STATS_KEY]: daily,
+    [AUDIT_BLOCKED_KEY]: auditLog,
+    [TOP_DOMAINS_KEY]: topDomains,
+    [DAILY_HISTORY_KEY]: history
+  });
+}
+
+const STAT_FIELD_BY_TYPE = {
+  website_blocked: 'websiteBlockedCount',
+  image_filtered: 'imageBlockedCount',
+  image_ai_filtered: 'aiImageBlockedCount',
+  search_result_filtered: 'searchResultBlockedCount'
+};
+
+const DAILY_FIELD_BY_TYPE = {
+  website_blocked: 'websiteBlocked',
+  image_filtered: 'imageBlocked',
+  image_ai_filtered: 'imageAiBlocked',
+  search_result_filtered: 'searchResultBlocked'
+};
+
+/**
+ * Apply the accumulated badge deltas, one read and one write per tab rather
+ * than three API calls per blocked element. bumpTabBadge still reads the badge
+ * back rather than keeping its own tally, because the worker is torn down while
+ * the badge text the browser is drawing survives.
+ */
+async function flushBadges() {
+  badgeFlushTimer = null;
+  const batch = new Map(pendingBadges);
+  pendingBadges.clear();
+  for (const [tabId, delta] of batch) {
+    await bumpTabBadge(tabId, delta);
+  }
+}
+
+// Commit before the browser tears the background down, so the tail of a session
+// is not lost. Both Firefox event pages and Chrome service workers fire this.
+try {
+  browserAPI.runtime.onSuspend.addListener(() => {
+    flushBadges();
+    flushBlockEvents();
+  });
+} catch (_) {
+  // Not implemented in this build; the timers still commit during normal use.
+}
+
 // Track extension state for disable event logging
 let lastExtensionState = null;
 let extensionDisabledTime = null;
 
-// Log a blocked page to audit log
-async function logBlockedPage(url, reason = 'Pattern match') {
-  try {
-    const { [AUDIT_BLOCKED_KEY]: blockedLog } = await browserAPI.storage.local.get(AUDIT_BLOCKED_KEY);
-    let log = blockedLog || [];
 
-    const entry = {
-      url: url,
-      timestamp: Date.now(),
-      reason: reason
-    };
 
-    log.push(entry);
 
-    const cutoffDate = Date.now() - (AUDIT_RETENTION_DAYS * 24 * 60 * 60 * 1000);
-    log = log.filter(item => item.timestamp >= cutoffDate);
 
-    if (log.length > AUDIT_MAX_ENTRIES) {
-      log = log.slice(-AUDIT_MAX_ENTRIES);
-    }
 
-    await browserAPI.storage.local.set({ [AUDIT_BLOCKED_KEY]: log });
-
-    await updateTopDomains(url);
-    await updateDailyHistory();
-  } catch (error) {
-    console.error('BlockNSFW: Failed to log blocked page', error);
-  }
-}
-
-async function updateTopDomains(url) {
-  try {
-    let domain;
-    try {
-      const urlObj = new URL(url);
-      domain = urlObj.hostname.replace(/^www\./, '');
-    } catch (_) {
-      return;
-    }
-
-    if (!domain) return;
-
-    const { [TOP_DOMAINS_KEY]: topDomains } = await browserAPI.storage.local.get(TOP_DOMAINS_KEY);
-    const domains = topDomains || {};
-    domains[domain] = (domains[domain] || 0) + 1;
-
-    const sortedDomains = Object.entries(domains)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 100);
-    
-    const limitedDomains = {};
-    sortedDomains.forEach(([key, value]) => {
-      limitedDomains[key] = value;
-    });
-
-    await browserAPI.storage.local.set({ [TOP_DOMAINS_KEY]: limitedDomains });
-  } catch (error) {
-    console.error('BlockNSFW: Failed to update top domains', error);
-  }
-}
-
-async function updateDailyHistory() {
-  try {
-    const today = new Date().toISOString().slice(0, 10);
-    const { [DAILY_HISTORY_KEY]: history } = await browserAPI.storage.local.get(DAILY_HISTORY_KEY);
-    const dailyHistory = history || {};
-    
-    dailyHistory[today] = (dailyHistory[today] || 0) + 1;
-
-    const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-    const cutoffDate = thirtyDaysAgo.toISOString().slice(0, 10);
-    
-    Object.keys(dailyHistory).forEach(date => {
-      if (date < cutoffDate) {
-        delete dailyHistory[date];
-      }
-    });
-
-    await browserAPI.storage.local.set({ [DAILY_HISTORY_KEY]: dailyHistory });
-  } catch (error) {
-    console.error('BlockNSFW: Failed to update daily history', error);
-  }
-}
 
 // Log extension state change (enable/disable)
 async function logExtensionStateChange(enabled, method = 'Manual toggle') {
@@ -1683,16 +1851,31 @@ async function loadDefaultBlocklist() {
     // multi-megabyte data while the first browsing pages are rendering.
     const previousMeta = blocklistMeta || (await loadBlocklistMeta());
     if (!previousMeta) {
-      blocklistMeta = {
-        updatedAt: BUNDLED_BLOCKLIST_BUILT_AT || Date.now(),
-        // No remote cache generation exists yet; the bundled snapshot is
-        // authoritative until updatedAt reaches the normal refresh TTL.
-        chunkCount: 0,
-        version: 1,
-        source: 'bundled',
-        domainCount: defaultBlocklist.length
-      };
-      await browserAPI.storage.local.set({ [BLOCKLIST_CACHE_META_KEY]: blocklistMeta });
+      // Write the bundled snapshot into the chunk cache, then backdate it to the
+      // build time so PR #22's deferred remote refresh still holds.
+      //
+      // Declaring chunkCount: 0 instead — as this did — makes
+      // loadBlocklistFromCache() report "no cache", so every subsequent wake
+      // fell back to fetch(blocklist.json) + JSON.parse of 4.1 MB + normalizing
+      // 204k domains, while ensureRemoteBlocklistUpToDate() returned early
+      // because the metadata was not stale. The chunk cache, whose entire
+      // purpose is to make a wake cheap, was never populated at all.
+      const meta = await storeBlocklistInCache(defaultBlocklist);
+      if (meta) {
+        meta.source = 'bundled';
+        meta.updatedAt = BUNDLED_BLOCKLIST_BUILT_AT || Date.now();
+        blocklistMeta = meta;
+        await browserAPI.storage.local.set({ [BLOCKLIST_CACHE_META_KEY]: meta });
+      } else {
+        blocklistMeta = {
+          updatedAt: BUNDLED_BLOCKLIST_BUILT_AT || Date.now(),
+          chunkCount: 0,
+          version: 1,
+          source: 'bundled',
+          domainCount: defaultBlocklist.length
+        };
+        await browserAPI.storage.local.set({ [BLOCKLIST_CACHE_META_KEY]: blocklistMeta });
+      }
     } else {
       // Preserve the original bundled timestamp across restarts so its normal
       // TTL can expire and trigger a remote refresh.
@@ -2047,14 +2230,11 @@ async function shouldBlock(urlStr) {
   return shouldBlockResult;
 }
 
-async function handleBlock(urlStr, type = 'blocked', reason = 'Pattern match') {
-  // update stats using new updateStats function
-  await updateStats(type);
-  
-  // Log to audit system for website blocks
-  if (type === 'website_blocked' || type === 'blocked') {
-    await logBlockedPage(urlStr, reason);
-  }
+function handleBlock(urlStr, type = 'blocked', reason = 'Pattern match') {
+  // Audit logging is for page-level blocks only, as before: passing no url for
+  // the other types is what keeps them out of the log.
+  const auditable = type === 'website_blocked' || type === 'blocked';
+  queueBlockEvent(type, { url: auditable ? urlStr : '', reason });
 }
 
 // Message listener for content script communications
@@ -2145,46 +2325,52 @@ try {
   // tabs.onUpdated unavailable in this build; the badge just accumulates.
 }
 
+// The page a block happened on: the content script reports it, but a message
+// without one still has the sender's own URL.
+function senderUrl(message, sender) {
+  if (typeof message?.url === 'string' && message.url) return message.url;
+  if (typeof sender?.url === 'string' && sender.url) return sender.url;
+  return '';
+}
+
 browserAPI.runtime.onMessage.addListener((message, sender, sendResponse) => {
   // Messages addressed to the offscreen document are handled there, not here.
   if (message && message.target === 'offscreen-ai') return false;
+  // The four block notifications are the hot path — one message per blocked
+  // image on a page that can hold hundreds. They only touch memory here; the
+  // storage write happens once per batch. See queueBlockEvent.
   if (message.type === 'image_filtered') {
-    updateStats('image_filtered');
-    bumpTabBadge(sender?.tab?.id, 1);
-    try {
-      const url = typeof message.url === 'string' ? message.url : (typeof sender?.url === 'string' ? sender.url : '');
-      if (url) logBlockedPage(url, 'Image filtered');
-    } catch (_) {}
+    queueBlockEvent('image_filtered', {
+      url: senderUrl(message, sender),
+      reason: 'Image filtered',
+      tabId: sender?.tab?.id
+    });
     sendResponse({ success: true });
   } else if (message.type === 'image_ai_filtered') {
-    updateStats('image_ai_filtered');
-    bumpTabBadge(sender?.tab?.id, 1);
-    try {
-      const url = typeof message.url === 'string'
-        ? message.url
-        : (typeof sender !== 'undefined' && sender && sender.url ? sender.url : '');
-      if (url) logBlockedPage(url, 'AI image filtered');
-    } catch (_) {}
+    queueBlockEvent('image_ai_filtered', {
+      url: senderUrl(message, sender),
+      reason: 'AI image filtered',
+      tabId: sender?.tab?.id
+    });
     sendResponse({ success: true });
   } else if (message.type === 'website_blocked') {
-    updateStats('website_blocked', {
+    queueBlockEvent('website_blocked', {
       url: message.url,
       title: message.title,
-      reason: message.reason
+      reason: message.reason || 'Pattern match',
+      tabId: sender?.tab?.id
     });
-    // Log to audit system
-    logBlockedPage(message.url, message.reason || 'Pattern match');
     console.log(`BlockNSFW: Website blocked - ${message.url} (${message.reason})`);
     sendResponse({ success: true });
   } else if (message.type === 'search_result_filtered') {
-    updateStats('search_result_filtered');
     // The pass reports how many results it blocked; the badge counts all of
-    // them, unlike updateStats which records the pass as a single event.
-    bumpTabBadge(sender?.tab?.id, typeof message.count === 'number' ? message.count : 1);
-    try {
-      const url = typeof message.url === 'string' ? message.url : (typeof sender?.url === 'string' ? sender.url : '');
-      if (url) logBlockedPage(url, 'Search results filtered');
-    } catch (_) {}
+    // them, while the stats record the pass as a single event.
+    queueBlockEvent('search_result_filtered', {
+      url: senderUrl(message, sender),
+      reason: 'Search results filtered',
+      tabId: sender?.tab?.id,
+      count: typeof message.count === 'number' ? message.count : 1
+    });
     sendResponse({ success: true });
   } else if (message.type === 'subscription_prefill' && typeof message.url === 'string') {
     // Opens Settings with the address filled in. Deliberately does not
@@ -2907,8 +3093,7 @@ let backgroundInitializationPromise = null;
 function initializeBackground() {
   if (backgroundInitializationPromise) return backgroundInitializationPromise;
   backgroundInitializationPromise = (async () => {
-    const settings = await getSettings();
-    await setSettings(settings); // ensure defaults saved
+    await ensureSettingsDefaults();
     await loadDefaultBlocklist();
     await rebuildCompiledPatterns();
     await initializeExtensionStateTracking();
@@ -2980,6 +3165,12 @@ browserAPI.storage.onChanged.addListener(async (changes, area) => {
     // Re-apply safe-search rules and the custom-site image block if the
     // relevant toggles or the user's blocked-site list changed
     await updateDnrRules();
+    // Turning the AI image blocker off should release the offscreen document's
+    // WebGL context and resident models now, not in five minutes.
+    try {
+      const settings = await getSettings();
+      if (settings.aiImageBlocker !== true) await closeOffscreenDocument();
+    } catch (_) {}
     console.log('BlockNSFW: Settings updated - patterns rebuilt');
   }
   // Clear URL caches when whitelist changes (patterns don't need rebuilding)

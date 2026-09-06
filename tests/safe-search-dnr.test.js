@@ -55,8 +55,8 @@ function detectedSearchEngine(url) {
     ${contentConstArraySource('YANDEX_SEARCH_BASE_DOMAINS')}
     ${contentFunctionSource('getYandexSearchBaseDomain')}
     ${contentFunctionSource('isYandexSearchHost')}
-    ${contentFunctionSource('getSearchEngine')}
-    globalThis.result = getSearchEngine();
+    ${contentFunctionSource('computeSearchEngine')}
+    globalThis.result = computeSearchEngine();
   `, sandbox);
   return sandbox.result;
 }
