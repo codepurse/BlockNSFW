@@ -144,6 +144,54 @@ All notable project changes should be documented here going forward.
   the other side. The step is skippable.
 
 ### Fixed
+- **Changing detection strictness demanded the full access code.** With the
+  access code on and "Ask for the code on every settings change" enabled,
+  nudging image detection strictness down by one step made you retype 32-256
+  random characters, with paste disabled — the same price as turning blocking
+  off entirely. The reports were unanimous about the reason: nobody doing this
+  was trying to switch the AI off, they were trying to stop a holiday photo
+  from being blurred.
+
+  The access code exists to guard the way out, and a sensitivity dial is not
+  one. At Relaxed the blocker is still running and still catches clearly
+  explicit images; the dial only decides how much borderline content comes with
+  it. Charging someone a minute of typing to correct a false positive of ours is
+  the exact friction that gets the whole feature switched off, which protects
+  nobody.
+
+  The gate now has three tiers instead of a critical/not-critical flag. Image
+  detection strictness, AI text strictness and the image filter level are
+  `tuning`: they never face the access code under either scope. Everything else
+  is unchanged — your PIN, if set, is still required for all three, and the
+  master switches are still gated exactly as before.
+
+- **The page-level scans blocked local sites too, and there was no way out of
+  it.** The DNS fix below was real but not the whole story: `checkPageMetadata`
+  also ran on `localhost`, and it blocks on a **single** adult keyword anywhere
+  in the title or seven meta tags — where the body-text scan needs two. So any
+  dev page whose metadata mentioned adult content was blocked on sight, which
+  includes the pages of a tool for blocking it. The blocked page then said only
+  "its title or metadata matched your adult-content filters" and, unlike
+  `page_text_scan`, passed nothing for it to name, so the trigger was
+  undiagnosable.
+
+  `validateDomain` refused `localhost` and every bare IP as well — the regex
+  wants a dot and a letters-only TLD — so the whitelist could not be used as an
+  escape hatch. There was no accepted spelling of the one thing that would have
+  helped.
+
+  The three *heuristic* scans (metadata, page text, AI text) now skip local and
+  private hosts via `isLocalPage()`. They infer what an unknown site is about
+  from a few keywords, and localhost is not an unknown site — it is whatever the
+  person at the keyboard is building. Deliberately still active there: the
+  user's own custom blocklist and title patterns, which are an instruction
+  rather than a guess, and AI image classification, which judges the picture
+  instead of guessing from a word. A public IP is not treated as local, since it
+  can serve anything. The whitelist now accepts `localhost`, its subdomains and
+  bare IPv4 addresses — but still not bare labels like `com`, which would
+  quietly allow every domain under them. And the metadata block now names the
+  keyword that fired.
+
 - **DNS Protection blocked every local development server.** With the setting
   on, `http://localhost:3000` — and every other local address — was redirected
   to the blocked page on every load, reason "Blocked by DNS filter". Neither the

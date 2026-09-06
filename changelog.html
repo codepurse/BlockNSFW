@@ -362,6 +362,13 @@
         <div class="group-title">Fixed</div>
 
         <div class="entry">
+          <div class="entry-title">Changing detection strictness asked for the whole access code</div>
+          <div class="entry-body">
+            With the access code on and set to ask on every change, moving image detection strictness down one step made you retype the full random string by hand &mdash; the same price as turning blocking off altogether. Nobody doing this was trying to switch the AI off; they were trying to stop an ordinary photo being blurred. The code is there to guard the way out, and a sensitivity dial is not one: at <span class="code">Relaxed</span> the blocker is still running and still catches clearly explicit images. Image strictness, AI text strictness and image filtering no longer ask for the code on either setting. Your PIN still applies to all three, and every other lock is unchanged.
+          </div>
+        </div>
+
+        <div class="entry">
           <div class="entry-title">The access code did not guard "unblock this site"</div>
           <div class="entry-body">
             If you had set an access code &mdash; the long random string you retype by hand, on top of your PIN &mdash; it was only ever asked for on the settings page. Unblocking a site from the toolbar popup asked for the four-digit PIN and nothing else, and unblocking a site opens every page on it, so the strongest lock the extension offers was missing from the one place most likely to be used in a weak moment. Whitelisting a site by hand and turning SafeSearch off went the same way. The popup now asks for the code exactly as the settings page does, and unblocking a whole site is treated as one of the decisive actions &mdash; it asks for the code even on the default setting. Unblocking a single page is narrower and is not. Re-blocking a site still needs only the PIN: tightening protection is never made harder. Reported by Pattrattbarr (#29).
@@ -376,9 +383,9 @@
         </div>
 
         <div class="entry">
-          <div class="entry-title">DNS Protection blocked local websites, including your own</div>
+          <div class="entry-title">Local sites, including your own dev server, were blocked</div>
           <div class="entry-body">
-            With DNS Protection on, <span class="code">localhost</span>, home-network devices and intranet addresses were all blocked on sight. A public resolver cannot answer for a private address, and its "no such name" reply is also how a resolver signals a block. They are recognised as local now, and skipped.
+            Local addresses — <span class="code">localhost</span>, home-network devices, intranet addresses — were blocked on sight by two separate layers, and could not be whitelisted around it either. The DNS check asked a public resolver about an address only your own machine knows; the page scan blocked on one adult keyword in a title, which any site about blocking adult content trips. Both skip local addresses now, your own blocked-site rules still apply there, and <span class="code">localhost</span> is whitelistable.
           </div>
         </div>
 

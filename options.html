@@ -2150,7 +2150,7 @@
               <li><strong>Notes are dimmed in your lists <span class="badge-new">New</span></strong> &mdash; A line starting with <code class="code">#</code> or <code class="code">!</code> reads in grey, so a list with section headings can be scanned at a glance. Suggested by Maksim.</li>
               <li><strong>Sorting no longer strands your notes</strong> &mdash; A <code class="code">/pattern/</code> entry is filed under its first letter now, not its opening slash, so it stops jumping above everything on save. Reported by Maksim.</li>
               <li><strong>DuckDuckGo is filtered properly at last</strong> &mdash; The Images and Videos tabs, the thumbnail row and the Wikipedia panel are all covered, and a late-loading result is no longer skipped for good.</li>
-              <li><strong>Local sites are no longer blocked by DNS Protection</strong> &mdash; <code class="code">localhost</code>, home-network devices and intranet addresses were blocked on sight whenever DNS Protection was on. They are recognised as local now, and skipped.</li>
+              <li><strong>Local sites are no longer blocked</strong> &mdash; <code class="code">localhost</code>, home-network devices and intranet addresses were blocked on sight, by the DNS check and by the page-title scan, and could not be whitelisted either. All three are fixed.</li>
               <li><strong>Other fixes</strong> &mdash; A <code class="code">.xyz</code> entry no longer breaks image blocking for other sites, your blocked words apply in image search at every filter level, and Go Back works on the blocked page.</li>
             </ul>
           </details>
@@ -2764,7 +2764,7 @@ title/Example Domain/"></textarea>
       <div class="switch-container">
         <div class="switch-label">
           <span class="label">Ask for the code on every settings change</span>
-          <span class="description">Off by default — the code is only asked for the big ones: turning blocking off, whitelisting a whole site, clearing your PIN, or weakening the code itself. Turn this on to be asked for every change that reduces your protection, including editing your blocked words and lists.</span>
+          <span class="description">Off by default — the code is only asked for the big ones: turning blocking off, whitelisting a whole site, clearing your PIN, or weakening the code itself. Turn this on to be asked for every change that reduces your protection, including editing your blocked words and lists. The sensitivity dials (detection strictness and image filtering) are never asked for either way — they're how you fix a false positive, and at their loosest the filters are still on.</span>
         </div>
         <label class="switch">
           <input type="checkbox" id="access-code-scope-all" />
