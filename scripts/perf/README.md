@@ -88,6 +88,29 @@ table above used. Re-measure on a clean Linux host for an authoritative
 baseline. The *shape* of the result reproduces regardless: cost appears when
 blocking happens.
 
+## Only compare within one session
+
+Absolute numbers drift heavily between sessions on a working machine. The same
+commit, measured twice on the same laptop a few minutes apart, produced:
+
+    42.0-47.5 fps      and      27.2-31.3 fps
+
+That is a ~35% swing with no code change, so a figure recorded in one session
+cannot be compared against one recorded in another. Comparing across sessions
+will invent improvements and regressions that are not there.
+
+Capture both arms back to back in one sitting, using `--extension-source` to
+point one of them at the other revision:
+
+```bash
+git worktree add /tmp/baseline <commit>
+npm run perf:firefox -- --blockable-every 8 --extension-source /tmp/baseline --output artifacts/before.json
+npm run perf:firefox -- --blockable-every 8 --output artifacts/after.json
+```
+
+Then read the per-run spreads, not just the medians: if the two ranges overlap,
+the result is directional at best. A clean result has non-overlapping ranges.
+
 ## Enterprise policies invalidate the comparison
 
 A `force_installed` ExtensionSettings policy applies to every profile on the
