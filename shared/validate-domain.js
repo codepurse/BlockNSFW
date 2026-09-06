@@ -25,6 +25,33 @@
   var DOMAIN_REGEX =
     /^(?=.{1,253}$)([a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$/;
 
+  // Loopback and private addresses are whitelistable too. `localhost` and a
+  // bare IP are the two shapes DOMAIN_REGEX cannot express -- it requires a dot
+  // and a letters-only TLD -- so someone trying to allow their own dev server
+  // got "Please enter a valid domain" whatever they typed, with no accepted
+  // spelling at all. That mattered because the page-level heuristics did block
+  // localhost, leaving no way out of it.
+  //
+  // Only these two shapes are added, NOT bare labels in general: a whitelist
+  // entry covers its subdomains, so accepting "com" would quietly allow every
+  // .com domain there is. `localhost` carries no such risk (RFC 6761 reserves
+  // the whole subtree) and an IP literal has no subdomains.
+  var LOCALHOST_REGEX =
+    /^(?=.{1,253}$)([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)*localhost$/;
+  var IPV4_REGEX = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/;
+
+  function isIpv4Address(value) {
+    var m = String(value).match(IPV4_REGEX);
+    if (!m) return false;
+    for (var i = 1; i <= 4; i++) {
+      // A leading zero means someone typed an octal-looking octet; refuse it
+      // rather than guess which of the two readings they meant.
+      if (m[i].length > 1 && m[i].charAt(0) === '0') return false;
+      if (+m[i] > 255) return false;
+    }
+    return true;
+  }
+
   // Normalize a user-entered string to a bare hostname, then validate it.
   // Returns the cleaned domain (lowercased, no scheme / www. / path / trailing
   // dot) on success, or null if it is not a well-formed domain.
@@ -35,6 +62,7 @@
     domain = domain.split('/')[0];   // drop any path
     domain = domain.split(':')[0];   // drop any port
     domain = domain.replace(/\.$/, ''); // drop trailing dot (FQDN form)
+    if (LOCALHOST_REGEX.test(domain) || isIpv4Address(domain)) return domain;
     return DOMAIN_REGEX.test(domain) ? domain : null;
   }
 

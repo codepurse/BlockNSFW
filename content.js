@@ -849,6 +849,72 @@ function hasModerateContextSignals(text) {
   return false;
 }
 
+// --- Local hosts ----------------------------------------------------------
+// Loopback, private ranges, the reserved local TLDs and bare intranet labels:
+// names that mean something only on this machine or this network. Mirrors
+// isLocalHostname / isIpLiteral in shared/hostname.js, with an inline fallback
+// for the case where that module did not load.
+
+function hostIsLocal(host) {
+  const helpers = (typeof HostnameNormalize !== 'undefined') ? HostnameNormalize : null;
+  if (helpers && helpers.isLocalHostname) return helpers.isLocalHostname(host);
+  const h = normalizeHost(host).replace(/^\[/, '').replace(/\]$/, '').replace(/\.+$/, '');
+  if (!h) return false;
+  if (h.includes(':')) {
+    return h === '::1' || h === '::' || /^f[cd]/.test(h) || /^fe[89ab]/.test(h);
+  }
+  if (!h.includes('.')) return true;
+  if (/^(?:0|10|127)\./.test(h)) return true;
+  if (/^192\.168\./.test(h)) return true;
+  if (/^169\.254\./.test(h)) return true;
+  if (/^172\.(?:1[6-9]|2\d|3[01])\./.test(h)) return true;
+  return /\.(?:localhost|local|test|example|invalid|internal|home\.arpa)$/.test(h);
+}
+
+function hostIsIpLiteral(host) {
+  const helpers = (typeof HostnameNormalize !== 'undefined') ? HostnameNormalize : null;
+  if (helpers && helpers.isIpLiteral) return helpers.isIpLiteral(host);
+  const h = normalizeHost(host).replace(/^\[/, '').replace(/\]$/, '').replace(/\.+$/, '');
+  if (!h) return false;
+  if (/^(?:\d{1,3}\.){3}\d{1,3}$/.test(h)) return true;
+  return h.includes(':') && /^[0-9a-f:.]+$/.test(h);
+}
+
+/**
+ * Is the page itself on a local host?
+ *
+ * This gates the three heuristic scans below — page metadata, page body text,
+ * and the AI text classifier. Those infer what an *unknown* site is about from
+ * a handful of keywords, and localhost is not an unknown site: it is whatever
+ * the person at this keyboard is building. The inference is wrong there often
+ * enough to be worse than useless. checkPageMetadata blocks on a single
+ * keyword anywhere in the title or seven meta tags, so every dev page whose
+ * metadata mentioned adult content was blocked on sight -- including the pages
+ * of a tool for blocking it -- and `localhost` could not even be whitelisted,
+ * so there was no way out.
+ *
+ * Deliberately NOT exempted: the user's own custom blocklist and title
+ * patterns (they typed those, which is an instruction rather than a guess) and
+ * AI image classification (it judges the picture in front of it rather than
+ * guessing from a word). A public IP literal is not local either -- it can
+ * serve anything -- which is why this asks hostIsLocal and not hostIsIpLiteral.
+ *
+ * Memoized: the page's host cannot change without a navigation, and the scans
+ * ask on every pass.
+ */
+let _localPageCache = null;
+
+function isLocalPage() {
+  if (_localPageCache === null) {
+    try {
+      _localPageCache = hostIsLocal(window.location.hostname);
+    } catch (_) {
+      _localPageCache = false;
+    }
+  }
+  return _localPageCache;
+}
+
 // Can a public resolver meaningfully answer for this hostname?
 //
 // No, for anything public DNS has no record of: `localhost`, a bare intranet
@@ -858,19 +924,10 @@ function hasModerateContextSignals(text) {
 // Those all come back NXDOMAIN, and the block detector reads NXDOMAIN as
 // "filtered" (see shared/dns-providers.js), so with DNS Protection on every
 // local development server was redirected to the blocked page on every single
-// load. The background worker refuses these too — this check just saves the
+// load. The background worker refuses these too -- this check just saves the
 // round trip. Mirrors isDnsCheckableHost in background.js.
 function isDnsCheckableHost(host) {
-  const helpers = (typeof HostnameNormalize !== 'undefined') ? HostnameNormalize : null;
-  if (helpers && helpers.isLocalHostname && helpers.isIpLiteral) {
-    return !helpers.isLocalHostname(host) && !helpers.isIpLiteral(host);
-  }
-  // Mirror of the shared predicate, for the case where the module did not load.
-  const h = normalizeHost(host).replace(/^\[/, '').replace(/\]$/, '').replace(/\.+$/, '');
-  if (!h || !h.includes('.')) return false;
-  if (h.includes(':')) return false;
-  if (/^(?:\d{1,3}\.){3}\d{1,3}$/.test(h)) return false;
-  return !/\.(?:localhost|local|test|example|invalid|internal|home\.arpa)$/.test(h);
+  return !hostIsLocal(host) && !hostIsIpLiteral(host);
 }
 
 function hostMatchesDomain(host, domain) {
@@ -1972,6 +2029,7 @@ function checkPageMetadata() {
   // Skip search engines (users need to search)
   if (getSearchEngine()) return false;
   if (isExtensionStorePage()) return false;
+  if (isLocalPage()) return false;
   if (!useSmartBlocking) return false;
   
   let textToCheck = document.title || '';
@@ -2005,7 +2063,10 @@ function checkPageMetadata() {
       title: document.title
     });
     
-    redirectToBlockedPage('metadata_scan');
+    // Name the keyword that fired. Without it this block was undiagnosable:
+    // the page says only "its title or metadata matched", and unlike the body
+    // scan below it passed nothing for the blocked page to show.
+    redirectToBlockedPage('metadata_scan', { matched: analysis.matchedKeywords.slice(0, 5) });
     return true;
   }
   
@@ -2044,6 +2105,7 @@ function checkPageBodyText() {
   if (blockedTriggered) return false;
   if (getSearchEngine()) return false;
   if (isExtensionStorePage()) return false;
+  if (isLocalPage()) return false;
   if (!useSmartBlocking || !document.body) return false;
 
   const lines = getPageTextLinesForScan();
@@ -2149,6 +2211,7 @@ function checkPageTextWithModel() {
   if (!isEnabled || !aiTextBlocker) return false;
   if (getSearchEngine()) return false;        // users need to search
   if (isExtensionStorePage()) return false;
+  if (isLocalPage()) return false;
   if (typeof TextClassifier === 'undefined' || !document.body) return false;
 
   if (!textModelReady || !textModel) {

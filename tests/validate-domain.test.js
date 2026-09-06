@@ -44,7 +44,9 @@ test('validateDomain: trims surrounding whitespace', () => {
 
 test('validateDomain: rejects malformed input', () => {
   assert.equal(validateDomain(''), null);
-  assert.equal(validateDomain('localhost'), null);          // no TLD
+  // 'localhost' used to be listed here as "no TLD". It is now deliberately
+  // accepted — see "accepts localhost and its subtree" below — because refusing
+  // it left no way to whitelist a local dev server.
   assert.equal(validateDomain('not a domain at all !!'), null);
   assert.equal(validateDomain('.com'), null);               // empty label
   assert.equal(validateDomain('example.'), null);           // empty TLD
@@ -55,4 +57,42 @@ test('validateDomain: rejects malformed input', () => {
   assert.equal(validateDomain(null), null);
   assert.equal(validateDomain(undefined), null);
   assert.equal(validateDomain(12345), null);
+});
+
+// --- Local and private hosts ------------------------------------------------
+// The whitelist inputs refused `localhost` and every bare IP: DOMAIN_REGEX
+// requires a dot and a letters-only TLD, so someone trying to allow their own
+// dev server got "Please enter a valid domain" whatever they typed. There was
+// no accepted spelling, which meant no way out of a page-level block.
+
+test('validateDomain: accepts localhost and its subtree', () => {
+  assert.equal(validateDomain('localhost'), 'localhost');
+  assert.equal(validateDomain('localhost:3000'), 'localhost');
+  assert.equal(validateDomain('http://localhost:8080/app'), 'localhost');
+  assert.equal(validateDomain('dev.localhost'), 'dev.localhost');
+});
+
+test('validateDomain: accepts a bare IPv4 address', () => {
+  assert.equal(validateDomain('127.0.0.1'), '127.0.0.1');
+  assert.equal(validateDomain('127.0.0.1:5173'), '127.0.0.1');
+  assert.equal(validateDomain('192.168.1.10'), '192.168.1.10');
+  assert.equal(validateDomain('10.0.0.5'), '10.0.0.5');
+});
+
+test('validateDomain: still refuses a bare label', () => {
+  // This is the reason localhost is special-cased rather than single labels
+  // being allowed in general: a whitelist entry covers its subdomains, so "com"
+  // would quietly allow every .com domain there is.
+  assert.equal(validateDomain('com'), null);
+  assert.equal(validateDomain('xyz'), null);
+  assert.equal(validateDomain('localhosts'), null);
+  assert.equal(validateDomain('notlocalhost'), null);
+});
+
+test('validateDomain: refuses a malformed address', () => {
+  assert.equal(validateDomain('999.1.1.1'), null);
+  assert.equal(validateDomain('1.2.3'), null);
+  // A leading zero reads as octal to some resolvers and decimal to others;
+  // refuse rather than pick one.
+  assert.equal(validateDomain('127.00.0.1'), null);
 });
