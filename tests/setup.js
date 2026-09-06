@@ -79,8 +79,11 @@ function makeChromeStub() {
   return stub;
 }
 
-function loadBackgroundContext() {
-  const source = fs.readFileSync(SOURCE_PATH, 'utf8');
+// `sourcePath` lets a caller load a background.js from somewhere other than the
+// working tree — a git worktree at an older commit, say — so two revisions can
+// be driven through the identical stub and compared. Defaults to this tree.
+function loadBackgroundContext(sourcePath = SOURCE_PATH) {
+  const source = fs.readFileSync(sourcePath, 'utf8');
   const sharedBrowserKeySource = fs.readFileSync(SHARED_BROWSER_KEY_PATH, 'utf8');
   const sharedHostnameSource = fs.readFileSync(SHARED_HOSTNAME_PATH, 'utf8');
   const sharedHostKeywordsSource = fs.readFileSync(SHARED_HOST_KEYWORDS_PATH, 'utf8');
