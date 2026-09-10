@@ -111,6 +111,29 @@ protected when they are not — check by hand every release.
 ## 7. Publish
 
 - [ ] Upload correct browser-specific package
-- [ ] Publish release notes
+- [ ] Publish release notes (`RELEASE_NOTES_<version>.md`)
 - [ ] Tag release in git if desired
 - [ ] Upload packaged zips to GitHub Release if using GitHub Releases
+
+### After the stores accept the upload
+
+- [ ] **Bump `latest` in `data/version.json` to the version now live, and push
+      it to `main`.** This is the file `checkForUpdate()` fetches, and it is
+      the only thing that makes the in-product "update available" banner
+      appear. It must move *after* publishing, not before — the extension
+      compares it against the installed version, so naming a build the stores
+      have not accepted yet tells users to fetch something that does not
+      exist.
+
+      It went unbumped from 1.6.1 through the whole 1.7.x line, which meant
+      the banner never appeared for anyone for three months. Nothing catches
+      that automatically: only the store knows what is published, and during
+      release prep the manifest is *supposed* to be ahead. The test suite only
+      guards the other direction — `tests/update-manifest-consistency.test.js`
+      fails if `version.json` ever gets ahead of the manifest, or names a
+      version with no changelog entry.
+
+- [ ] Update `updatedAt` and `notes` in the same edit — `notes` is shown in
+      the banner
+- [ ] Confirm the per-store URLs still resolve (`chromeUrl`, `firefoxUrl`,
+      `edgeUrl`); each browser is routed to its own listing

@@ -7,7 +7,7 @@ Project status:
 - Already used by thousands of users
 - Source-first repo with Chrome and Firefox build scripts
 
-Current version: `1.6.1`
+Current version: `1.7.7`
 
 ## Install
 
@@ -32,11 +32,15 @@ BlockNSFW combines several protection layers:
 - Domain blocking with local fallback rules plus cached remote blocklist updates. IDN / punycode hostnames (e.g. `xn--porn-tqa.net`) are retained at runtime, not silently dropped.
 - Hostname smart filter that scans both the ASCII / punycode form and the decoded Unicode form of a hostname, with multilingual adult-hostword coverage (Chinese, Korean, Russian, Arabic, Thai, plus transliterated Latin).
 - Page and visible-content filtering through a Manifest V3 content script
+- **On-device AI image detection** (opt-in). Two models: a bundled NSFW.js MobileNetV2, or Marqo's ViT-384 whose weights are fetched once on first use. Images are never uploaded.
+- **On-device AI text classification** (opt-in, beta). Currently requires corroboration from the image scanner before it will block a page on its own.
 - Search SafeSearch enforcement on Google, Bing, DuckDuckGo, Yahoo, Brave, Ecosia, Qwant, AOL Search, Presearch, and Yandex
-- Optional DNS-based blocking through Cloudflare for Families
+- Optional DNS-based blocking through one of four filtering resolvers — Cloudflare for Families, AdGuard DNS Family, Mullvad DNS Family, CleanBrowsing — or any DNS-over-HTTPS endpoint you supply
+- **Ruleset subscriptions**: follow a blocklist someone else maintains, in uBlacklist's format. Subscribed lists can only ever add blocks, never remove them.
+- **PIN and access-code locks** over the settings that would weaken protection
 - Reddit NSFW subreddit checks for Reddit-specific filtering paths
 - Optional Facebook Reels and Instagram Reels blocking toggles
-- Local stats, streak tracking, whitelist management, and audit views
+- First-run onboarding, local stats, streak tracking, whitelist management, and audit views
 - Manual community reports for blocked / missed sites
 
 ## Architecture
@@ -79,7 +83,18 @@ Most filtering decisions happen locally in the browser, but this project is **no
 Network requests may occur for these features:
 
 - Remote blocklist and whitelist updates from GitHub-hosted text files
-- Optional DNS filtering through `family.cloudflare-dns.com`
+- A twice-daily update check against a small `version.json` in this repository
+- Optional DNS filtering through whichever resolver you select — Cloudflare for
+  Families, AdGuard DNS Family, Mullvad DNS Family, CleanBrowsing, or a custom
+  DNS-over-HTTPS endpoint you provide. Queries go straight from your browser to
+  that resolver; nothing passes through our servers. A preset that stops
+  answering fails over to a second one on a different network; a custom
+  resolver deliberately does not
+- Ruleset subscriptions, which fetch whichever URLs you have subscribed to,
+  once a day
+- The optional ViT-384 image model's weights, fetched once from a GitHub-hosted
+  URL if you select that model. The traffic goes one way — your images are
+  never uploaded
 - Reddit subreddit NSFW checks through Reddit endpoints
 - Optional manual community reports through Appwrite-hosted backend
 

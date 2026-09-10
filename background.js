@@ -628,11 +628,17 @@ let updateCheckPromise = null;
 // Prefer the store link for the running browser, falling back to a generic URL.
 // Uses detectBrowserKey() (UA-based) rather than `typeof browser`, which misfires
 // on Chrome — see the note there.
+//
+// Edge is its own key and its own store. This used to test only for Firefox and
+// send everything else to chromeUrl, which would have handed Edge users a
+// Chrome Web Store link they cannot update an Edge-installed extension from.
+// A Chromium fork with no store of its own (Brave, Opera, Vivaldi) buckets as
+// 'chrome' in detectBrowserKey and is correctly served the Chrome link.
 function pickUpdateUrl(data) {
   if (!data || typeof data !== 'object') return DEFAULT_UPDATE_URL;
-  const isFirefox = detectBrowserKey() === 'firefox';
-  if (isFirefox && typeof data.firefoxUrl === 'string' && data.firefoxUrl) return data.firefoxUrl;
-  if (!isFirefox && typeof data.chromeUrl === 'string' && data.chromeUrl) return data.chromeUrl;
+  const byBrowser = { firefox: data.firefoxUrl, edge: data.edgeUrl, chrome: data.chromeUrl };
+  const preferred = byBrowser[detectBrowserKey()];
+  if (typeof preferred === 'string' && preferred) return preferred;
   if (typeof data.url === 'string' && data.url) return data.url;
   return DEFAULT_UPDATE_URL;
 }
