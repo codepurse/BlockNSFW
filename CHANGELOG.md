@@ -6,6 +6,11 @@ All notable project changes should be documented here going forward.
 
 ## [1.8.0] - 2026-09-10
 
+> **Includes everything in 1.7.7**, which was prepared but never published
+> separately — its six fixes reach users for the first time in this release.
+> Anyone updating from 1.7.6 receives both sets. The `[1.7.7]` section below
+> is kept as the record of what those changes were.
+
 The release where blocking stops being something the extension does *to* a
 page after it starts loading, and becomes something the browser refuses
 outright. Two long-standing structural gaps close: blocked sites no longer

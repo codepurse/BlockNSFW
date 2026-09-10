@@ -2134,7 +2134,7 @@
       <div class="card-header">
         <h2 class="card-title">What’s New <span id="whats-new-version" class="whats-new-version"></span></h2>
         <p class="card-description" style="margin-bottom: 0.75rem;">
-          The headlines from this release. <a href="changelog.html" target="_blank" rel="noopener" style="color: var(--primary-hover); font-weight: 600; text-decoration: none;">📜 See the full changelog →</a>
+          The headlines from this release, which also carries everything prepared for 1.7.7. <a href="changelog.html" target="_blank" rel="noopener" style="color: var(--primary-hover); font-weight: 600; text-decoration: none;">📜 See the full changelog →</a>
         </p>
         <div class="card-description">
           <ul style="margin: 0; padding-left: 1.1rem">
@@ -2143,6 +2143,17 @@
             <li><strong>The blocked page no longer leaves the address in your history</strong> &mdash; The site you were blocked from was written into the address of the blocked page, which put it in your browser history, in address-bar suggestions, and &mdash; if you have history sync on &mdash; in your Google account. It is now held in memory for the moment it takes to show the page, and never written down.</li>
             <li><strong>The AI image filter stops re-checking the same pictures</strong> &mdash; Its results were meant to be remembered for a day, but the store it used was unreachable, so every page re-analysed every image from scratch. It remembers them now.</li>
           </ul>
+          <details class="wn-details">
+            <summary aria-label="Show the rest of this release&rsquo;s changes"><span class="wn-toggle-closed">Show 6 more &#9662;</span><span class="wn-toggle-open">Show less &#9652;</span></summary>
+            <ul style="margin: 0; padding-left: 1.1rem">
+              <li><strong>Blogspot blogs and some government sites were being blocked</strong> &mdash; A single entry on the blocklist could block an entire hosting platform. <code class="code">www.blogspot.com</code> was listed, the extension trims <code class="code">www.</code> from addresses, and what was left blocked every Blogger blog on the internet &mdash; and separately, every Mexican government site. If you whitelisted a site to work around this, you can remove that entry.</li>
+              <li><strong>A blocked word written as a pattern could freeze the page</strong> &mdash; Certain patterns take many seconds to check against ordinary text, and one saved word of that shape slowed every page you opened. They are refused when you save them now, with an explanation of what to change.</li>
+              <li><strong>Some sites could slip past the keyword filter</strong> &mdash; A site avoided the filter entirely just by having an everyday word like &ldquo;safe&rdquo;, &ldquo;help&rdquo; or &ldquo;study&rdquo; somewhere in its address.</li>
+              <li><strong>A website could put its own content on the blocked page</strong> &mdash; If you use a custom blocked page written in HTML, the address you were blocked from was dropped into your template without being made safe first.</li>
+              <li><strong>Nothing about your browsing is written into the page any more</strong> &mdash; Every page you opened had its title and address logged into that page&rsquo;s own console, where the site&rsquo;s analytics tools can read it. On AOL and Yahoo, so was your search.</li>
+              <li><strong>Blocked videos and embedded content are counted again</strong> &mdash; Three kinds of block never reached your statistics or the toolbar counter, which is why the counter in the corner of the page and the one on the toolbar sometimes disagreed.</li>
+            </ul>
+          </details>
         </div>
       </div>
     </div>

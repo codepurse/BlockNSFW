@@ -64,6 +64,24 @@ from where it was writing, and the failure was silent — so every page analysed
 every image from scratch, every time. If you use it, pages with many images
 should feel noticeably lighter.
 
+## Also in this release: everything from 1.7.7
+
+1.7.7 was prepared but never published on its own, so its fixes arrive here.
+The full detail is in `RELEASE_NOTES_1.7.7.md`; the ones you might notice:
+
+- **Blogspot blogs and Mexican government sites were being blocked.** A single
+  entry on the blocklist could take out an entire hosting platform. If you
+  whitelisted a site to work around that, you can remove the entry now.
+- **A blocked word written as a pattern could freeze the page.** Those
+  patterns are refused when you save them now.
+- **Some sites could slip past the keyword filter** by having an ordinary word
+  like "safe" or "help" in their address.
+- **A website could put its own content on the blocked page**, if you use a
+  custom blocked page written in HTML.
+- **Nothing about your browsing is written into the page's console any more.**
+- **Blocked videos and embedded content are counted again** in your
+  statistics.
+
 ## Upgrading
 
 Nothing to do. Settings carry over.
@@ -75,6 +93,12 @@ Nothing to do. Settings carry over.
 - **If a site you allowed still seems partly blocked**, reload it once. Your
   whitelist now also applies at the network layer, and the rules are rebuilt
   when the extension starts.
+- **A saved blocked word written as a pattern that repeats a repeat**, such as
+  `/(a+)+/`, has stopped matching — those are the ones that could freeze a
+  page. Rewrite it without the inner `+` and save again.
+- **A site may be newly blocked** if its address contains one of the eight
+  over-broad "safe" words removed in 1.7.7. Whitelist it, and please report
+  it.
 
 ## For contributors
 
