@@ -7,9 +7,11 @@ function getParam(name) {
 
 const url = getParam('url') || 'Unknown URL';
 const reason = getParam('reason') || '';
-const mode = getParam('mode') || '';
 const matched = getParam('matched') || '';
 const score = getParam('score') || '';
+// `mode` is deliberately not read from the query string any more — see the
+// plain-HTML branch at the bottom of this file. content.js still sends it, so
+// older copies of the blocked page keep working during an update.
 
 function getReasonMeta(reasonCode) {
   switch (reasonCode) {
@@ -173,22 +175,50 @@ function goBack() {
   }
 }
 
-// User-supplied HTML replaces the document outright.
-if (mode === 'plain_html') {
-  (async () => {
-    try {
-      const { pblocker_settings: settings } = await browserAPI.storage.local.get('pblocker_settings');
-      const html = settings && typeof settings.plainBlockedPageHtml === 'string' ? settings.plainBlockedPageHtml : '';
-      if (!html || !html.trim()) return;
-      const rendered = html
-        .replace(/\{\{\s*url\s*\}\}/g, url)
-        .replace(/\{\{\s*reason\s*\}\}/g, reasonMeta.detail);
-      document.open();
-      document.write(rendered);
-      document.close();
-    } catch (_) {}
-  })();
+// Values substituted into the user's template. Everything on this page comes
+// out of the query string, and blocked.html is a web-accessible resource — so
+// any website can navigate to it, or frame it, with a `url` of its choosing.
+// Written into the template unescaped, that is HTML injection into the
+// extension's own origin.
+//
+// The extension CSP (script-src 'self') stops injected script from running,
+// but it does not stop markup: an attacker could render a convincing
+// "BlockNSFW — enter your PIN to continue" form at a genuine
+// chrome-extension:// address, and img-src is unrestricted so the result can
+// be sent somewhere. PIN phishing against this particular audience is not a
+// theoretical concern.
+//
+// Only the substituted values are escaped. The template itself is the user's
+// own HTML and is meant to render as HTML — that is the whole feature.
+function escapeHtml(value) {
+  return String(value == null ? '' : value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }
+
+// User-supplied HTML replaces the document outright.
+//
+// Which page type to render is read from settings, not from the `mode` query
+// parameter. The parameter is set by content.js from the same setting, so
+// legitimate navigations are unaffected — but taking it from the URL let any
+// website choose this rendering path for a user who had never selected it.
+(async () => {
+  try {
+    const { pblocker_settings: settings } = await browserAPI.storage.local.get('pblocker_settings');
+    if (!settings || settings.blockedPageType !== 'plain_html') return;
+    const html = typeof settings.plainBlockedPageHtml === 'string' ? settings.plainBlockedPageHtml : '';
+    if (!html || !html.trim()) return;
+    const rendered = html
+      .replace(/\{\{\s*url\s*\}\}/g, escapeHtml(url))
+      .replace(/\{\{\s*reason\s*\}\}/g, escapeHtml(reasonMeta.detail));
+    document.open();
+    document.write(rendered);
+    document.close();
+  } catch (_) {}
+})();
 
 document.addEventListener('DOMContentLoaded', () => {
   const settings = document.getElementById('settings');
