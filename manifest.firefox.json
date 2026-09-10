@@ -63,6 +63,8 @@
       "matches": [
         "<all_urls>"
       ],
+      "all_frames": true,
+      "match_about_blank": true,
       "js": [
         "shared/hostname.js",
         "shared/host-keywords.js",
