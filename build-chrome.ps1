@@ -77,6 +77,14 @@ foreach ($file in $RuntimeFiles) {
     }
 }
 
+Write-Host "==> Copying data files" -ForegroundColor Cyan
+# Only the public suffix list ships. data\HOSTS.txt and data\WHITELIST.txt
+# are the published sources the extension fetches at runtime, not package
+# content, so they are deliberately left out of the bundle.
+$DataOut = Join-Path $OutDir "data"
+New-Item -ItemType Directory -Path $DataOut -Force | Out-Null
+Copy-Item -Path (Join-Path $SrcDir "data\public-suffixes.txt") -Destination (Join-Path $DataOut "public-suffixes.txt") -Force
+
 $BuildTimestampToken = "__BLOCKNSFW_BUILD_TIMESTAMP_MS__"
 $BuildTimestampMs = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds().ToString()
 $BackgroundDst = Join-Path $OutDir "background.js"
@@ -90,6 +98,7 @@ if (-not $BackgroundSource.Contains($BuildTimestampToken)) {
 )
 
 $RequiredAssets = @(
+    "data\public-suffixes.txt",
     "vendor\tfjs\tf.es2017.js",
     "vendor\nsfwjs\nsfwjs.runtime.js",
     "nsfwjs\model.json",

@@ -19,6 +19,8 @@
       "shared/validate-domain.js",
       "shared/version-compare.js",
       "shared/keyword-pattern.js",
+      "shared/public-suffix.js",
+      "shared/domain-policy.js",
       "shared/ruleset.js",
       "shared/dns-providers.js",
       "shared/ai-image-models.js",

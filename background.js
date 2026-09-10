@@ -11,6 +11,8 @@ try {
     self.importScripts('shared/version-compare.js');
     self.importScripts('shared/validate-domain.js');
     self.importScripts('shared/keyword-pattern.js');
+    self.importScripts('shared/public-suffix.js');
+    self.importScripts('shared/domain-policy.js');
     self.importScripts('shared/ruleset.js');
     self.importScripts('shared/dns-providers.js');
     self.importScripts('shared/ai-image-models.js');
@@ -541,17 +543,82 @@ function markReady() {
   }
 }
 
-// Multi-tenant CDN parent domains that must not be parent-domain blocked.
-const SHARED_CDN_PARENT_DOMAINS = new Set([
-  'b-cdn.net', 'cloudfront.net', 'akamaized.net', 'akamaihd.net',
-  'azureedge.net', 'azurefd.net', 'cloudflare.net', 'fastly.net',
-  'fastlylb.net', 'cdn77.org', 'kxcdn.com', 'stackpathdns.com',
-  'edgecastcdn.net', 'imgix.net', 'scene7.com', 'amazonaws.com',
-  'digitaloceanspaces.com', 'r2.dev', 'netlify.app', 'vercel.app',
-  'pages.dev', 'herokuapp.com', 'github.io', 'imagedelivery.net',
-  'twimg.com', 'fbcdn.net', 'cdninstagram.com', 'gstatic.com',
-  'googleapis.com', 'ggpht.com',
-]);
+// --- Namespaces that must never stand in for their children ----------------
+//
+// isUrlInDefaultBlocklist() blocks a host when the host OR ANY PARENT of it is
+// listed. Right for `cdn.pornhub.com` matching `pornhub.com`; catastrophic
+// when the parent is a namespace anyone can register under.
+//
+// This shipped: data/HOSTS.txt carried `www.blogspot.com`, and
+// normalizeDomainForCache() strips `www.`, leaving `blogspot.com` — a public
+// suffix — so the parent walk matched EVERY Blogger blog, Google's own
+// included. `gob.mx`, listed bare, blocked every Mexican government site.
+//
+// The old defence was a hand-written list of 30 CDN parents, which held
+// neither of those, because the set of namespaces is open-ended and a hand
+// list cannot cover it. The Public Suffix List can, and it is intersected with
+// the blocklist on every load so a bad entry arriving in a remote refresh is
+// neutralised within the refresh interval rather than at the next release.
+//
+// Two curated lists remain, in shared/domain-policy.js: multi-tenant hosts the
+// PSL does not name (b-cdn.net and friends), and the handful of public
+// suffixes this project blocks wholesale on purpose (sex.hu).
+const SHARED_CDN_PARENT_DOMAINS = (typeof DomainPolicy !== 'undefined')
+  ? DomainPolicy.sharedHostParentSet()
+  : new Set(['b-cdn.net', 'fastly.net', 'amazonaws.com', 'twimg.com',
+             'fbcdn.net', 'cdninstagram.com', 'gstatic.com', 'ggpht.com']);
+
+const INTENTIONAL_SUFFIX_BLOCKS = (typeof DomainPolicy !== 'undefined')
+  ? DomainPolicy.blockedPublicSuffixSet()
+  : new Set(['sex.hu', 'szex.hu']);
+
+// Parsed data/public-suffixes.txt, and the small subset of it that actually
+// appears in the current blocklist. Only the subset is consulted per request.
+let publicSuffixList = null;
+let blocklistPublicSuffixes = new Set();
+
+async function loadPublicSuffixList() {
+  if (publicSuffixList) return publicSuffixList;
+  try {
+    const res = await fetch(browserAPI.runtime.getURL('data/public-suffixes.txt'));
+    publicSuffixList = self.PublicSuffix.parseList(await res.text());
+  } catch (error) {
+    // Fail closed on the SAFE side: with no list, nothing is treated as a
+    // public suffix and parent matching behaves as it did before. The curated
+    // lists above still apply.
+    console.warn('BlockNSFW: public suffix list unavailable', error);
+    publicSuffixList = { exact: new Set(), wildcard: new Set(), exception: new Set() };
+  }
+  return publicSuffixList;
+}
+
+/**
+ * Drop public-suffix entries from the effective blocklist. Runs after every
+ * load or refresh, so the guard tracks the list rather than the release.
+ *
+ * They are REMOVED rather than merely skipped during the parent walk, because
+ * `gob.mx` is in the list literally: an exact-match lookup for gob.mx hits
+ * before the walk ever runs, so skipping parents alone still blocked the
+ * Mexican government's own homepage. Removing the entry fixes both paths at
+ * once and leaves isSharedCDNParent responsible only for the curated
+ * multi-tenant hosts the PSL cannot name.
+ *
+ * The individually-listed children survive: the 15,316 explicit
+ * `*.blogspot.com` adult blogs are separate entries and still block. Only the
+ * namespace itself stops standing in for everything beneath it.
+ */
+async function applyPublicSuffixGuard() {
+  const list = await loadPublicSuffixList();
+  if (!self.PublicSuffix) return;
+  const found = self.PublicSuffix.publicSuffixesAmong(defaultBlocklistSet, list);
+  for (const intentional of INTENTIONAL_SUFFIX_BLOCKS) found.delete(intentional);
+  blocklistPublicSuffixes = found;
+  if (found.size === 0) return;
+  for (const suffix of found) defaultBlocklistSet.delete(suffix);
+  console.log(`BlockNSFW: dropped ${found.size} public-suffix entr` +
+    `${found.size === 1 ? 'y' : 'ies'} from the blocklist (each would have ` +
+    `blocked an entire namespace):`, [...found].slice(0, 10).join(', '));
+}
 
 function isSharedCDNParent(domain) {
   return SHARED_CDN_PARENT_DOMAINS.has(domain);
@@ -917,6 +984,7 @@ async function ensureRemoteBlocklistUpToDate(options = {}) {
           defaultBlocklist = remoteDomains.map(normalizeDomainForCache).filter(isLikelyDomain);
         }
         defaultBlocklistSet = new Set(defaultBlocklist);
+        await applyPublicSuffixGuard();
         await rebuildCompiledPatterns();
         return { meta: newMeta, domains: defaultBlocklist };
       }
@@ -1828,6 +1896,7 @@ async function loadDefaultBlocklist() {
     if (Array.isArray(cachedDomains) && cachedDomains.length > 0) {
       defaultBlocklist = cachedDomains;
       defaultBlocklistSet = new Set(defaultBlocklist);
+      await applyPublicSuffixGuard();
       console.log(`BlockNSFW: Loaded ${cachedDomains.length} domains from cached blocklist`);
       const meta = blocklistMeta || (await loadBlocklistMeta());
       if (meta && meta.updatedAt && (Date.now() - meta.updatedAt) > BLOCKLIST_CACHE_TTL) {
@@ -1844,6 +1913,7 @@ async function loadDefaultBlocklist() {
     const list = await res.json();
     defaultBlocklist = Array.isArray(list) ? list.map(normalizeDomainForCache).filter(isLikelyDomain) : [];
     defaultBlocklistSet = new Set(defaultBlocklist);
+    await applyPublicSuffixGuard();
     console.log(`BlockNSFW: Loaded ${defaultBlocklist.length} domains from packaged blocklist`);
 
     // A fresh release already carries a curated current snapshot. Mark it
