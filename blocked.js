@@ -5,10 +5,23 @@ function getParam(name) {
   return u.searchParams.get(name);
 }
 
-const url = getParam('url') || 'Unknown URL';
-const reason = getParam('reason') || '';
-const matched = getParam('matched') || '';
-const score = getParam('score') || '';
+// The detail normally arrives through session storage under a random key, so
+// the address of the blocked site never enters this page's URL — and so never
+// enters browser history, omnibox suggestions, or Chrome's history sync.
+// content.js used to put it in the query string, which meant `location.replace`
+// kept the adult URL out of history and then wrote a history entry containing
+// it anyway. See stashBlockedDetail() in content.js.
+//
+// The query-string form is still read, for three cases that all still occur: a
+// custom blocked page (someone else's document, which cannot read our
+// storage), a browser without session storage, and a redirect already in
+// flight when the extension updated.
+const detailKey = getParam('k') || '';
+
+let url = getParam('url') || 'Unknown URL';
+let reason = getParam('reason') || '';
+let matched = getParam('matched') || '';
+let score = getParam('score') || '';
 // `mode` is deliberately not read from the query string any more — see the
 // plain-HTML branch at the bottom of this file. content.js still sends it, so
 // older copies of the blocked page keep working during an update.
@@ -88,6 +101,7 @@ function getReasonMeta(reasonCode) {
   }
 }
 
+function renderDetail() {
 const reasonMeta = getReasonMeta(reason);
 
 const urlEl = document.getElementById('target-url');
@@ -154,6 +168,96 @@ if (reason && urlEl) {
   }
 }
 
+}
+
+/**
+ * Fetch the stashed detail, then render.
+ *
+ * content.js writes it fire-and-forget so the redirect is not delayed, which
+ * leaves a small race: this page can load before the write lands. One short
+ * retry covers it. If nothing arrives the page still renders — with a generic
+ * message rather than a wrong one — because a blocked page that fails to
+ * appear is far worse than one missing its reason line.
+ *
+ * The record is deleted after reading. It exists only to survive one
+ * navigation.
+ */
+async function loadStashedDetail() {
+  const area = browserAPI.storage && browserAPI.storage.session;
+  if (!detailKey || !area) return false;
+
+  for (const waitMs of [0, 60, 180]) {
+    if (waitMs) await new Promise(done => setTimeout(done, waitMs));
+    let record;
+    try {
+      const stored = await area.get(detailKey);
+      record = stored && stored[detailKey];
+    } catch (_) {
+      return false;
+    }
+    if (!record) continue;
+    try { area.remove(detailKey); } catch (_) {}
+
+    url = typeof record.url === 'string' && record.url ? record.url : url;
+    reason = typeof record.reason === 'string' ? record.reason : reason;
+    matched = Array.isArray(record.matched) ? record.matched.join(', ') : (record.matched || '');
+    score = (typeof record.score === 'number' && isFinite(record.score))
+      ? record.score.toFixed(2) : '';
+    return true;
+  }
+  return false;
+}
+
+/**
+ * User-supplied HTML replaces the document outright.
+ *
+ * Which page type to render is read from settings, not from the `mode` query
+ * parameter. content.js sets that parameter from the same setting, so
+ * legitimate navigations are unaffected — but taking it from the URL let any
+ * website choose this rendering path for a user who had never selected it.
+ *
+ * Only the substituted values are escaped. The template is the user's own
+ * HTML and is meant to render as markup; that is the feature.
+ *
+ * @returns {Promise<boolean>} whether it took over the document
+ */
+async function renderPlainHtml() {
+  try {
+    const { pblocker_settings: settings } = await browserAPI.storage.local.get('pblocker_settings');
+    if (!settings || settings.blockedPageType !== 'plain_html') return false;
+    const html = typeof settings.plainBlockedPageHtml === 'string' ? settings.plainBlockedPageHtml : '';
+    if (!html || !html.trim()) return false;
+    const rendered = html
+      .replace(/\{\{\s*url\s*\}\}/g, escapeHtml(url))
+      .replace(/\{\{\s*reason\s*\}\}/g, escapeHtml(getReasonMeta(reason).detail));
+    document.open();
+    document.write(rendered);
+    document.close();
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
+// One driver, so both rendering paths see the same detail. The stashed record
+// has to be read before either runs, or they render the query string's values
+// and the whole point of stashing it is lost.
+(async () => {
+  try {
+    await loadStashedDetail();
+  } catch (_) {
+    // Fall through and render whatever the query string carried.
+  }
+  try {
+    if (await renderPlainHtml()) return;
+  } catch (_) {}
+  try {
+    renderDetail();
+  } catch (error) {
+    console.warn('BlockNSFW: could not render blocked-page detail', error);
+  }
+})();
+
 // --- Page chrome ------------------------------------------------------------
 
 function runtimeURL(path) {
@@ -199,26 +303,6 @@ function escapeHtml(value) {
     .replace(/'/g, '&#39;');
 }
 
-// User-supplied HTML replaces the document outright.
-//
-// Which page type to render is read from settings, not from the `mode` query
-// parameter. The parameter is set by content.js from the same setting, so
-// legitimate navigations are unaffected — but taking it from the URL let any
-// website choose this rendering path for a user who had never selected it.
-(async () => {
-  try {
-    const { pblocker_settings: settings } = await browserAPI.storage.local.get('pblocker_settings');
-    if (!settings || settings.blockedPageType !== 'plain_html') return;
-    const html = typeof settings.plainBlockedPageHtml === 'string' ? settings.plainBlockedPageHtml : '';
-    if (!html || !html.trim()) return;
-    const rendered = html
-      .replace(/\{\{\s*url\s*\}\}/g, escapeHtml(url))
-      .replace(/\{\{\s*reason\s*\}\}/g, escapeHtml(reasonMeta.detail));
-    document.open();
-    document.write(rendered);
-    document.close();
-  } catch (_) {}
-})();
 
 document.addEventListener('DOMContentLoaded', () => {
   const settings = document.getElementById('settings');
