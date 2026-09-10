@@ -88,8 +88,11 @@ test('an over-long pattern is refused', () => {
 });
 
 test('a catastrophically slow pattern is refused', () => {
-  // The classic exponential blow-up. It is valid, so only measurement catches
-  // it — and it must be caught here rather than on the user's pages.
+  // The classic exponential blow-up. It is syntactically valid, so it has to be
+  // refused on shape: findNestedQuantifier() recognises a repeat nested in a
+  // repeat before the pattern is compiled or run. Measurement alone could not
+  // be trusted with it — compiled.test() is not interruptible, so a probe that
+  // does not return is never billed. See tests/redos-guard.test.js.
   const result = KP.validateEntry('/(a+)+$/');
   assert.equal(result.ok, false);
   assert.equal(result.isRegex, true);

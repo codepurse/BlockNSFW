@@ -11,6 +11,8 @@ try {
     self.importScripts('shared/version-compare.js');
     self.importScripts('shared/validate-domain.js');
     self.importScripts('shared/keyword-pattern.js');
+    self.importScripts('shared/public-suffix.js');
+    self.importScripts('shared/domain-policy.js');
     self.importScripts('shared/ruleset.js');
     self.importScripts('shared/dns-providers.js');
     self.importScripts('shared/ai-image-models.js');
@@ -520,6 +522,14 @@ const DEFAULT_STATS = {
   imageBlockedCount: 0,
   aiImageBlockedCount: 0,
   searchResultBlockedCount: 0,
+  // Recorded but not yet surfaced anywhere. content.js has always reported
+  // these three; the listener had no handler for them, so they counted for
+  // nothing at all. Giving them their own fields keeps the breakdown honest
+  // and means a future tile on the stats page is a UI change with history
+  // already behind it, rather than a counter starting from zero.
+  videoBlockedCount: 0,
+  iframeBlockedCount: 0,
+  socialPostBlockedCount: 0,
   lastBlocked: null,
   lastWebsiteBlocked: null,
 };
@@ -541,17 +551,82 @@ function markReady() {
   }
 }
 
-// Multi-tenant CDN parent domains that must not be parent-domain blocked.
-const SHARED_CDN_PARENT_DOMAINS = new Set([
-  'b-cdn.net', 'cloudfront.net', 'akamaized.net', 'akamaihd.net',
-  'azureedge.net', 'azurefd.net', 'cloudflare.net', 'fastly.net',
-  'fastlylb.net', 'cdn77.org', 'kxcdn.com', 'stackpathdns.com',
-  'edgecastcdn.net', 'imgix.net', 'scene7.com', 'amazonaws.com',
-  'digitaloceanspaces.com', 'r2.dev', 'netlify.app', 'vercel.app',
-  'pages.dev', 'herokuapp.com', 'github.io', 'imagedelivery.net',
-  'twimg.com', 'fbcdn.net', 'cdninstagram.com', 'gstatic.com',
-  'googleapis.com', 'ggpht.com',
-]);
+// --- Namespaces that must never stand in for their children ----------------
+//
+// isUrlInDefaultBlocklist() blocks a host when the host OR ANY PARENT of it is
+// listed. Right for `cdn.pornhub.com` matching `pornhub.com`; catastrophic
+// when the parent is a namespace anyone can register under.
+//
+// This shipped: data/HOSTS.txt carried `www.blogspot.com`, and
+// normalizeDomainForCache() strips `www.`, leaving `blogspot.com` — a public
+// suffix — so the parent walk matched EVERY Blogger blog, Google's own
+// included. `gob.mx`, listed bare, blocked every Mexican government site.
+//
+// The old defence was a hand-written list of 30 CDN parents, which held
+// neither of those, because the set of namespaces is open-ended and a hand
+// list cannot cover it. The Public Suffix List can, and it is intersected with
+// the blocklist on every load so a bad entry arriving in a remote refresh is
+// neutralised within the refresh interval rather than at the next release.
+//
+// Two curated lists remain, in shared/domain-policy.js: multi-tenant hosts the
+// PSL does not name (b-cdn.net and friends), and the handful of public
+// suffixes this project blocks wholesale on purpose (sex.hu).
+const SHARED_CDN_PARENT_DOMAINS = (typeof DomainPolicy !== 'undefined')
+  ? DomainPolicy.sharedHostParentSet()
+  : new Set(['b-cdn.net', 'fastly.net', 'amazonaws.com', 'twimg.com',
+             'fbcdn.net', 'cdninstagram.com', 'gstatic.com', 'ggpht.com']);
+
+const INTENTIONAL_SUFFIX_BLOCKS = (typeof DomainPolicy !== 'undefined')
+  ? DomainPolicy.blockedPublicSuffixSet()
+  : new Set(['sex.hu', 'szex.hu']);
+
+// Parsed data/public-suffixes.txt, and the small subset of it that actually
+// appears in the current blocklist. Only the subset is consulted per request.
+let publicSuffixList = null;
+let blocklistPublicSuffixes = new Set();
+
+async function loadPublicSuffixList() {
+  if (publicSuffixList) return publicSuffixList;
+  try {
+    const res = await fetch(browserAPI.runtime.getURL('data/public-suffixes.txt'));
+    publicSuffixList = self.PublicSuffix.parseList(await res.text());
+  } catch (error) {
+    // Fail closed on the SAFE side: with no list, nothing is treated as a
+    // public suffix and parent matching behaves as it did before. The curated
+    // lists above still apply.
+    console.warn('BlockNSFW: public suffix list unavailable', error);
+    publicSuffixList = { exact: new Set(), wildcard: new Set(), exception: new Set() };
+  }
+  return publicSuffixList;
+}
+
+/**
+ * Drop public-suffix entries from the effective blocklist. Runs after every
+ * load or refresh, so the guard tracks the list rather than the release.
+ *
+ * They are REMOVED rather than merely skipped during the parent walk, because
+ * `gob.mx` is in the list literally: an exact-match lookup for gob.mx hits
+ * before the walk ever runs, so skipping parents alone still blocked the
+ * Mexican government's own homepage. Removing the entry fixes both paths at
+ * once and leaves isSharedCDNParent responsible only for the curated
+ * multi-tenant hosts the PSL cannot name.
+ *
+ * The individually-listed children survive: the 15,316 explicit
+ * `*.blogspot.com` adult blogs are separate entries and still block. Only the
+ * namespace itself stops standing in for everything beneath it.
+ */
+async function applyPublicSuffixGuard() {
+  const list = await loadPublicSuffixList();
+  if (!self.PublicSuffix) return;
+  const found = self.PublicSuffix.publicSuffixesAmong(defaultBlocklistSet, list);
+  for (const intentional of INTENTIONAL_SUFFIX_BLOCKS) found.delete(intentional);
+  blocklistPublicSuffixes = found;
+  if (found.size === 0) return;
+  for (const suffix of found) defaultBlocklistSet.delete(suffix);
+  console.log(`BlockNSFW: dropped ${found.size} public-suffix entr` +
+    `${found.size === 1 ? 'y' : 'ies'} from the blocklist (each would have ` +
+    `blocked an entire namespace):`, [...found].slice(0, 10).join(', '));
+}
 
 function isSharedCDNParent(domain) {
   return SHARED_CDN_PARENT_DOMAINS.has(domain);
@@ -620,11 +695,17 @@ let updateCheckPromise = null;
 // Prefer the store link for the running browser, falling back to a generic URL.
 // Uses detectBrowserKey() (UA-based) rather than `typeof browser`, which misfires
 // on Chrome — see the note there.
+//
+// Edge is its own key and its own store. This used to test only for Firefox and
+// send everything else to chromeUrl, which would have handed Edge users a
+// Chrome Web Store link they cannot update an Edge-installed extension from.
+// A Chromium fork with no store of its own (Brave, Opera, Vivaldi) buckets as
+// 'chrome' in detectBrowserKey and is correctly served the Chrome link.
 function pickUpdateUrl(data) {
   if (!data || typeof data !== 'object') return DEFAULT_UPDATE_URL;
-  const isFirefox = detectBrowserKey() === 'firefox';
-  if (isFirefox && typeof data.firefoxUrl === 'string' && data.firefoxUrl) return data.firefoxUrl;
-  if (!isFirefox && typeof data.chromeUrl === 'string' && data.chromeUrl) return data.chromeUrl;
+  const byBrowser = { firefox: data.firefoxUrl, edge: data.edgeUrl, chrome: data.chromeUrl };
+  const preferred = byBrowser[detectBrowserKey()];
+  if (typeof preferred === 'string' && preferred) return preferred;
   if (typeof data.url === 'string' && data.url) return data.url;
   return DEFAULT_UPDATE_URL;
 }
@@ -917,6 +998,7 @@ async function ensureRemoteBlocklistUpToDate(options = {}) {
           defaultBlocklist = remoteDomains.map(normalizeDomainForCache).filter(isLikelyDomain);
         }
         defaultBlocklistSet = new Set(defaultBlocklist);
+        await applyPublicSuffixGuard();
         await rebuildCompiledPatterns();
         return { meta: newMeta, domains: defaultBlocklist };
       }
@@ -1591,7 +1673,11 @@ async function commitPendingBlocks() {
   const storedDaily = store[DAILY_STATS_KEY] || {};
   const daily = storedDaily.date === today
     ? { ...storedDaily }
-    : { date: today, blockedToday: 0, websiteBlocked: 0, imageBlocked: 0, imageAiBlocked: 0, searchResultBlocked: 0 };
+    : {
+        date: today, blockedToday: 0, websiteBlocked: 0, imageBlocked: 0,
+        imageAiBlocked: 0, searchResultBlocked: 0,
+        videoBlocked: 0, iframeBlocked: 0, socialPostBlocked: 0
+      };
   daily.blockedToday = (daily.blockedToday || 0) + totalEvents;
   for (const [type, n] of Object.entries(batch.stats)) {
     const field = DAILY_FIELD_BY_TYPE[type];
@@ -1631,18 +1717,28 @@ async function commitPendingBlocks() {
   });
 }
 
+// Every block type content.js can report needs an entry in BOTH maps, or the
+// event lands in the grand total with no line of its own. tests/message-
+// contract.test.js asserts the two maps and the listener stay in step with
+// what the content script actually sends.
 const STAT_FIELD_BY_TYPE = {
   website_blocked: 'websiteBlockedCount',
   image_filtered: 'imageBlockedCount',
   image_ai_filtered: 'aiImageBlockedCount',
-  search_result_filtered: 'searchResultBlockedCount'
+  search_result_filtered: 'searchResultBlockedCount',
+  video_filtered: 'videoBlockedCount',
+  iframe_filtered: 'iframeBlockedCount',
+  social_post_filtered: 'socialPostBlockedCount'
 };
 
 const DAILY_FIELD_BY_TYPE = {
   website_blocked: 'websiteBlocked',
   image_filtered: 'imageBlocked',
   image_ai_filtered: 'imageAiBlocked',
-  search_result_filtered: 'searchResultBlocked'
+  search_result_filtered: 'searchResultBlocked',
+  video_filtered: 'videoBlocked',
+  iframe_filtered: 'iframeBlocked',
+  social_post_filtered: 'socialPostBlocked'
 };
 
 /**
@@ -1828,6 +1924,7 @@ async function loadDefaultBlocklist() {
     if (Array.isArray(cachedDomains) && cachedDomains.length > 0) {
       defaultBlocklist = cachedDomains;
       defaultBlocklistSet = new Set(defaultBlocklist);
+      await applyPublicSuffixGuard();
       console.log(`BlockNSFW: Loaded ${cachedDomains.length} domains from cached blocklist`);
       const meta = blocklistMeta || (await loadBlocklistMeta());
       if (meta && meta.updatedAt && (Date.now() - meta.updatedAt) > BLOCKLIST_CACHE_TTL) {
@@ -1844,6 +1941,7 @@ async function loadDefaultBlocklist() {
     const list = await res.json();
     defaultBlocklist = Array.isArray(list) ? list.map(normalizeDomainForCache).filter(isLikelyDomain) : [];
     defaultBlocklistSet = new Set(defaultBlocklist);
+    await applyPublicSuffixGuard();
     console.log(`BlockNSFW: Loaded ${defaultBlocklist.length} domains from packaged blocklist`);
 
     // A fresh release already carries a curated current snapshot. Mark it
@@ -2334,11 +2432,19 @@ function senderUrl(message, sender) {
 }
 
 browserAPI.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  // A message that is not an object at all reached `message.type` below and
+  // threw inside the listener, which in Chrome surfaces only as a rejected
+  // send on the far side. Anything without a string type is not ours.
+  if (!message || typeof message.type !== 'string') {
+    // Except offscreen traffic, which is addressed by `target` and handled in
+    // the offscreen document rather than here.
+    return false;
+  }
   // Messages addressed to the offscreen document are handled there, not here.
-  if (message && message.target === 'offscreen-ai') return false;
-  // The four block notifications are the hot path — one message per blocked
-  // image on a page that can hold hundreds. They only touch memory here; the
-  // storage write happens once per batch. See queueBlockEvent.
+  if (message.target === 'offscreen-ai') return false;
+  // The block notifications are the hot path — one message per blocked image
+  // on a page that can hold hundreds. They only touch memory here; the storage
+  // write happens once per batch. See queueBlockEvent.
   if (message.type === 'image_filtered') {
     queueBlockEvent('image_filtered', {
       url: senderUrl(message, sender),
@@ -2368,6 +2474,37 @@ browserAPI.runtime.onMessage.addListener((message, sender, sendResponse) => {
     queueBlockEvent('search_result_filtered', {
       url: senderUrl(message, sender),
       reason: 'Search results filtered',
+      tabId: sender?.tab?.id,
+      count: typeof message.count === 'number' ? message.count : 1
+    });
+    sendResponse({ success: true });
+  } else if (message.type === 'video_filtered') {
+    // content.js has always sent this; nothing here received it, so a blocked
+    // video counted for nothing — not the badge, not the totals, not the
+    // audit log. The in-page pill counted it (COUNTED_BLOCK_TYPES includes
+    // 'video'), which is why the pill and the toolbar disagreed.
+    queueBlockEvent('video_filtered', {
+      url: senderUrl(message, sender),
+      reason: 'Video filtered',
+      tabId: sender?.tab?.id,
+      count: typeof message.count === 'number' ? message.count : 1
+    });
+    sendResponse({ success: true });
+  } else if (message.type === 'iframe_filtered') {
+    // Sent with the frame's `src` rather than a count, so the page URL comes
+    // from the sender. Same gap as video_filtered above.
+    queueBlockEvent('iframe_filtered', {
+      url: senderUrl(message, sender),
+      reason: 'Embedded frame filtered',
+      tabId: sender?.tab?.id
+    });
+    sendResponse({ success: true });
+  } else if (message.type === 'social_post_filtered') {
+    // Like the search pass, this reports how many posts one sweep hid: the
+    // badge counts each post, the stats record the sweep once.
+    queueBlockEvent('social_post_filtered', {
+      url: senderUrl(message, sender),
+      reason: 'Social posts filtered',
       tabId: sender?.tab?.id,
       count: typeof message.count === 'number' ? message.count : 1
     });
@@ -2708,7 +2845,16 @@ browserAPI.runtime.onMessage.addListener((message, sender, sendResponse) => {
     })();
     return true;
   }
-  return true; // Keep message channel open for async response
+  // Nothing matched. Returning true here held the port open for a response
+  // that was never going to come, so every unhandled message — which, until
+  // the three handlers above were added, meant every blocked video, frame and
+  // social post — left a channel dangling until the sender timed out and
+  // logged "The message port closed before a response was received".
+  //
+  // The async branches above each return true for themselves; the synchronous
+  // ones have already called sendResponse, and a synchronous response is
+  // delivered whatever this returns.
+  return false;
 });
 
 // ============================================
