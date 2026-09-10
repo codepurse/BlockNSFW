@@ -1171,14 +1171,30 @@ function matchesSubscriptionRule(urlStr, host) {
   return customPatternsMatchHost(urlStr, host, subscriptionPatterns);
 }
 
+// A deliberately broader net than matchesAdultKeywordHost: the adult tokens
+// here are matched as bare substrings, so this catches a token glued inside a
+// longer label ("freedomporn.com") that the strict label matcher declines.
+//
+// The safe-host side, however, defers to the shared segment-bounded rule
+// rather than doing its own substring test. As a substring check it was the
+// same bypass as the one in shared/host-keywords.js: "hentai-protect.io" and
+// "helpxxx.com" were exempted here too, so fixing only the shared module would
+// have left this path open. One rule, one place — see safeHostMatches.
 function isLikelyAdultHostEarly(host) {
   const h = normalizeHost(host);
   if (!h) return false;
-  const safeHostTokens = [
-    'help', 'recovery', 'quit', 'addiction', 'support', 'therapy', 'counseling', 'counselling', 'treatment',
-    'awareness', 'education', 'protect', 'protection', 'accountability'
-  ];
-  if (safeHostTokens.some(t => h.includes(t))) return false;
+  const safeMatch = (typeof HostBlockKeywords !== 'undefined' && HostBlockKeywords.safeHostMatches)
+    ? HostBlockKeywords.safeHostMatches
+    // Fallback if the shared module did not load. Mirrors safeHostMatches:
+    // whole hyphen-delimited segments only, never a bare substring.
+    : (value) => String(value || '').split('.').some((label) => {
+        if (!label) return false;
+        const padded = '-' + label + '-';
+        return ['help', 'recovery', 'quit', 'addiction', 'support', 'therapy',
+          'counseling', 'counselling', 'treatment', 'awareness', 'education',
+          'protection', 'accountability'].some(t => padded.indexOf('-' + t + '-') !== -1);
+      });
+  if (safeMatch(h)) return false;
   const adultHostTokens = ['porn', 'porno', 'pornography', 'xxx', 'nsfw', 'hentai'];
   return adultHostTokens.some(t => h.includes(t));
 }

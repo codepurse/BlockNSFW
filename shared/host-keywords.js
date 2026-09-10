@@ -147,14 +147,38 @@
     'porno-ru': 'ru TLD already covered by "porno"'
   };
 
-  // Safe-host bypass tokens. If a hostname contains any of these (broad
-  // substring), we suppress the block — these are recovery / accountability /
-  // education / support sites that may legitimately contain adult-themed
-  // words in their name (e.g. "pornhub-recovery.com" or "sex-addicts-help.org").
-  // The list is intentionally broad: a false negative on a support site is far
-  // worse than blocking a real adult site that also happens to mention "help".
-  // The DNS layer + HOSTS.txt + the strict adult list still catch the
-  // unambiguous cases.
+  // Safe-host bypass tokens. When one of these appears in a hostname we
+  // suppress the block — these are recovery / accountability / education /
+  // support sites that legitimately carry adult-themed words in their name
+  // (e.g. "pornhub-recovery.com" or "porn-addiction-treatment.org"). A false
+  // negative on a support site is far worse than missing one adult mirror, so
+  // this list stays generous in what it covers.
+  //
+  // MATCHING RULE (see safeHostMatches below): a token must occupy whole
+  // hyphen-delimited segments of a single label. It is NOT a bare substring.
+  //
+  // That distinction is the whole point. Substring matching meant any hostname
+  // *containing* one of these strings anywhere had the smart filter switched
+  // off wholesale — so "hentai-protect.io", "xnxx-safer.tv" and
+  // "cdn.safe.pornhub-mirror.com" were all exempt, and an operator could buy
+  // an exemption by putting "safe" in a new mirror's name. Segment matching
+  // keeps "porn-addiction-treatment.org" exempt (its segments really are
+  // "addiction" and "treatment") while "helpxxx.com" is not (its single
+  // segment is "helpxxx", not "help").
+  //
+  // CURATION RULE: a token must be safety-coded enough that an adult operator
+  // would not plausibly put it in a domain name. Words that are merely
+  // positive or generic are rejected — segment matching narrows them but does
+  // not make them safe, because the operator picks the segments. Removed for
+  // exactly that reason, and deliberately NOT to be re-added:
+  //   safe, safer   — free cover; "safe-<anything>" is one registration away
+  //   study, research, academic — an adult mirror adds "-study" at no cost
+  //   freedom, liberty — common in adult branding, not specific to recovery
+  //   protect       — the bare verb is generic; "protection" is kept, being
+  //                   long enough and strongly enough safety-coded to survive
+  // A genuine academic or research site caught by this narrowing has a real
+  // escape hatch already: data/WHITELIST.txt, which is exactly what the remote
+  // whitelist exists for.
   var SAFE_HOST_TOKENS = [
     'help',
     'recovery',
@@ -169,7 +193,6 @@
     'awareness',
     'education',
     'educate',
-    'protect',
     'protection',
     'accountability',
     'nofap',
@@ -177,20 +200,39 @@
     'stop-porn',
     'antiporn',
     'anti-porn',
-    'safer',
-    'safe',
     'healing',
     'rehab',
     'overcome',
     'overcoming',
-    'freedom',
-    'liberty',
     'testimonial',
-    'testimony',
-    'research',
-    'study',
-    'academic'
+    'testimony'
   ];
+
+  /**
+   * Does a safe token occupy whole hyphen-delimited segments of some label?
+   *
+   * Each label is padded with hyphens so a single indexOf covers the four
+   * positions a token can hold — the whole label, a prefix, a suffix, or a
+   * run in the middle — and covers hyphenated tokens ("stop-porn") with the
+   * same test as single words ("recovery").
+   *
+   *   "porn-addiction-treatment" -> "-porn-addiction-treatment-"
+   *      contains "-addiction-"  -> exempt (a real support site)
+   *   "helpxxx"                  -> "-helpxxx-"
+   *      does not contain "-help-" -> not exempt
+   */
+  function safeHostMatches(hostname) {
+    var labels = String(hostname == null ? '' : hostname).toLowerCase().split('.');
+    for (var i = 0; i < labels.length; i++) {
+      var label = labels[i];
+      if (!label) continue;
+      var padded = '-' + label + '-';
+      for (var j = 0; j < SAFE_HOST_TOKENS.length; j++) {
+        if (padded.indexOf('-' + SAFE_HOST_TOKENS[j] + '-') !== -1) return true;
+      }
+    }
+    return false;
+  }
 
   // Internal: run the strict scan over one form of the hostname.
   function labelMatches(candidate) {
@@ -212,20 +254,18 @@
   }
 
   // The strict hostname smart-match.
-  //   1) Safe-host bypass: if the ASCII hostname contains a recovery /
-  //      accountability / education / support token, do NOT block.
+  //   1) Safe-host bypass: if a recovery / accountability / education /
+  //      support token occupies whole hyphen-delimited segments of a label,
+  //      do NOT block. See safeHostMatches.
   //   2) Scan the ASCII / punycode form (whole-label / hyphen-bounded).
   //   3) If a decoded Unicode form differs, scan that too.
-  //   4) Never use a broad substring match for adult tokens — only the
-  //      safe-host bypass uses broad substring, and only because false
-  //      negatives there are far worse than false positives.
+  //   4) Never use a broad substring match, for adult tokens OR safe ones.
+  //      Both sides are segment-bounded, so neither a longer word containing
+  //      an adult token nor a longer word containing a safe token can decide
+  //      the verdict by accident.
   function matchesAdultKeywordHost(hostname) {
     if (!hostname) return false;
-    // Safe-host bypass runs on the normalized ASCII form.
-    var normalized = String(hostname).toLowerCase();
-    for (var s = 0; s < SAFE_HOST_TOKENS.length; s++) {
-      if (normalized.indexOf(SAFE_HOST_TOKENS[s]) >= 0) return false;
-    }
+    if (safeHostMatches(hostname)) return false;
     if (labelMatches(hostname)) return true;
     if (typeof root.HostnameNormalize !== 'undefined' && root.HostnameNormalize.getHostnameVariants) {
       try {
@@ -245,6 +285,7 @@
     AMBIGUOUS_HOST_KEYWORDS: AMBIGUOUS_HOST_KEYWORDS,
     ADULT_HOST_KEYWORDS: ADULT_HOST_KEYWORDS,
     SAFE_HOST_TOKENS: SAFE_HOST_TOKENS,
+    safeHostMatches: safeHostMatches,
     matchesAdultKeywordHost: matchesAdultKeywordHost
   };
 
