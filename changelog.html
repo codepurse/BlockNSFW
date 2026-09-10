@@ -181,6 +181,12 @@
       border: 1px solid rgba(99, 102, 241, 0.28);
     }
 
+    .tag-folded {
+      background: var(--surface-2);
+      color: var(--foreground-dim);
+      border: 1px solid var(--card-border);
+    }
+
     .group {
       margin-bottom: 1.5rem;
     }
@@ -285,11 +291,134 @@
 
   <div class="container">
 
+    <!-- ===================== 1.8.0 ===================== -->
+    <div class="release">
+      <div class="release-head">
+        <span class="release-version">1.8.0</span>
+        <span class="tag tag-current">Current</span>
+        <span class="release-date">September 2026</span>
+      </div>
+
+      <div class="group">
+        <div class="group-title">New</div>
+
+        <div class="entry">
+          <div class="entry-title">Blocked sites are stopped by the browser itself</div>
+          <div class="entry-body">
+            Until now a blocked site still received your request. Its address was looked up, a connection was made, cookies and the page you came from were sent &mdash; and only <em>then</em> did the extension stop the page and show you the blocked screen. You never saw the site, but the site saw you. The whole curated blocklist &mdash; 204,223 addresses &mdash; is now handed to the browser's own request engine, which refuses those requests outright. Nothing is contacted, and it happens before any script runs.
+          </div>
+        </div>
+
+        <div class="entry">
+          <div class="entry-title">Filtering now works inside embedded frames</div>
+          <div class="entry-body">
+            When a page embedded another page inside it, nothing inside that frame was ever examined &mdash; no image filter, no AI scanner, no text check. The frame's address was compared against the blocklist and that was all, so any mirror, shortener or redirector the list did not already know went straight through. Sites exist that do nothing but this. Frames are now filtered the same way pages are. Frames under 120 pixels on either side are skipped entirely, so ad slots and tracking pixels cost you nothing.
+          </div>
+        </div>
+      </div>
+
+      <div class="group">
+        <div class="group-title">Fixed</div>
+
+        <div class="entry">
+          <div class="entry-title">The blocked page no longer leaves the address in your history</div>
+          <div class="entry-body">
+            The blocked screen carried the address it stopped you from inside its own address &mdash; which put it in your browser history. It turned up in history search, was suggested in the address bar as you typed, and was uploaded to your Google account if you have history sync switched on. The words that triggered the block went with it. Those details now travel in memory only, are never written to disk, and are gone when the browser closes.
+          </div>
+        </div>
+
+        <div class="entry">
+          <div class="entry-title">The image scanner remembers its results again</div>
+          <div class="entry-body">
+            On Chrome the AI image scanner's 24-hour memory never actually worked. Every attempt to save a result was silently refused, so every page you opened re-scanned every image from scratch. It is stored as intended now, which makes repeat visits noticeably faster.
+          </div>
+        </div>
+      </div>
+
+      <div class="group">
+        <div class="group-title">Changed</div>
+
+        <div class="entry">
+          <div class="entry-title">Chrome 101 or newer is now required</div>
+          <div class="entry-body">
+            The new blocking method needs it &mdash; on older versions the rules would be thrown away without warning, which is worse than asking. Chrome 101 was released in April 2022. Firefox is unaffected: version 113 was already the minimum.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===================== 1.7.7 ===================== -->
+    <div class="release">
+      <div class="release-head">
+        <span class="release-version">1.7.7</span>
+        <span class="tag tag-folded">Included in 1.8.0</span>
+        <span class="release-date">September 2026</span>
+      </div>
+
+      <div class="group">
+        <div class="group-title">Fixed</div>
+
+        <div class="entry">
+          <div class="entry-body" style="margin-bottom: 1rem">
+            1.7.7 was prepared but never published on its own, so these fixes reached you as part of 1.8.0. They are listed separately as a record of what changed.
+          </div>
+        </div>
+
+        <div class="entry">
+          <div class="entry-title">Blogspot blogs and some government sites were being blocked</div>
+          <div class="entry-body">
+            A single entry on the blocklist could block an entire hosting platform. <span class="code">www.blogspot.com</span> was listed, the extension trims <span class="code">www.</span> from addresses, and what was left blocked every Blogger blog on the internet. Separately, <span class="code">gob.mx</span> did the same to every Mexican government site. The list is now checked against the registry of public domain suffixes on every load, so an entry like this is neutralised rather than waiting for a release. If you whitelisted a site to work around it, you can remove that entry.
+          </div>
+        </div>
+
+        <div class="entry">
+          <div class="entry-title">A blocked word written as a pattern could freeze the page</div>
+          <div class="entry-body">
+            Certain patterns take many seconds to check against ordinary text, and one saved word of that shape slowed down every page you opened. They are refused when you save them now, with an explanation of what to change. A pattern of that shape you had already saved has stopped matching &mdash; rewrite it and save again.
+          </div>
+        </div>
+
+        <div class="entry">
+          <div class="entry-title">Some sites could slip past the keyword filter</div>
+          <div class="entry-body">
+            A site avoided the filter entirely just by having an everyday word like &ldquo;safe&rdquo;, &ldquo;help&rdquo; or &ldquo;study&rdquo; somewhere in its address. Those words are now only honoured as a whole part of the address, and eight of the most generic were removed. A site you visit may be newly blocked as a result &mdash; whitelist it, and please report it.
+          </div>
+        </div>
+
+        <div class="entry">
+          <div class="entry-title">A website could put its own content on the blocked page</div>
+          <div class="entry-body">
+            If you use a custom blocked page written in HTML, the address you were blocked from was dropped into your template without being made safe first &mdash; so a site could have written its own text and forms onto the blocked screen, at the extension's own genuine address.
+          </div>
+        </div>
+
+        <div class="entry">
+          <div class="entry-title">Nothing about your browsing is written into the page any more</div>
+          <div class="entry-body">
+            Every page you opened had its title and address written into that page's own developer console, four times per visit, where the site's own analytics tools can read it. On AOL and Yahoo, so was what you searched for.
+          </div>
+        </div>
+
+        <div class="entry">
+          <div class="entry-title">Blocked videos and embedded content are counted again</div>
+          <div class="entry-body">
+            Three kinds of block never reached your statistics or the toolbar counter, which is why the counter in the corner of the page and the one on the toolbar sometimes disagreed.
+          </div>
+        </div>
+
+        <div class="entry">
+          <div class="entry-title">The update notice works again</div>
+          <div class="entry-body">
+            The file the extension checks for new versions had been stuck since June, so the &ldquo;a new version is available&rdquo; notice had never appeared for anyone. Edge users who followed it were also being sent to the Chrome Web Store rather than to the Edge add-ons site.
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- ===================== 1.7.6 ===================== -->
     <div class="release">
       <div class="release-head">
         <span class="release-version">1.7.6</span>
-        <span class="tag tag-current">Current</span>
         <span class="release-date">August 2026</span>
       </div>
 
