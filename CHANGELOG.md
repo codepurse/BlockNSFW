@@ -110,7 +110,7 @@ receive the request, and content inside embedded frames is filtered at all.
   install. Firefox is unaffected: it shipped both static rulesets and
   `requestDomains` in 113, already the declared floor.
 - Both build scripts regenerate the ruleset and fail if it cannot be built, so
-  a stale ruleset cannot ship. Packaged size 4.13 → 4.97 MB.
+  a stale ruleset cannot ship. Packaged size 4.13 → 4.98 MB.
 
 ## [1.7.7] - 2026-09-10
 
