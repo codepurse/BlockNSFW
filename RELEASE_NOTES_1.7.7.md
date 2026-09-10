@@ -1,7 +1,9 @@
 # BlockNSFW 1.7.7
 
-Release notes for the current release. Rewritten each time; the full history
-lives in `CHANGELOG.md`.
+*Unreleased*
+
+One file per release, alongside `RELEASE_NOTES_1.7.6.md`. The full technical
+history lives in `CHANGELOG.md`.
 
 ---
 
