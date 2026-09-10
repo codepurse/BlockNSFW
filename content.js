@@ -1001,6 +1001,56 @@ function hostMatchesDomain(host, domain) {
   return h === d || h.endsWith('.' + d);
 }
 
+// --- Keeping the blocked address out of history ----------------------------
+//
+// The blocked page used to carry everything in its query string:
+//
+//   blocked.html?url=https%3A%2F%2F<adult site>&reason=…&matched=porn,xxx
+//
+// content.js arrives here via location.replace(), so the adult URL itself is
+// not left in history — but its replacement embeds the same URL, and that IS a
+// history entry. It shows up in history search, in omnibox suggestions, and
+// Chrome uploads it to the user's Google account when history sync is on. For
+// a tool whose users are, by definition, trying not to leave that trail, this
+// was the worst place in the product to put it.
+//
+// The detail now goes into session storage — memory only, never written to
+// disk, gone when the browser closes — under a random key, and only the key
+// travels in the URL.
+const BLOCK_DETAIL_PREFIX = 'pblocker_block_detail_';
+
+function newBlockDetailKey() {
+  try {
+    if (crypto && typeof crypto.randomUUID === 'function') {
+      return BLOCK_DETAIL_PREFIX + crypto.randomUUID();
+    }
+  } catch (_) {}
+  return BLOCK_DETAIL_PREFIX + Date.now().toString(36) + Math.random().toString(36).slice(2);
+}
+
+/**
+ * Stash the detail and return its key, or null when session storage is not
+ * available — in which case the caller keeps the old query-string form. That
+ * fallback is deliberate: losing the reason and the matched terms would be a
+ * worse outcome than the history entry, and on a browser without session
+ * storage there is nowhere better to put it.
+ *
+ * Fire-and-forget on purpose. Awaiting it would delay window.stop() and the
+ * redirect, and blocked.js re-reads briefly if it arrives first.
+ */
+function stashBlockedDetail(payload) {
+  try {
+    const area = browserAPI.storage && browserAPI.storage.session;
+    if (!area || typeof area.set !== 'function') return null;
+    const key = newBlockDetailKey();
+    const result = area.set({ [key]: { ...payload, ts: Date.now() } });
+    if (result && typeof result.catch === 'function') result.catch(() => {});
+    return key;
+  } catch (_) {
+    return null;
+  }
+}
+
 function getBlockedRedirectUrl(targetUrl, reason, settings, detail) {
   const pageType = (settings && settings.blockedPageType) ? settings.blockedPageType : blockedPageType;
   const customUrl = (settings && typeof settings.customBlockedPageUrl === 'string') ? settings.customBlockedPageUrl : customBlockedPageUrl;
@@ -1029,6 +1079,19 @@ function getBlockedRedirectUrl(targetUrl, reason, settings, detail) {
   }
 
   const base = browserAPI.runtime.getURL('blocked.html');
+
+  // Preferred form: the address never enters the URL, so it never enters
+  // history. A custom blocked page is someone else's document and cannot read
+  // our session storage, so that branch above keeps the query string.
+  const key = stashBlockedDetail({
+    url: targetUrl,
+    reason,
+    matched: matchedList,
+    score: (typeof detail.score === 'number' && isFinite(detail.score))
+      ? detail.score : null
+  });
+  if (key) return base + '?k=' + encodeURIComponent(key);
+
   if (pageType === 'plain_html' && plainHtml && plainHtml.trim()) {
     return base +
       '?mode=plain_html' +

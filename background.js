@@ -3222,6 +3222,29 @@ async function updateDnrRules() {
   }
 }
 
+// storage.session is memory-only and never written to disk, which is what
+// makes it the right home for the blocked page's detail (see stashBlockedDetail
+// in content.js) and for the AI image verdict cache. Both live in content
+// scripts, and Chrome defaults session storage to TRUSTED_CONTEXTS — so those
+// writes were rejected and silently swallowed. The verdict cache in particular
+// has therefore never persisted across page loads on Chrome, despite the code
+// being written to make it.
+try {
+  if (browserAPI.storage.session &&
+      typeof browserAPI.storage.session.setAccessLevel === 'function') {
+    const result = browserAPI.storage.session.setAccessLevel({
+      accessLevel: 'TRUSTED_AND_UNTRUSTED_CONTEXTS'
+    });
+    if (result && typeof result.catch === 'function') {
+      result.catch(error => console.warn('BlockNSFW: session access level', error));
+    }
+  }
+} catch (error) {
+  // Firefox below 126 has storage.session without setAccessLevel; content
+  // scripts can reach it there anyway. Callers fall back regardless.
+  console.warn('BlockNSFW: could not widen session storage access', error);
+}
+
 // Init. Firefox can run the background script and dispatch onInstalled at the
 // same time for a temporary/fresh install. Share one initialization promise so
 // the 4 MB blocklist is parsed and indexed once.
