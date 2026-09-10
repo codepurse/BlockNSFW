@@ -520,6 +520,14 @@ const DEFAULT_STATS = {
   imageBlockedCount: 0,
   aiImageBlockedCount: 0,
   searchResultBlockedCount: 0,
+  // Recorded but not yet surfaced anywhere. content.js has always reported
+  // these three; the listener had no handler for them, so they counted for
+  // nothing at all. Giving them their own fields keeps the breakdown honest
+  // and means a future tile on the stats page is a UI change with history
+  // already behind it, rather than a counter starting from zero.
+  videoBlockedCount: 0,
+  iframeBlockedCount: 0,
+  socialPostBlockedCount: 0,
   lastBlocked: null,
   lastWebsiteBlocked: null,
 };
@@ -1591,7 +1599,11 @@ async function commitPendingBlocks() {
   const storedDaily = store[DAILY_STATS_KEY] || {};
   const daily = storedDaily.date === today
     ? { ...storedDaily }
-    : { date: today, blockedToday: 0, websiteBlocked: 0, imageBlocked: 0, imageAiBlocked: 0, searchResultBlocked: 0 };
+    : {
+        date: today, blockedToday: 0, websiteBlocked: 0, imageBlocked: 0,
+        imageAiBlocked: 0, searchResultBlocked: 0,
+        videoBlocked: 0, iframeBlocked: 0, socialPostBlocked: 0
+      };
   daily.blockedToday = (daily.blockedToday || 0) + totalEvents;
   for (const [type, n] of Object.entries(batch.stats)) {
     const field = DAILY_FIELD_BY_TYPE[type];
@@ -1631,18 +1643,28 @@ async function commitPendingBlocks() {
   });
 }
 
+// Every block type content.js can report needs an entry in BOTH maps, or the
+// event lands in the grand total with no line of its own. tests/message-
+// contract.test.js asserts the two maps and the listener stay in step with
+// what the content script actually sends.
 const STAT_FIELD_BY_TYPE = {
   website_blocked: 'websiteBlockedCount',
   image_filtered: 'imageBlockedCount',
   image_ai_filtered: 'aiImageBlockedCount',
-  search_result_filtered: 'searchResultBlockedCount'
+  search_result_filtered: 'searchResultBlockedCount',
+  video_filtered: 'videoBlockedCount',
+  iframe_filtered: 'iframeBlockedCount',
+  social_post_filtered: 'socialPostBlockedCount'
 };
 
 const DAILY_FIELD_BY_TYPE = {
   website_blocked: 'websiteBlocked',
   image_filtered: 'imageBlocked',
   image_ai_filtered: 'imageAiBlocked',
-  search_result_filtered: 'searchResultBlocked'
+  search_result_filtered: 'searchResultBlocked',
+  video_filtered: 'videoBlocked',
+  iframe_filtered: 'iframeBlocked',
+  social_post_filtered: 'socialPostBlocked'
 };
 
 /**
@@ -2334,11 +2356,19 @@ function senderUrl(message, sender) {
 }
 
 browserAPI.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  // A message that is not an object at all reached `message.type` below and
+  // threw inside the listener, which in Chrome surfaces only as a rejected
+  // send on the far side. Anything without a string type is not ours.
+  if (!message || typeof message.type !== 'string') {
+    // Except offscreen traffic, which is addressed by `target` and handled in
+    // the offscreen document rather than here.
+    return false;
+  }
   // Messages addressed to the offscreen document are handled there, not here.
-  if (message && message.target === 'offscreen-ai') return false;
-  // The four block notifications are the hot path — one message per blocked
-  // image on a page that can hold hundreds. They only touch memory here; the
-  // storage write happens once per batch. See queueBlockEvent.
+  if (message.target === 'offscreen-ai') return false;
+  // The block notifications are the hot path — one message per blocked image
+  // on a page that can hold hundreds. They only touch memory here; the storage
+  // write happens once per batch. See queueBlockEvent.
   if (message.type === 'image_filtered') {
     queueBlockEvent('image_filtered', {
       url: senderUrl(message, sender),
@@ -2368,6 +2398,37 @@ browserAPI.runtime.onMessage.addListener((message, sender, sendResponse) => {
     queueBlockEvent('search_result_filtered', {
       url: senderUrl(message, sender),
       reason: 'Search results filtered',
+      tabId: sender?.tab?.id,
+      count: typeof message.count === 'number' ? message.count : 1
+    });
+    sendResponse({ success: true });
+  } else if (message.type === 'video_filtered') {
+    // content.js has always sent this; nothing here received it, so a blocked
+    // video counted for nothing — not the badge, not the totals, not the
+    // audit log. The in-page pill counted it (COUNTED_BLOCK_TYPES includes
+    // 'video'), which is why the pill and the toolbar disagreed.
+    queueBlockEvent('video_filtered', {
+      url: senderUrl(message, sender),
+      reason: 'Video filtered',
+      tabId: sender?.tab?.id,
+      count: typeof message.count === 'number' ? message.count : 1
+    });
+    sendResponse({ success: true });
+  } else if (message.type === 'iframe_filtered') {
+    // Sent with the frame's `src` rather than a count, so the page URL comes
+    // from the sender. Same gap as video_filtered above.
+    queueBlockEvent('iframe_filtered', {
+      url: senderUrl(message, sender),
+      reason: 'Embedded frame filtered',
+      tabId: sender?.tab?.id
+    });
+    sendResponse({ success: true });
+  } else if (message.type === 'social_post_filtered') {
+    // Like the search pass, this reports how many posts one sweep hid: the
+    // badge counts each post, the stats record the sweep once.
+    queueBlockEvent('social_post_filtered', {
+      url: senderUrl(message, sender),
+      reason: 'Social posts filtered',
       tabId: sender?.tab?.id,
       count: typeof message.count === 'number' ? message.count : 1
     });
@@ -2708,7 +2769,16 @@ browserAPI.runtime.onMessage.addListener((message, sender, sendResponse) => {
     })();
     return true;
   }
-  return true; // Keep message channel open for async response
+  // Nothing matched. Returning true here held the port open for a response
+  // that was never going to come, so every unhandled message — which, until
+  // the three handlers above were added, meant every blocked video, frame and
+  // social post — left a channel dangling until the sender timed out and
+  // logged "The message port closed before a response was received".
+  //
+  // The async branches above each return true for themselves; the synchronous
+  // ones have already called sendResponse, and a synchronous response is
+  // delivered whatever this returns.
+  return false;
 });
 
 // ============================================
