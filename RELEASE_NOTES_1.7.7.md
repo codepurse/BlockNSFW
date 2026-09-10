@@ -7,13 +7,32 @@ history lives in `CHANGELOG.md`.
 
 ---
 
-A maintenance release with no new features. It closes four ways the filter
-could stop doing its job without saying so, plus one way a website could put
-its own content on the blocked page, and adds the tests that keep them shut.
+A maintenance release with no new features. It fixes a false positive that
+blocked millions of ordinary sites, closes four ways the filter could stop
+doing its job without saying so, plus one way a website could put its own
+content on the blocked page, and adds the tests that keep them shut.
 Every one of these was silent — nothing logged an error, nothing showed in the
 UI, and the extension went on reporting that protection was on.
 
 ## Fixed
+
+**Blogspot blogs and Mexican government sites are no longer blocked.**
+
+A single entry could take out an entire namespace. The blocklist treats a
+listed domain as covering everything beneath it, which is right for a site and
+its subdomains — and wrong when the listed name is something anyone can
+register under. `www.blogspot.com` was on the list, the extension trims `www.`
+from addresses, and what remained was `blogspot.com` — so every Blogger blog
+on the internet was blocked, Google's own included. `gob.mx` did the same for
+every Mexican government site.
+
+The extension now recognises shared namespaces using the Public Suffix List,
+the same reference browsers use to decide what counts as a site. Adult blogs
+hosted on Blogspot are listed individually and are still blocked; only the
+platform itself stops standing in for everything on it.
+
+If a site you use was wrongly blocked and you whitelisted it to work around
+this, you can remove that entry now.
 
 **Ordinary words in a domain name no longer switch the smart filter off.**
 

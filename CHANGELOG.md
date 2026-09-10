@@ -6,13 +6,53 @@ All notable project changes should be documented here going forward.
 
 ## [1.7.7] - 2026-09-10
 
-Maintenance release, no new features. Five defects found by an audit of the
+Maintenance release, no new features. Six defects found by an audit of the
 blocking engine — four ways the filter could stop working without saying so,
-and one way a website could inject markup into the extension's own pages. Each
-was silent: nothing logged an error, nothing showed in the UI, and the
-extension went on reporting that protection was on.
+one way a website could inject markup into the extension's own pages, and one
+false positive that blocked millions of ordinary sites. Each was silent:
+nothing logged an error, nothing showed in the UI, and the extension went on
+reporting that protection was on.
 
 ### Fixed
+
+- **One blocklist entry no longer blocks an entire namespace.** Every Blogspot
+  blog and the whole `gob.mx` Mexican government domain were being blocked.
+
+  `isUrlInDefaultBlocklist()` blocks a host when the host *or any parent of it*
+  is listed — correct for `cdn.pornhub.com` matching `pornhub.com`, and
+  catastrophic when the parent is a namespace anyone can register under.
+  `data/HOSTS.txt` carried `www.blogspot.com`, a perfectly reasonable entry,
+  but `normalizeDomainForCache()` strips `www.` and left `blogspot.com`.
+  `gob.mx` was listed bare and did the same.
+
+  The old defence was `SHARED_CDN_PARENT_DOMAINS`, a hand-written list of 30
+  CDN parents. It held neither, because the set of namespaces is open-ended and
+  a hand-written list cannot cover it. The Public Suffix List can:
+  `data/public-suffixes.txt` is now intersected with the blocklist on every
+  load, so an entry arriving in a remote refresh is neutralised within the
+  refresh interval rather than at the next release.
+
+  Individually listed children survive — the 15,316 explicit `*.blogspot.com`
+  adult blogs are separate entries and still block. Only the namespace stops
+  standing in for everything beneath it.
+
+  Three things this shook out:
+  - Skipping the parent was not enough. `gob.mx` is in the list *literally*, so
+    an exact-match lookup hit before the parent walk ever ran. Offending
+    entries are removed from the effective set instead, which fixes both paths.
+  - The 30-entry CDN list is kept in full even though the PSL covers half of
+    it. The overlap is deliberate: the PSL is fetched at runtime, and the guard
+    degrades to dropping nothing when that fails. Trimming the overlap made
+    `safe.cloudfront.net` blockable on a failed fetch, which
+    `tests/firefox-performance.test.js` caught — it injects a blocklist
+    directly and so never runs the guard.
+  - Wildcard PSL rules are ignored by the guard. `*.mm` makes the list call
+    `milffuck.mm` a public suffix; it is an adult site, and honouring that
+    would have stopped it being blocked at all. The rules that caused real
+    damage are all exact.
+
+  `sex.hu` and `szex.hu` stay blocked wholesale on purpose — those namespaces
+  exist for adult content, so every registration under them is in scope.
 
 - **Ordinary words in a hostname no longer switch the smart filter off.** The
   smart hostname filter stands down when a domain looks like a recovery or
