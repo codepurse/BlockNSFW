@@ -51,9 +51,17 @@ function updateYandexFamilyCookieValue(currentValue, expiresAt) {
       isYandexSafeSearchPath(path, u.search);
 
     const settingsKey = 'pblocker_settings';
+    // Set from settings below, before enforce() runs. This IIFE executes at
+    // document_start, ahead of loadSettings(), so it cannot read the module's
+    // debugMode and has to carry its own copy.
+    let safeSearchDebug = false;
     const isAolYahooHost = (hostname) => /(^|\.)search\.aol\./.test(hostname) || hostname === 'search.yahoo.com';
     const isAolYahooSearchPath = (pathname) => pathname.startsWith('/aol/search') || pathname.startsWith('/yhs/search') || pathname.startsWith('/search');
+    // Diagnostic only. This logged `location.href` on every AOL/Yahoo search
+    // page — i.e. the user's search query — into the page's own console, where
+    // the site's analytics SDK can pick it up as a console breadcrumb. Gated.
     const logAolSafeSearchAudit = (stage) => {
+      if (!safeSearchDebug) return;
       if (!isAolYahooHost(u.hostname.toLowerCase())) return;
       try {
         const params = new URL(location.href).searchParams;
@@ -102,7 +110,7 @@ function updateYandexFamilyCookieValue(currentValue, expiresAt) {
           history[methodName] = function patchedHistory(state, title, urlArg) {
             const nextUrl = typeof urlArg === 'string' ? normalizeAolUrl(urlArg) || urlArg : urlArg;
             if (nextUrl !== urlArg && typeof nextUrl === 'string') {
-              console.log(`BlockNSFW: AOL history.${methodName} vm -> r`, { from: urlArg, to: nextUrl });
+              if (safeSearchDebug) console.log(`BlockNSFW: AOL history.${methodName} vm -> r`, { from: urlArg, to: nextUrl });
             }
             return originalMethod.call(this, state, title, nextUrl);
           };
@@ -130,7 +138,7 @@ function updateYandexFamilyCookieValue(currentValue, expiresAt) {
         }
         if (vmInput.value !== 'r') {
           vmInput.value = 'r';
-          console.log('BlockNSFW: AOL form vm -> r');
+          if (safeSearchDebug) console.log('BlockNSFW: AOL form vm -> r');
         }
       };
 
@@ -210,7 +218,7 @@ function updateYandexFamilyCookieValue(currentValue, expiresAt) {
             const strictUrl = normalizeAolUrl(location.href);
             if (strictUrl) {
               try { window.stop(); } catch (_) {}
-              console.log('BlockNSFW: AOL URL hard-rewrite vm -> r', { from: location.href, to: strictUrl });
+              if (safeSearchDebug) console.log('BlockNSFW: AOL URL hard-rewrite vm -> r', { from: location.href, to: strictUrl });
               location.replace(strictUrl);
               return;
             }
@@ -332,6 +340,7 @@ function updateYandexFamilyCookieValue(currentValue, expiresAt) {
       const s = (res && res[settingsKey]) || {};
       if (s.enabled === false) return;
       if (s.safeSearchEnabled === false) return;
+      safeSearchDebug = s.debugMode === true;
       enforce();
       if (isAolYahooHost(u.hostname.toLowerCase())) {
         setTimeout(() => logAolSafeSearchAudit('post_enforce_750ms'), 750);
@@ -5414,9 +5423,18 @@ function setupEventListeners() {
   });
 }
 
+// Diagnostic only. Gated on debugMode, which it was not: this fired four times
+// per navigation on every page, writing the page's title and full URL into that
+// page's console. Page-side RUM and error SDKs (Sentry, LogRocket, Datadog RUM)
+// record console output as breadcrumbs by default, so a site's analytics vendor
+// received both the fact that BlockNSFW is installed and the title of every
+// page the user opened — from an extension whose entire premise is that
+// browsing stays local. Routed through log() so it obeys the same switch as
+// every other diagnostic in this file.
 function consoleLogPageTitle(source) {
+  if (!debugMode) return;
   try {
-    console.log('BlockNSFW: Page title', {
+    log('Page title', {
       source,
       title: document.title || '',
       url: window.location.href,
@@ -5429,12 +5447,14 @@ function consoleLogPageTitle(source) {
 // Initialization
 async function init() {
   try {
-    consoleLogPageTitle('init');
-    log('Content script initializing on', window.location.hostname);
-
     // Load settings, then warm the one canonical-list verdict needed by the
     // synchronous clean-page heuristics. The full list remains in background.
     await loadSettings();
+    // Logged after loadSettings, not before: debugMode is read there, so a
+    // diagnostic emitted earlier could only ever see the default (off) and
+    // would be dropped even for someone who had turned debugging on.
+    consoleLogPageTitle('init');
+    log('Content script initializing on', window.location.hostname);
     await warmCurrentPageBlocklistHost();
 
     // Set up event listeners and observers
