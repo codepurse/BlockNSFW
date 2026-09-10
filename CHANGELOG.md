@@ -4,6 +4,121 @@ All notable project changes should be documented here going forward.
 
 ## [Unreleased]
 
+## [1.7.7] - 2026-09-10
+
+Maintenance release, no new features. Four ways the filter could stop working
+without saying so, found by an audit of the blocking engine. Each was silent:
+nothing logged an error, nothing showed in the UI, and the extension went on
+reporting that protection was on.
+
+### Fixed
+
+- **Ordinary words in a hostname no longer switch the smart filter off.** The
+  smart hostname filter stands down when a domain looks like a recovery or
+  support site, so `porn-addiction-treatment.org` is never filtered. It matched
+  those words as bare substrings anywhere in the hostname, so any domain merely
+  *containing* one of ~39 everyday English words had the filter switched off
+  wholesale — `safe-pornhub.com`, `xnxx-safer.tv`, `hentai-protect.io`,
+  `cdn.safe.pornhub-mirror.com`. An operator could buy an exemption for a new
+  mirror by putting "safe" in its name.
+
+  A safe token now has to occupy whole hyphen-delimited segments of a label
+  (`safeHostMatches`), so `porn-addiction-treatment.org` still stands down —
+  its segments really are "addiction" and "treatment" — while `helpxxx.com`
+  does not. Eight tokens that were free cover rather than genuinely
+  safety-coded are removed: safe, safer, study, research, academic, freedom,
+  liberty, protect. "protection" is kept.
+
+  Both implementations were fixed, not just the shared one:
+  `content.js`'s `isLikelyAdultHostEarly` carried its own substring copy and
+  now defers to the same rule.
+
+  Two things this shook out:
+  - Page *navigation* was largely unaffected: it ORs in a second, broader check
+    that matches adult tokens as substrings, and that caught most of the corpus
+    already. The strict matcher is what images, embedded frames, media and
+    social-post links consult, and it is also what the background's own verdict
+    uses — so an image host named `safe-cdn.<mirror>.com` served unfiltered
+    pictures wherever it was hotlinked. That is where this bit.
+  - An adult token glued inside a longer label (`freedomporn.com`) is still not
+    matched. That is the same rule that stops "essex" matching "sex", so
+    loosening it trades against false positives on news, reference and support
+    sites; it is left as an open decision rather than changed in a patch
+    release.
+
+- **A custom blocked word written as a pattern can no longer freeze the
+  browser, and a subscribed list can no longer stall the background.** Regex
+  entries were guarded by timing each candidate against adversarial probe
+  strings and rejecting the slow ones. Two independent holes:
+
+  - The probe alphabet was built only from the `[A-Za-z0-9]` literals a pattern
+    mentions, falling back to `"a"`. A pattern whose blow-up alphabet is
+    punctuation or a negated class was therefore probed with characters it
+    never matches: `/([-.]+)+$/` passed validation in 1 ms and then cost ~15 s
+    against a run of 30 dots — an ellipsis or a `-----` separator, which
+    ordinary pages are full of. Compiled patterns run against up to 48 lines of
+    body text on every page, so one saved entry of that shape froze all
+    browsing.
+  - The 10 ms budget was read only *after* `compiled.test()` returned, so a
+    probe that did not return was never billed. The uncapped 43-character prose
+    probe holds a 36-character run with no `"a"`, which is enough to make
+    `/([^a]+)+$/` backtrack exponentially inside the validator itself.
+    `parseRuleset` calls the same validator, so one line in a subscribed list
+    stalled the background on every startup — and while it stalls, nothing
+    answers `should_block_url` and the 204k-domain blocklist is not consulted.
+
+  No in-thread budget can fix the second: the thread doing the measuring is the
+  thread that hangs. The exponential family is now refused on **shape**, before
+  anything is compiled or executed — `findNestedQuantifier()` rejects an
+  unbounded repeat nested inside a repeated group. Bounded inner repeats
+  (`(\d{3}-)+`) and groups with no inner repeat (`(foo|bar)+`) are unaffected.
+
+  The probe remains as a second gate with both holes closed: its alphabet now
+  reaches punctuation and character-class contents, a negated class is stressed
+  with a character it excludes, and every probe is capped at `PROBE_REPEAT` —
+  that cap was the calibration all along, and the prose probe was the one
+  string exempt from it.
+
+- **Blocked videos, embedded frames and social posts are counted again.**
+  `content.js` has always reported `video_filtered`, `iframe_filtered` and
+  `social_post_filtered`; the background listener had no branch for any of
+  them, so three of the six block types reached nothing — not the toolbar
+  badge, not the totals, not the daily counters, not the audit log. The in-page
+  pill counted videos and frames itself, which is why it and the badge
+  disagreed on the same page. Each type now has its own stat and daily field.
+
+- **The content script no longer writes every page's title and URL into that
+  page's console.** `consoleLogPageTitle()` fired from init, popstate,
+  DOMContentLoaded and ready — four entries per navigation, on every site,
+  gated on nothing. Page-side analytics and error SDKs record console output as
+  breadcrumbs by default, so a site's vendor received both the page title and
+  the fact that BlockNSFW is installed. The AOL/Yahoo SafeSearch audit logged
+  `location.href`, which on a search page is the user's query. Both now respect
+  debug mode.
+
+- **A malformed runtime message no longer throws inside the background
+  listener.** `message.type` was read with no guard, so a message that was not
+  an object threw — which Chrome surfaces only as a failed send on the far
+  side. The listener's fallthrough also returned `true`, promising a response
+  that was never coming and leaving a port dangling until the sender timed out;
+  it now returns `false`.
+
+### Changed
+
+- Subscribed rulesets cap how many regex rules they may carry
+  (`MAX_REGEX_ENTRIES`, 200), checked before validation rather than after, so a
+  hostile or broken file cannot multiply per-entry validation cost across
+  `MAX_ENTRIES` lines. Bare host rules are unaffected.
+
+### Notes for existing users
+
+- A saved blocked word written as a pattern that repeats a repeat will stop
+  matching, since those are the entries that could freeze a page. Rewrite
+  without the inner `+` or `*` and save again.
+- A site previously exempt because its hostname contained one of the eight
+  removed safe tokens may now be blocked. Whitelist it locally, and please
+  report it so it can reach `data/WHITELIST.txt`.
+
 ## [1.7.6] - 2026-08-30
 
 ### Added
