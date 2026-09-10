@@ -8,9 +8,10 @@ history lives in `CHANGELOG.md`.
 ---
 
 A maintenance release with no new features. It closes four ways the filter
-could stop doing its job without saying so, and adds the tests that keep them
-shut. Every one of these was silent — nothing logged an error, nothing showed
-in the UI, and the extension went on reporting that protection was on.
+could stop doing its job without saying so, plus one way a website could put
+its own content on the blocked page, and adds the tests that keep them shut.
+Every one of these was silent — nothing logged an error, nothing showed in the
+UI, and the extension went on reporting that protection was on.
 
 ## Fixed
 
@@ -83,6 +84,19 @@ console output, so a site's vendor could pick up both the page title and the
 fact that BlockNSFW was installed — from an extension whose whole premise is
 that browsing stays on your machine. On AOL and Yahoo search pages the search
 query went the same way. Both are now silent unless debug mode is on.
+
+**A website could put its own content on the blocked page.**
+
+If you use a custom blocked page written in HTML, the address of the site you
+were blocked from was dropped into your template without being made safe
+first. Because the blocked page can be opened by any website, a malicious one
+could use that to draw its own content there — most usefully a convincing fake
+"enter your PIN" box, at what looks like a genuine extension address.
+
+Your template still renders as HTML, because that is the point of it. What gets
+substituted into it no longer can. The extension also decides which kind of
+blocked page to show from your settings rather than from the address, so a
+website cannot select the custom-HTML path for someone who never chose it.
 
 ## Upgrading
 

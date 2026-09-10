@@ -6,10 +6,11 @@ All notable project changes should be documented here going forward.
 
 ## [1.7.7] - 2026-09-10
 
-Maintenance release, no new features. Four ways the filter could stop working
-without saying so, found by an audit of the blocking engine. Each was silent:
-nothing logged an error, nothing showed in the UI, and the extension went on
-reporting that protection was on.
+Maintenance release, no new features. Five defects found by an audit of the
+blocking engine — four ways the filter could stop working without saying so,
+and one way a website could inject markup into the extension's own pages. Each
+was silent: nothing logged an error, nothing showed in the UI, and the
+extension went on reporting that protection was on.
 
 ### Fixed
 
@@ -95,6 +96,26 @@ reporting that protection was on.
   the fact that BlockNSFW is installed. The AOL/Yahoo SafeSearch audit logged
   `location.href`, which on a search page is the user's query. Both now respect
   debug mode.
+
+- **A website could inject markup into the blocked page.** `blocked.html` is a
+  web-accessible resource matching `<all_urls>`, so any site can navigate to it
+  — or frame it — with a query string of its choosing. In plain-HTML mode the
+  `url` and `reason` parameters were substituted into the user's saved template
+  unescaped and handed to `document.write()`.
+
+  The extension CSP (`script-src 'self'`) stops injected `<script>` from
+  running, so this was not remote code execution. It does not stop markup: an
+  attacker could render a convincing "BlockNSFW — enter your PIN to continue"
+  form at a genuine `chrome-extension://` address, and `img-src` is
+  unrestricted, so what gets typed can be sent somewhere. The shipped example
+  template uses `{{url}}`, so the documented configuration was the vulnerable
+  one.
+
+  Both substituted values are escaped now. The template itself is not — it is
+  the user's own HTML and is meant to render as markup, which is the feature.
+  Which page type to render also comes from settings rather than the `mode`
+  query parameter, so a website can no longer select this rendering path for
+  someone who never chose it.
 
 - **A malformed runtime message no longer throws inside the background
   listener.** `message.type` was read with no guard, so a message that was not
