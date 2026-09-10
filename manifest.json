@@ -12,6 +12,15 @@
   "host_permissions": [
     "<all_urls>"
   ],
+  "declarative_net_request": {
+    "rule_resources": [
+      {
+        "id": "blocklist",
+        "enabled": true,
+        "path": "rules/blocklist-rules.json"
+      }
+    ]
+  },
   "background": {
     "service_worker": "background.js"
   },
@@ -35,7 +44,9 @@
   },
   "content_scripts": [
     {
-      "matches": ["<all_urls>"],
+      "matches": [
+        "<all_urls>"
+      ],
       "js": [
         "shared/hostname.js",
         "shared/host-keywords.js",
@@ -71,13 +82,15 @@
         "nsfwjs/group1-shard1of1.bin",
         "text-model.json"
       ],
-      "matches": ["<all_urls>"]
+      "matches": [
+        "<all_urls>"
+      ]
     }
   ],
   "content_security_policy": {
     "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self';"
   },
-  "minimum_chrome_version": "88",
+  "minimum_chrome_version": "101",
   "browser_specific_settings": {
     "gecko": {
       "id": "blocknsfw@extension.local",

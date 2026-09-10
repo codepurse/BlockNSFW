@@ -19,6 +19,7 @@ $ManifestDst = Join-Path $OutDir "manifest.json"
 
 $RuntimeFolders = @(
     "icons",
+    "rules",
     "shared",
     "vendor",
     "nsfwjs",
@@ -51,6 +52,13 @@ $RuntimeFiles   = @(
     "text-model.json",
     "LICENSE"
 )
+
+Write-Host "==> Building static declarativeNetRequest ruleset" -ForegroundColor Cyan
+# Generated from data\HOSTS.txt. Committed, but rebuilt here so a stale
+# ruleset can never ship: it enforces the blocklist at the network layer,
+# where a wrong entry is invisible to the user.
+node scripts/build-dnr-ruleset.mjs
+if ($LASTEXITCODE -ne 0) { throw "Failed to build the static DNR ruleset" }
 
 Write-Host "==> Cleaning $OutDir" -ForegroundColor Cyan
 if (Test-Path $OutDir) {
@@ -99,6 +107,7 @@ if (-not $BackgroundSource.Contains($BuildTimestampToken)) {
 
 $RequiredAssets = @(
     "data\public-suffixes.txt",
+    "rules\blocklist-rules.json",
     "vendor\tfjs\tf.es2017.js",
     "vendor\nsfwjs\nsfwjs.runtime.js",
     "nsfwjs\model.json",

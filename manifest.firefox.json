@@ -11,6 +11,15 @@
   "host_permissions": [
     "<all_urls>"
   ],
+  "declarative_net_request": {
+    "rule_resources": [
+      {
+        "id": "blocklist",
+        "enabled": true,
+        "path": "rules/blocklist-rules.json"
+      }
+    ]
+  },
   "background": {
     "scripts": [
       "shared/browser-key.js",
@@ -51,7 +60,9 @@
   },
   "content_scripts": [
     {
-      "matches": ["<all_urls>"],
+      "matches": [
+        "<all_urls>"
+      ],
       "js": [
         "shared/hostname.js",
         "shared/host-keywords.js",
@@ -87,7 +98,9 @@
         "nsfwjs/group1-shard1of1.bin",
         "text-model.json"
       ],
-      "matches": ["<all_urls>"]
+      "matches": [
+        "<all_urls>"
+      ]
     }
   ],
   "browser_specific_settings": {
