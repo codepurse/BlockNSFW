@@ -59,6 +59,76 @@ foreach ($z in @('blocknsfw-chrome.zip','blocknsfw-firefox.zip')) {
 - [ ] Whitelist add/remove works
 - [ ] No new console errors on fresh install
 
+### Network-level blocking and frame coverage (1.8.0 and after)
+
+The static ruleset and `all_frames` change how blocking works, and **no
+automated test in this repo can prove either of them**. The suite checks the
+ruleset's shape, its size against the platform limits, and the frame gate's
+logic — but nothing here loads the extension into a browser, so nothing here
+proves the browser accepts the ruleset or applies it. Load the unpacked build
+and check by hand, every release that touches `rules/`, the manifests, or
+`content.js`'s frame handling.
+
+- [ ] **The ruleset is accepted at install.** Load `dist\chrome\` unpacked.
+      `chrome://extensions` must show **no** "Rules file … is invalid" or
+      "Ruleset failed to load" warning. A rejected ruleset is silent at
+      runtime: blocking simply falls back to the content script and nothing
+      says so.
+- [ ] **Confirm the rules are live, not merely accepted.** In the service
+      worker console:
+      `chrome.declarativeNetRequest.getEnabledRulesets()` returns
+      `['blocklist']`, and
+      `chrome.declarativeNetRequest.getAvailableStaticRuleCount()` returns a
+      number well above zero.
+- [ ] **A blocked host's images are refused at the network layer.** On any
+      ordinary page, open DevTools → Network and load an image URL from a
+      listed host directly. It must fail as `net::ERR_BLOCKED_BY_CLIENT`, not
+      merely be hidden after loading. Hidden-but-loaded means the ruleset is
+      not working and only the content script is.
+- [ ] **Navigation still reaches the blocked page**, not the browser's error
+      page. This is the deliberate boundary: `main_frame` is not in the
+      ruleset. Seeing `ERR_BLOCKED_BY_CLIENT` on a navigation means
+      `RESOURCE_TYPES` in `scripts/build-dnr-ruleset.mjs` has gained
+      `main_frame`, and the blocked page, its reason and its audit entry are
+      all gone with it.
+- [ ] **A whitelisted site loads completely.** Whitelist a normally-blocked
+      host, reload, and confirm its images and frames appear. Half-loading —
+      page renders, images blocked — means the dynamic allow rules are not
+      outranking the static blocks.
+- [ ] **Removing a whitelist entry restores the block** without a browser
+      restart.
+
+### Frame coverage
+
+- [ ] **An adult site inside an iframe is filtered.** Make a local page with
+      `<iframe src="…" width="800" height="600">` pointing at a blocked host,
+      and separately at a host that is *not* on the list but trips the keyword
+      filter. Both must be handled: the first by the ruleset, the second by
+      the content script running inside the frame.
+- [ ] **Ordinary pages have not slowed down.** Open a news site heavy with ad
+      frames, with DevTools → Performance recording. Compare against 1.7.7.
+      This is the regression `all_frames` most plausibly causes and the one
+      the test suite cannot see. `.verify/frames.html` (see below) confirms
+      the *gate* is correct; it says nothing about the cost on a real page.
+- [ ] **No pill or blocked-results line appears inside a frame.** One counter,
+      on the page.
+
+### Blocked-page detail
+
+- [ ] **The address bar on the blocked page shows only `?k=…`** — no `url=`,
+      no `matched=`. Then check `chrome://history`: the entry must not contain
+      the blocked site's address.
+- [ ] The blocked page still names the site, the reason, and the matched
+      terms. If it reads "Unknown URL", the stash did not survive the
+      navigation.
+
+> A local harness for the two pieces that *can* be checked without installing
+> the extension lives in `.verify/` (gitignored, generated — see the scripts
+> referenced in the 1.8.0 changelog). It renders the real `blocked.html` and
+> `blocked.js` against a stubbed `chrome.*`, and runs the real frame gate in
+> real iframes. Both were used to verify 1.8.0; neither substitutes for the
+> checks above.
+
 ### Settings lock (no automated test can cover these)
 
 The PIN and access code prompts are DOM flows, so the test suite only covers the

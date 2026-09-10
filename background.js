@@ -2884,13 +2884,34 @@ const YOUTUBE_RESTRICT_RULE_IDS = [10010];
 // Network-level image/media block for the user's own blocked sites (see
 // buildCustomImageBlockRules). One rule carries every eligible domain.
 const CUSTOM_IMAGE_BLOCK_RULE_IDS = [10050];
+
+// Whitelist allow rules. The static ruleset (rules/blocklist-rules.json) blocks
+// sub-resources from every host on the curated list at priority 10; a user who
+// has allowed a site must outrank that, or the page loads with its images and
+// frames still blocked at the network layer and nothing in the UI explaining
+// why. Allow also beats block at equal priority in DNR, but the higher number
+// is set explicitly so the ordering survives someone changing the other.
+//
+// Dynamic, because it is user data: static rules ship in the package and
+// cannot know what anyone allowed.
+const WHITELIST_ALLOW_RULE_ID_START = 10100;
+const WHITELIST_ALLOW_RULE_PRIORITY = 100;
+// Chrome's dynamic-rule budget is 5,000 and the other features use a couple of
+// dozen. A whitelist longer than this is not a real configuration, and the
+// content script still honours every entry regardless.
+const MAX_WHITELIST_ALLOW_RULES = 500;
 // Dynamic-rule conditions have a bounded domain list; the curated blocklist
 // (200k+ hosts) could never fit here, but a user's own list realistically will.
 const CUSTOM_IMAGE_BLOCK_MAX_DOMAINS = 1000;
 const ALL_DNR_RULE_IDS = [
   ...SAFE_SEARCH_RULE_IDS,
   ...YOUTUBE_RESTRICT_RULE_IDS,
-  ...CUSTOM_IMAGE_BLOCK_RULE_IDS
+  ...CUSTOM_IMAGE_BLOCK_RULE_IDS,
+  // The whole allow range is always cleared, not just the ids currently in
+  // use: removing a whitelist entry has to remove its rule, and the count
+  // shrinks as well as grows.
+  ...Array.from({ length: MAX_WHITELIST_ALLOW_RULES },
+    (_, index) => WHITELIST_ALLOW_RULE_ID_START + index)
 ];
 
 function buildSafeSearchRules() {
@@ -3187,6 +3208,47 @@ function buildCustomImageBlockRules(requestDomains) {
   }];
 }
 
+/**
+ * Allow rules for the user's whitelist, outranking the static block ruleset.
+ *
+ * Host-scoped only. A path-scoped entry (`reddit.com/r/NoFap`) deliberately
+ * gets NO network-level allow: DNR matches requests, and the images and frames
+ * a page pulls in carry no trace of which page asked for them, so an allow
+ * keyed on the path would either miss every sub-resource or open the whole
+ * host. The content script continues to honour path scope, which is where the
+ * distinction can actually be observed.
+ */
+function buildWhitelistAllowRules(domains) {
+  const hosts = [];
+  const seen = new Set();
+  for (const raw of domains) {
+    const host = String(raw || '').trim().toLowerCase()
+      .replace(/^\.+/, '').replace(/\.+$/, '').replace(/^www\./, '');
+    if (!host || host.includes('/') || host.includes('*')) continue;
+    if (!/^[a-z0-9.-]+$/.test(host) || !host.includes('.')) continue;
+    if (seen.has(host)) continue;
+    seen.add(host);
+    hosts.push(host);
+    if (hosts.length >= MAX_WHITELIST_ALLOW_RULES) break;
+  }
+  if (hosts.length === 0) return [];
+
+  // One host per rule. Unlike the packed block rules this list is short, and
+  // one-per-rule keeps a later "which rule allowed this?" question answerable.
+  return hosts.map((host, index) => ({
+    id: WHITELIST_ALLOW_RULE_ID_START + index,
+    priority: WHITELIST_ALLOW_RULE_PRIORITY,
+    action: { type: 'allow' },
+    condition: {
+      requestDomains: [host],
+      resourceTypes: [
+        'main_frame', 'sub_frame', 'image', 'media', 'object', 'script',
+        'xmlhttprequest', 'font'
+      ]
+    }
+  }));
+}
+
 async function getActiveWhitelistDomains() {
   try {
     const { [WHITELIST_KEY]: whitelist } = await browserAPI.storage.local.get(WHITELIST_KEY);
@@ -3210,6 +3272,11 @@ async function updateDnrRules() {
     const settings = await getSettings();
     const addRules = [];
     if (settings.safeSearchEnabled) addRules.push(...buildSafeSearchRules());
+
+    // Always applied, even with blocking switched off: the static ruleset is
+    // declared in the manifest and cannot be turned off from here, so the
+    // allow rules are the only thing that can lift it for an allowed site.
+    addRules.push(...buildWhitelistAllowRules(await getActiveWhitelistDomains()));
     // Rule id 10010 stays in ALL_DNR_RULE_IDS so any previously-set rule is removed.
 
     if (settings.enabled) {
@@ -3229,6 +3296,29 @@ async function updateDnrRules() {
   } catch (error) {
     console.error('BlockNSFW: failed to update dynamic rules', error);
   }
+}
+
+// storage.session is memory-only and never written to disk, which is what
+// makes it the right home for the blocked page's detail (see stashBlockedDetail
+// in content.js) and for the AI image verdict cache. Both live in content
+// scripts, and Chrome defaults session storage to TRUSTED_CONTEXTS — so those
+// writes were rejected and silently swallowed. The verdict cache in particular
+// has therefore never persisted across page loads on Chrome, despite the code
+// being written to make it.
+try {
+  if (browserAPI.storage.session &&
+      typeof browserAPI.storage.session.setAccessLevel === 'function') {
+    const result = browserAPI.storage.session.setAccessLevel({
+      accessLevel: 'TRUSTED_AND_UNTRUSTED_CONTEXTS'
+    });
+    if (result && typeof result.catch === 'function') {
+      result.catch(error => console.warn('BlockNSFW: session access level', error));
+    }
+  }
+} catch (error) {
+  // Firefox below 126 has storage.session without setAccessLevel; content
+  // scripts can reach it there anyway. Callers fall back regardless.
+  console.warn('BlockNSFW: could not widen session storage access', error);
 }
 
 // Init. Firefox can run the background script and dispatch onInstalled at the

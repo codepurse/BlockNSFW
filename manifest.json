@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "BlockNSFW – Porn & Adult Content Blocker",
-  "version": "1.7.7",
+  "version": "1.8.0",
   "description": "Blocks adult websites and inappropriate content using pattern matching and configurable filtering for safer browsing.",
   "permissions": [
     "storage",
@@ -12,6 +12,15 @@
   "host_permissions": [
     "<all_urls>"
   ],
+  "declarative_net_request": {
+    "rule_resources": [
+      {
+        "id": "blocklist",
+        "enabled": true,
+        "path": "rules/blocklist-rules.json"
+      }
+    ]
+  },
   "background": {
     "service_worker": "background.js"
   },
@@ -35,7 +44,11 @@
   },
   "content_scripts": [
     {
-      "matches": ["<all_urls>"],
+      "matches": [
+        "<all_urls>"
+      ],
+      "all_frames": true,
+      "match_about_blank": true,
       "js": [
         "shared/hostname.js",
         "shared/host-keywords.js",
@@ -71,13 +84,15 @@
         "nsfwjs/group1-shard1of1.bin",
         "text-model.json"
       ],
-      "matches": ["<all_urls>"]
+      "matches": [
+        "<all_urls>"
+      ]
     }
   ],
   "content_security_policy": {
     "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self';"
   },
-  "minimum_chrome_version": "88",
+  "minimum_chrome_version": "101",
   "browser_specific_settings": {
     "gecko": {
       "id": "blocknsfw@extension.local",

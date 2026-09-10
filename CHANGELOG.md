@@ -4,6 +4,114 @@ All notable project changes should be documented here going forward.
 
 ## [Unreleased]
 
+## [1.8.0] - 2026-09-10
+
+> **Includes everything in 1.7.7**, which was prepared but never published
+> separately — its six fixes reach users for the first time in this release.
+> Anyone updating from 1.7.6 receives both sets. The `[1.7.7]` section below
+> is kept as the record of what those changes were.
+
+The release where blocking stops being something the extension does *to* a
+page after it starts loading, and becomes something the browser refuses
+outright. Two long-standing structural gaps close: blocked sites no longer
+receive the request, and content inside embedded frames is filtered at all.
+
+### Added
+
+- **The curated blocklist is enforced by the browser's request engine.**
+  Until now it was enforced only by the content script: it ran at
+  `document_start`, called `window.stop()` and redirected. That meant every
+  blocked host still received the request — DNS, TLS, the GET, cookies,
+  `Referer` — so the site recorded the visit even though the user never saw
+  the page. It also meant the list was enforced only where a content script
+  runs, which is not everywhere.
+
+  `rules/blocklist-rules.json` is generated from `data/HOSTS.txt` by
+  `scripts/build-dnr-ruleset.mjs` and declared as a static
+  `declarativeNetRequest` ruleset in both manifests. 204,223 domains fold to
+  195,045 roots and pack into 4,743 rules — comfortably inside Chrome's 30,000
+  guaranteed static rules, so the **whole** list ships rather than a
+  high-prevalence subset. `requestDomains` matching sub-domains is what makes
+  it fit.
+
+  Three things this shook out:
+  - **Sub-resources only, deliberately.** `main_frame` is not blocked here. A
+    DNR block on a navigation produces the browser's own
+    `ERR_BLOCKED_BY_CLIENT` page: no content script, so no blocked page, no
+    reason, no audit entry, no counted stat. A redirect could reach
+    `blocked.html`, but its target is static and carrying the original URL
+    across needs `regexSubstitution`, which caps at 1,000 rules where this
+    needs thousands. Navigation keeps the content-script path, which is what
+    makes the blocked page work, and everything invisible moves to the network
+    layer where the user loses nothing by it.
+  - **The generator applies the same public-suffix guard as the runtime**,
+    from the same `shared/domain-policy.js`. It matters more here:
+    `requestDomains` matches sub-domains, so a rule containing `blogspot.com`
+    would block every Blogger blog with no whitelist escape and nothing shown
+    to the user. Three namespaces are dropped and a post-pack assertion
+    refuses to emit a ruleset if any survives. The drop runs *before* the
+    subdomain fold, or `18yos.b-cdn.net` would collapse into the very name
+    being excluded.
+  - **Whitelist entries become dynamic allow rules** at priority 100, above
+    the static blocks at 10, covering `main_frame` too. Without them an
+    allowed site would load with its images and frames still blocked and
+    nothing in the interface explaining why. Path-scoped entries get no
+    network allow on purpose: a sub-resource request carries no trace of which
+    page asked for it, so a path-keyed allow would either miss everything or
+    open the whole host. The content script still honours path scope.
+
+- **Filtering runs inside embedded frames.** The content script ran in the top
+  frame only, so nothing reached inside an iframe — no image filter, no AI
+  classifier, no text scan. `processIframe()` checked the frame's address
+  against the blocklist from the parent, which catches a known host and
+  nothing else, so any unknown mirror, shortener, redirector or
+  script-written `srcdoc` passed straight through. Iframe-proxy sites made
+  that a two-click bypass needing no technical skill.
+
+  Running everywhere is only affordable if most frames do almost nothing, so:
+  the top frame does everything as before; a sub-frame gets the URL/host block
+  and the image, media and frame filters; a frame under 120px on either axis
+  does nothing at all and bails before the storage read. Page-level verdicts
+  (metadata, page text, the AI text classifier) and page-level UI (the
+  results line, the counter pill, SafeSearch cookie enforcement) stay in the
+  top frame — they reason about "the page", which a 300×250 ad slot is not.
+
+  A frame reporting 0×0 is scanned rather than skipped: that means "not laid
+  out yet", and skipping those would miss the frames that matter.
+
+### Fixed
+
+- **The blocked page no longer puts the blocked address in browser history.**
+  `content.js` arrives there via `location.replace()`, so the adult URL itself
+  is not left in history — but its replacement embedded the same URL in its
+  own query string, and that *is* a history entry. It appeared in history
+  search, in omnibox suggestions, and Chrome uploaded it to the user's Google
+  account with history sync on. The matched terms went with it; a history
+  entry reading `matched=porn,xxx` is as revealing as the address.
+
+  The detail now goes to session storage under a random key — memory only,
+  never written to disk, gone when the browser closes — and only the key
+  travels in the URL. A custom blocked page, a browser without session
+  storage, and a redirect already in flight during an update all still use the
+  query string: losing the reason line would be a worse outcome than the
+  history entry.
+
+- **The AI image classifier's results are remembered again.** The verdict
+  cache is written from a content script into `storage.session`, which Chrome
+  restricts to trusted contexts by default — so every write was rejected and
+  every failure swallowed. The 24-hour cache the code describes has therefore
+  never existed on Chrome, and every page re-analysed every image from
+  scratch. `storage.session.setAccessLevel` is now set at startup.
+
+### Changed
+
+- **`minimum_chrome_version` 88 → 101.** `requestDomains` is Chrome 101+, and
+  below that the static rules would be dropped or the ruleset rejected at
+  install. Firefox is unaffected: it shipped both static rulesets and
+  `requestDomains` in 113, already the declared floor.
+- Both build scripts regenerate the ruleset and fail if it cannot be built, so
+  a stale ruleset cannot ship. Packaged size 4.13 → 4.98 MB.
+
 ## [1.7.7] - 2026-09-10
 
 Maintenance release, no new features. Six defects found by an audit of the

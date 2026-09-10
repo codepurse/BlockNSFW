@@ -108,3 +108,32 @@ test('README states the version being built', () => {
   assert.ok(readme.includes(`\`${manifest.version}\``),
     `README.md does not mention ${manifest.version} — it drifted to a stale version twice before`);
 });
+
+test('the in-extension changelog page documents the version being built', () => {
+  // changelog.html is a hand-maintained mirror of CHANGELOG.md, reached from
+  // Settings. It stopped at 1.7.6 while CHANGELOG.md, the release notes and
+  // the What's New card were all updated for 1.8.0 — nothing compared them,
+  // so a user opening the page saw no record of the release they were running.
+  const page = read('changelog.html');
+  assert.ok(page.includes(`>${manifest.version}<`),
+    `changelog.html has no entry for ${manifest.version} — it is a separate ` +
+    'file from CHANGELOG.md and has to be updated by hand');
+});
+
+test('exactly one release on the changelog page is tagged Current', () => {
+  // Two "Current" badges is the shape the miss takes when a release is added
+  // and the previous one is not demoted.
+  const page = read('changelog.html');
+  const current = page.match(/class="tag tag-current"/g) || [];
+  assert.equal(current.length, 1,
+    `changelog.html marks ${current.length} releases as Current`);
+});
+
+test('the changelog page marks the version being built as Current', () => {
+  const page = read('changelog.html');
+  const head = page.slice(page.indexOf('release-version'));
+  const version = head.slice(0, head.indexOf('</span>')).match(/>([\d.]+)$/);
+  assert.ok(version, 'could not read the first version off changelog.html');
+  assert.equal(version[1], manifest.version,
+    `changelog.html leads with ${version[1]}, not the ${manifest.version} being built`);
+});

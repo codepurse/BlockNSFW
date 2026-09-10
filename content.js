@@ -1,6 +1,58 @@
 /* BlockNSFW content script - comprehensive content filtering */
 const browserAPI = typeof browser !== 'undefined' ? browser : chrome;
 
+// --- Frame context ---------------------------------------------------------
+//
+// This script runs in every frame (`all_frames`), which it did not before
+// 1.8.0. Sub-frames were the largest hole in the product: nothing here ran
+// inside an iframe, so an adult site loaded in one was filtered by nothing —
+// no image filter, no AI classifier, no text scan — and iframe-proxy sites
+// made that a two-click bypass needing no skill at all.
+//
+// Running everywhere is only affordable if most frames do almost nothing. An
+// ordinary article page carries a dozen ad and analytics iframes, and this
+// file sets up three observers and reads settings from storage on startup.
+// Multiplying that by every frame is precisely the shape of regression that
+// made 1.7.0 slow, so the split is:
+//
+//   top frame   everything, exactly as before
+//   sub-frame   the URL/host block and the image, media and frame filters —
+//               the checks that judge one element and cost nothing per page
+//   tiny frame  nothing at all; it bails before reading settings
+//
+// Page-level verdicts (metadata, page text, the AI text classifier) and
+// page-level UI (the blocked-results line, the counter pill, SafeSearch
+// enforcement) stay in the top frame. They reason about "the page", which a
+// 300x250 ad slot is not, and their false-positive cost is highest exactly
+// where the content is least meaningful.
+const IS_TOP_FRAME = (() => {
+  try {
+    return window.top === window;
+  } catch (_) {
+    // Cross-origin parent: reading window.top throws, which itself means this
+    // is a sub-frame.
+    return false;
+  }
+})();
+
+// Below this, a frame holds a tracking pixel or a button, not content worth
+// scanning. Zero is excluded deliberately: a frame that has not been laid out
+// yet reports 0, and skipping those would miss frames that matter.
+const FRAME_MIN_DIMENSION_PX = 120;
+
+function isNegligibleFrame() {
+  if (IS_TOP_FRAME) return false;
+  try {
+    const width = window.innerWidth;
+    const height = window.innerHeight;
+    if (width > 0 && width < FRAME_MIN_DIMENSION_PX) return true;
+    if (height > 0 && height < FRAME_MIN_DIMENSION_PX) return true;
+    return false;
+  } catch (_) {
+    return false;
+  }
+}
+
 // Yandex serves Search from several regional domains. Keep the list explicit:
 // a broad `hostname.includes('yandex.')` check would also trust lookalike hosts.
 const YANDEX_SEARCH_BASE_DOMAINS = [
@@ -43,6 +95,9 @@ function updateYandexFamilyCookieValue(currentValue, expiresAt) {
 // ----------------------------------------------------------------------------
 (function enforceSafeSearchSideEffects() {
   try {
+    // Search engines are not framed, and cookie/localStorage writes plus a
+    // settings-page lockdown make no sense inside someone else's iframe.
+    if (!IS_TOP_FRAME) return;
     const u = new URL(location.href);
     if (u.protocol !== 'http:' && u.protocol !== 'https:') return;
     const host = (u.hostname || '').toLowerCase().replace(/^www\./, '');
@@ -955,6 +1010,56 @@ function hostMatchesDomain(host, domain) {
   return h === d || h.endsWith('.' + d);
 }
 
+// --- Keeping the blocked address out of history ----------------------------
+//
+// The blocked page used to carry everything in its query string:
+//
+//   blocked.html?url=https%3A%2F%2F<adult site>&reason=…&matched=porn,xxx
+//
+// content.js arrives here via location.replace(), so the adult URL itself is
+// not left in history — but its replacement embeds the same URL, and that IS a
+// history entry. It shows up in history search, in omnibox suggestions, and
+// Chrome uploads it to the user's Google account when history sync is on. For
+// a tool whose users are, by definition, trying not to leave that trail, this
+// was the worst place in the product to put it.
+//
+// The detail now goes into session storage — memory only, never written to
+// disk, gone when the browser closes — under a random key, and only the key
+// travels in the URL.
+const BLOCK_DETAIL_PREFIX = 'pblocker_block_detail_';
+
+function newBlockDetailKey() {
+  try {
+    if (crypto && typeof crypto.randomUUID === 'function') {
+      return BLOCK_DETAIL_PREFIX + crypto.randomUUID();
+    }
+  } catch (_) {}
+  return BLOCK_DETAIL_PREFIX + Date.now().toString(36) + Math.random().toString(36).slice(2);
+}
+
+/**
+ * Stash the detail and return its key, or null when session storage is not
+ * available — in which case the caller keeps the old query-string form. That
+ * fallback is deliberate: losing the reason and the matched terms would be a
+ * worse outcome than the history entry, and on a browser without session
+ * storage there is nowhere better to put it.
+ *
+ * Fire-and-forget on purpose. Awaiting it would delay window.stop() and the
+ * redirect, and blocked.js re-reads briefly if it arrives first.
+ */
+function stashBlockedDetail(payload) {
+  try {
+    const area = browserAPI.storage && browserAPI.storage.session;
+    if (!area || typeof area.set !== 'function') return null;
+    const key = newBlockDetailKey();
+    const result = area.set({ [key]: { ...payload, ts: Date.now() } });
+    if (result && typeof result.catch === 'function') result.catch(() => {});
+    return key;
+  } catch (_) {
+    return null;
+  }
+}
+
 function getBlockedRedirectUrl(targetUrl, reason, settings, detail) {
   const pageType = (settings && settings.blockedPageType) ? settings.blockedPageType : blockedPageType;
   const customUrl = (settings && typeof settings.customBlockedPageUrl === 'string') ? settings.customBlockedPageUrl : customBlockedPageUrl;
@@ -983,6 +1088,19 @@ function getBlockedRedirectUrl(targetUrl, reason, settings, detail) {
   }
 
   const base = browserAPI.runtime.getURL('blocked.html');
+
+  // Preferred form: the address never enters the URL, so it never enters
+  // history. A custom blocked page is someone else's document and cannot read
+  // our session storage, so that branch above keeps the query string.
+  const key = stashBlockedDetail({
+    url: targetUrl,
+    reason,
+    matched: matchedList,
+    score: (typeof detail.score === 'number' && isFinite(detail.score))
+      ? detail.score : null
+  });
+  if (key) return base + '?k=' + encodeURIComponent(key);
+
   if (pageType === 'plain_html' && plainHtml && plainHtml.trim()) {
     return base +
       '?mode=plain_html' +
@@ -1286,6 +1404,9 @@ function getBlockedReasonLabel(reasonKey) {
 // page cannot add a list by linking at one.
 (function handleSubscribeLink() {
   try {
+    // Only a page the user deliberately navigated to may offer a list. A
+    // framed copy of the subscribe page is not that.
+    if (!IS_TOP_FRAME) return;
     const host = window.location.hostname.toLowerCase();
     if (host !== 'ublacklist.github.io') return;
     if (!/^\/rulesets\/subscribe\/?$/.test(window.location.pathname)) return;
@@ -1302,6 +1423,8 @@ function getBlockedReasonLabel(reasonKey) {
 // Run an instant host-level check at document_start to avoid page flash
 (function instantBlockEarly() {
   try {
+    // A frame too small to show anything is not worth a storage read.
+    if (isNegligibleFrame()) return;
     const urlStr = window.location.href;
     const host = window.location.hostname;
     const normalizedHost = normalizeHost(host);
@@ -1328,8 +1451,14 @@ function getBlockedReasonLabel(reasonKey) {
 
         const redirectNow = (reasonKey, notifyReasonLabel) => {
           try {
+            // A blocked sub-frame is reported as a frame, not as a page: it
+            // is one element of someone else's page, and counting it under
+            // "websites blocked" would inflate that figure every time an
+            // article embedded something. The static ruleset already refuses
+            // listed hosts at the network layer, so what reaches here is an
+            // unknown domain caught by the keyword filter or by DNS.
             browserAPI.runtime.sendMessage({
-              type: 'website_blocked',
+              type: IS_TOP_FRAME ? 'website_blocked' : 'iframe_filtered',
               url: urlStr,
               title: document.title,
               reason: notifyReasonLabel
@@ -1685,7 +1814,11 @@ async function loadSettings() {
     // off by default) flagged something on the same page.
     aiTextBlocker = settings.aiTextBlocker === true;
     aiTextStrictness = settings.aiTextStrictness || 'balanced';
-    anyTextFeatureOn = !!(useSmartBlocking || aiTextBlocker);
+    // Page-text features are a top-frame concern. Left true in a sub-frame,
+    // the MutationObserver would arm a debounced scan on every element
+    // insertion in every ad slot, for a scan that then declines to run — the
+    // pure-overhead shape this whole split exists to avoid.
+    anyTextFeatureOn = IS_TOP_FRAME && !!(useSmartBlocking || aiTextBlocker);
 
     // Store custom blocked page settings globally for access during blocking
     blockedPageType = settings.blockedPageType || 'default';
@@ -3539,6 +3672,7 @@ function addBlockedResultCount(count) {
  */
 function updateBlockedResultsNotice() {
   try {
+    if (!IS_TOP_FRAME) return;
     const engine = getSearchEngine();
     // Turned off, nothing blocked, or the tally belongs to a previous search:
     // in every case the line has to go, including when it is already drawn.
@@ -3597,6 +3731,9 @@ function scheduleFloatingCounterUpdate() {
  */
 function updateFloatingCounter() {
   try {
+    // A pill drawn inside every ad iframe would be absurd, and invisible
+    // anyway — the count belongs to the page, so it is drawn once.
+    if (!IS_TOP_FRAME) return;
     const existing = document.getElementById(FLOATING_COUNTER_ID);
 
     if (blockCountDisplay !== 'floating' || pageBlockedTotal <= 0 ||
@@ -4833,16 +4970,22 @@ async function processContent() {
       }
     }
 
-    const searchEngine = getSearchEngine();
-    if (searchEngine === 'yandex' && shouldBlockCurrentSearchQuery()) {
-      log('Yandex search blocked - explicit query detected');
-      redirectToBlockedPage('search_query');
-      return;
-    }
+    // Search and social reason about "the page" — which engine this is, what
+    // its results say. A sub-frame is one element of someone else's page, so
+    // those passes stay in the top frame. The element filters below run
+    // everywhere: they judge one image or one video and cost nothing per page.
+    if (IS_TOP_FRAME) {
+      const searchEngine = getSearchEngine();
+      if (searchEngine === 'yandex' && shouldBlockCurrentSearchQuery()) {
+        log('Yandex search blocked - explicit query detected');
+        redirectToBlockedPage('search_query');
+        return;
+      }
 
-    // Filter search results only on text/web results, not image search
-    if (searchEngine && !isImagesSearchContext()) {
-      await filterSearchResults();
+      // Filter search results only on text/web results, not image search
+      if (searchEngine && !isImagesSearchContext()) {
+        await filterSearchResults();
+      }
     }
     
     // Filter images on all pages
@@ -4851,8 +4994,13 @@ async function processContent() {
     filterMedia();
 
     // Social site feeds: per-post filtering without blocking entire site
-    await filterSocialFeed();
+    if (IS_TOP_FRAME) await filterSocialFeed();
     
+    // Page-level verdicts, top frame only. Judging a 300x250 ad slot by its
+    // title or its handful of words is where these are least reliable and
+    // most expensive.
+    if (!IS_TOP_FRAME) return;
+
     // The user's own title patterns come first — an explicit instruction
     // outranks the heuristics below it.
     if (checkCustomTitlePatterns()) {
@@ -5447,6 +5595,12 @@ function consoleLogPageTitle(source) {
 // Initialization
 async function init() {
   try {
+    // Nothing to filter in a tracking pixel or a share button. Bail before
+    // the storage read, the three observers and the first content pass —
+    // with all_frames on, an ordinary article page runs this file a dozen
+    // times over and most of those frames are this.
+    if (isNegligibleFrame()) return;
+
     // Load settings, then warm the one canonical-list verdict needed by the
     // synchronous clean-page heuristics. The full list remains in background.
     await loadSettings();

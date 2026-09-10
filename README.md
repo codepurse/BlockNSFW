@@ -7,7 +7,7 @@ Project status:
 - Already used by thousands of users
 - Source-first repo with Chrome and Firefox build scripts
 
-Current version: `1.7.7`
+Current version: `1.8.0`
 
 ## Install
 
@@ -29,6 +29,13 @@ Current version: `1.7.7`
 
 BlockNSFW combines several protection layers:
 
+- **Network-level blocking**: the curated list ships as a static
+  declarativeNetRequest ruleset, so a blocked host's images, media, frames and
+  scripts are refused by the browser before any request is sent. Navigation
+  still routes through the content script, which is what makes the blocked
+  page and its audit entry possible.
+- **Filtering inside embedded frames**, not just the top page, with the work
+  scaled to the frame so ordinary pages stay fast.
 - Domain blocking with local fallback rules plus cached remote blocklist updates. IDN / punycode hostnames (e.g. `xn--porn-tqa.net`) are retained at runtime, not silently dropped.
 - Hostname smart filter that scans both the ASCII / punycode form and the decoded Unicode form of a hostname, with multilingual adult-hostword coverage (Chinese, Korean, Russian, Arabic, Thai, plus transliterated Latin).
 - Page and visible-content filtering through a Manifest V3 content script
@@ -104,7 +111,7 @@ Privacy details live in `PRIVACY_POLICY.md`. Public docs should stay aligned wit
 
 Supported:
 
-- Chrome 88+
+- Chrome 101+ (`requestDomains`, used by the static ruleset, landed in 101)
 - Firefox 113+
 - Chromium-based browsers that support MV3 and required permissions
 

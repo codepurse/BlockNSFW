@@ -30,3 +30,6 @@ __pycache__/
 
 # Benchmark output
 artifacts/
+
+# Local verification harness (not shipped)
+.verify/
