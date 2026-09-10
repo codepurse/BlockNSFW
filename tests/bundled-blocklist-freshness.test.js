@@ -3,6 +3,9 @@ const assert = require('node:assert/strict');
 const vm = require('node:vm');
 const { loadBackgroundContext } = require('./setup.js');
 
+const PUBLIC_SUFFIX_TEXT = require('fs').readFileSync(
+  require('path').join(__dirname, '..', 'data', 'public-suffixes.txt'), 'utf8');
+
 const META_KEY = 'pblocker_blocklist_meta_v2';
 
 async function settleBackgroundStartup(context) {
@@ -22,6 +25,10 @@ test('packaged blocklist is fresh until its normal refresh TTL expires', async (
   context.chrome.storage.local.get = async () => ({});
   context.chrome.storage.local.set = async value => { writes.push(value); };
   context.fetch = async url => {
+    // Packaged file, read on every blocklist load; not a remote call.
+    if (String(url).endsWith('public-suffixes.txt')) {
+      return { ok: true, text: async () => PUBLIC_SUFFIX_TEXT };
+    }
     if (url === 'blocklist.json') {
       return { json: async () => ['blocked.example'] };
     }
@@ -54,6 +61,10 @@ test('packaged blocklist preserves its original freshness timestamp across resta
   context.chrome.storage.local.get = async () => ({ [META_KEY]: storedMeta });
   context.chrome.storage.local.set = async value => { writes.push(value); };
   context.fetch = async url => {
+    // Packaged file, read on every blocklist load; not a remote call.
+    if (String(url).endsWith('public-suffixes.txt')) {
+      return { ok: true, text: async () => PUBLIC_SUFFIX_TEXT };
+    }
     if (url === 'blocklist.json') {
       return { json: async () => ['blocked.example'] };
     }
@@ -89,6 +100,10 @@ test('an expired bundled timestamp triggers the normal remote refresh', async ()
   context.chrome.storage.local.set = async () => {};
   context.chrome.storage.local.remove = async () => {};
   context.fetch = async url => {
+    // Packaged file, read on every blocklist load; not a remote call.
+    if (String(url).endsWith('public-suffixes.txt')) {
+      return { ok: true, text: async () => PUBLIC_SUFFIX_TEXT };
+    }
     if (url === 'blocklist.json') {
       return { json: async () => ['blocked.example'] };
     }
