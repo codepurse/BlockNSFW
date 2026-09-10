@@ -40,6 +40,22 @@
   var MAX_LINE_LENGTH = 2000;
   var MAX_NAME_LENGTH = 80;
 
+  // Regex rules are capped far below MAX_ENTRIES, and separately from it.
+  //
+  // Validating a regex is the one line-level cost here that is not O(length):
+  // each one is shape-checked and then timed against a dozen probe strings.
+  // The shape check refuses the exponential family outright, so no single
+  // entry can hang the parser any more — but a pattern that is merely slow
+  // still costs up to the probe budget before it is rejected, and this runs on
+  // the background thread on every startup. At 50,000 entries that multiplies
+  // into an outage; at 200 it is bounded by construction.
+  //
+  // 200 is generous for the format's actual use: a published site list is
+  // overwhelmingly bare domains, and the regex form exists for the handful of
+  // cases a wildcard cannot express. Rules past the cap are counted as skipped
+  // and reported to the user, not silently dropped.
+  var MAX_REGEX_ENTRIES = 200;
+
   var KP = (typeof KeywordPattern !== 'undefined') ? KeywordPattern
     : (typeof require === 'function' ? require('./keyword-pattern.js') : null);
 
@@ -116,6 +132,7 @@
     var seen = {};
     var skipped = 0;
     var truncated = false;
+    var regexCount = 0;
 
     for (var i = header.start; i < lines.length; i++) {
       var raw = lines[i].trim();
@@ -125,6 +142,16 @@
 
       var entry = stripEscape(raw);
       if (!entry) continue;
+
+      // Count the regex forms before validating them, and stop validating once
+      // the cap is reached. Checking the cap first is the point: validation is
+      // the expensive step, so a file with 50,000 regex lines must not pay for
+      // 50,000 validations to discover it is over the limit.
+      var looksRegex = entry.charAt(0) === '/' || /^title\s*\//i.test(entry);
+      if (looksRegex) {
+        if (regexCount >= MAX_REGEX_ENTRIES) { skipped++; continue; }
+        regexCount++;
+      }
 
       // Validation is the same gate the options box applies, so a broken regex
       // in someone else's file is dropped here rather than reaching a page.
@@ -186,6 +213,7 @@
   var exported = {
     MAX_FILE_BYTES: MAX_FILE_BYTES,
     MAX_ENTRIES: MAX_ENTRIES,
+    MAX_REGEX_ENTRIES: MAX_REGEX_ENTRIES,
     parseRuleset: parseRuleset,
     splitEntries: splitEntries,
     isHttpUrl: isHttpUrl

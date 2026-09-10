@@ -1,6 +1,9 @@
 {
-  "latest": "1.6.1",
-  "notes": "Latest stable release.",
+  "latest": "1.7.6",
+  "notes": "Faster browsing, a choice of DNS resolver, and a second image-detection model.",
   "url": "https://github.com/codepurse/BlockNSFW/releases",
-  "updatedAt": "2026-06-24"
+  "chromeUrl": "https://chromewebstore.google.com/detail/blocknsfw-%E2%80%93-porn-adult-co/fiecjgpoilkhmoieaboolkfmgbnhlhop",
+  "firefoxUrl": "https://addons.mozilla.org/en-US/firefox/addon/blocknsfw-porn-adult-content/",
+  "edgeUrl": "https://microsoftedge.microsoft.com/addons/detail/blocknsfw-%E2%80%93-porn-adult-/imccbmfplknoadpaoopicfdpnnimgdab",
+  "updatedAt": "2026-09-10"
 }

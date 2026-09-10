@@ -130,24 +130,168 @@
     return { body: value.slice(1, close), flags: value.slice(close + 1) };
   }
 
+  // --- Structural rejection ---------------------------------------------
+  //
+  // The timing probe below cannot be the only defence, because the thing it
+  // measures is the thing that hangs. `compiled.test(probe)` is not
+  // interruptible: the elapsed time is read only after it returns, so a probe
+  // that takes a minute is billed a minute late, and the page — or the
+  // background worker parsing a subscribed list — is frozen for that minute
+  // either way. No budget can fix that from inside the same thread.
+  //
+  // So the catastrophic family is rejected by SHAPE, before anything is
+  // executed. In practice that family is one construct: an unbounded repeat
+  // nested inside another repeat — (a+)+, (a*)*, ([-.]+)+, ([^a]+)+,
+  // (x+x+)+y, (\w+\s?)* — where the engine has exponentially many ways to
+  // divide the same input between the two levels.
+  //
+  // This is deliberately conservative. A bounded inner repeat is fine
+  // ((\d{3}-)+ stays legal), and so is a group with no inner repeat at all
+  // ((foo|bar)+). Something like (ab+)+ is only polynomial, and is rejected
+  // anyway: nested repeats are vanishingly rare in blocked-word patterns, and
+  // the cost of a wrong "accept" here is a browser the user cannot unfreeze.
+
+  // What quantifier, if any, sits at `pos`. `repeatable` means it can run the
+  // atom more than once; `unbounded` means it has no upper limit.
+  function quantifierAt(source, pos) {
+    var none = { length: 0, repeatable: false, unbounded: false };
+    var ch = source.charAt(pos);
+    if (ch === '+' || ch === '*') {
+      // A lazy quantifier (+?, *?) backtracks just as badly; it only changes
+      // the order the engine tries things, not how many there are to try.
+      var lazy = source.charAt(pos + 1) === '?' ? 1 : 0;
+      return { length: 1 + lazy, repeatable: true, unbounded: true };
+    }
+    if (ch === '?') {
+      return { length: source.charAt(pos + 1) === '?' ? 2 : 1, repeatable: false, unbounded: false };
+    }
+    if (ch !== '{') return none;
+    var close = source.indexOf('}', pos);
+    if (close === -1) return none;
+    var spec = source.slice(pos + 1, close);
+    var match = /^(\d+)(,(\d*))?$/.exec(spec);
+    if (!match) return none;               // not a quantifier, a literal brace
+    var lazyBrace = source.charAt(close + 1) === '?' ? 1 : 0;
+    var min = parseInt(match[1], 10);
+    var hasComma = !!match[2];
+    var max = match[3] ? parseInt(match[3], 10) : (hasComma ? Infinity : min);
+    return {
+      length: (close - pos + 1) + lazyBrace,
+      repeatable: max >= 2,
+      unbounded: max === Infinity
+    };
+  }
+
+  /**
+   * The offending construct if the pattern nests an unbounded repeat inside a
+   * repeated group, or '' when it does not.
+   *
+   * Walks the source tracking group nesting. Any unbounded quantifier marks
+   * every group currently open, because it lies inside all of them. When a
+   * group closes we look at the quantifier that follows: a repeatable one on a
+   * group that contains an unbounded repeat is the exponential shape.
+   *
+   * Character classes are skipped wholesale — `+` inside `[...]` is a literal
+   * plus sign — and an escaped character is never read as syntax.
+   */
+  function findNestedQuantifier(body) {
+    var source = String(body == null ? '' : body);
+    var open = [];          // one flag per currently-open group
+    var inClass = false;
+    var i = 0;
+    while (i < source.length) {
+      var ch = source.charAt(i);
+      if (ch === '\\') { i += 2; continue; }
+      if (inClass) {
+        if (ch === ']') inClass = false;
+        i++;
+        continue;
+      }
+      if (ch === '[') { inClass = true; i++; continue; }
+      if (ch === '(') { open.push({ start: i, nested: false }); i++; continue; }
+      if (ch === ')') {
+        var group = open.pop();
+        var after = quantifierAt(source, i + 1);
+        if (group && group.nested && after.repeatable) {
+          return source.slice(group.start, i + 1 + after.length);
+        }
+        // The group's own quantifier belongs to whatever encloses it.
+        if (after.unbounded && open.length) open[open.length - 1].nested = true;
+        i += 1 + after.length;
+        continue;
+      }
+      var here = quantifierAt(source, i);
+      if (here.length > 0) {
+        if (here.unbounded) {
+          for (var g = 0; g < open.length; g++) open[g].nested = true;
+        }
+        i += here.length;
+        continue;
+      }
+      i++;
+    }
+    return '';
+  }
+
   // Inputs chosen to provoke backtracking: a run of one character, the same run
   // failing only at the final character (the worst case for a nested
   // quantifier), an alternating run, and ordinary prose as a sanity check.
-  // A generic run of "a" only blows up patterns written with "a". /(x+x+)+y/ is
-  // just as catastrophic but sails through an all-"a" probe, so the probe
-  // alphabet is taken from the pattern itself: the literal characters it
-  // mentions are the ones capable of driving its own backtracking.
+  //
+  // The alphabet is taken from the pattern itself, because a generic run of
+  // "a" only blows up patterns written with "a" — /(x+x+)+y/ sails through an
+  // all-"a" probe. Punctuation and character-class contents count too: the
+  // original version collected only [A-Za-z0-9] literals and fell back to "a",
+  // so /([-.]+)+$/ was probed with characters it never matches, passed in a
+  // millisecond, and then took ~15 seconds against a run of 30 dots — text
+  // that appears on ordinary pages as a separator or an ellipsis.
   function probeAlphabet(body) {
     var chars = [];
+    var add = function (ch) {
+      if (!ch || chars.length >= 5) return;
+      if (chars.indexOf(ch) === -1) chars.push(ch);
+    };
+    var inClass = false;
+    var negated = false;
+    var seen = '';
     for (var i = 0; i < body.length; i++) {
       var ch = body.charAt(i);
-      if (ch === '\\') { i++; continue; } // skip escapes: \d is not a literal d
-      if (!/[A-Za-z0-9]/.test(ch)) continue;
-      if (chars.indexOf(ch) === -1) chars.push(ch);
-      if (chars.length >= 3) break;       // keep the probe set small
+      if (ch === '\\') { i++; continue; }  // skip escapes: \d is not a literal d
+      if (inClass) {
+        if (ch === ']') {
+          inClass = false;
+          // A negated class is stressed by a character it does NOT contain,
+          // so pick the first candidate the class leaves out.
+          if (negated) {
+            var candidates = 'az0-. !';
+            for (var c = 0; c < candidates.length; c++) {
+              if (seen.indexOf(candidates.charAt(c)) === -1) { add(candidates.charAt(c)); break; }
+            }
+          }
+          seen = '';
+          continue;
+        }
+        if (ch === '^' && seen === '') { negated = true; continue; }
+        seen += ch;
+        if (!negated) add(ch);
+        continue;
+      }
+      if (ch === '[') { inClass = true; negated = false; seen = ''; continue; }
+      if ('()|{}+*?.^$'.indexOf(ch) !== -1) continue; // syntax, not an input char
+      add(ch);
     }
     if (chars.indexOf('a') === -1) chars.push('a'); // always try the classic
     return chars;
+  }
+
+  // Every probe is capped at PROBE_REPEAT characters, including the prose one.
+  // That cap is the whole calibration: at ~22 characters an exponential
+  // pattern costs a few million steps — tens of milliseconds, comfortably over
+  // the budget and plainly detectable — while an honest one finishes in
+  // microseconds. The prose probe used to be the full 43-character pangram,
+  // which contains a 36-character run with no "a", so /([^a]+)+$/ backtracked
+  // exponentially inside the validator and the measurement never ran at all.
+  function cap(text) {
+    return text.length > PROBE_REPEAT ? text.slice(0, PROBE_REPEAT) : text;
   }
 
   function probeStrings(body) {
@@ -155,11 +299,11 @@
     var alphabet = probeAlphabet(body || '');
     for (var i = 0; i < alphabet.length; i++) {
       var run = new Array(PROBE_REPEAT + 1).join(alphabet[i]);
-      strings.push(run);
-      strings.push(run + '!'); // failing at the very end is the worst case
+      strings.push(cap(run));
+      strings.push(cap(run.slice(0, PROBE_REPEAT - 1) + '!')); // fail at the end
     }
-    strings.push(new Array(Math.floor(PROBE_REPEAT / 2) + 1).join('a1') + ' ');
-    strings.push('the quick brown fox jumps over the lazy dog');
+    strings.push(cap(new Array(Math.floor(PROBE_REPEAT / 2) + 1).join('a1') + ' '));
+    strings.push(cap('the quick brown fox jumps over the lazy dog'));
     return strings;
   }
 
@@ -198,6 +342,19 @@
       if (ALLOWED_FLAGS.indexOf(flag) === -1) {
         return { ok: false, isRegex: true, error: 'Unknown flag "' + flag + '"' };
       }
+    }
+
+    // Shape check BEFORE compiling or running anything. The timing probe below
+    // cannot interrupt a pattern that has already started, so the exponential
+    // family has to be refused without being executed even once.
+    var nested = findNestedQuantifier(parts.body);
+    if (nested) {
+      return {
+        ok: false,
+        isRegex: true,
+        error: 'Pattern repeats a repeat (' + nested + '), which can take exponential ' +
+          'time on some inputs and freeze pages. Rewrite it without the inner + or *'
+      };
     }
 
     var compiled;
@@ -321,6 +478,9 @@
   var exported = {
     MAX_PATTERN_LENGTH: MAX_PATTERN_LENGTH,
     PROBE_BUDGET_MS: PROBE_BUDGET_MS,
+    PROBE_REPEAT: PROBE_REPEAT,
+    findNestedQuantifier: findNestedQuantifier,
+    probeStrings: probeStrings,
     isCommentEntry: isCommentEntry,
     needsCommentEscape: needsCommentEscape,
     escapeCommentEntry: escapeCommentEntry,

@@ -4,6 +4,182 @@ All notable project changes should be documented here going forward.
 
 ## [Unreleased]
 
+## [1.7.7] - 2026-09-10
+
+Maintenance release, no new features. Six defects found by an audit of the
+blocking engine — four ways the filter could stop working without saying so,
+one way a website could inject markup into the extension's own pages, and one
+false positive that blocked millions of ordinary sites. Each was silent:
+nothing logged an error, nothing showed in the UI, and the extension went on
+reporting that protection was on.
+
+### Fixed
+
+- **One blocklist entry no longer blocks an entire namespace.** Every Blogspot
+  blog and the whole `gob.mx` Mexican government domain were being blocked.
+
+  `isUrlInDefaultBlocklist()` blocks a host when the host *or any parent of it*
+  is listed — correct for `cdn.pornhub.com` matching `pornhub.com`, and
+  catastrophic when the parent is a namespace anyone can register under.
+  `data/HOSTS.txt` carried `www.blogspot.com`, a perfectly reasonable entry,
+  but `normalizeDomainForCache()` strips `www.` and left `blogspot.com`.
+  `gob.mx` was listed bare and did the same.
+
+  The old defence was `SHARED_CDN_PARENT_DOMAINS`, a hand-written list of 30
+  CDN parents. It held neither, because the set of namespaces is open-ended and
+  a hand-written list cannot cover it. The Public Suffix List can:
+  `data/public-suffixes.txt` is now intersected with the blocklist on every
+  load, so an entry arriving in a remote refresh is neutralised within the
+  refresh interval rather than at the next release.
+
+  Individually listed children survive — the 15,316 explicit `*.blogspot.com`
+  adult blogs are separate entries and still block. Only the namespace stops
+  standing in for everything beneath it.
+
+  Three things this shook out:
+  - Skipping the parent was not enough. `gob.mx` is in the list *literally*, so
+    an exact-match lookup hit before the parent walk ever ran. Offending
+    entries are removed from the effective set instead, which fixes both paths.
+  - The 30-entry CDN list is kept in full even though the PSL covers half of
+    it. The overlap is deliberate: the PSL is fetched at runtime, and the guard
+    degrades to dropping nothing when that fails. Trimming the overlap made
+    `safe.cloudfront.net` blockable on a failed fetch, which
+    `tests/firefox-performance.test.js` caught — it injects a blocklist
+    directly and so never runs the guard.
+  - Wildcard PSL rules are ignored by the guard. `*.mm` makes the list call
+    `milffuck.mm` a public suffix; it is an adult site, and honouring that
+    would have stopped it being blocked at all. The rules that caused real
+    damage are all exact.
+
+  `sex.hu` and `szex.hu` stay blocked wholesale on purpose — those namespaces
+  exist for adult content, so every registration under them is in scope.
+
+- **Ordinary words in a hostname no longer switch the smart filter off.** The
+  smart hostname filter stands down when a domain looks like a recovery or
+  support site, so `porn-addiction-treatment.org` is never filtered. It matched
+  those words as bare substrings anywhere in the hostname, so any domain merely
+  *containing* one of ~39 everyday English words had the filter switched off
+  wholesale — `safe-pornhub.com`, `xnxx-safer.tv`, `hentai-protect.io`,
+  `cdn.safe.pornhub-mirror.com`. An operator could buy an exemption for a new
+  mirror by putting "safe" in its name.
+
+  A safe token now has to occupy whole hyphen-delimited segments of a label
+  (`safeHostMatches`), so `porn-addiction-treatment.org` still stands down —
+  its segments really are "addiction" and "treatment" — while `helpxxx.com`
+  does not. Eight tokens that were free cover rather than genuinely
+  safety-coded are removed: safe, safer, study, research, academic, freedom,
+  liberty, protect. "protection" is kept.
+
+  Both implementations were fixed, not just the shared one:
+  `content.js`'s `isLikelyAdultHostEarly` carried its own substring copy and
+  now defers to the same rule.
+
+  Two things this shook out:
+  - Page *navigation* was largely unaffected: it ORs in a second, broader check
+    that matches adult tokens as substrings, and that caught most of the corpus
+    already. The strict matcher is what images, embedded frames, media and
+    social-post links consult, and it is also what the background's own verdict
+    uses — so an image host named `safe-cdn.<mirror>.com` served unfiltered
+    pictures wherever it was hotlinked. That is where this bit.
+  - An adult token glued inside a longer label (`freedomporn.com`) is still not
+    matched. That is the same rule that stops "essex" matching "sex", so
+    loosening it trades against false positives on news, reference and support
+    sites; it is left as an open decision rather than changed in a patch
+    release.
+
+- **A custom blocked word written as a pattern can no longer freeze the
+  browser, and a subscribed list can no longer stall the background.** Regex
+  entries were guarded by timing each candidate against adversarial probe
+  strings and rejecting the slow ones. Two independent holes:
+
+  - The probe alphabet was built only from the `[A-Za-z0-9]` literals a pattern
+    mentions, falling back to `"a"`. A pattern whose blow-up alphabet is
+    punctuation or a negated class was therefore probed with characters it
+    never matches: `/([-.]+)+$/` passed validation in 1 ms and then cost ~15 s
+    against a run of 30 dots — an ellipsis or a `-----` separator, which
+    ordinary pages are full of. Compiled patterns run against up to 48 lines of
+    body text on every page, so one saved entry of that shape froze all
+    browsing.
+  - The 10 ms budget was read only *after* `compiled.test()` returned, so a
+    probe that did not return was never billed. The uncapped 43-character prose
+    probe holds a 36-character run with no `"a"`, which is enough to make
+    `/([^a]+)+$/` backtrack exponentially inside the validator itself.
+    `parseRuleset` calls the same validator, so one line in a subscribed list
+    stalled the background on every startup — and while it stalls, nothing
+    answers `should_block_url` and the 204k-domain blocklist is not consulted.
+
+  No in-thread budget can fix the second: the thread doing the measuring is the
+  thread that hangs. The exponential family is now refused on **shape**, before
+  anything is compiled or executed — `findNestedQuantifier()` rejects an
+  unbounded repeat nested inside a repeated group. Bounded inner repeats
+  (`(\d{3}-)+`) and groups with no inner repeat (`(foo|bar)+`) are unaffected.
+
+  The probe remains as a second gate with both holes closed: its alphabet now
+  reaches punctuation and character-class contents, a negated class is stressed
+  with a character it excludes, and every probe is capped at `PROBE_REPEAT` —
+  that cap was the calibration all along, and the prose probe was the one
+  string exempt from it.
+
+- **Blocked videos, embedded frames and social posts are counted again.**
+  `content.js` has always reported `video_filtered`, `iframe_filtered` and
+  `social_post_filtered`; the background listener had no branch for any of
+  them, so three of the six block types reached nothing — not the toolbar
+  badge, not the totals, not the daily counters, not the audit log. The in-page
+  pill counted videos and frames itself, which is why it and the badge
+  disagreed on the same page. Each type now has its own stat and daily field.
+
+- **The content script no longer writes every page's title and URL into that
+  page's console.** `consoleLogPageTitle()` fired from init, popstate,
+  DOMContentLoaded and ready — four entries per navigation, on every site,
+  gated on nothing. Page-side analytics and error SDKs record console output as
+  breadcrumbs by default, so a site's vendor received both the page title and
+  the fact that BlockNSFW is installed. The AOL/Yahoo SafeSearch audit logged
+  `location.href`, which on a search page is the user's query. Both now respect
+  debug mode.
+
+- **A website could inject markup into the blocked page.** `blocked.html` is a
+  web-accessible resource matching `<all_urls>`, so any site can navigate to it
+  — or frame it — with a query string of its choosing. In plain-HTML mode the
+  `url` and `reason` parameters were substituted into the user's saved template
+  unescaped and handed to `document.write()`.
+
+  The extension CSP (`script-src 'self'`) stops injected `<script>` from
+  running, so this was not remote code execution. It does not stop markup: an
+  attacker could render a convincing "BlockNSFW — enter your PIN to continue"
+  form at a genuine `chrome-extension://` address, and `img-src` is
+  unrestricted, so what gets typed can be sent somewhere. The shipped example
+  template uses `{{url}}`, so the documented configuration was the vulnerable
+  one.
+
+  Both substituted values are escaped now. The template itself is not — it is
+  the user's own HTML and is meant to render as markup, which is the feature.
+  Which page type to render also comes from settings rather than the `mode`
+  query parameter, so a website can no longer select this rendering path for
+  someone who never chose it.
+
+- **A malformed runtime message no longer throws inside the background
+  listener.** `message.type` was read with no guard, so a message that was not
+  an object threw — which Chrome surfaces only as a failed send on the far
+  side. The listener's fallthrough also returned `true`, promising a response
+  that was never coming and leaving a port dangling until the sender timed out;
+  it now returns `false`.
+
+### Changed
+
+- Subscribed rulesets cap how many regex rules they may carry
+  (`MAX_REGEX_ENTRIES`, 200), checked before validation rather than after, so a
+  hostile or broken file cannot multiply per-entry validation cost across
+  `MAX_ENTRIES` lines. Bare host rules are unaffected.
+
+### Notes for existing users
+
+- A saved blocked word written as a pattern that repeats a repeat will stop
+  matching, since those are the entries that could freeze a page. Rewrite
+  without the inner `+` or `*` and save again.
+- A site previously exempt because its hostname contained one of the eight
+  removed safe tokens may now be blocked. Whitelist it locally, and please
+  report it so it can reach `data/WHITELIST.txt`.
+
 ## [1.7.6] - 2026-08-30
 
 ### Added
