@@ -189,3 +189,17 @@ test('H1: the shipped example template uses the substitution that was vulnerable
   assert.ok(example.includes('{{url}}'),
     'the documented template should still exercise the escaped path');
 });
+
+
+test('privacy mode never renders a custom HTML template with external resources', async () => {
+  const { written } = renderBlockedPage({
+    query: '?mode=plain_html&url=https%3A%2F%2Fprivate.example',
+    settings: {
+      privacyMode: true,
+      blockedPageType: 'plain_html',
+      plainBlockedPageHtml: '<img src="https://third-party.example/pixel?url={{url}}">'
+    }
+  });
+  await flush();
+  assert.deepEqual(written, []);
+});

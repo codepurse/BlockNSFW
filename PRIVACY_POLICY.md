@@ -10,6 +10,27 @@ Most filtering decisions are made locally in your browser. We do not sell person
 
 ## How We Collect and Handle Data
 
+### Optional Privacy mode
+
+In Settings → Protection, **Privacy mode** limits extension-initiated fetches
+to the three public GitHub files for the blocklist, whitelist and version.
+These downloads omit credentials and referrers, discard caller-provided
+headers and reject HTTP redirects. Their hosts still receive your IP address
+and ordinary connection metadata. The mode is off by default for compatibility
+with existing optional features.
+
+While on, DNS checks, Reddit API lookups, AI image scanning and model downloads,
+custom list subscriptions, reports and community requests are unavailable.
+Saved settings are preserved, but a built-in blocked page replaces external
+or custom HTML blocked pages. Local filtering, SafeSearch and local statistics
+remain available. Reload existing pages after switching the mode; requests
+already sent cannot be recalled.
+
+This is a restriction on this extension's data transfers, not anonymity for
+your browser: websites you visit, browser sync, other extensions, and browser
+or store updates have their own behavior. See `docs/PRIVACY_MODE.md` for the
+scope and regression tests.
+
 BlockNSFW may handle data in the following ways:
 
 - **Automatically on-device while you browse:** the extension may access and process the URL, domain, page title, page metadata, visible text, links, and certain page element attributes in order to detect and block adult or inappropriate content.

@@ -2160,6 +2160,18 @@
       </section>
 
       <section class="section" id="section-protection">
+    <div class="card fade-in">
+      <h2 class="card-title">Privacy mode</h2>
+      <div class="switch-container">
+        <div class="switch-label">
+          <span class="label">Keep browsing data on this device</span>
+          <span class="description">Allow only public blocklist and version downloads. Local filtering and statistics stay available.</span>
+        </div>
+        <label class="switch"><input type="checkbox" id="privacy-mode" /><span class="slider"></span></label>
+      </div>
+      <p class="card-description">While enabled, DNS checks, Reddit lookups, AI image scanning, model downloads, custom list downloads, reports and community requests are unavailable. The built-in blocked page replaces custom pages. Existing settings are preserved for when you turn this mode off.</p>
+      <p class="card-description">Download servers still see your IP address. This does not anonymize websites you visit or browser sync. Reload open pages after enabling; requests already sent cannot be recalled.</p>
+    </div>
         <div class="section-head">
           <h2 class="section-title">Protection</h2>
           <p class="section-desc">Core blocking, DNS-level filtering, and safe search.</p>
@@ -3012,6 +3024,7 @@ title/Example Domain/"></textarea>
     </div>
   </div>
 
+  <script src="shared/privacy-guard.js"></script>
   <script src="shared/browser-key.js"></script>
   <script src="appwrite-client.js"></script>
   <script src="shared/validate-domain.js"></script>

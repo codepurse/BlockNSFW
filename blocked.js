@@ -224,7 +224,7 @@ async function loadStashedDetail() {
 async function renderPlainHtml() {
   try {
     const { pblocker_settings: settings } = await browserAPI.storage.local.get('pblocker_settings');
-    if (!settings || settings.blockedPageType !== 'plain_html') return false;
+    if (!settings || settings.privacyMode === true || settings.blockedPageType !== 'plain_html') return false;
     const html = typeof settings.plainBlockedPageHtml === 'string' ? settings.plainBlockedPageHtml : '';
     if (!html || !html.trim()) return false;
     const rendered = html
