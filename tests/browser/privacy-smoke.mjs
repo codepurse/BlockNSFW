@@ -1,6 +1,10 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+const contract = JSON.parse(
+  readFileSync(new URL('../fixtures/privacy-contract.json', import.meta.url), 'utf8'),
+);
 // Run only against a disposable Chrome profile with --enable-unsafe-extension-debugging.
 const endpoint = process.env.BLOCKNSFW_CDP_URL;
 if (!endpoint)
@@ -35,6 +39,7 @@ socket.addEventListener('message', async (e) => {
       url: m.params.request.url,
       method: m.params.request.method,
       body: m.params.request.postData,
+      headers: m.params.request.headers,
       session: m.sessionId,
     });
     try {
@@ -131,8 +136,14 @@ try {
     "fetch('https://raw.githubusercontent.com/codepurse/BlockNSFW/refs/heads/main/data/version.json', {headers:{'X-Private':'PRIVATE_MARKER'},referrer:'https://private.example.com/PRIVATE_MARKER'})",
   );
   const relevant = requests.slice(mark);
-  assert.equal(relevant.length, 1, JSON.stringify(relevant));
-  assert.ok(relevant[0].url.endsWith('/data/version.json'));
+  // Startup refreshes can finish concurrently on slower CI machines. They must
+  // satisfy the same contract; do not require a timing-dependent request count.
+  assert.ok(relevant.some((request) => request.url.endsWith('/data/version.json')));
+  for (const request of relevant) {
+    assert.ok(contract.allowedDownloads.includes(request.url), JSON.stringify(request));
+    assert.equal(request.method, 'GET');
+    assert.equal(request.body, undefined);
+  }
   assert.ok(!JSON.stringify(relevant).includes('PRIVATE_MARKER'));
   const { browserContextId } = await send('Target.createBrowserContext');
   const privateTarget = await send('Target.createTarget', { url: 'about:blank', browserContextId });
@@ -162,6 +173,7 @@ try {
   assert.match(privateProbe.result.value, /Privacy mode/);
   assert.equal(requests.length, privateMark, 'incognito probe must not reach network');
   await send('Target.disposeBrowserContext', { browserContextId });
+  assert.deepEqual(failures, [], 'network interception must not fail silently');
   const result = {
     incognitoProbe: privateProbe.result.value,
     browser: 'isolated headless Chrome',

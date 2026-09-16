@@ -1,0 +1,67 @@
+{
+  "scope": "Extension-initiated fetches while privacyMode is enabled; not browser-wide anonymity",
+  "allowedDownloads": [
+    "https://raw.githubusercontent.com/codepurse/BlockNSFW/refs/heads/main/data/HOSTS.txt",
+    "https://raw.githubusercontent.com/codepurse/BlockNSFW/refs/heads/main/data/WHITELIST.txt",
+    "https://raw.githubusercontent.com/codepurse/BlockNSFW/refs/heads/main/data/version.json"
+  ],
+  "requiredRequestOptions": {
+    "method": "GET",
+    "credentials": "omit",
+    "referrerPolicy": "no-referrer",
+    "redirect": "error"
+  },
+  "deniedRequests": [
+    { "name": "page URL", "url": "https://private.example/path?search=PRIVATE_SEARCH_MARKER" },
+    {
+      "name": "DNS lookup",
+      "url": "https://family.cloudflare-dns.com/dns-query?name=PRIVATE_SEARCH_MARKER.example.com&type=A"
+    },
+    { "name": "Reddit lookup", "url": "https://www.reddit.com/r/PRIVATE_SEARCH_MARKER/about.json" },
+    {
+      "name": "community report",
+      "url": "https://699ac1b100018b3f455a.sgp.appwrite.run",
+      "method": "POST",
+      "body": "PRIVATE_SEARCH_MARKER"
+    },
+    { "name": "community request", "url": "https://6a3aafbf000d1e70cc28.sgp.appwrite.run" },
+    {
+      "name": "image refetch",
+      "url": "https://images.example/photo.jpg?token=PRIVATE_SEARCH_MARKER"
+    },
+    {
+      "name": "external blocked page",
+      "url": "https://example.test/blocked?url=PRIVATE_SEARCH_MARKER"
+    },
+    { "name": "relative URL", "url": "/PRIVATE_SEARCH_MARKER" },
+    { "name": "protocol-relative URL", "url": "//example.test/PRIVATE_SEARCH_MARKER" },
+    {
+      "name": "download query",
+      "url": "https://raw.githubusercontent.com/codepurse/BlockNSFW/refs/heads/main/data/HOSTS.txt?page=PRIVATE_SEARCH_MARKER"
+    },
+    {
+      "name": "download fragment",
+      "url": "https://raw.githubusercontent.com/codepurse/BlockNSFW/refs/heads/main/data/HOSTS.txt#PRIVATE_SEARCH_MARKER"
+    },
+    {
+      "name": "lookalike download host",
+      "url": "https://raw.githubusercontent.com.evil.example/codepurse/BlockNSFW/refs/heads/main/data/HOSTS.txt"
+    },
+    {
+      "name": "POST to approved host",
+      "url": "https://raw.githubusercontent.com/codepurse/BlockNSFW/refs/heads/main/data/HOSTS.txt",
+      "method": "POST",
+      "body": "PRIVATE_SEARCH_MARKER"
+    }
+  ],
+  "forbiddenPermissions": [
+    "history",
+    "cookies",
+    "downloads",
+    "nativeMessaging",
+    "proxy",
+    "debugger",
+    "webRequest",
+    "webRequestBlocking"
+  ]
+}

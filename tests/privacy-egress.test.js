@@ -10,6 +10,8 @@ const BASE = 'chrome-extension://privacy-test/';
 const DOWNLOAD =
   'https://raw.githubusercontent.com/codepurse/BlockNSFW/refs/heads/main/data/HOSTS.txt';
 const PRIVATE_URL = 'https://private.example/path?search=PRIVATE_SEARCH_MARKER';
+// Independent, reviewable contract; never load the production allowlist here.
+const contract = JSON.parse(read('tests/fixtures/privacy-contract.json'));
 
 function functionSource(file, name) {
   const source = read(file);
@@ -85,20 +87,45 @@ test('Request-like objects cannot smuggle browsing data into approved downloads'
   assert.ok(!JSON.stringify(requests).includes('PRIVATE_'));
 });
 
-for (const url of [
-  PRIVATE_URL,
-  DOWNLOAD + '?page=PRIVATE_SEARCH_MARKER',
-  DOWNLOAD + '#PRIVATE_SEARCH_MARKER',
-  DOWNLOAD.replace('raw.githubusercontent.com', 'raw.githubusercontent.com.evil.example'),
-  'https://example.test/report',
-  'https://www.reddit.com/r/PRIVATE_SEARCH_MARKER/about.json',
-]) {
-  test(`privacy mode rejects non-public-download destination ${url}`, async () => {
+for (const url of contract.allowedDownloads) {
+  test(`privacy contract allows only a sanitized public GET: ${url}`, async () => {
     const { ctx, requests } = context();
-    await assert.rejects(ctx.fetch(url), /Privacy mode/);
+    await ctx.fetch(url, {
+      headers: { Authorization: 'PRIVATE_SECRET', 'X-Page': PRIVATE_URL },
+      credentials: 'include',
+      referrer: PRIVATE_URL,
+      redirect: 'follow',
+    });
+    assert.equal(requests.length, 1);
+    assert.equal(requests[0].url, url);
+    for (const [key, value] of Object.entries(contract.requiredRequestOptions)) {
+      assert.equal(requests[0].init[key], value, key);
+    }
+    assert.ok(!JSON.stringify(requests).includes('PRIVATE_'));
+  });
+}
+
+for (const { name, url, method = 'GET', body } of contract.deniedRequests) {
+  test(`privacy contract rejects ${name}`, async () => {
+    const { ctx, requests } = context();
+    await assert.rejects(ctx.fetch(url, { method, ...(body ? { body } : {}) }));
     assert.equal(requests.length, 0);
   });
 }
+
+test('permission expansion requires explicit privacy contract review', () => {
+  for (const file of ['manifest.json', 'manifest.firefox.json']) {
+    const manifest = JSON.parse(read(file));
+    const permissions = [...(manifest.permissions || []), ...(manifest.optional_permissions || [])];
+    for (const permission of contract.forbiddenPermissions) {
+      assert.ok(
+        !permissions.includes(permission),
+        `${file}: review ${permission} before adding it`,
+      );
+    }
+    assert.equal(manifest.externally_connectable, undefined, 'review external message access');
+  }
+});
 
 test('POST to a public download URL is rejected', async () => {
   const { ctx, requests } = context();

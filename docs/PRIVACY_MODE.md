@@ -45,6 +45,43 @@ transport; review new network sinks and HTML resources as well as running tests.
 
 ## Tests
 
+### CI checks and declarative contract
+
+`.github/workflows/privacy.yml` runs on pushes and pull requests and can also
+be started manually. Its independent checks are **Privacy contract** (Ubuntu)
+and **Chrome privacy (normal and incognito)** (Windows). They use Node 22 without
+installing npm dependencies and do not need secrets or write permissions. The
+Chrome job builds the actual package with `build-chrome.ps1`; an unavailable
+browser or failed assertion fails the job rather than skipping it. The existing
+build workflow still includes these unit tests in `npm test`.
+
+`tests/fixtures/privacy-contract.json` declares approved downloads, required
+request options, denied request examples and permissions requiring review.
+Tests read this independently of the implementation. Changing a privacy promise
+therefore requires an explicit, reviewable change to the contract. This is not
+a declaration that the entire application is safe: other transports, browser
+traffic and malicious future code remain outside the stated guarantee.
+
+Both jobs upload logs as artifacts even on failure. The browser launcher creates
+and removes its own temporary profile, stops the processes it starts, and disables
+external DNS/proxy access as defense in depth for synthetic probes. It does not
+use a personal profile. For local reproduction after building:
+
+```sh
+npm run test:privacy
+npm run test:privacy:ci
+```
+
+Chrome is detected in standard locations; override with `BLOCKNSFW_CHROME_PATH`.
+The output is saved under `artifacts/privacy/` (ignored by Git).
+
+The repository maintainer can mark both check names as required in branch
+protection/rulesets. This workflow does not change those repository settings.
+For contributions from forks, GitHub may require a maintainer to approve the
+workflow run before it starts.
+
+### Test coverage
+
 Run `npm test` (Node's built-in runner; no runtime dependencies needed).
 
 `tests/privacy-egress.test.js` captures calls that would reach native fetch and
