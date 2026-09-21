@@ -16,6 +16,7 @@ const CUSTOM_DNS_ID = (self.DnsProviders && self.DnsProviders.CUSTOM_PROVIDER_ID
 
 const DEFAULT_SETTINGS = {
   enabled: true,
+  privacyMode: false,
   useSmartBlocking: true,
   imageFilterLevel: 'strict',
   customPatterns: [],
@@ -1515,6 +1516,7 @@ async function render() {
   const stats = await getStats();
   const pin = await getPIN();
 
+  if ($('privacy-mode')) $('privacy-mode').checked = settings.privacyMode === true;
   $('enabled').checked = !!settings.enabled;
   $('smart').checked = !!settings.useSmartBlocking;
   $('debug-mode').checked = !!settings.debugMode;
@@ -2244,6 +2246,17 @@ async function init() {
   }
 
   // DNS Protection toggle
+  const privacyToggle = $('privacy-mode');
+  if (privacyToggle) {
+    privacyToggle.addEventListener('change', async (event) => {
+      const settings = await getSettings();
+      settings.privacyMode = event.target.checked;
+      await setSettings(settings);
+      await render();
+      showToast('Privacy mode updated. Reload open pages to apply all filtering changes.', 'info');
+    });
+  }
+
   const dnsFilterToggle = $('dns-filter-enabled');
   if (dnsFilterToggle) {
     dnsFilterToggle.addEventListener('change', async (e) => {

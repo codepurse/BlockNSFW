@@ -1,4 +1,6 @@
 /* BlockNSFW background service worker */
+// Install before any feature or vendor code can capture fetch.
+if (typeof importScripts === 'function') importScripts('shared/privacy-guard.js');
 const browserAPI = typeof browser !== 'undefined' ? browser : chrome;
 
 // Shared browser-safe hostname normalization helpers (RFC 3492 punycode
@@ -457,6 +459,7 @@ const DAILY_HISTORY_KEY = 'pblocker_daily_history';
 // Default settings
 const DEFAULT_SETTINGS = {
   enabled: true,
+  privacyMode: false,
   useSmartBlocking: true,
   customPatterns: [], // user patterns, wildcard supported e.g. *.example.com, example.com/path
   trustedImageDomains: [], // domains where images should never be blocked
@@ -2307,7 +2310,7 @@ async function shouldBlock(urlStr) {
   // DNS-over-HTTPS check via the user's chosen filtering resolver (runs only
   // if nothing else caught it).
   let dnsAnswered = true;
-  if (!shouldBlockResult && settings.dnsFilterEnabled) {
+  if (!shouldBlockResult && settings.dnsFilterEnabled && !settings.privacyMode) {
     try {
       const verdict = await checkDnsFilter(hostname, settings.dnsProvider, settings.dnsCustomUrl);
       if (verdict === null) dnsAnswered = false;

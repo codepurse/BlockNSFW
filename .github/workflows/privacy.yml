@@ -1,0 +1,57 @@
+name: Privacy regression checks
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: privacy-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  contract:
+    name: Privacy contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Run declarative privacy and security regressions
+        run: |
+          mkdir -p artifacts/privacy
+          npm run test:privacy > artifacts/privacy/contract.log 2>&1
+      - name: Preserve test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: privacy-contract-results
+          path: artifacts/privacy/
+          if-no-files-found: warn
+
+  chrome:
+    name: Chrome privacy (normal and incognito)
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Build the actual Chrome package
+        shell: pwsh
+        run: ./build-chrome.ps1
+      - name: Test the package in disposable Chrome
+        run: npm run test:privacy:ci
+      - name: Preserve browser results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: privacy-chrome-results
+          path: artifacts/privacy/
+          if-no-files-found: warn
