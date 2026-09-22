@@ -1514,6 +1514,26 @@
       font-weight: 500;
     }
 
+    /* Warden call-to-action inside the dev message. The card is amber, so the
+       button keeps the indigo primary and the row stays quiet around it. */
+    .dev-cta {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+      margin-top: 1.125rem;
+    }
+
+    .dev-cta .button {
+      text-decoration: none;
+    }
+
+    .dev-cta-note {
+      font-size: 0.75rem;
+      color: var(--foreground-dim);
+      font-family: var(--font-mono, monospace);
+    }
+
     .dev-message-signature {
       margin-top: 1.25rem;
       padding-top: 1rem;
@@ -2117,15 +2137,20 @@
       <div class="card-header">
         <h2 class="card-title">Message from the Dev</h2>
       </div>
-      <p class="dev-teaser">This is it — we’ve reached another milestone! 🎉 From the bottom of my heart, thank you to everyone who supports and uses this extension. <strong>It’s 100% free, always — no account, everything stays on your device.</strong></p>
+      <p class="dev-teaser">Thank you to everyone who uses this extension and takes the time to report sites — you are the reason the list keeps growing. <strong>BlockNSFW is 100% free, always — no account, everything stays on your device.</strong> That is not changing. But I have been building something alongside it, and I wanted you to hear it from me first: <strong>Warden</strong>, a content blocker for the whole Windows machine.</p>
       <details class="dev-details">
         <summary aria-label="Read the full message from the developer"></summary>
         <div class="dev-message-body">
-          <p>I’m so excited to share a fresh wave of features with you: smarter AI detection that catches even more adult content, and a brand-new desktop version of the app that keeps the extension safe from being uninstalled.</p>
-          <p>We’ve also added a huge number of sites covering both adult and non-adult content. A heartfelt thank you to everyone who took the time to report these sites — and, of course, to the wonderful people who supported me on Buy Me a Coffee. You make all of this possible.</p>
+          <p>This extension can only see what happens inside this browser. Plenty of what people want kept off a machine was never a browser at all — and a browser that brings its own DNS, or a fresh one installed in a minute, walks around any extension ever written. I kept hearing about it from users, and it is not something I can fix from in here.</p>
+          <p>Warden works at the doors the machine itself owns: its own DNS resolver, the Windows firewall, the policies browsers read, and the programs Windows opens. Thirteen categories, every browser and every program covered by the same rules, and nothing installed inside any of them. It can also force-install this extension so it cannot be removed &mdash; the same job Desktop Guard does. Desktop Guard is staying exactly as it is, free and open source, for anyone who only wants that one thing; Warden is for the rest of the machine.</p>
+          <p><strong>Being straight with you:</strong> it is Windows 10 and 11 only, it is still a beta you ask for rather than a public download, and it is a separate product with a one-time licence — no subscription, no account, no telemetry. BlockNSFW stays free forever and works exactly the same whether you ever look at Warden or not. The full feature list, and an honest section on what it does <em>not</em> claim to do, are on the site.</p>
+        </div>
+        <div class="dev-cta">
+          <a class="button button-primary button-sm" href="https://monolab.dev/warden" target="_blank" rel="noopener noreferrer">See what Warden does →</a>
+          <span class="dev-cta-note">monolab.dev/warden · Windows 10 &amp; 11 · beta</span>
         </div>
         <div class="dev-message-signature">
-          — The BlockNSFW Developer
+          — Alfon, the BlockNSFW Developer
         </div>
       </details>
     </div>
