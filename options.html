@@ -2318,14 +2318,15 @@
 
       <h3 class="card-title" style="font-size: 1.05rem;">AI Text Blocker <span class="badge-beta">Beta</span></h3>
       <p class="card-description">
-        Reads the page's text with a tiny multilingual model to catch adult sites the
-        keyword and blocklist filters miss — especially non-English ones. Runs fully on
-        your device; nothing is uploaded.
+        Reads the page's text with a small on-device model to catch adult sites the
+        keyword and blocklist filters miss. It reads English and most European languages
+        best; Japanese, Chinese and Russian pages are still left to the other filters.
+        Runs fully on your device; nothing is uploaded.
       </p>
       <div class="switch-container">
         <div class="switch-label">
           <span class="label">Enable AI Text Blocker</span>
-          <span class="description">Blocks a page when its text looks adult <em>and</em> the AI Image Blocker flagged an image on it. Text alone no longer blocks a page while the text model is being retrained, so keep the AI Image Blocker on for this to have any effect.</span>
+          <span class="description">Blocks a page when its text is clearly adult. With the AI Image Blocker on too, a page whose text and images both look adult is caught at a lower bar.</span>
         </div>
         <label class="switch">
           <input type="checkbox" id="ai-text-blocker" />
@@ -2343,7 +2344,7 @@
           <option value="strict">Strict - Catch borderline pages (more false positives)</option>
         </select>
         <div class="pin-hint" id="ai-text-strictness-detail" style="margin-top: 0.5rem;">
-          Balanced — agrees on confident pages while letting benign multilingual pages through.
+          Balanced — blocks clearly adult pages; tested not to block health, recovery or sex-education pages.
         </div>
       </div>
     </div>
