@@ -1720,24 +1720,29 @@ function getAiThresholds(level, modelId) {
   }
 }
 
-// Minimum-evidence floor for whole-page text blocking. The linear model carries
-// a positive prior (bias ~0.83 -> sigmoid ~0.70), so a content-sparse page — a
-// brand-only title, an un-rendered SPA shell, an image-only page — has too few
-// learned features to overcome it and collapses to a bias-driven "adult" score
-// (~0.70-0.86) that has nothing to do with its actual words. That is exactly the
-// "health"/"navix" false-positive class. Below this many normalized tokens we
-// decline to score the page at all, so the bias can never trigger a block by
-// itself. Genuinely adult short pages are still covered by URL/path keywords,
-// the blocklist, and the AI image scanner. This is a quantity-of-evidence gate:
-// it never looks at *which* words are present, only *how many*.
+// Minimum-evidence floor for whole-page text blocking. A content-sparse page —
+// a brand-only title, an un-rendered SPA shell, an image-only page — gives the
+// model a handful of words, and a verdict on a handful of words is a guess (the
+// v2 model blocked "Navix Health" this way). Below this many normalized tokens
+// we decline to score the page at all. Genuinely adult short pages are still
+// covered by URL/path keywords, the blocklist, and the AI image scanner. This
+// is a quantity-of-evidence gate: it never looks at *which* words are present,
+// only *how many*.
 const MIN_TEXT_TOKENS_FOR_BLOCK = 12;
 
 // AI Text Blocker thresholds. `block` = redirect on text alone (high
 // confidence). `fuse` = lower bar that only redirects when the AI image blocker
-// also flagged >=1 image on the page (corroborating evidence). Whole-page
-// blocking has a higher false-positive cost than image blocking, so `block`
-// stays conservative.
+// also flagged >=1 image on the page (corroborating evidence).
+//
+// A v4 model carries its own thresholds, chosen on held-out pages for a target
+// false-positive rate per level (tools/text_corpus/EVAL.md), and those always
+// win: a threshold only means something for the model it was measured on.
+// These fixed values are the fallback for a model without them.
 function getAiTextThresholds(level) {
+  const fromModel = (textModel && typeof TextClassifier !== 'undefined' && TextClassifier.thresholdsFor)
+    ? TextClassifier.thresholdsFor(textModel, level)
+    : null;
+  if (fromModel) return fromModel;
   switch (String(level || '').toLowerCase()) {
     case 'relaxed': return { block: 0.96, fuse: 0.75 };
     case 'strict':  return { block: 0.80, fuse: 0.50 };
@@ -2441,20 +2446,21 @@ function runDeferredTextScan() {
     .catch(() => {});
 }
 
+// The model scores the page's title and meta tags (`head`) separately from its
+// visible text (`body`): a title like "Free Porn Videos" is a concentrated
+// signal that should not be averaged into the navigation around it. The model
+// applies its own length caps. tools/text_corpus/build_corpus.py page_parts()
+// builds training text the same way -- change one, change both.
 function gatherTextForModel() {
-  const parts = [];
-  if (document.title) parts.push(document.title);
+  const headParts = [];
+  if (document.title) headParts.push(document.title);
   try {
     document.querySelectorAll(AI_TEXT_META_SELECTORS.join(',')).forEach(meta => {
       const content = meta.getAttribute('content');
-      if (content) parts.push(content);
+      if (content) headParts.push(content);
     });
   } catch (_) {}
-  const lines = getPageTextLinesForScan();
-  if (lines.length > 0) parts.push(lines.join(' '));
-  let text = parts.join(' ');
-  if (text.length > MAX_TEXT_LENGTH) text = text.slice(0, MAX_TEXT_LENGTH);
-  return text;
+  return { head: headParts.join(' '), body: getPageTextLinesForScan().join(' ') };
 }
 
 function checkPageTextWithModel() {
@@ -2471,60 +2477,40 @@ function checkPageTextWithModel() {
     return false;
   }
 
-  const text = gatherTextForModel();
-  if (!text) return false;
+  const parts = gatherTextForModel();
+  if (!parts.head && !parts.body) return false;
 
-  // Minimum-evidence guard: with too little text the score is driven by the
-  // model's positive prior, not the page's words, so we don't trust it for a
-  // block (text-only or image-fused). See MIN_TEXT_TOKENS_FOR_BLOCK.
-  const normForCount = TextClassifier.normalizeForClassifier(text);
+  // Minimum-evidence guard: a page with almost no text gives the model almost
+  // nothing to go on, so it is never blocked on text. See
+  // MIN_TEXT_TOKENS_FOR_BLOCK.
+  const normForCount = TextClassifier.normalizeForClassifier(parts.head + ' ' + parts.body);
   const tokenCount = normForCount ? normForCount.split(' ').length : 0;
   if (tokenCount < MIN_TEXT_TOKENS_FOR_BLOCK) {
     if (debugMode) log(`AI text scan skipped — only ${tokenCount} token(s), below evidence floor`);
     return false;
   }
 
-  let prob;
+  let result;
   try {
-    prob = TextClassifier.scoreText(text, textModel);
+    result = TextClassifier.scorePage(parts, textModel);
   } catch (_) {
     return false; // fail open
   }
+  const prob = result ? result.prob : -1;
   if (typeof prob !== 'number' || prob < 0) return false;
 
   const thresholds = getAiTextThresholds(aiTextStrictness);
   const imageBlockCount = (globalThis.__pblockerAIImageBlockCount | 0);
-  let verdict = TextClassifier.verdictForText(prob, thresholds, imageBlockCount);
-
-  // TEMPORARY SAFETY CATCH — remove when text model v4 lands.
-  //
-  // The v3 model's vocabulary is inverted: it scores "videos" (+8.27) as a
-  // stronger adult signal than "nude" (+0.27) or "naked" (-0.44), because the
-  // adult training phrases average 1.7 words while the benign ones average 8,
-  // so generic media words absorbed the positive signal. "youtube" (+3.74)
-  // inherits its weight from "tube" through character n-grams alone. The
-  // visible symptom was m.youtube.com blocked at 99% confidence.
-  //
-  // No threshold separates that, so until the model is retrained the text
-  // score may not block a page on its own — it only counts when the AI image
-  // scanner independently flagged something on the same page. That makes this
-  // detector weaker, which is the right trade while it can't be trusted alone.
-  if (verdict === 'block' && imageBlockCount < 1) {
-    if (debugMode) {
-      log(`AI text block withheld (score ${prob.toFixed(2)}, no image corroboration) — v3 model is unreliable alone`);
-    }
-    verdict = 'allow';
-  }
+  const verdict = TextClassifier.verdictForText(prob, thresholds, imageBlockCount);
+  if (debugMode) log(`AI text score ${prob.toFixed(3)} (block ${thresholds.block}, fuse ${thresholds.fuse}) -> ${verdict}`);
 
   if (verdict === 'block' || verdict === 'fuse-block') {
-    // Explain the verdict: pull the words on the page that pushed the linear
-    // model's score up the most, so the blocked page can show *what text*
-    // triggered it. Best-effort — never let this throw out of a block.
+    // Explain the verdict: the words that pushed the page's most adult windows
+    // up the most, so the blocked page can show *what text* triggered it.
+    // Best-effort — never let this throw out of a block.
     let triggers = [];
     try {
-      if (typeof TextClassifier.topContributors === 'function') {
-        triggers = TextClassifier.topContributors(text, textModel, 6).map(t => t.feature);
-      }
+      triggers = TextClassifier.explain(result, 6).map(t => t.feature);
     } catch (_) {}
     const triggerNote = triggers.length > 0 ? ` [top signals: ${triggers.join(', ')}]` : '';
     const reason = verdict === 'fuse-block'
