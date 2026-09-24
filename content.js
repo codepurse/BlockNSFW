@@ -1813,10 +1813,8 @@ async function loadSettings() {
     instagramReelsEnabled = settings.instagramReelsEnabled === true;
     // `=== true`, matching every other opt-in beta flag above and
     // DEFAULT_SETTINGS.aiTextBlocker === false. It was `!== false`, so an absent
-    // key read as ON — and when on it fetches and parses a 228 KB model per page
-    // and scores character n-grams over 8000 chars per scan, for a verdict the
-    // v3 safety catch below then discards unless the AI *image* blocker (also
-    // off by default) flagged something on the same page.
+    // key read as ON — and when on it fetches and parses the text model per page
+    // and scores up to 8000 chars per scan, for a feature the user never chose.
     aiTextBlocker = settings.aiTextBlocker === true;
     aiTextStrictness = settings.aiTextStrictness || 'balanced';
     // Page-text features are a top-frame concern. Left true in a sub-frame,
@@ -2425,7 +2423,7 @@ function ensureTextModelLoaded() {
         textModel = m;
         textModelReady = true;
         loaded = true;
-        log('AI Text Blocker model ready', { version: m.version, weights: m.weights.size });
+        log('AI Text Blocker model ready', { version: m.version, weights: m.size });
       }
     })
     .catch(err => { log('AI Text Blocker model load failed:', err && err.message || err); })

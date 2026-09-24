@@ -153,6 +153,31 @@ test('the model\'s own thresholds are used, for every level', () => {
   }
 });
 
+test('loading the shipped model succeeds cleanly and runs the scan that was waiting for it', async () => {
+  // Its "ready" log line read v3's `m.weights.size`, which v4 does not have.
+  // The model was already marked ready when that threw, so scanning still
+  // worked -- but every page load threw and logged "model load failed".
+  const modelJson = JSON.parse(fs.readFileSync(path.join(ROOT, 'text-model.json'), 'utf8'));
+  const logs = [];
+  let deferredRuns = 0;
+  const sandbox = {
+    TextClassifier: TC,
+    textModel: null, textModelReady: false, textModelLoading: false, textModelFailed: false,
+    textScanPending: true,
+    browserAPI: { runtime: { getURL: p => 'chrome-extension://test/' + p } },
+    fetch: () => Promise.resolve({ ok: true, json: () => Promise.resolve(modelJson) }),
+    log: (...args) => logs.push(args.map(String).join(' ')),
+    runDeferredTextScan: () => { deferredRuns++; },
+  };
+  vm.createContext(sandbox);
+  vm.runInContext(`${contentFunctionSource('ensureTextModelLoaded')}\nensureTextModelLoaded();`, sandbox);
+  for (let i = 0; i < 20 && sandbox.textModelLoading; i++) await new Promise(r => setImmediate(r));
+  assert.equal(sandbox.textModelReady, true);
+  assert.equal(sandbox.textModelFailed, false);
+  assert.ok(!logs.some(l => l.includes('load failed')), `unexpected: ${logs.join(' | ')}`);
+  assert.equal(deferredRuns, 1, 'the scan requested before the model loaded must run once it has');
+});
+
 test('without a model the scan does nothing and the constants remain as a fallback', () => {
   const { blocked, thresholds } = runScan({ ...ADULT, model: null });
   assert.equal(blocked, false);
