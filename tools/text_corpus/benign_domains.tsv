@@ -1,0 +1,611 @@
+# Curated benign targets for tools/text_corpus/build_corpus.py
+#
+# <target>\t<category>
+#
+# A target is a domain (subdomains included), or an exact URL / path prefix
+# ending in * (e.g. en.wikipedia.org/wiki/Sex_education).
+#
+# Categories starting with "trap-" are pages that SHARE VOCABULARY with adult
+# content but must never be blocked. They are the graduation gate: the text
+# blocker leaves beta only if it blocks none of the held-out trap pages. The
+# recovery category matters most -- this extension's users visit those sites,
+# and they discuss pornography constantly.
+
+# ---- trap-recovery: porn-addiction recovery and support ----
+fightthenewdrug.org	trap-recovery
+nofap.com	trap-recovery
+yourbrainonporn.com	trap-recovery
+covenanteyes.com	trap-recovery
+rebootnation.org	trap-recovery
+brainbuddyapp.com	trap-recovery
+saa-recovery.org	trap-recovery
+sa.org	trap-recovery
+slaafws.org	trap-recovery
+sexaa.org	trap-recovery
+fortifyprogram.org	trap-recovery
+addictionhelp.com	trap-recovery
+therecoveryvillage.com	trap-recovery
+psychologytoday.com	trap-recovery
+iitap.com	trap-recovery
+gottman.com	trap-recovery
+accountable2you.com	trap-recovery
+blockerx.net	trap-recovery
+truthaboutporn.org	trap-recovery
+culturereframed.org	trap-recovery
+
+# ---- trap-sexed: sex education ----
+plannedparenthood.org	trap-sexed
+scarleteen.com	trap-sexed
+sexandu.ca	trap-sexed
+brook.org.uk	trap-sexed
+amaze.org	trap-sexed
+advocatesforyouth.org	trap-sexed
+siecus.org	trap-sexed
+kinseyinstitute.org	trap-sexed
+bishuk.com	trap-sexed
+teenhealthsource.com	trap-sexed
+loveisrespect.org	trap-sexed
+goaskalice.columbia.edu	trap-sexed
+sexualhealth.org	trap-sexed
+familyplanning.org.nz	trap-sexed
+sexwise.org.uk	trap-sexed
+unesco.org/en/health-education*	trap-sexed
+
+# ---- trap-health: medical, sexual and reproductive health ----
+nhs.uk	trap-health
+mayoclinic.org	trap-health
+webmd.com	trap-health
+healthline.com	trap-health
+medlineplus.gov	trap-health
+cdc.gov	trap-health
+who.int	trap-health
+clevelandclinic.org	trap-health
+hopkinsmedicine.org	trap-health
+medicalnewstoday.com	trap-health
+verywellhealth.com	trap-health
+urologyhealth.org	trap-health
+acog.org	trap-health
+womenshealth.gov	trap-health
+aidsmap.com	trap-health
+avert.org	trap-health
+hiv.gov	trap-health
+ashasexualhealth.org	trap-health
+issm.info	trap-health
+menopause.org	trap-health
+endometriosis-uk.org	trap-health
+breastcancer.org	trap-health
+netdoktor.de	trap-health
+doctissimo.fr	trap-health
+cuidateplus.marca.com	trap-health
+tuasaude.com	trap-health
+health.harvard.edu	trap-health
+msdmanuals.com	trap-health
+rainn.org	trap-health
+thehotline.org	trap-health
+
+# ---- trap-sexhealth-products: condoms, ED, contraception brands ----
+durex.com	trap-products
+trojanbrands.com	trap-products
+skyn.com	trap-products
+forhims.com	trap-products
+ro.co	trap-products
+lloydspharmacy.com	trap-products
+boots.com	trap-products
+cvs.com	trap-products
+walgreens.com	trap-products
+thinx.com	trap-products
+
+# ---- trap-lingerie: underwear and swimwear retail ----
+victoriassecret.com	trap-lingerie
+adoreme.com	trap-lingerie
+savagex.com	trap-lingerie
+ae.com	trap-lingerie
+bravissimo.com	trap-lingerie
+triumph.com	trap-lingerie
+intimissimi.com	trap-lingerie
+calzedonia.com	trap-lingerie
+hunkemoller.com	trap-lingerie
+agentprovocateur.com	trap-lingerie
+journelle.com	trap-lingerie
+thirdlove.com	trap-lingerie
+wacoal-america.com	trap-lingerie
+bluebellalingerie.com	trap-lingerie
+seafolly.com	trap-lingerie
+speedo.com	trap-lingerie
+calvinklein.us	trap-lingerie
+tezenis.com	trap-lingerie
+etam.com	trap-lingerie
+womensecret.com	trap-lingerie
+
+# ---- trap-dating ----
+tinder.com	trap-dating
+bumble.com	trap-dating
+hinge.co	trap-dating
+match.com	trap-dating
+okcupid.com	trap-dating
+grindr.com	trap-dating
+pof.com	trap-dating
+eharmony.com	trap-dating
+her.app	trap-dating
+coffeemeetsbagel.com	trap-dating
+elitesingles.com	trap-dating
+meetic.fr	trap-dating
+parship.de	trap-dating
+badoo.com	trap-dating
+
+# ---- trap-lgbtq ----
+glaad.org	trap-lgbtq
+thetrevorproject.org	trap-lgbtq
+stonewall.org.uk	trap-lgbtq
+hrc.org	trap-lgbtq
+pflag.org	trap-lgbtq
+advocate.com	trap-lgbtq
+them.us	trap-lgbtq
+out.com	trap-lgbtq
+pinknews.co.uk	trap-lgbtq
+lgbtqnation.com	trap-lgbtq
+ilga.org	trap-lgbtq
+transequality.org	trap-lgbtq
+queerty.com	trap-lgbtq
+autostraddle.com	trap-lgbtq
+
+# ---- trap-video: video/streaming platforms (the m.youtube.com regression) ----
+youtube.com	trap-video
+m.youtube.com	trap-video
+twitch.tv	trap-video
+vimeo.com	trap-video
+dailymotion.com	trap-video
+netflix.com	trap-video
+tiktok.com	trap-video
+bilibili.com	trap-video
+nicovideo.jp	trap-video
+rutube.ru	trap-video
+kick.com	trap-video
+hulu.com	trap-video
+disneyplus.com	trap-video
+primevideo.com	trap-video
+crunchyroll.com	trap-video
+tubitv.com	trap-video
+plex.tv	trap-video
+iq.com	trap-video
+viu.com	trap-video
+vk.com/video*	trap-video
+ted.com	trap-video
+rumble.com	trap-video
+odysee.com	trap-video
+peertube.tv	trap-video
+veoh.com	trap-video
+youku.com	trap-video
+zdf.de	trap-video
+arte.tv	trap-video
+bbc.co.uk/iplayer*	trap-video
+
+# ---- trap-art: art, museums, classical nudes ----
+louvre.fr	trap-art
+metmuseum.org	trap-art
+moma.org	trap-art
+uffizi.it	trap-art
+nationalgallery.org.uk	trap-art
+wikiart.org	trap-art
+artsy.net	trap-art
+museodelprado.es	trap-art
+rijksmuseum.nl	trap-art
+tate.org.uk	trap-art
+musee-orsay.fr	trap-art
+artic.edu	trap-art
+getty.edu	trap-art
+khanacademy.org/humanities*	trap-art
+smarthistory.org	trap-art
+vam.ac.uk	trap-art
+
+# ---- trap-parenting: pregnancy, breastfeeding, babies ----
+lalecheleague.org	trap-parenting
+whattoexpect.com	trap-parenting
+babycenter.com	trap-parenting
+thebump.com	trap-parenting
+parents.com	trap-parenting
+kellymom.com	trap-parenting
+mumsnet.com	trap-parenting
+netmums.com	trap-parenting
+americanpregnancy.org	trap-parenting
+tommys.org	trap-parenting
+
+# ---- trap-anatomy: biology and anatomy education ----
+kenhub.com	trap-anatomy
+teachmeanatomy.info	trap-anatomy
+visiblebody.com	trap-anatomy
+britannica.com	trap-anatomy
+biologydictionary.net	trap-anatomy
+innerbody.com	trap-anatomy
+ncbi.nlm.nih.gov/books*	trap-anatomy
+bbc.co.uk/bitesize*	trap-anatomy
+
+# ---- trap-encyclopedic: reference articles about sexuality ----
+en.wikipedia.org/wiki/Sex_education	trap-encyclopedic
+en.wikipedia.org/wiki/Human_sexuality	trap-encyclopedic
+en.wikipedia.org/wiki/Sexual_intercourse	trap-encyclopedic
+en.wikipedia.org/wiki/Human_reproduction	trap-encyclopedic
+en.wikipedia.org/wiki/Puberty	trap-encyclopedic
+en.wikipedia.org/wiki/Contraception	trap-encyclopedic
+en.wikipedia.org/wiki/Condom	trap-encyclopedic
+en.wikipedia.org/wiki/Sexually_transmitted_infection	trap-encyclopedic
+en.wikipedia.org/wiki/Erectile_dysfunction	trap-encyclopedic
+en.wikipedia.org/wiki/Breastfeeding	trap-encyclopedic
+en.wikipedia.org/wiki/Nudity	trap-encyclopedic
+en.wikipedia.org/wiki/Nude_(art)	trap-encyclopedic
+en.wikipedia.org/wiki/Venus_de_Milo	trap-encyclopedic
+en.wikipedia.org/wiki/David_(Michelangelo)	trap-encyclopedic
+en.wikipedia.org/wiki/Sexual_orientation	trap-encyclopedic
+en.wikipedia.org/wiki/Transgender	trap-encyclopedic
+en.wikipedia.org/wiki/Sexual_abuse	trap-encyclopedic
+en.wikipedia.org/wiki/Consent	trap-encyclopedic
+en.wikipedia.org/wiki/Masters_and_Johnson	trap-encyclopedic
+en.wikipedia.org/wiki/Alfred_Kinsey	trap-encyclopedic
+en.wikipedia.org/wiki/Problematic_pornography_use	trap-encyclopedic
+en.wikipedia.org/wiki/Internet_pornography	trap-encyclopedic
+en.wikipedia.org/wiki/Pornography_addiction	trap-encyclopedic
+en.wikipedia.org/wiki/Lingerie	trap-encyclopedic
+en.wikipedia.org/wiki/Bikini	trap-encyclopedic
+en.wikipedia.org/wiki/Kama_Sutra	trap-encyclopedic
+en.wikipedia.org/wiki/Romance_novel	trap-encyclopedic
+es.wikipedia.org/wiki/Educaci%C3%B3n_sexual	trap-encyclopedic
+de.wikipedia.org/wiki/Sexualerziehung	trap-encyclopedic
+fr.wikipedia.org/wiki/%C3%89ducation_sexuelle	trap-encyclopedic
+pt.wikipedia.org/wiki/Educa%C3%A7%C3%A3o_sexual	trap-encyclopedic
+ru.wikipedia.org/wiki/%D0%9F%D0%BE%D0%BB%D0%BE%D0%B2%D0%BE%D0%B5_%D0%B2%D0%BE%D1%81%D0%BF%D0%B8%D1%82%D0%B0%D0%BD%D0%B8%D0%B5	trap-encyclopedic
+
+# ---- trap-books: romance, fiction, reading communities ----
+goodreads.com	trap-books
+harlequin.com	trap-books
+bookbub.com	trap-books
+bookriot.com	trap-books
+penguinrandomhouse.com	trap-books
+gutenberg.org	trap-books
+
+# ---- news (multilingual) ----
+bbc.com	news
+bbc.co.uk/news*	news
+theguardian.com	news
+apnews.com	news
+reuters.com	news
+nytimes.com	news
+cnn.com	news
+washingtonpost.com	news
+npr.org	news
+foxnews.com	news
+nbcnews.com	news
+usatoday.com	news
+dailymail.co.uk	news
+independent.co.uk	news
+thetimes.co.uk	news
+abc.net.au	news
+cbc.ca	news
+aljazeera.com	news
+aljazeera.net	news
+spiegel.de	news
+zeit.de	news
+bild.de	news
+faz.net	news
+lemonde.fr	news
+lefigaro.fr	news
+liberation.fr	news
+elpais.com	news
+elmundo.es	news
+clarin.com	news
+eluniversal.com.mx	news
+corriere.it	news
+repubblica.it	news
+globo.com	news
+folha.uol.com.br	news
+publico.pt	news
+ria.ru	news
+lenta.ru	news
+rbc.ru	news
+asahi.com	news
+yomiuri.co.jp	news
+nhk.or.jp	news
+chosun.com	news
+donga.com	news
+joins.com	news
+sina.com.cn	news
+thepaper.cn	news
+udn.com	news
+ltn.com.tw	news
+detik.com	news
+kompas.com	news
+vnexpress.net	news
+tuoitre.vn	news
+thairath.co.th	news
+bangkokpost.com	news
+hurriyet.com.tr	news
+sozcu.com.tr	news
+onet.pl	news
+wp.pl	news
+nu.nl	news
+nos.nl	news
+ndtv.com	news
+thehindu.com	news
+timesofindia.indiatimes.com	news
+bhaskar.com	news
+inquirer.net	news
+rappler.com	news
+scmp.com	news
+straitstimes.com	news
+news.yahoo.co.jp	news
+
+# ---- reference / knowledge ----
+en.wikipedia.org/wiki/Photosynthesis	reference
+en.wikipedia.org/wiki/World_War_II	reference
+en.wikipedia.org/wiki/Python_(programming_language)	reference
+en.wikipedia.org/wiki/Football	reference
+en.wikipedia.org/wiki/Cooking	reference
+de.wikipedia.org/wiki/Berlin	reference
+fr.wikipedia.org/wiki/Paris	reference
+es.wikipedia.org/wiki/M%C3%A9xico	reference
+ja.wikipedia.org/wiki/%E6%9D%B1%E4%BA%AC%E9%83%BD	reference
+wiktionary.org	reference
+dictionary.com	reference
+merriam-webster.com	reference
+investopedia.com	reference
+howstuffworks.com	reference
+wikihow.com	reference
+quora.com	reference
+stackexchange.com	reference
+archive.org	reference
+nationalgeographic.com	reference
+smithsonianmag.com	reference
+nasa.gov	reference
+baike.baidu.com	reference
+namu.wiki	reference
+zhihu.com	reference
+
+# ---- shopping ----
+amazon.com	shopping
+amazon.de	shopping
+amazon.co.jp	shopping
+ebay.com	shopping
+etsy.com	shopping
+aliexpress.com	shopping
+walmart.com	shopping
+target.com	shopping
+bestbuy.com	shopping
+ikea.com	shopping
+zara.com	shopping
+hm.com	shopping
+asos.com	shopping
+shein.com	shopping
+uniqlo.com	shopping
+nike.com	shopping
+adidas.com	shopping
+rakuten.co.jp	shopping
+mercadolibre.com.mx	shopping
+shopee.co.id	shopping
+tokopedia.com	shopping
+lazada.com.ph	shopping
+flipkart.com	shopping
+otto.de	shopping
+allegro.pl	shopping
+bol.com	shopping
+coupang.com	shopping
+jd.com	shopping
+sephora.com	shopping
+ulta.com	shopping
+
+# ---- tech / dev ----
+github.com	tech
+stackoverflow.com	tech
+developer.mozilla.org	tech
+microsoft.com	tech
+apple.com	tech
+google.com/intl*	tech
+android.com	tech
+python.org	tech
+nodejs.org	tech
+theverge.com	tech
+arstechnica.com	tech
+techcrunch.com	tech
+wired.com	tech
+cnet.com	tech
+tomshardware.com	tech
+heise.de	tech
+gsmarena.com	tech
+medium.com	tech
+dev.to	tech
+hackernews.com	tech
+news.ycombinator.com	tech
+qiita.com	tech
+habr.com	tech
+csdn.net	tech
+
+# ---- social / forums / community ----
+reddit.com/r/AskReddit*	social
+reddit.com/r/science*	social
+reddit.com/r/cooking*	social
+reddit.com/r/NoFap*	trap-recovery
+reddit.com/r/pornfree*	trap-recovery
+reddit.com/r/relationships*	social
+reddit.com/r/AskDocs*	trap-health
+reddit.com/r/sexualhealth*	trap-health
+tumblr.com/tagged/art*	social
+pinterest.com	social
+linkedin.com	social
+twitter.com	social
+x.com	social
+facebook.com	social
+instagram.com	social
+threads.net	social
+mastodon.social	social
+discord.com	social
+telegram.org	social
+weibo.com	social
+2ch.net	social
+5ch.net	social
+dcinside.com	social
+ptt.cc	social
+pikabu.ru	social
+fandom.com	social
+imgur.com	social
+9gag.com	social
+
+# ---- entertainment / music / games ----
+imdb.com	entertainment
+rottentomatoes.com	entertainment
+metacritic.com	entertainment
+spotify.com	entertainment
+soundcloud.com	entertainment
+genius.com	entertainment
+billboard.com	entertainment
+rollingstone.com	entertainment
+variety.com	entertainment
+ign.com	entertainment
+gamespot.com	entertainment
+store.steampowered.com	entertainment
+epicgames.com	entertainment
+nintendo.com	entertainment
+playstation.com	entertainment
+xbox.com	entertainment
+myanimelist.net	entertainment
+anilist.co	entertainment
+webtoons.com	entertainment
+mangadex.org	entertainment
+eonline.com	entertainment
+people.com	entertainment
+tmz.com	entertainment
+cosmopolitan.com	entertainment
+glamour.com	entertainment
+vogue.com	entertainment
+menshealth.com	entertainment
+womenshealthmag.com	entertainment
+gq.com	entertainment
+elle.com	entertainment
+
+# ---- sports ----
+espn.com	sports
+bbc.com/sport*	sports
+skysports.com	sports
+goal.com	sports
+nba.com	sports
+nfl.com	sports
+fifa.com	sports
+uefa.com	sports
+marca.com	sports
+kicker.de	sports
+gazzetta.it	sports
+lequipe.fr	sports
+sports.yahoo.com	sports
+cricbuzz.com	sports
+olympics.com	sports
+
+# ---- travel / food / lifestyle ----
+booking.com	lifestyle
+tripadvisor.com	lifestyle
+airbnb.com	lifestyle
+expedia.com	lifestyle
+lonelyplanet.com	lifestyle
+allrecipes.com	lifestyle
+seriouseats.com	lifestyle
+bonappetit.com	lifestyle
+foodnetwork.com	lifestyle
+cookpad.com	lifestyle
+chefkoch.de	lifestyle
+marmiton.org	lifestyle
+bbcgoodfood.com	lifestyle
+houzz.com	lifestyle
+apartmenttherapy.com	lifestyle
+zillow.com	lifestyle
+weather.com	lifestyle
+accuweather.com	lifestyle
+yelp.com	lifestyle
+fitnessblender.com	lifestyle
+myfitnesspal.com	lifestyle
+yogajournal.com	lifestyle
+
+# ---- government / education / finance ----
+usa.gov	gov
+gov.uk	gov
+canada.ca	gov
+australia.gov.au	gov
+europa.eu	gov
+bund.de	gov
+service-public.fr	gov
+gob.mx	gov
+gov.br	gov
+gov.ph	gov
+irs.gov	gov
+harvard.edu	edu
+mit.edu	edu
+stanford.edu	edu
+ox.ac.uk	edu
+coursera.org	edu
+edx.org	edu
+khanacademy.org	edu
+duolingo.com	edu
+quizlet.com	edu
+chegg.com	edu
+bankofamerica.com	finance
+chase.com	finance
+paypal.com	finance
+bloomberg.com	finance
+cnbc.com	finance
+ft.com	finance
+wsj.com	finance
+nerdwallet.com	finance
+coinmarketcap.com	finance
+
+# ---- religion (common among this extension's users) ----
+biblegateway.com	religion
+bible.com	religion
+vatican.va	religion
+churchofjesuschrist.org	religion
+desiringgod.org	religion
+gotquestions.org	religion
+crosswalk.com	religion
+christianitytoday.com	religion
+quran.com	religion
+islamqa.info	religion
+chabad.org	religion
+accesstoinsight.org	religion
+
+# ---- trap-video: video LISTINGS (added after v4's first eval) ----
+# Adult tube pages repeat "videos" dozens of times; benign pages that do the
+# same (stock footage, recipe and workout videos, kids' videos, news video
+# sections) are what teach the model the word itself is not adult.
+pexels.com/videos*	trap-video
+pixabay.com/videos*	trap-video
+videvo.net	trap-video
+mixkit.co/free-stock-video*	trap-video
+coverr.co	trap-video
+shutterstock.com/video*	trap-video
+tasty.co	trap-video
+foodnetwork.com/videos*	trap-video
+fitnessblender.com/videos*	trap-video
+doyogawithme.com	trap-video
+pbskids.org/video*	trap-video
+ted.com/talks*	trap-video
+ign.com/videos*	trap-video
+gamespot.com/videos*	trap-video
+espn.com/video*	trap-video
+nfl.com/videos*	trap-video
+nba.com/watch*	trap-video
+cnn.com/videos*	trap-video
+nbcnews.com/video*	trap-video
+foxnews.com/video*	trap-video
+reuters.com/video*	trap-video
+theguardian.com/video*	trap-video
+vimeo.com/categories*	trap-video
+dailymotion.com/video*	trap-video
+youtube.com/@*	trap-video
+youtube.com/watch*	trap-video
+thedodo.com	trap-video
+cheezburger.com	trap-video
+vevo.com	trap-video
+spiegel.de/video*	trap-video
+elpais.com/videos*	trap-video
+ria.ru/video*	trap-video
+francetvinfo.fr	trap-video
+20.detik.com	trap-video
+g1.globo.com	trap-video
+tv.naver.com	trap-video
+sohu.com	trap-video
+ixigua.com	trap-video
+dzen.ru/video*	trap-video

@@ -4,6 +4,81 @@ All notable project changes should be documented here going forward.
 
 ## [Unreleased]
 
+### Changed
+
+- **The AI Text Blocker has a new model, and text alone can block a page
+  again.** Since 1.7.4 a temporary catch in `content.js` downgraded every
+  text-only block to "allow", because the v3 model could not be trusted on its
+  own. v4 replaces the model and the catch is gone.
+
+  v3 had three defects, and no threshold could fix any of them:
+  - **Its vocabulary was inverted.** It was trained on 217 hand-written adult
+    phrases averaging 1.7 words against benign sentences averaging 8, so
+    generic words absorbed the adult signal: "videos" outweighed "nude",
+    "naked" and "xxx" combined. That is what blocked `m.youtube.com`.
+  - **Its score grew with page length.** It summed weights over the whole
+    page, so every real page scored exactly 0 or 1. The three strictness
+    levels were unreachable and "AI confidence: 100%" was always 100%.
+  - **Ordinary text drowned out explicit text.** One explicit sentence inside
+    700 ordinary words scored 0, so it could only catch pages that were adult
+    from top to bottom, which the blocklist already catches.
+
+  v4 is trained on real page text from Common Crawl's public archive (about
+  2,900 pages from 817 sites, in the shape `content.js` reads a live page),
+  labelled by the blocklist and a curated list weighted toward sites that
+  share vocabulary with adult content but must never be blocked: porn-addiction
+  recovery, sex education, sexual health, lingerie, dating, LGBTQ, art,
+  parenting, video sites. It scores ~200-character windows, and a small second
+  model turns those into one calibrated page probability. The thresholds for
+  Relaxed, Balanced and Strict now live in the model file, chosen on held-out
+  pages for a target false-positive rate.
+
+  Measured on sites the model never saw (`tools/text_corpus/EVAL.md`):
+  - **At Balanced, 0 of 297 ordinary pages and 0 of 130 trap pages blocked.**
+  - **63% of adult pages caught at Balanced (76% of English ones).** The
+    detector is a second line behind the blocklist, not a replacement for it.
+  - **An explicit passage inside a long ordinary page is found 76% of the
+    time**, against 0% for v3.
+  - **Pages that simply talk about videos stay well clear of every block
+    bar** (cooking, cat, workout and stock-footage videos, YouTube's own
+    pages). An early v4 blocked those at 0.99, the same failure as v3's
+    YouTube block; see *For contributors* for how it was fixed.
+
+  It stays labelled **Beta**. It reads English and most European languages
+  well, but Japanese, Chinese and Russian adult pages mostly get past it: the
+  archive held too few of those sites to learn from. Settings now says so.
+
+- **Settings describes what the text blocker actually does.** It no longer
+  says text alone cannot block, and the strictness levels describe blocking
+  rather than "agreeing" with the image filter.
+- **The text model file is smaller and loads faster**: 223 KB to 157 KB, with
+  weights stored as packed binary instead of a JSON array of pairs.
+
+### For contributors
+
+- `tools/text_corpus/build_corpus.py` builds the corpus from Common Crawl
+  (resumable, byte-capped; about 290 MB of downloads). Its output in
+  `tools/text_corpus/cache/` is git-ignored and must stay so: it holds adult
+  text and third-party content. `tools/train_text_classifier.py` is rewritten
+  for v4 and writes `text-model.json`, the golden vectors and
+  `tools/text_corpus/EVAL.md`. `tools/README.md` explains the whole pipeline.
+- Pages are split by **site**, so evaluation only sees sites the model never
+  trained on. The page model is fitted through cross-fitting; thresholds come
+  from validation plus out-of-fold scores, never from test.
+- Two training measures fix the confounds that surfaced during development:
+  classes are balanced within each language (the multilingual blocklist
+  against an English-heavy benign list had taught "not English means adult"),
+  and each adult window is also added with its explicit words removed,
+  labelled benign (`tools/text_corpus/explicit_terms.txt`), so page furniture
+  like "watch", "videos" and "updated daily" stops counting as adult. That list
+  is used only in training; nothing in it runs in the extension.
+- `tools/text_corpus/label_overrides.tsv` excludes blocklisted sites that are
+  not adult from the corpus, each with a reason.
+- New tests: `tests/ai-text-wiring.test.js` runs the real `content.js` scan
+  against the shipped model. `tests/text-classifier-core.test.js` now checks
+  JS/Python parity down to the final page probability, and behaviour on text
+  written for the test rather than rows copied from training data.
+
 ## [1.8.0] - 2026-09-10
 
 > **Includes everything in 1.7.7**, which was prepared but never published
