@@ -8,8 +8,8 @@
 //      of lines, so a '# adult sites' line compiled as a host pattern would
 //      block whatever domain the note happened to mention.
 //   2. Saving sorts A-Z and de-duplicates. A note is a heading for the lines
-//      under it, so sorting lines individually would strand every comment away
-//      from its group — the sort has to move blocks, not lines.
+//      under it, so a note must never move: only the entries between two notes
+//      are sorted, and each stays inside the section it was written in.
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
@@ -141,28 +141,65 @@ test('compileListEntry: a comment compiles to nothing', () => {
   assert.equal(compiled.regex, null);
 });
 
-// --- saving: sort blocks, not lines -----------------------------------------
+// --- saving: notes hold their places, entries sort between them -------------
 
-test('serializePatterns: a note stays with the entry written under it', () => {
+test('serializePatterns: every entry under a heading stays under it', () => {
+  // Reported by a user who heads each letter with '# A', '# G' and so on. When
+  // a note travelled with only the entry directly below it, '/anana/' sorted
+  // ahead of '/apricot/' (the entry '# A' was attached to) and landed above
+  // the heading.
+  const ctx = loadOptionsListContext();
+  const out = ctx.serializePatterns([
+    '# A',
+    '# All explicit a-words',
+    '/apricot[sz]?/i',
+    '/anana[sz]?/i',
+    '# G',
+    '/godzilla/i',
+    '# P',
+    '/p[0o]rn/i',
+    '! Comment 1',
+    '! Comment 2'
+  ].join('\n'));
+
+  assert.deepEqual(plain(out), [
+    '# A',
+    '# All explicit a-words',
+    '/anana[sz]?/i',
+    '/apricot[sz]?/i',
+    '# G',
+    '/godzilla/i',
+    '# P',
+    '/p[0o]rn/i',
+    '! Comment 1',
+    '! Comment 2'
+  ]);
+});
+
+test('serializePatterns: sections keep the order they were written in', () => {
   const ctx = loadOptionsListContext();
   const out = ctx.serializePatterns([
     '# === Video ===',
     'youtube.com',
+    'dailymotion.com',
     '# === Shopping ===',
+    'etsy.com',
     'amazon.com'
   ].join('\n'));
 
-  // Sorted by entry (amazon before youtube), each heading carried along. Sorting
-  // the lines on their own would have put both '#' lines together at one end.
+  // Entries sort inside each section; the sections themselves are the user's
+  // structure and are not reordered by their headings.
   assert.deepEqual(plain(out), [
+    '# === Video ===',
+    'dailymotion.com',
+    'youtube.com',
     '# === Shopping ===',
     'amazon.com',
-    '# === Video ===',
-    'youtube.com'
+    'etsy.com'
   ]);
 });
 
-test('serializePatterns: several notes above one entry all travel with it', () => {
+test('serializePatterns: entries never cross a note', () => {
   const ctx = loadOptionsListContext();
   const out = ctx.serializePatterns([
     'zebra.com',
@@ -171,11 +208,12 @@ test('serializePatterns: several notes above one entry all travel with it', () =
     'apple.com'
   ].join('\n'));
 
+  // apple sorts before zebra, but a note sits between them, so neither moves.
   assert.deepEqual(plain(out), [
+    'zebra.com',
     '# reported by a user',
     '! see issue 42',
-    'apple.com',
-    'zebra.com'
+    'apple.com'
   ]);
 });
 
@@ -193,18 +231,19 @@ test('serializePatterns: identical notes are kept, identical entries are not', (
   assert.deepEqual(plain(out), ['# ---', 'a.com', '# ---', 'b.com']);
 });
 
-test('serializePatterns: a duplicate entry keeps its note on the surviving copy', () => {
+test('serializePatterns: a duplicate in a later section goes, its note stays', () => {
   const ctx = loadOptionsListContext();
   const out = ctx.serializePatterns([
     '# first mention',
     'twitter.com',
     '# second mention',
-    'twitter.com'
+    'Twitter.com',
+    'x.com'
   ].join('\n'));
 
-  // The entry is deduped. Its second note describes the same entry, so it joins
-  // the surviving block rather than being dropped or drifting to another entry.
-  assert.deepEqual(plain(out), ['# first mention', '# second mention', 'twitter.com']);
+  // First spelling wins across the whole list. The note is the user's text and
+  // is kept where it was written.
+  assert.deepEqual(plain(out), ['# first mention', 'twitter.com', '# second mention', 'x.com']);
 });
 
 test('serializePatterns: trailing notes with no entry below are kept at the end', () => {

@@ -2613,8 +2613,10 @@ netflix.com"></textarea>
           Matching ignores capitals either way. Patterns are checked when you save, and one that
           is invalid or slow enough to freeze pages is refused with the reason.<br>
           <strong>Comments</strong> — a line starting with <code class="code">#</code> or
-          <code class="code">!</code> is a note, ignored when matching. To block a word that really
-          begins with one of those, put a backslash first: <code class="code">\#nsfw</code>.
+          <code class="code">!</code> is a note, ignored when matching. Notes never move when you
+          save; only the words between two notes are sorted, so a note works as a section
+          heading. To block a word that really begins with one of those, put a backslash
+          first: <code class="code">\#nsfw</code>.
         </p>
       </div>
       <div class="textarea-syntax">
@@ -2655,8 +2657,9 @@ another phrase
           A site you add here is also blocked as a source of images — its results are hidden in
           image search, and its pictures are blocked wherever they appear on other sites.<br>
           <strong>Comments</strong> — a line starting with <code class="code">#</code> or
-          <code class="code">!</code> is a note, ignored when matching. Notes stay with the entry
-          written below them when the list is sorted, so they work as section headings.
+          <code class="code">!</code> is a note, ignored when matching. Notes never move when the
+          list is sorted; only the entries between two notes are sorted, so a note works as a
+          section heading.
         </p>
       </div>
       <div class="textarea-syntax">

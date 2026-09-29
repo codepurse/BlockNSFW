@@ -4,6 +4,17 @@ All notable project changes should be documented here going forward.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Saving moved entries above the heading they were written under.** A note
+  travelled with the one entry directly below it, so a heading over several
+  entries held on to only the first. Under `# A`, `/anana/` sorts ahead of
+  `/apricot/`, the entry the heading was attached to, and landed above the
+  heading. Notes are no longer sorted at all: they stay on the line where they
+  were written, and only the entries between two notes are sorted. Sections keep
+  the order they were written in. A list with no notes sorts exactly as before.
+  Applies to the blocklist, custom blocked words and trusted image domains.
+
 ## [1.8.0] - 2026-09-10
 
 > **Includes everything in 1.7.7**, which was prepared but never published
