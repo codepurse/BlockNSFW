@@ -41,6 +41,18 @@ test('wildcard subdomains still work', () => {
   assert.equal(matches(['*.example.com'], 'https://other.com/'), false);
 });
 
+test('a wildcard entry matches hosts, not text further along the URL', () => {
+  // The subdomain prefix of '*.' entries was '.*', which ran past the host.
+  // Subscribed lists carry TLD rules like these (OISD's NSFW list has four),
+  // so this blocked whole pages elsewhere for a word at the end of their path.
+  assert.equal(matches(['*.xxx'], 'https://en.wikipedia.org/wiki/a.xxx'), false);
+  assert.equal(matches(['*.porn'], 'https://example.com/files/readme.porn'), false);
+  assert.equal(matches(['*.example.com'], 'https://www.google.com/search?q=site.example.com'), false);
+  assert.equal(matches(['*.xxx'], 'https://foo.xxx/'), true);
+  assert.equal(matches(['*.xxx'], 'https://a.b.xxx/page'), true);
+  assert.equal(matches(['*.example.com'], 'https://example.com/'), true);
+});
+
 test('title patterns compile to nothing here', () => {
   // The page title does not exist at navigation time; the content script owns
   // these. Compiling one into a URL matcher would block the wrong pages.
