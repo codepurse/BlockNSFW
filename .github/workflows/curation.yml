@@ -26,11 +26,22 @@ jobs:
           cat /tmp/dryrun.log
           python scripts/curation/pipeline.py
 
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 'lts/*'
+
+      # The static ruleset is generated from data/HOSTS.txt. Without this step
+      # every curation commit left it behind, and the "committed ruleset matches
+      # data/HOSTS.txt" test failed on main until someone rebuilt it by hand.
+      - name: Rebuild the network-layer ruleset
+        run: node scripts/build-dnr-ruleset.mjs
+
       - name: Commit changes
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add data/HOSTS.txt data/REVIEW_QUEUE.md blocklist.json
+          git add data/HOSTS.txt data/REVIEW_QUEUE.md blocklist.json rules/blocklist-rules.json
           if git diff --cached --quiet; then
             echo "No changes to commit"
           else
