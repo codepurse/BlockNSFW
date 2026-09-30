@@ -1271,16 +1271,59 @@ function validateDomain(domain) {
 // --- Subscribed lists --------------------------------------------------------
 
 function subscriptionStatusText(subscription) {
-  if (subscription.error) return `Update failed: ${subscription.error}`;
+  const count = subscription.entryCount || 0;
+  const rules = `${count.toLocaleString()} ${count === 1 ? 'rule' : 'rules'}`;
+
+  if (subscription.error) {
+    let text = `Update failed: ${subscription.error}`;
+    if (subscription.retryAfterAt && subscription.retryAfterAt > Date.now()) {
+      text += ` · will try again after ${new Date(subscription.retryAfterAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+    }
+    // A failed refresh leaves the last good download in force. Saying only
+    // "failed" made a working list look like it was blocking nothing.
+    if (count && subscription.updatedAt) {
+      text += ` · still blocking the ${rules} from ${new Date(subscription.updatedAt).toLocaleString()}`;
+    }
+    return text;
+  }
   if (!subscription.updatedAt) return 'Not downloaded yet';
 
   const when = new Date(subscription.updatedAt).toLocaleString();
-  const count = subscription.entryCount || 0;
-  let text = `${count.toLocaleString()} ${count === 1 ? 'rule' : 'rules'} · updated ${when}`;
+  let text = `${rules} · updated ${when}`;
   // Say so out loud rather than quietly applying a partial list.
   if (subscription.truncated) text += ' · list was too long and was cut short';
   if (subscription.skipped) text += ` · ${subscription.skipped} unusable ${subscription.skipped === 1 ? 'line' : 'lines'} skipped`;
   return text;
+}
+
+/**
+ * One line for the toast after "Update Now". It used to say "Subscriptions
+ * updated" whatever happened, including when every list failed.
+ *
+ * @returns {[string, string]} message and toast type
+ */
+function subscriptionRefreshSummary(results) {
+  if (results.length === 0) return ['No enabled lists to update', 'info'];
+
+  const failed = results.filter((result) => result && result.checked && !result.ok).length;
+  if (failed) {
+    return [failed === results.length
+      ? (results.length === 1 ? 'The list could not be updated' : 'None of your lists could be updated')
+      : `${failed} of ${results.length} lists could not be updated`, 'warning'];
+  }
+
+  const checked = results.filter((result) => result && result.checked);
+  if (checked.length === 0) {
+    // Nothing was downloaded: every list was checked moments ago, or its
+    // server asked to be left alone for a while.
+    if (results.some((result) => result && result.reason === 'rate-limited')) {
+      return ["The list's server asked BlockNSFW to wait. It will try again later.", 'warning'];
+    }
+    return ['Already checked in the last few minutes', 'info'];
+  }
+  return checked.some((result) => result.changed)
+    ? ['Subscriptions updated', 'success']
+    : ['Subscriptions are up to date', 'success'];
 }
 
 async function renderSubscriptions() {
@@ -2650,9 +2693,10 @@ async function init() {
       refreshSubscriptionsBtn.disabled = true;
       refreshSubscriptionsBtn.textContent = 'Updating…';
       try {
-        await browserAPI.runtime.sendMessage({ type: 'subscription_refresh' });
+        const response = await browserAPI.runtime.sendMessage({ type: 'subscription_refresh' });
         await renderSubscriptions();
-        showToast('Subscriptions updated', 'success');
+        const [message, type] = subscriptionRefreshSummary((response && response.results) || []);
+        showToast(message, type);
       } catch (_) {
         showToast('Could not update subscriptions', 'error');
       } finally {

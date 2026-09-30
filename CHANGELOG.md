@@ -4,6 +4,78 @@ All notable project changes should be documented here going forward.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Large subscribed lists work, starting with OISD's NSFW list.** Subscribing
+  to `https://nsfw.oisd.nl/ublacklist` failed with "That file is too large to
+  use as a ruleset". The file is 12.5 MB and 481,222 rules, against caps of
+  5 MB and 50,000. Raising the caps alone would have changed the error to "No
+  rules found": the parser did not read uBlacklist match patterns
+  (`*://*.example.com/*`), which is how real uBlacklist lists are written, so
+  "uBlacklist ruleset files work as they are" was true only for lists that
+  avoided uBlacklist's own syntax.
+
+  Match patterns are now read. Any rule naming a whole site becomes a bare
+  host however it is spelled, including `*.example.com`, `.example.com` and
+  `example.com/*`. A whole TLD (`*://*.xxx/*`) stays a wildcard, and allow
+  rules (`@…`) and `*://*/*` are skipped. The caps are now 32 MB and 1,000,000
+  rules per list, with at most 2,000,000 hosts across all lists. Non-host
+  rules keep a separate cap of 1,000 per list, because they are checked one by
+  one on every page.
+
+  Holding that many hosts needed a different home:
+  - **Hosts live in IndexedDB, owned by the background.** Chrome gives
+    `storage.local` 10 MB and the bundled blocklist cache already uses about
+    half. Content scripts, which read `storage.local` in every frame, now
+    receive only the small pattern list. They ask the background about hosts
+    through `check_blocklist_hosts`, the same way they already ask about the
+    bundled list, and images get the same question when a subscription has
+    hosts.
+  - **Each list is stored as one sorted string and searched in place.** For
+    OISD that is about 10 MB and a 19 ms load on each service-worker wake,
+    against about 30 MB and 180 ms as a `Set`.
+  - **Hosts no longer become regexes.** Every subscribed entry used to compile
+    to its own RegExp and was tested one by one on every navigation. Hosts are
+    now a lookup, and only patterns are compiled.
+  - Public-suffix entries (`github.io`, `blogspot.com`) are dropped from
+    subscribed lists, as they already are from the bundled one.
+  - Lists saved by earlier versions move to the new storage on first start.
+    If saved hosts go missing (evicted, site data cleared), the list is
+    downloaded again.
+
+- **Update Now no longer gets a list's server to answer 503.** A list that
+  failed was retried on every background wake, and the service worker wakes
+  many times an hour. The file was also downloaded in full before the size
+  check refused it, so an oversized list was fetched again and again. The
+  button started a new download on every press. Now:
+  - an oversized file is refused from its `Content-Length`, or cut off mid-
+    stream, before it is read in full;
+  - after a failure, automatic retries wait an hour, and a 429 or 503 is left
+    alone for as long as `Retry-After` asks (ten minutes if it does not say);
+  - an unchanged list is confirmed with `If-None-Match` / `If-Modified-Since`
+    and a 304, with no download or re-parse;
+  - presses while a download is running join it, and a press within five
+    minutes of a successful check is answered from disk.
+
+  A refresh saving a stale copy of the list could also overwrite a remove or
+  toggle made during the download. All subscription writes now go through one
+  queue.
+
+- **A `*.` entry no longer matches text in the path.** The background compiled
+  `*.xxx` with a `.*` subdomain prefix that ran past the host, so
+  `https://en.wikipedia.org/wiki/a.xxx` was blocked at navigation. The same
+  bug meant a `*.example.com` entry blocked a Google search for
+  `site.example.com`. The prefix now stops at the first `/`, like the one for
+  bare hosts. OISD's list carries four TLD rules of this shape, so subscribing
+  to it would have exposed the bug widely.
+
+- **Subscription status says what is still blocking.** A failed refresh
+  showed only "Update failed", even though the last good download stays in
+  force. It now also shows when a retry is due and which rules are still
+  active. The Update Now toast said "Subscriptions updated" even when every
+  list failed. It now reports failures, "up to date", and "checked in the last
+  few minutes" separately.
+
 ### Changed
 
 - **The AI Text Blocker has a new model, and text alone can block a page

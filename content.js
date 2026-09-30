@@ -409,14 +409,22 @@ function updateYandexFamilyCookieValue(currentValue, expiresAt) {
 let isEnabled = true;
 let useSmartBlocking = true;
 let customKeywordList = [];
-// Rules from subscribed lists. Held apart from the user's own patterns and in
-// two shapes on purpose: a published list is mostly bare domains and can run to
-// tens of thousands of lines, so those go in a Set for an O(1) host test, and
-// only the wildcard and regex entries stay in a list that has to be walked. The
-// walk happens per image and per search result, which is exactly the path that
-// made pages crawl in 1.7.0.
+// Rules from subscribed lists, held apart from the user's own patterns. Only the
+// patterns are held here: wildcards, paths, regexes and titles, capped at a
+// thousand a list, since they are walked per image and per search result — the
+// path that made pages crawl in 1.7.0. The hosts can run to hundreds of
+// thousands (OISD's NSFW list is 481,000), far too many for every frame, so the
+// background keeps them and answers for them through check_blocklist_hosts, as
+// it does for the bundled list. subscriptionHostSet is only filled by rules
+// still saved in the old one-array form, until the background moves them.
 let subscriptionHostSet = new Set();
 let subscriptionPatterns = [];
+// Some enabled list has hosts the background holds. Gates asking about each
+// image's host, so nobody without a subscription pays for the message.
+let subscriptionHostsInBackground = false;
+// What the loaded rules came from. A metadata write that changes none of it —
+// the daily check finding nothing new — then skips re-scanning the page.
+let subscriptionRulesSignature = null;
 
 // User-defined blocked sites (settings.customPatterns). Kept at module scope so
 // the image/search-result filters can honour them, not just page navigation.
@@ -869,15 +877,32 @@ function liveListEntries(list) {
     .filter((entry) => entry && entry.charAt(0) !== '#' && entry.charAt(0) !== '!');
 }
 
+function subscriptionSignature(subscriptions) {
+  if (!Array.isArray(subscriptions)) return '';
+  return subscriptions
+    .filter((subscription) => subscription && subscription.enabled !== false)
+    .map((subscription) => `${subscription.id}:${subscription.revision || 0}:${subscription.hostCount}`)
+    .join('|');
+}
+
 /**
- * Flatten the enabled subscriptions into the two shapes the matcher uses. A
+ * Flatten the enabled subscriptions into the shapes the matcher uses. A
  * disabled subscription keeps its rules on disk but contributes none, so
  * switching it back on costs nothing.
+ *
+ * @returns {boolean} whether the rules in effect changed. With `force` unset,
+ *   an unchanged signature returns false without rebuilding anything.
  */
-function loadSubscriptionRules(subscriptions, rulesById) {
+function loadSubscriptionRules(subscriptions, rulesById, force) {
+  const signature = subscriptionSignature(subscriptions);
+  if (!force && signature === subscriptionRulesSignature) return false;
+  subscriptionRulesSignature = signature;
+
   subscriptionHostSet = new Set();
   subscriptionPatterns = [];
-  if (!Array.isArray(subscriptions) || !rulesById || typeof rulesById !== 'object') return;
+  subscriptionHostsInBackground = Array.isArray(subscriptions) && subscriptions.some((subscription) =>
+    subscription && subscription.enabled !== false && subscription.hostCount > 0);
+  if (!Array.isArray(subscriptions) || !rulesById || typeof rulesById !== 'object') return true;
 
   const entries = [];
   for (const subscription of subscriptions) {
@@ -885,13 +910,14 @@ function loadSubscriptionRules(subscriptions, rulesById) {
     const own = rulesById[subscription.id];
     if (Array.isArray(own)) entries.push(...own);
   }
-  if (!entries.length) return;
+  if (!entries.length) return true;
 
   const split = (typeof Ruleset !== 'undefined' && Ruleset.splitEntries)
     ? Ruleset.splitEntries(entries)
     : { hosts: [], patterns: entries };
   subscriptionHostSet = new Set(split.hosts);
   subscriptionPatterns = split.patterns;
+  return true;
 }
 
 function normalizeSearchResultTreatment(treatment) {
@@ -1761,7 +1787,7 @@ async function loadSettings() {
       'pblocker_subscriptions',
       'pblocker_subscription_rules'
     ]);
-    loadSubscriptionRules(result.pblocker_subscriptions, result.pblocker_subscription_rules);
+    loadSubscriptionRules(result.pblocker_subscriptions, result.pblocker_subscription_rules, true);
     
     const settings = result.pblocker_settings || {
       enabled: true,
@@ -4615,10 +4641,33 @@ function maybeBlockImage(img) {
   if (shouldBlockImage(img)) {
     hideElement(img, 'image');
     notifyBackground('image_filtered', { count: 1 });
-  } else if (debugMode) {
+    return;
+  }
+  if (subscriptionHostsInBackground) checkImageHostWithBackground(img);
+  if (debugMode) {
     const url = getEffectiveImageUrl(img);
     log('[Image Filter] Allowed:', url ? url.substring(0, 120) : '(no url)', '| alt:', (img.alt || '').substring(0, 60));
   }
+}
+
+/**
+ * Subscribed hosts are held by the background, so the synchronous checks in
+ * shouldBlockImage miss an image from one until this page has asked about its
+ * host. Ask, and hide the image if the answer is yes. The question is batched
+ * and cached per host, so a page of images from one CDN costs one message.
+ *
+ * Trusted and first-party image hosts are left alone, in the same order
+ * shouldBlockImage applies them to the bundled list.
+ */
+function checkImageHostWithBackground(img) {
+  const url = getEffectiveImageUrl(img);
+  if (!url || isTrustedDomain(url) || isKnownSafeImageHost(url)) return;
+  isUrlBlockedByBackground(url).then((blocked) => {
+    if (!blocked || !isEnabled || img.dataset.pblockerHidden === 'true') return;
+    if (getEffectiveImageUrl(img) !== url) return; // src changed while we asked
+    hideElement(img, 'image');
+    notifyBackground('image_filtered', { count: 1 });
+  });
 }
 
 const IMAGE_OBSERVER_ROOT_MARGIN_PX = 1400;
@@ -5501,9 +5550,18 @@ function setupEventListeners() {
     // A list that just finished downloading has to reach the page without a
     // reload, or a fresh subscription looks like it did nothing.
     if (changes.pblocker_subscriptions || changes.pblocker_subscription_rules) {
+      // Only the metadata changing is usually a refresh stamping its time;
+      // loadSubscriptionRules says whether anything that blocks has moved.
+      const rulesWritten = !!changes.pblocker_subscription_rules;
       browserAPI.storage.local.get(['pblocker_subscriptions', 'pblocker_subscription_rules'])
         .then((store) => {
-          loadSubscriptionRules(store.pblocker_subscriptions, store.pblocker_subscription_rules);
+          const changed = loadSubscriptionRules(
+            store.pblocker_subscriptions, store.pblocker_subscription_rules, rulesWritten);
+          if (!changed) return;
+          // Verdicts the background gave before this list arrived (or before it
+          // was switched off) are out of date now.
+          backgroundBlocklistHostCache.clear();
+          _cleanPageHostCache = null;
           resetCustomPatternCache();
           processContent();
         })
