@@ -455,14 +455,7 @@ async function showDurationModal(options = {}) {
 // Only our own extension page is unwrapped, checked against runtime.getURL
 // rather than by protocol alone: another extension's page must not be able to
 // steer this by putting a url= parameter in its address.
-function resolveTabUrl(rawUrl) {
-  let url;
-  try {
-    url = new URL(rawUrl);
-  } catch (_) {
-    return null;
-  }
-
+function isOwnBlockedPage(url) {
   // Compared by protocol + host, NOT by origin. For non-special schemes like
   // moz-extension: and chrome-extension:, URL.origin is the string "null" for
   // every such address, so an origin check would treat any other extension's
@@ -471,10 +464,20 @@ function resolveTabUrl(rawUrl) {
   try {
     own = new URL(browserAPI.runtime.getURL('blocked.html'));
   } catch (_) {
-    return url;
+    return false;
   }
-  const sameExtension = url.protocol === own.protocol && url.host === own.host;
-  if (!sameExtension || !url.pathname.endsWith('/blocked.html')) return url;
+  return url.protocol === own.protocol && url.host === own.host &&
+    url.pathname.endsWith('/blocked.html');
+}
+
+function resolveTabUrl(rawUrl) {
+  let url;
+  try {
+    url = new URL(rawUrl);
+  } catch (_) {
+    return null;
+  }
+  if (!isOwnBlockedPage(url)) return url;
 
   const target = url.searchParams.get('url');
   if (!target) return url; // opened directly, nothing to unwrap
@@ -489,11 +492,73 @@ function resolveTabUrl(rawUrl) {
   }
 }
 
+function isWebUrl(url) {
+  return url.protocol === 'http:' || url.protocol === 'https:';
+}
+
+// The blocked page answers from memory, so a slow reply means no page is
+// holding the key. The limit only stops the popup waiting on a listener that
+// never replies.
+const BLOCKED_PAGE_ASK_TIMEOUT_MS = 1500;
+
+// Our blocked page normally carries only ?k=<key>. The site's address was kept
+// in session storage and deleted once the page read it, so the page itself is
+// the only thing left to ask. See the listener at the end of blocked.js.
+async function askBlockedPageForTarget(key) {
+  let reply;
+  let timer;
+  try {
+    reply = await Promise.race([
+      browserAPI.runtime.sendMessage({ type: 'blocked_page_target', key }),
+      new Promise(done => { timer = setTimeout(() => done(null), BLOCKED_PAGE_ASK_TIMEOUT_MS); })
+    ]);
+  } catch (_) {
+    return null; // nobody answered: the page was reloaded, or closed
+  } finally {
+    clearTimeout(timer);
+  }
+  if (!reply || typeof reply.url !== 'string') return null;
+  try {
+    const target = new URL(reply.url);
+    return isWebUrl(target) ? target : null;
+  } catch (_) {
+    return null;
+  }
+}
+
+// The website a tab stands for, or null when it isn't one. Null is the answer
+// for the extension's own pages, other extensions' pages and the browser's own
+// pages (chrome://extensions reports its hostname as "extensions"). Handing
+// back their hostname anyway is how "unblock this website" came to whitelist
+// the extension's ID in issue #44.
+async function resolveTabTarget(rawUrl) {
+  const url = resolveTabUrl(rawUrl);
+  if (!url) return null;
+  if (isWebUrl(url)) return url;
+  if (isOwnBlockedPage(url)) {
+    const key = url.searchParams.get('k');
+    if (key) return askBlockedPageForTarget(key);
+  }
+  return null;
+}
+
+// One refresh of the popup asks about the current tab several times (the
+// unblock toggle, the block button and both of their states), so the answer
+// is kept until the tab's address changes.
+let tabTargetCache = null; // { rawUrl, promise }
+
+function resolveTabTargetCached(rawUrl) {
+  if (!tabTargetCache || tabTargetCache.rawUrl !== rawUrl) {
+    tabTargetCache = { rawUrl, promise: resolveTabTarget(rawUrl) };
+  }
+  return tabTargetCache.promise;
+}
+
 async function getCurrentTabDomain() {
   try {
     const [tab] = await browserAPI.tabs.query({ active: true, currentWindow: true });
     if (tab && tab.url) {
-      const url = resolveTabUrl(tab.url);
+      const url = await resolveTabTargetCached(tab.url);
       if (url) return url.hostname.replace(/^www\./, '');
     }
   } catch (error) {
@@ -656,7 +721,10 @@ async function updateUI() {
     const blockBtn = $('block-site-btn');
     const blockDesc = $('block-desc');
 
-    if (domain && !domain.startsWith('chrome') && !domain.startsWith('moz-extension') && !domain.startsWith('edge')) {
+    // Null for anything that is not a website (see resolveTabTarget). The old
+    // hostname-prefix test here let the blocked page through as the extension
+    // ID, and hid these rows on real sites such as chromium.org.
+    if (domain) {
       unblockRow.style.display = 'flex';
       const isWhitelisted = await isCurrentSiteWhitelisted();
       unblockToggle.classList.toggle('active', isWhitelisted);

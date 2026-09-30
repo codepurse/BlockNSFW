@@ -6,6 +6,19 @@ All notable project changes should be documented here going forward.
 
 ### Fixed
 
+- **"Unblock this website" on the blocked page whitelisted the extension
+  again, not the site (#44).** The same symptom as #26, back in 1.8.0. To keep
+  blocked addresses out of browser history, the blocked page stopped carrying
+  `?url=` and holds only a key into session storage, and deletes the record
+  once read. The popup found nothing to unwrap and fell back to the tab's own
+  address, so the entry it saved was the extension's ID and the site stayed
+  blocked. The popup now asks the open blocked page which site it stands for.
+  Only that page answers, and only to the popup. A page that is not a website
+  (the blocked page once reloaded, `chrome://` pages, other extensions) no
+  longer shows the unblock or block rows at all, instead of offering to act on
+  a meaningless hostname. That also stops those rows vanishing on real sites
+  whose names start with "chrome", "edge" or "moz-extension".
+
 - **Large subscribed lists work, starting with OISD's NSFW list.** Subscribing
   to `https://nsfw.oisd.nl/ublacklist` failed with "That file is too large to
   use as a ruleset". The file is 12.5 MB and 481,222 rules, against caps of

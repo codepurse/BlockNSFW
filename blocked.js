@@ -239,6 +239,11 @@ async function renderPlainHtml() {
   }
 }
 
+// Settles once the stashed detail has been read, or given up on. The popup's
+// question below waits on it rather than answering with the placeholder.
+let markDetailSettled;
+const detailSettled = new Promise(done => { markDetailSettled = done; });
+
 // One driver, so both rendering paths see the same detail. The stashed record
 // has to be read before either runs, or they render the query string's values
 // and the whole point of stashing it is lost.
@@ -248,6 +253,7 @@ async function renderPlainHtml() {
   } catch (_) {
     // Fall through and render whatever the query string carried.
   }
+  markDetailSettled();
   try {
     if (await renderPlainHtml()) return;
   } catch (_) {}
@@ -257,6 +263,50 @@ async function renderPlainHtml() {
     console.warn('BlockNSFW: could not render blocked-page detail', error);
   }
 })();
+
+// --- Telling the popup which site this is -----------------------------------
+//
+// "Unblock this website" in the popup has to whitelist the site this page
+// stands in for. It used to read that from ?url=, and still does for the
+// fallback form. But the address is now kept out of this page's URL, and the
+// record is deleted once read, so this page is the only thing that still
+// knows. The popup found no url= parameter, fell back to the tab's own
+// address, and whitelisted the extension's ID instead (issue #44, the same
+// symptom as #26).
+//
+// So the popup asks, naming the key from the tab's address. Every blocked tab
+// hears the question; only the one holding that key answers.
+function blockedTargetUrl() {
+  try {
+    const parsed = new URL(url);
+    return (parsed.protocol === 'http:' || parsed.protocol === 'https:') ? parsed.href : null;
+  } catch (_) {
+    return null; // still the 'Unknown URL' placeholder
+  }
+}
+
+function answerPopup(message, sender, sendResponse) {
+  if (!message || message.type !== 'blocked_page_target') return false;
+  if (!detailKey || message.key !== detailKey) return false;
+  // Only our popup. Content scripts share this bus, and one tab's page has no
+  // business learning what another tab blocked.
+  const popupUrl = browserAPI.runtime.getURL('popup.html');
+  if (!sender || sender.id !== browserAPI.runtime.id || sender.tab ||
+      String(sender.url || '').split(/[?#]/)[0] !== popupUrl) {
+    return false;
+  }
+  detailSettled.then(() => {
+    const target = blockedTargetUrl();
+    sendResponse(target ? { url: target } : null);
+  });
+  return true;
+}
+
+// Guarded: a throw here would stop the rest of this file, and the back button
+// below would never be bound.
+try {
+  browserAPI.runtime.onMessage.addListener(answerPopup);
+} catch (_) {}
 
 // --- Page chrome ------------------------------------------------------------
 
