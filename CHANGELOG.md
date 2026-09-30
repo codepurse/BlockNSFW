@@ -13,6 +13,12 @@ All notable project changes should be documented here going forward.
   section was ever marked; it only worked when the page was opened outside the
   extension. The code now lives in `options-layout.js`.
 
+- **The streak ring on the Statistics page never filled.** The same cause as
+  the sidebar above: the code that fills it toward the 30-day goal was an
+  inline `<script>` in `stats.html`, so in the installed extension the ring
+  always stayed empty. It now lives in `stats.js`, and the fill animation the
+  ring was styled with plays when the page opens.
+
 - **"Unblock this website" on the blocked page whitelisted the extension
   again, not the site (#44).** The same symptom as #26, back in 1.8.0. To keep
   blocked addresses out of browser history, the blocked page stopped carrying
@@ -189,6 +195,9 @@ All notable project changes should be documented here going forward.
   a saved full-width choice applies before the first paint, and it is in both
   build scripts' file lists. `tests/page-scripts-ship.test.js` fails if a page
   loads a script that a build leaves out.
+- `tests/page-scripts-ship.test.js` also fails if a shipped page carries code
+  the CSP will refuse: an inline `<script>`, an inline `on…=` handler, or a
+  `javascript:` link.
 - What's New items are now written `<li><strong>Headline</strong> text</li>`,
   with no dash after the headline: the headline is the top line of its tile.
 
