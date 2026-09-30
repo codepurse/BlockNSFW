@@ -939,18 +939,6 @@ function isCommentLine(entry) {
 }
 
 /**
- * Normalise a list box into what gets stored: blank lines dropped, entries
- * de-duplicated case-insensitively, and the whole thing sorted A–Z.
- *
- * Comments make the sort more than a sort. A note is almost always a heading for
- * the lines under it — `# === Social ===` — so sorting the lines individually
- * would strand every comment away from the group it labels. Entries are
- * therefore sorted in *blocks*: the comments immediately above an entry travel
- * with it. Comments are never de-duplicated, since two `# ---` rules are both
- * meant to be there, and trailing comments with no entry after them stay at the
- * end where they were written.
- */
-/**
  * What an entry is filed under. Leading punctuation is skipped, so `/apricots?/`
  * files under "a" beside the literal it stands in for rather than under "/".
  *
@@ -968,58 +956,61 @@ function entrySortKey(entry) {
   return stripped || value;
 }
 
+/**
+ * Normalise a list box into what gets stored: blank lines dropped, entries
+ * de-duplicated case-insensitively, and sorted A–Z.
+ *
+ * Comments are not sorted at all. They stay on the line where they were
+ * written, and entries are sorted only within the stretch between two
+ * comments, so a note works as a section heading: `# A` keeps every entry
+ * written under it, in order, until the next note. A list with no comments is
+ * one stretch and sorts exactly as a plain list.
+ *
+ * This replaced sorting in blocks, where each note travelled with the single
+ * entry below it. That broke the common case of a heading over several
+ * entries: under `# A`, `/anana/` sorted ahead of `/apricot/`, the entry the
+ * heading was attached to, and landed above the heading.
+ *
+ * Comments are never de-duplicated, since two `# ---` rules are both meant to
+ * be there. A repeated entry is dropped wherever it appears after the first, so
+ * the first spelling wins, even across sections.
+ */
 function serializePatterns(text) {
-  const byKey = new Map();
-  const blocks = [];
-  let pendingComments = [];
+  const seen = new Set();
+  const out = [];
+  let stretch = [];
+
+  const flushStretch = () => {
+    stretch.sort((a, b) => {
+      const byName = entrySortKey(a).localeCompare(
+        entrySortKey(b), undefined, { sensitivity: 'base' }
+      );
+      // `/porn/` and `porn` file under the same name; compare the raw text so
+      // the order of the pair is settled rather than left to the sort's stability.
+      return byName !== 0
+        ? byName
+        : a.localeCompare(b, undefined, { sensitivity: 'base' });
+    });
+    for (const entry of stretch) out.push(entry);
+    stretch = [];
+  };
 
   for (const line of text.split(/\r?\n/)) {
     const entry = line.trim();
     if (!entry) continue;
 
     if (isCommentLine(entry)) {
-      pendingComments.push(entry);
+      flushStretch();
+      out.push(entry);
       continue;
     }
 
     const key = entry.toLowerCase();
-    const existing = byKey.get(key);
-    if (existing) {
-      // The entry is a duplicate and goes, but the note above it describes that
-      // same entry — so it joins the block that already owns it rather than
-      // being dropped or drifting onto whatever sorts next.
-      for (const comment of pendingComments) {
-        if (!existing.comments.includes(comment)) existing.comments.push(comment);
-      }
-      pendingComments = [];
-      continue;
-    }
-
-    const block = { entry, comments: pendingComments };
-    byKey.set(key, block);
-    blocks.push(block);
-    pendingComments = [];
+    if (seen.has(key)) continue;
+    seen.add(key);
+    stretch.push(entry);
   }
-
-  blocks.sort((a, b) => {
-    const byName = entrySortKey(a.entry).localeCompare(
-      entrySortKey(b.entry), undefined, { sensitivity: 'base' }
-    );
-    // `/porn/` and `porn` file under the same name; compare the raw text so the
-    // order of the pair is settled rather than left to the sort's stability.
-    return byName !== 0
-      ? byName
-      : a.entry.localeCompare(b.entry, undefined, { sensitivity: 'base' });
-  });
-
-  const out = [];
-  for (const block of blocks) {
-    for (const comment of block.comments) out.push(comment);
-    out.push(block.entry);
-  }
-  // Comments after the last entry belong to nothing; keep them rather than lose
-  // what someone typed.
-  for (const comment of pendingComments) out.push(comment);
+  flushStretch();
   return out;
 }
 
@@ -3400,8 +3391,9 @@ async function init() {
           }
           const existing = serializePatterns(textarea.value);
           const before = countRealEntries(existing);
-          // serializePatterns dedups (case-insensitively) and sorts the union,
-          // keeping each comment with the entry it was written above.
+          // serializePatterns dedups (case-insensitively) and sorts the union.
+          // Comments hold their places, so the file's sections land after the
+          // list's own, and entries at the top of the file join the last section.
           const merged = serializePatterns(existing.concat(imported).join('\n'));
           textarea.value = deserializePatterns(merged);
           const added = countRealEntries(merged) - before;
