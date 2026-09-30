@@ -6,6 +6,13 @@ All notable project changes should be documented here going forward.
 
 ### Fixed
 
+- **The Settings sidebar never showed which section you were on.** Its
+  highlight and smooth scrolling were an inline `<script>` in `options.html`,
+  which the extension's content security policy (`script-src 'self'`) refuses
+  to run. In the installed extension the links jumped without scrolling and no
+  section was ever marked; it only worked when the page was opened outside the
+  extension. The code now lives in `options-layout.js`.
+
 - **"Unblock this website" on the blocked page whitelisted the extension
   again, not the site (#44).** The same symptom as #26, back in 1.8.0. To keep
   blocked addresses out of browser history, the blocked page stopped carrying
@@ -91,6 +98,21 @@ All notable project changes should be documented here going forward.
 
 ### Changed
 
+- **Settings uses the whole window on wide screens.** Suggested by a supporter
+  on a wide monitor. The page was one centred 1160px block, which left the
+  sidebar floating between two large empty gutters. The sidebar is now a
+  full-height rail pinned to the left edge, and the content is centred in the
+  rest, capped at 960px so text stays a readable line length.
+  - **A full-width toggle** sits beside the name at the top of the sidebar. It
+    lets the content run to the right edge, and is remembered on that device.
+    It only appears where it makes a difference, from 1304px wide.
+  - **What's New is a grid of tiles**, one per change: two columns at the
+    standard width, four or more with full width on, one on a phone. Lines drop
+    from about 130 characters to about 65.
+  - **With full width on, the Message from the Dev sits beside What's New**
+    (from 1600px wide), so the letter keeps a readable line length and the
+    release notes get more columns.
+
 - **The AI Text Blocker has a new model, and text alone can block a page
   again.** Since 1.7.4 a temporary catch in `content.js` downgraded every
   text-only block to "allow", because the v3 model could not be trusted on its
@@ -163,6 +185,12 @@ All notable project changes should be documented here going forward.
   against the shipped model. `tests/text-classifier-core.test.js` now checks
   JS/Python parity down to the final page probability, and behaviour on text
   written for the test rather than rows copied from training data.
+- `options-layout.js` is new. It loads from the `<head>` of `options.html`, so
+  a saved full-width choice applies before the first paint, and it is in both
+  build scripts' file lists. `tests/page-scripts-ship.test.js` fails if a page
+  loads a script that a build leaves out.
+- What's New items are now written `<li><strong>Headline</strong> text</li>`,
+  with no dash after the headline: the headline is the top line of its tile.
 
 ## [1.8.0] - 2026-09-10
 

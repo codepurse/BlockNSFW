@@ -13,6 +13,7 @@
       --background-gradient: linear-gradient(180deg, #0c0d12 0%, #0a0b0e 100%);
       --surface: #14161c;
       --surface-2: #1a1d24;
+      --sidebar-bg: #0f1116;
       --foreground: #f2f3f5;
       --foreground-muted: #a4abb8;
       --foreground-dim: #868e9e;
@@ -1543,24 +1544,30 @@
       font-style: italic;
     }
 
-    /* ===== App Layout: sidebar + grouped sections ===== */
+    /* ===== App Layout: sidebar + grouped sections =====
+       The sidebar is a full-height rail pinned to the window's left edge and
+       the content takes the rest. The page used to be one centred 1160px
+       block, which on a wide monitor left the nav floating in the middle of
+       two large empty gutters. The content column is still capped — past
+       ~960px the release notes and card descriptions run too long a line to
+       read — and is centred in whatever space the rail leaves. */
     .app {
-      max-width: 1160px;
-      margin: 0 auto;
       display: grid;
-      grid-template-columns: 232px minmax(0, 1fr);
-      gap: 2rem;
-      padding: 1.75rem 1.5rem 4rem;
+      grid-template-columns: 264px minmax(0, 1fr);
+      min-height: 100vh;
       align-items: start;
     }
 
     .sidebar {
       position: sticky;
-      top: 1.75rem;
+      top: 0;
       display: flex;
       flex-direction: column;
       gap: 1.25rem;
-      max-height: calc(100vh - 3.5rem);
+      height: 100vh;
+      padding: 1.75rem 1rem 1.5rem;
+      background: var(--sidebar-bg);
+      border-right: 1px solid var(--card-border);
       overflow-y: auto;
       scrollbar-width: thin;
       scrollbar-color: rgba(255, 255, 255, 0.14) transparent;
@@ -1591,6 +1598,47 @@
       font-size: 0.72rem;
       color: var(--foreground-dim);
       margin: 0;
+    }
+
+    /* Full-width toggle (options-layout.js). Hidden below the width where the
+       content column is already narrower than its cap, since it would do
+       nothing there. */
+    .layout-toggle {
+      margin-left: auto;
+      flex-shrink: 0;
+      width: 30px;
+      height: 30px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--card-border);
+      background: transparent;
+      color: var(--foreground-dim);
+      cursor: pointer;
+      transition: var(--transition-fast);
+    }
+    .layout-toggle:hover {
+      background: var(--surface-2);
+      border-color: var(--card-border-hover);
+      color: var(--foreground);
+    }
+    .layout-toggle:focus-visible {
+      outline: 2px solid var(--primary);
+      outline-offset: 2px;
+    }
+    .layout-toggle[aria-pressed="true"] {
+      color: var(--primary-hover);
+      background: var(--primary-soft);
+      border-color: rgba(99, 102, 241, 0.30);
+    }
+    .layout-toggle svg { width: 16px; height: 16px; display: block; }
+    .layout-toggle .layout-toggle-collapse,
+    .layout-toggle[aria-pressed="true"] .layout-toggle-expand { display: none; }
+    .layout-toggle[aria-pressed="true"] .layout-toggle-collapse { display: block; }
+    @media (max-width: 1303px) {
+      .layout-toggle { display: none; }
     }
 
     .nav { display: flex; flex-direction: column; gap: 0.125rem; }
@@ -1776,7 +1824,30 @@
       transform: translateX(2px);
     }
 
-    .main { min-width: 0; }
+    .main {
+      min-width: 0;
+      width: 100%;
+      max-width: calc(960px + 5rem);
+      margin: 0 auto;
+      padding: 1.75rem 2.5rem 4rem;
+    }
+    /* Chosen with the sidebar's full-width toggle: drops the reading cap and
+       lets the content run to the window's right edge. */
+    html[data-layout="full"] .main { max-width: none; }
+    /* With full width on, the dev message sits beside What's New instead of
+       above it: a letter stays a readable line length in a column, and What's
+       New gets the width for more tiles. Below 1600px there isn't room for
+       both, so they stack as usual. */
+    @media (min-width: 1600px) {
+      html[data-layout="full"] #section-welcome {
+        display: grid;
+        grid-template-columns: minmax(0, 34rem) minmax(0, 1fr);
+        gap: 0.875rem;
+        align-items: start;
+        margin-bottom: 0.875rem;
+      }
+      html[data-layout="full"] #section-welcome > .card { margin-bottom: 0; }
+    }
 
     .section { scroll-margin-top: 1.5rem; }
     .section + .section { margin-top: 2rem; }
@@ -1808,16 +1879,19 @@
     @media (max-width: 880px) {
       .app {
         grid-template-columns: minmax(0, 1fr);
-        gap: 1.25rem;
-        padding: 1.25rem 1rem 3rem;
+        min-height: 0;
       }
       .sidebar {
         position: static;
         min-width: 0;
         gap: 1rem;
-        max-height: none;
+        height: auto;
+        padding: 1.25rem 1rem 1rem;
+        background: none;
+        border-right: 0;
         overflow: visible;
       }
+      .main { padding: 0.25rem 1rem 3rem; }
       .nav {
         flex-direction: row;
         flex-wrap: wrap;
@@ -1899,6 +1973,39 @@
     .wn-details > summary .wn-toggle-open { display: none; }
     .wn-details[open] > summary .wn-toggle-open { display: inline; }
     .wn-details > ul { margin-top: 0.55rem !important; }
+
+    /* What's New as tiles. Each <li> is one change: a <strong> headline, then
+       its text, with no dash between them. The grid takes as many columns as
+       fit — two at the standard width, four or more with full width on — so
+       a line stays around 60-70 characters however wide the page is. Both
+       lists use the same tracks, so the "Show more" tiles line up under the
+       headline ones. */
+    .wn-list {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(min(100%, 20rem), 1fr));
+      gap: 0.625rem;
+    }
+    .wn-list > li {
+      padding: 0.75rem 0.875rem 0.8rem;
+      border-radius: var(--radius-sm);
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid var(--card-border);
+      font-size: 0.85rem;
+      line-height: 1.6;
+      color: var(--foreground-muted);
+    }
+    .wn-list > li > strong:first-child {
+      display: block;
+      margin-bottom: 0.3rem;
+      font-size: 0.9rem;
+      font-weight: 600;
+      line-height: 1.4;
+      color: var(--foreground);
+    }
+    .wn-list .badge-new { margin-left: 0.25rem; vertical-align: 0.1em; }
     /* Update Available Banner */
     .update-banner {
       display: flex;
@@ -2025,6 +2132,9 @@
     }
 
   </style>
+  <!-- In <head> on purpose: it applies a saved full-width choice before the
+       first paint. See the note at the top of the file. -->
+  <script src="options-layout.js"></script>
 </head>
 <body>
   <div class="app">
@@ -2037,6 +2147,10 @@
           <h1>BlockNSFW</h1>
           <p>Content filter &amp; privacy</p>
         </div>
+        <button type="button" class="layout-toggle" id="layout-toggle" aria-pressed="false" aria-label="Expand content to full width" title="Expand content to full width">
+          <svg class="layout-toggle-expand" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 4h4v4"/><path d="M14 10l6-6"/><path d="M8 20H4v-4"/><path d="M4 20l6-6"/></svg>
+          <svg class="layout-toggle-collapse" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 10h-4V6"/><path d="M20 4l-6 6"/><path d="M6 14h4v4"/><path d="M10 14l-6 6"/></svg>
+        </button>
       </div>
       <nav class="nav" aria-label="Settings sections">
         <a class="nav-link" href="#section-welcome" data-target="section-welcome"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2.6l1.7 5.1 5.1 1.7-5.1 1.7L12 16.2l-1.7-5.1L5.2 9.4l5.1-1.7z"/><path d="M5 15.5l.8 2.3 2.3.8-2.3.8L5 21.7l-.8-2.3L1.9 18.6l2.3-.8z"/></svg></span><span>Welcome</span></a>
@@ -2162,21 +2276,22 @@
           The headlines from this release, which also carries everything prepared for 1.7.7. <a href="changelog.html" target="_blank" rel="noopener" style="color: var(--primary-hover); font-weight: 600; text-decoration: none;">📜 See the full changelog →</a>
         </p>
         <div class="card-description">
-          <ul style="margin: 0; padding-left: 1.1rem">
-            <li><strong>Blocked sites are now stopped by the browser itself <span class="badge-new">New</span></strong> &mdash; Until now every blocked site still received the request before the page was stopped &mdash; it saw your visit even though you never saw the page. The images, videos and embedded content of the 204,000 sites on the list are now refused by the browser&rsquo;s own request engine, before anything is sent.</li>
-            <li><strong>Content inside embedded frames is filtered at last <span class="badge-new">New</span></strong> &mdash; Filtering only ever ran on the main page, so a site loaded inside a frame on another page was checked against the blocklist and nothing else &mdash; no image filtering, no AI, no text scan. That was the easiest way around the extension, and it is closed. Small frames are skipped so ordinary pages stay fast.</li>
-            <li><strong>The blocked page no longer leaves the address in your history</strong> &mdash; The site you were blocked from was written into the address of the blocked page, which put it in your browser history, in address-bar suggestions, and &mdash; if you have history sync on &mdash; in your Google account. It is now held in memory for the moment it takes to show the page, and never written down.</li>
-            <li><strong>The AI image filter stops re-checking the same pictures</strong> &mdash; Its results were meant to be remembered for a day, but the store it used was unreachable, so every page re-analysed every image from scratch. It remembers them now.</li>
+          <!-- Each <li> is a tile: <strong>headline</strong> then the text, no dash between. -->
+          <ul class="wn-list">
+            <li><strong>Blocked sites are now stopped by the browser itself <span class="badge-new">New</span></strong> Until now every blocked site still received the request before the page was stopped &mdash; it saw your visit even though you never saw the page. The images, videos and embedded content of the 204,000 sites on the list are now refused by the browser&rsquo;s own request engine, before anything is sent.</li>
+            <li><strong>Content inside embedded frames is filtered at last <span class="badge-new">New</span></strong> Filtering only ever ran on the main page, so a site loaded inside a frame on another page was checked against the blocklist and nothing else &mdash; no image filtering, no AI, no text scan. That was the easiest way around the extension, and it is closed. Small frames are skipped so ordinary pages stay fast.</li>
+            <li><strong>The blocked page no longer leaves the address in your history</strong> The site you were blocked from was written into the address of the blocked page, which put it in your browser history, in address-bar suggestions, and &mdash; if you have history sync on &mdash; in your Google account. It is now held in memory for the moment it takes to show the page, and never written down.</li>
+            <li><strong>The AI image filter stops re-checking the same pictures</strong> Its results were meant to be remembered for a day, but the store it used was unreachable, so every page re-analysed every image from scratch. It remembers them now.</li>
           </ul>
           <details class="wn-details">
             <summary aria-label="Show the rest of this release&rsquo;s changes"><span class="wn-toggle-closed">Show 6 more &#9662;</span><span class="wn-toggle-open">Show less &#9652;</span></summary>
-            <ul style="margin: 0; padding-left: 1.1rem">
-              <li><strong>Blogspot blogs and some government sites were being blocked</strong> &mdash; A single entry on the blocklist could block an entire hosting platform. <code class="code">www.blogspot.com</code> was listed, the extension trims <code class="code">www.</code> from addresses, and what was left blocked every Blogger blog on the internet &mdash; and separately, every Mexican government site. If you whitelisted a site to work around this, you can remove that entry.</li>
-              <li><strong>A blocked word written as a pattern could freeze the page</strong> &mdash; Certain patterns take many seconds to check against ordinary text, and one saved word of that shape slowed every page you opened. They are refused when you save them now, with an explanation of what to change.</li>
-              <li><strong>Some sites could slip past the keyword filter</strong> &mdash; A site avoided the filter entirely just by having an everyday word like &ldquo;safe&rdquo;, &ldquo;help&rdquo; or &ldquo;study&rdquo; somewhere in its address.</li>
-              <li><strong>A website could put its own content on the blocked page</strong> &mdash; If you use a custom blocked page written in HTML, the address you were blocked from was dropped into your template without being made safe first.</li>
-              <li><strong>Nothing about your browsing is written into the page any more</strong> &mdash; Every page you opened had its title and address logged into that page&rsquo;s own console, where the site&rsquo;s analytics tools can read it. On AOL and Yahoo, so was your search.</li>
-              <li><strong>Blocked videos and embedded content are counted again</strong> &mdash; Three kinds of block never reached your statistics or the toolbar counter, which is why the counter in the corner of the page and the one on the toolbar sometimes disagreed.</li>
+            <ul class="wn-list">
+              <li><strong>Blogspot blogs and some government sites were being blocked</strong> A single entry on the blocklist could block an entire hosting platform. <code class="code">www.blogspot.com</code> was listed, the extension trims <code class="code">www.</code> from addresses, and what was left blocked every Blogger blog on the internet &mdash; and separately, every Mexican government site. If you whitelisted a site to work around this, you can remove that entry.</li>
+              <li><strong>A blocked word written as a pattern could freeze the page</strong> Certain patterns take many seconds to check against ordinary text, and one saved word of that shape slowed every page you opened. They are refused when you save them now, with an explanation of what to change.</li>
+              <li><strong>Some sites could slip past the keyword filter</strong> A site avoided the filter entirely just by having an everyday word like &ldquo;safe&rdquo;, &ldquo;help&rdquo; or &ldquo;study&rdquo; somewhere in its address.</li>
+              <li><strong>A website could put its own content on the blocked page</strong> If you use a custom blocked page written in HTML, the address you were blocked from was dropped into your template without being made safe first.</li>
+              <li><strong>Nothing about your browsing is written into the page any more</strong> Every page you opened had its title and address logged into that page&rsquo;s own console, where the site&rsquo;s analytics tools can read it. On AOL and Yahoo, so was your search.</li>
+              <li><strong>Blocked videos and embedded content are counted again</strong> Three kinds of block never reached your statistics or the toolbar counter, which is why the counter in the corner of the page and the one on the toolbar sometimes disagreed.</li>
             </ul>
           </details>
         </div>
@@ -3048,35 +3163,5 @@ title/Example Domain/"></textarea>
   <!-- Loaded for its template registry only, so the style picker below and the
        blocked page itself can never drift out of sync. -->
   <script src="options.js"></script>
-  <script>
-    (function () {
-      var links = Array.prototype.slice.call(document.querySelectorAll('.nav-link[data-target]'));
-      if (!links.length) return;
-      var byId = {};
-      links.forEach(function (l) { byId[l.dataset.target] = l; });
-      links.forEach(function (l) {
-        l.addEventListener('click', function (e) {
-          e.preventDefault();
-          var el = document.getElementById(l.dataset.target);
-          if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        });
-      });
-      var sections = links
-        .map(function (l) { return document.getElementById(l.dataset.target); })
-        .filter(Boolean);
-      if ('IntersectionObserver' in window) {
-        var obs = new IntersectionObserver(function (entries) {
-          entries.forEach(function (en) {
-            if (en.isIntersecting) {
-              links.forEach(function (x) { x.classList.remove('active'); });
-              if (byId[en.target.id]) byId[en.target.id].classList.add('active');
-            }
-          });
-        }, { rootMargin: '-15% 0px -75% 0px', threshold: 0 });
-        sections.forEach(function (s) { obs.observe(s); });
-      }
-      links[0].classList.add('active');
-    })();
-  </script>
 </body>
 </html>
