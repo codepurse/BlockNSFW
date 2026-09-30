@@ -1,0 +1,6 @@
+# Dev-only: tools/train_text_classifier.py and tools/text_corpus/build_corpus.py.
+# Nothing here ships in the extension.
+numpy==2.4.6
+scipy==1.17.1
+scikit-learn==1.9.0
+requests==2.34.2

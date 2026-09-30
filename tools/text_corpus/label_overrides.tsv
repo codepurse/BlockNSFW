@@ -1,0 +1,47 @@
+# Hosts whose pages are EXCLUDED from the text-model corpus, reviewed by hand.
+#
+# <host or domain>\t<reason>
+#
+# Adult labels come from data/HOSTS.txt, and the blocklist is not perfect: a
+# page from a listed site that is not adult would teach the model that city
+# news or recipes are adult. Each entry here was read and judged. A domain
+# excludes its subdomains too.
+#
+# Entries marked "not adult" are also false positives in the blocklist itself,
+# which blocks those sites for every user -- see the 2026-09 corpus review.
+
+# ---- not adult: blocklist false positives ----
+hamilton.ca	not adult: City of Hamilton municipal site
+foreverliving.com	not adult: health-products company
+friendscookbook.com	not adult: recipe site
+ultimateclassicrock.com	not adult: music magazine
+perezhilton.com	not adult: celebrity gossip
+letto.by	not adult: Belarusian retail
+gogps.me	not adult: GPS tracker shop
+news.ebc.net.tw	not adult: Taiwanese TV news
+defensoria-nsjp.gob.mx	not adult: Mexican government subdomain
+ok.ru	not adult: Odnoklassniki, a major Russian social network
+filmweb.pl	not adult: Polish film database
+ifmo.ru	not adult: ITMO University
+wnoz.de	not adult: German regional newspaper
+showtv.com.tr	not adult: Turkish TV channel
+szinhaz.hu	not adult: Hungarian theatre news
+funpic.hu	not adult: Hungarian funny-pictures site
+rybalka-opt.ru	not adult: wholesale fishing/knife shop
+ucsol.ru	not adult: customs-law reference
+hit.ua	not adult: web statistics service
+sdt.ru	not adult: truck parts dealer
+4gamers.com.tw	not adult: Taiwanese gaming news
+propan.ru	not adult: LPG car conversion
+yourdesires.ru	not adult: personal finance articles
+medanestesia.ru	not adult: anaesthesiology articles
+spokeo.pl	not adult: cinema listings
+rosalieeve.pl	not adult: medical clinic
+segob.gob.mx	not adult: Mexican interior ministry, including the Official Gazette (DOF)
+
+# ---- listed for a reason the page text cannot show ----
+hentai987.com	repurposed: now serves football articles
+elbrasombre.com	parked: "domain for sale" page
+cherrynudes.com	maintenance page only
+entensity.net	link dump, not clearly adult either way
+vapornosotras.es	not clearly adult: Spanish women's podcast and lifestyle articles

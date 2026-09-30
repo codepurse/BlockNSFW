@@ -181,24 +181,24 @@ function getAiStrictnessMeta(level) {
 // blocking.
 function getAiTextStrictnessMeta(level) {
   const normalized = normalizeAiStrictness(level);
-  // Wording note: text alone no longer blocks a page — every level below needs
-  // the AI Image Blocker to have flagged an image on the same page. These
-  // describe how readily the text side agrees, not what it blocks by itself.
+  // Each level is a threshold the model file carries, chosen on held-out pages
+  // for a target false-positive rate (tools/text_corpus/EVAL.md). Keep the
+  // copy in line with what that report measures.
   if (normalized === 'relaxed') {
     return {
       label: 'Relaxed',
-      detail: 'Agrees only on pages it is very confident are adult. Fewest false positives.'
+      detail: 'Blocks only pages it is almost certain are adult. Fewest false positives.'
     };
   }
   if (normalized === 'strict') {
     return {
       label: 'Strict',
-      detail: 'Also agrees on borderline pages. More likely to block benign text-heavy pages.'
+      detail: 'Also blocks borderline pages. Catches more, and will sometimes block an ordinary page.'
     };
   }
   return {
     label: 'Balanced',
-    detail: 'Balanced — agrees on confident pages while letting benign multilingual pages through.'
+    detail: 'Balanced — blocks clearly adult pages; tested not to block health, recovery or sex-education pages.'
   };
 }
 
