@@ -1834,19 +1834,33 @@
     /* Chosen with the sidebar's full-width toggle: drops the reading cap and
        lets the content run to the window's right edge. */
     html[data-layout="full"] .main { max-width: none; }
-    /* With full width on, the dev message sits beside What's New instead of
-       above it: a letter stays a readable line length in a column, and What's
-       New gets the width for more tiles. Below 1600px there isn't room for
-       both, so they stack as usual. */
-    @media (min-width: 1600px) {
+    /* With full width on, the letter keeps a readable line length inside its
+       card however wide the card gets. */
+    html[data-layout="full"] .dev-teaser,
+    html[data-layout="full"] .dev-message-body,
+    html[data-layout="full"] .dev-message-signature { max-width: 48rem; }
+    /* And once What's New has room for its four headlines in one row beside
+       it, the dev message moves up beside What's New, the two cards ending
+       level. Any narrower and What's New would run to two rows, twice the
+       letter's height, so they stay stacked. */
+    @media (min-width: 2080px) {
       html[data-layout="full"] #section-welcome {
         display: grid;
-        grid-template-columns: minmax(0, 34rem) minmax(0, 1fr);
+        grid-template-columns: minmax(0, 30rem) minmax(0, 1fr);
         gap: 0.875rem;
         align-items: start;
         margin-bottom: 0.875rem;
       }
       html[data-layout="full"] #section-welcome > .card { margin-bottom: 0; }
+      /* The letter stretches to What's New's height and "Read more" sits at
+         its foot, level with "Show more". Opened, the letter runs longer and
+         What's New keeps its own height rather than growing an empty box. */
+      html[data-layout="full"] .dev-message {
+        display: flex;
+        flex-direction: column;
+        align-self: stretch;
+      }
+      html[data-layout="full"] .dev-message .dev-details { margin-top: auto; }
     }
 
     .section { scroll-margin-top: 1.5rem; }
@@ -1975,11 +1989,17 @@
     .wn-details > ul { margin-top: 0.55rem !important; }
 
     /* What's New as tiles. Each <li> is one change: a <strong> headline, then
-       its text, with no dash between them. The grid takes as many columns as
-       fit — two at the standard width, four or more with full width on — so
-       a line stays around 60-70 characters however wide the page is. Both
-       lists use the same tracks, so the "Show more" tiles line up under the
-       headline ones. */
+       its text, with no dash between them. One column on a phone, two at the
+       standard width, four once the card is wide enough (full width on a big
+       screen): four headlines never split three and one, and never leave an
+       empty column. The count comes from the card's own width, so the
+       sidebar collapsing or the dev message beside it is taken into account.
+       Both lists use the same tracks, so the "Show more" tiles line up under
+       the headline ones. */
+    #whats-new-card { container-type: inline-size; }
+    /* The whole card is its header, so the header's gap below would only
+       pad the card's foot. */
+    #whats-new-card > .card-header { margin-bottom: 0; }
     .wn-list {
       list-style: none;
       margin: 0;
@@ -1987,6 +2007,12 @@
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(min(100%, 20rem), 1fr));
       gap: 0.625rem;
+    }
+    @container (min-width: 36rem) {
+      .wn-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+    @container (min-width: 70rem) {
+      .wn-list { grid-template-columns: repeat(4, minmax(0, 1fr)); }
     }
     .wn-list > li {
       padding: 0.75rem 0.875rem 0.8rem;
@@ -1997,15 +2023,22 @@
       line-height: 1.6;
       color: var(--foreground-muted);
     }
+    /* The headline's words wrap in their own column and a "New" badge sits
+       at its top right, rather than dropping onto a line by itself. A
+       headline is plain text plus the badge: anything else inside it would
+       become a column of its own. */
     .wn-list > li > strong:first-child {
-      display: block;
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 0.5rem;
       margin-bottom: 0.3rem;
       font-size: 0.9rem;
       font-weight: 600;
       line-height: 1.4;
       color: var(--foreground);
     }
-    .wn-list .badge-new { margin-left: 0.25rem; vertical-align: 0.1em; }
+    .wn-list .badge-new { margin-top: 0.1rem; }
 
     /* Blocked page design picker. options.js builds it from blocked-themes.js,
        the registry the blocked page itself renders from. Each thumbnail is a
