@@ -2010,17 +2010,21 @@
     /* Blocked page design picker. options.js builds it from blocked-themes.js,
        the registry the blocked page itself renders from. Each thumbnail is a
        small sketch of its design in that design's own palette. */
-    /* Four across or two by two, never three and a straggler: four across
-       once the content column is about 600px wide, which is 944px of window
-       beside the sidebar, or 632px once the sidebar stacks above. */
+    /* Five designs: all in one row once the content column is about 760px
+       wide (1104px of window beside the sidebar), three and two from 560px,
+       two across below that. About 150px is the narrowest a thumbnail and
+       its blurb can share. */
     .design-picker {
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 0.75rem;
       margin-top: 0.625rem;
     }
-    @media (min-width: 944px), (min-width: 632px) and (max-width: 880px) {
-      .design-picker { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    @media (min-width: 560px) {
+      .design-picker { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    }
+    @media (min-width: 1104px) {
+      .design-picker { grid-template-columns: repeat(5, minmax(0, 1fr)); }
     }
     .design-option {
       position: relative;
@@ -2210,6 +2214,22 @@
     .design-thumb-motivation .t-calendar .t-cells { fill: none; stroke: #d8d2c6; stroke-width: 0.6; }
     .design-thumb-motivation .t-calendar .t-x { fill: none; stroke: #cf2e2e; stroke-width: 1.4; stroke-linecap: round; }
     .design-thumb-motivation .t-calendar .t-today { fill: none; stroke: #1f1d1a; stroke-width: 0.9; }
+    /* The river: a board of tiles, the river in ink from the spring to the
+       sea, loose pieces of empty channel, and the sea's seal. Drawn as a
+       small SVG in options.js. */
+    .design-thumb-play {
+      display: grid;
+      place-items: center;
+      padding: 0;
+      background: #f6f3ec;
+    }
+    .design-thumb-play .t-river { width: 84%; overflow: visible; }
+    .design-thumb-play .t-river .t-cells { fill: none; stroke: #e2dccf; stroke-width: 0.5; }
+    .design-thumb-play .t-river .t-dry { fill: none; stroke: #b9b1a3; stroke-width: 2.4; }
+    .design-thumb-play .t-river .t-ink { fill: none; stroke: #1f1d1a; stroke-width: 2.6; stroke-linejoin: round; }
+    .design-thumb-play .t-river .t-pool { fill: #1f1d1a; }
+    .design-thumb-play .t-river .t-waves { fill: none; stroke: #1f1d1a; stroke-width: 0.7; stroke-linecap: round; }
+    .design-thumb-play .t-river .t-seal { fill: #cf2e2e; }
     /* Update Available Banner */
     .update-banner {
       display: flex;

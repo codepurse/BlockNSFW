@@ -109,9 +109,12 @@ function fakeTimers() {
 
 const flush = () => new Promise((done) => setImmediate(done));
 
-function loadThemes() {
+// `random` stands in for Math.random, for a design that deals from it.
+// `globals` adds properties to the page's global object.
+function loadThemes({ random, globals = {} } = {}) {
   const timers = fakeTimers();
-  const sandbox = { console, Math, Date, Promise, String, ...timers };
+  const sandbox = { console, Math: random ? Object.assign(Object.create(Math), { random }) : Math, Date, Promise, String, ...timers };
+  Object.defineProperties(sandbox, Object.getOwnPropertyDescriptors(globals));
   sandbox.globalThis = sandbox;
   vm.createContext(sandbox);
   vm.runInContext(THEMES_SRC, sandbox);
@@ -145,12 +148,12 @@ function openBlockedPage({ query = '', settings = null, streakStart = null, redu
 
 // --- the registry ------------------------------------------------------------
 
-test('registry: Classic first and the default, then the three designs', () => {
+test('registry: Classic first and the default, then the four designs', () => {
   const { themes } = loadThemes();
   assert.equal(themes.DEFAULT_ID, 'classic');
   // Array.from: the list comes from the vm realm, and deepStrictEqual compares
   // prototypes, which differ between realms.
-  assert.deepEqual(Array.from(themes.list, (t) => t.id), ['classic', 'calm', 'verse', 'motivation']);
+  assert.deepEqual(Array.from(themes.list, (t) => t.id), ['classic', 'calm', 'verse', 'motivation', 'play']);
 });
 
 test('registry: every design has a name, a blurb, and a renderer', () => {
@@ -206,8 +209,8 @@ test('wording: nothing shames, and the streak is never called clean or sober', (
 
 // --- rendering ---------------------------------------------------------------
 
-function renderInto(id, extra = {}) {
-  const { themes, timers } = loadThemes();
+function renderInto(id, extra = {}, page = {}) {
+  const { themes, timers } = loadThemes(page);
   const doc = fakeDocument();
   const hero = new FakeEl('section');
   themes.get(id).render({ doc, hero, reducedMotion: true, ...extra });
@@ -215,7 +218,7 @@ function renderInto(id, extra = {}) {
 }
 
 test('every design opens by saying what happened', () => {
-  for (const id of ['calm', 'verse', 'motivation']) {
+  for (const id of ['calm', 'verse', 'motivation', 'play']) {
     const { hero } = renderInto(id);
     const first = hero.all().find((c) => c.textContent);
     assert.ok(first.classList.contains('theme-context'), `${id}: the first words on the page`);
@@ -504,6 +507,181 @@ test('motivation: weeks start on the reader\'s first weekday and end with the on
     assert.equal(days.filter((d) => d.kept).length, 12);
     assert.ok(days[today - 1].kept && days[today - 12].kept && !days[today - 13].kept);
   }
+});
+
+// The river's course, tile by tile: the openings each tile needs to carry it,
+// from the one before to the one after (the spring and the sea at the ends),
+// and how many more quarter turns get it there. undefined when its piece can
+// never fit.
+function courseTurns(themes, river) {
+  const n = river.size;
+  const toward = (a, b) => (b === a - n ? 1 : b === a + 1 ? 2 : b === a + n ? 4 : 8);
+  return river.course.map((cell, i, course) => {
+    const need = (i === 0 ? 8 : toward(cell, course[i - 1])) |
+      (i === course.length - 1 ? 2 : toward(cell, course[i + 1]));
+    const t = river.tiles[cell];
+    return [cell, [0, 1, 2, 3].find((k) => themes.riverTurn(t.base, t.turns + k) === need)];
+  });
+}
+
+test('play: a quarter turn moves each opening one place clockwise', () => {
+  const { themes } = loadThemes();
+  assert.equal(themes.riverTurn(1, 1), 2, 'north to east');
+  assert.equal(themes.riverTurn(8, 1), 1, 'west to north');
+  assert.equal(themes.riverTurn(3, 2), 12, 'a bend, turned half way');
+  assert.equal(themes.riverTurn(5, 1), 10, 'a straight, turned across');
+  assert.equal(themes.riverTurn(7, 4), 7, 'four turns, back where it was');
+  assert.equal(themes.riverTurn(3, 6), themes.riverTurn(3, 2));
+});
+
+test('play: every river can be led to the sea, takes the spring, and is never dealt solved', () => {
+  const { themes } = loadThemes();
+  for (let seed = 1; seed <= 400; seed++) {
+    const river = themes.riverBuild(seed * 104729);
+    const n = themes.RIVER_SIZE;
+    assert.equal(river.tiles.length, n * n);
+    assert.ok(river.length >= n + 3 && river.length <= n + 9, `seed ${seed}: a course of ${river.length}`);
+    assert.equal(river.course[0], river.spring * n, `seed ${seed}: the course starts at the spring`);
+    assert.equal(river.course[river.length - 1], river.sea * n + n - 1, `seed ${seed}: and ends at the sea`);
+    const start = river.tiles[river.spring * n];
+    assert.ok(themes.riverTurn(start.base, start.turns) & 8, `seed ${seed}: the first tile takes the spring`);
+    const flow = themes.riverFlow(river);
+    assert.equal(flow.solved, false, `seed ${seed}: dealt already flowing`);
+    assert.ok(flow.reach >= 1);
+    // Turn every tile on the course the way it needs, and the river flows.
+    for (const [cell, k] of courseTurns(themes, river)) {
+      assert.notEqual(k, undefined, `seed ${seed}: tile ${cell} can never carry the river`);
+      river.tiles[cell].turns += k;
+    }
+    assert.equal(themes.riverFlow(river).solved, true, `seed ${seed}: no way to the sea`);
+  }
+});
+
+test('play: the same seed deals the same river', () => {
+  const { themes } = loadThemes();
+  const a = themes.riverBuild(77);
+  const b = themes.riverBuild(77);
+  assert.equal(JSON.stringify(a), JSON.stringify(b));
+  assert.notEqual(JSON.stringify(a), JSON.stringify(themes.riverBuild(78)));
+});
+
+test('play: ink runs from the spring through every opening that meets one', () => {
+  const { themes } = loadThemes();
+  // A 6 by 6 board of tiles that lead nowhere, then a straight run along the
+  // top row: the river reaches the sea once every tile on the row lies across.
+  const n = themes.RIVER_SIZE;
+  const river = {
+    size: n, spring: 0, sea: 0,
+    tiles: Array.from({ length: n * n }, () => ({ base: 3, turns: 2 }))
+  };
+  for (let c = 0; c < n; c++) river.tiles[c] = { base: 5, turns: 1 };
+  let flow = themes.riverFlow(river);
+  assert.equal(flow.solved, true);
+  assert.deepEqual(Array.from(flow.depth.slice(0, n)), [0, 1, 2, 3, 4, 5]);
+  river.tiles[3].turns = 0;
+  flow = themes.riverFlow(river);
+  assert.equal(flow.solved, false);
+  assert.equal(flow.reach, 3, 'the ink stops at the tile turned the wrong way');
+  river.tiles[0].turns = 0;
+  assert.equal(themes.riverFlow(river).reach, 0, 'a spring tile closed to the west lets nothing in');
+});
+
+// The river is dealt from Math.random; a fixed one deals a known river.
+const PLAY_RANDOM = () => 0.25;
+const PLAY_SEED = Math.floor(0.25 * 2147483647);
+
+function playView(extra) {
+  const { themes, hero } = renderInto('play', extra, { random: PLAY_RANDOM });
+  const tiles = hero.all().filter((c) => c.classList.contains('river-tile'));
+  return { themes, hero, tiles, river: themes.riverBuild(PLAY_SEED) };
+}
+
+test('play: a board of six by six tiles, the spring and the sea, and ink from the start', () => {
+  const { hero, tiles } = playView();
+  assert.equal(tiles.length, 36);
+  assert.ok(tiles.every((t) => t.tagName === 'BUTTON'));
+  assert.equal(tiles.filter((t) => t.tabIndex === 0).length, 1, 'one tile takes Tab');
+  assert.ok(tiles.some((t) => t.classList.contains('is-wet')), 'the ink is in the first tile');
+  assert.match(tiles.find((t) => t.tabIndex === 0).attributes['aria-label'], /^Row \d, column 1, (bend|straight), the ink reaches it$/);
+  assert.equal(hero.find('river-ends').attributes['aria-hidden'], 'true', 'the ends are drawing');
+  assert.ok(hero.find('river-pool') && hero.find('river-seal'));
+  assert.equal(hero.find('river-title').textContent, 'Lead the river to the sea.');
+  assert.equal(hero.find('river-status').textContent, 'Ink runs as far as the channel lets it.');
+  assert.equal(hero.find('river-moves').textContent, 'No turns yet');
+  assert.match(hero.find('river-unit').textContent, /^tiles? the river reaches$/);
+  assert.equal(hero.find('river-play').classList.contains('is-still'), true, 'reduced motion is honoured');
+});
+
+test('play: pressing a tile turns it a quarter, and the turns are counted', () => {
+  const { hero, tiles } = playView();
+  const face = tiles[7].children[0];
+  const before = parseInt(face.style.props.transform.match(/-?\d+/)[0], 10);
+  tiles[7].click();
+  assert.equal(face.style.props.transform, `rotate(${before + 90}deg)`);
+  assert.equal(hero.find('river-moves').textContent, '1 turn');
+  assert.equal(hero.find('river-status').textContent, 'Keep turning. Follow the ink from the spring.');
+  assert.equal(tiles[7].tabIndex, 0, 'the turned tile keeps the focus');
+  tiles[7].click();
+  assert.equal(hero.find('river-moves').textContent, '2 turns');
+});
+
+test('play: the board is the dealt river, the spring and the sea in their rows', () => {
+  const { hero, tiles, river } = playView();
+  const play = hero.find('river-play');
+  assert.equal(play.style.props['--river-spring'], String(river.spring));
+  assert.equal(play.style.props['--river-sea'], String(river.sea));
+  const paths = { 3: 'M50 0A50 50 0 0 0 100 50', 5: 'M50 0V100', 7: 'M50 0V100M50 50H100' };
+  river.tiles.forEach((t, i) => {
+    const [bank, water] = tiles[i].children[0].children;
+    assert.equal(bank.attributes.d, paths[t.base]);
+    assert.equal(water.attributes.d, paths[t.base]);
+    assert.equal(tiles[i].children[0].style.props.transform, `rotate(${t.turns * 90}deg)`);
+  });
+});
+
+test('play: leading the river to the sea sets the seal and stills the board', () => {
+  const { themes, hero, tiles, river } = playView();
+  const play = hero.find('river-play');
+  for (const [cell, k] of courseTurns(themes, river)) for (let i = 0; i < k; i++) tiles[cell].click();
+  assert.ok(play.classList.contains('is-solved'), 'the river reached the sea');
+  assert.equal(hero.find('river-status').textContent, 'The river reaches the sea. How is the urge now?');
+  assert.ok(tiles.every((t) => t.attributes['aria-disabled'] === 'true'));
+  const moves = hero.find('river-moves').textContent;
+  tiles[0].click();
+  assert.equal(hero.find('river-moves').textContent, moves, 'a finished river stays as it is');
+
+  hero.find('river-again').click();
+  assert.equal(play.classList.contains('is-solved'), false, 'Another river deals a new one');
+  assert.equal(hero.find('river-moves').textContent, 'No turns yet');
+  assert.equal(hero.find('river-status').textContent, 'Ink runs as far as the channel lets it.');
+});
+
+test('play: the arrow keys move between tiles', () => {
+  const { tiles } = playView();
+  const from = tiles.findIndex((t) => t.tabIndex === 0);
+  const press = (key) => {
+    const at = tiles.findIndex((t) => t.tabIndex === 0);
+    fire(tiles[at], 'keydown', { key });
+    return tiles.findIndex((t) => t.tabIndex === 0);
+  };
+  assert.equal(press('ArrowRight'), from + 1);
+  assert.equal(press('ArrowLeft'), from);
+  assert.equal(press('ArrowLeft'), from, 'the left edge holds');
+  assert.equal(press('End'), from + 5);
+  assert.equal(tiles.filter((t) => t.tabIndex === 0).length, 1);
+});
+
+test('play: nothing is kept between visits', () => {
+  // No score, no progress: the page never reads or writes the browser's storage.
+  let touched = 0;
+  const { themes } = loadThemes({
+    globals: { get localStorage() { touched += 1; return undefined; } }
+  });
+  const hero = new FakeEl('section');
+  themes.get('play').render({ doc: fakeDocument(), hero, reducedMotion: true });
+  hero.all().filter((c) => c.classList.contains('river-tile'))[3].click();
+  hero.find('river-again').click();
+  assert.equal(touched, 0);
 });
 
 // --- blocked.js choosing a design ----------------------------------------------

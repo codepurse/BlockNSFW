@@ -7,7 +7,8 @@
 //
 // Each design starts from what it is for, not from a mood: Calm is a breathing
 // exercise drawn as an ensō, Verse is scripture read in a moment of quiet,
-// Motivation is the streak as a chain of days. The blocked page is seen at a
+// Motivation is the streak as a chain of days, Play is a small puzzle to keep
+// the hands and eyes busy while an urge passes. The blocked page is seen at a
 // hard moment, so none of the wording shames or lectures, and every page says
 // plainly what happened in its first line.
 //
@@ -71,6 +72,10 @@
   const DAY_MS = 24 * 60 * 60 * 1000;
   // Today's X is the reader's own mark, kept in this browser for the day.
   const MARK_KEY = 'blocknsfw-chain-marked';
+
+  // Play is the river: a square of tiles, each a piece of channel, to turn
+  // until the ink runs from a spring on the left to the sea on the right.
+  const RIVER_SIZE = 6;
 
   // --- helpers ---------------------------------------------------------------
 
@@ -820,6 +825,296 @@
       .then(show, () => show(null));
   }
 
+  // --- Play: the river -----------------------------------------------------------
+  //
+  // A puzzle for the minutes an urge takes to pass. Visual, spatial play (the
+  // craving studies used Tetris) takes up the room in the mind that a
+  // craving's pictures need, and turning a piece in your head to see where it
+  // leads is that kind of work. So the river is calm on purpose: no clock, no
+  // way to lose, no score kept and nothing saved, so the blocked page never
+  // becomes somewhere worth coming back to. Ink runs from the spring as far as
+  // the channel connects, so every turn shows how far the river has come.
+
+  // A tile's openings as bits: north 1, east 2, south 4, west 8. The pieces
+  // are drawn opening north (and east), in a 100 x 100 box, and turned.
+  const RIVER_PIECES = {
+    3: { name: 'bend', d: 'M50 0A50 50 0 0 0 100 50' },
+    5: { name: 'straight', d: 'M50 0V100' },
+    7: { name: 'fork', d: 'M50 0V100M50 50H100' }
+  };
+
+  // A tile's openings after k quarter turns clockwise.
+  function riverTurn(mask, k) {
+    let m = mask;
+    for (let i = 0; i < ((k % 4) + 4) % 4; i++) m = ((m << 1) | (m >> 3)) & 15;
+    return m;
+  }
+
+  // The tiles next to this one: the opening that leads there, the tile, and
+  // the opening it needs to lead back.
+  function riverSteps(cell, n) {
+    const r = Math.floor(cell / n);
+    const c = cell % n;
+    const steps = [];
+    if (r > 0) steps.push([1, cell - n, 4]);
+    if (c < n - 1) steps.push([2, cell + 1, 8]);
+    if (r < n - 1) steps.push([4, cell + n, 1]);
+    if (c > 0) steps.push([8, cell - 1, 2]);
+    return steps;
+  }
+
+  // A river from a seed. A maze is grown from the spring by a random walk, and
+  // its one path to the sea is the river's course: each tile on it is the bend
+  // or straight the course needs, every other tile a loose piece. Then every
+  // tile is turned at random. Courses of 9 to 15 tiles, a few minutes' work.
+  // The first tile always takes the spring, so there is ink from the start,
+  // and no river is dealt already flowing.
+  function riverBuild(seed) {
+    const n = RIVER_SIZE;
+    const lo = n + 3;
+    const hi = n + 9;
+    let best = null;
+    for (let attempt = 0; attempt < 80; attempt++) {
+      const random = seeded(seed + attempt * 7919);
+      const spring = Math.floor(random() * n);
+      const sea = Math.floor(random() * n);
+      const start = spring * n;
+      const end = sea * n + n - 1;
+      const parent = new Array(n * n).fill(-1);
+      const seen = new Array(n * n).fill(false);
+      const stack = [start];
+      seen[start] = true;
+      while (stack.length) {
+        const cur = stack[stack.length - 1];
+        const open = riverSteps(cur, n).filter(([, cell]) => !seen[cell]);
+        if (!open.length) {
+          stack.pop();
+          continue;
+        }
+        const cell = open[Math.floor(random() * open.length)][1];
+        seen[cell] = true;
+        parent[cell] = cur;
+        stack.push(cell);
+      }
+      const course = [];
+      for (let at = end; at !== -1; at = parent[at]) course.unshift(at);
+      const need = new Array(n * n).fill(0);
+      const toward = (a, b) => riverSteps(a, n).find(([, cell]) => cell === b)[0];
+      course.forEach((cell, i) => {
+        need[cell] = (i === 0 ? 8 : toward(cell, course[i - 1])) |
+          (i === course.length - 1 ? 2 : toward(cell, course[i + 1]));
+      });
+      const tiles = need.map((m) => {
+        let base;
+        if (m) base = m === 5 || m === 10 ? 5 : 3;
+        else {
+          const pick = random();
+          base = pick < 0.55 ? 3 : (pick < 0.85 ? 5 : 7);
+        }
+        return { base, turns: Math.floor(random() * 4) };
+      });
+      while (!(riverTurn(tiles[start].base, tiles[start].turns) & 8)) tiles[start].turns += 1;
+      const river = { size: n, spring, sea, tiles, course, length: course.length };
+      for (let guard = 0; guard < 4 && riverFlow(river).solved; guard++) tiles[end].turns += 1;
+      if (course.length >= lo && course.length <= hi) return river;
+      if (!best || Math.abs(course.length - (lo + hi) / 2) < Math.abs(best.length - (lo + hi) / 2)) best = river;
+    }
+    return best;
+  }
+
+  // Where the ink has reached: each tile's distance from the spring along the
+  // channel (-1 where it has not), how many tiles that is, and whether the
+  // river has reached the sea.
+  function riverFlow(river) {
+    const n = river.size;
+    const mask = river.tiles.map((t) => riverTurn(t.base, t.turns));
+    const start = river.spring * n;
+    const end = river.sea * n + n - 1;
+    const depth = new Array(n * n).fill(-1);
+    if (mask[start] & 8) {
+      depth[start] = 0;
+      const queue = [start];
+      while (queue.length) {
+        const cur = queue.shift();
+        for (const [open, cell, back] of riverSteps(cur, n)) {
+          if ((mask[cur] & open) && (mask[cell] & back) && depth[cell] < 0) {
+            depth[cell] = depth[cur] + 1;
+            queue.push(cell);
+          }
+        }
+      }
+    }
+    return {
+      depth,
+      reach: depth.filter((d) => d >= 0).length,
+      solved: depth[end] >= 0 && (mask[end] & 2) !== 0
+    };
+  }
+
+  function renderPlay(ctx) {
+    const { doc, hero, reducedMotion } = ctx;
+    const n = RIVER_SIZE;
+    const newSeed = () => Math.floor(Math.random() * 2147483647);
+
+    let river = riverBuild(newSeed());
+    let moves = 0;
+    let solved = false;
+    // The one tile that takes Tab; the arrow keys move it.
+    let focus = river.spring * n;
+
+    const count = el(doc, 'span', 'river-count', '');
+    const unit = el(doc, 'span', 'river-unit', '');
+    const tally = el(doc, 'p', 'river-tally');
+    tally.append(count, unit);
+    const turnsLine = el(doc, 'p', 'river-moves', '');
+    const words = el(doc, 'div', 'river-words');
+    words.append(
+      el(doc, 'h1', 'theme-title river-title', 'Lead the river to the sea.'),
+      el(doc, 'p', 'river-guide',
+        'Press a tile to turn it. Join the channel from the spring on the left to the sea on the right.'),
+      tally,
+      turnsLine
+    );
+
+    const status = el(doc, 'p', 'river-status', '');
+    status.setAttribute('aria-live', 'polite');
+    const again = el(doc, 'button', 'theme-link river-again', 'Another river');
+    again.type = 'button';
+    const after = el(doc, 'div', 'river-after');
+    after.append(status, again);
+
+    // The board: the tiles, and either side of them the spring, a pool of ink
+    // that is always flowing, and the sea, which fills when the river arrives.
+    // The ends are drawn to the tiles' scale: 100 to a tile, 60 either side.
+    const grid = el(doc, 'div', 'river-grid');
+    grid.setAttribute('role', 'group');
+    grid.setAttribute('aria-label', `River tiles, ${n} by ${n}`);
+    const tiles = river.tiles.map((_, i) => {
+      const button = el(doc, 'button', 'river-tile');
+      button.type = 'button';
+      const face = svg(doc, 'svg', { class: 'river-piece', viewBox: '0 0 100 100', 'aria-hidden': 'true', focusable: 'false' });
+      const bank = svg(doc, 'path', { class: 'river-bank' });
+      const water = svg(doc, 'path', { class: 'river-water' });
+      face.append(bank, water);
+      button.append(face);
+      button.addEventListener('click', () => turn(i));
+      button.addEventListener('keydown', (e) => step(i, e));
+      return { button, face, bank, water };
+    });
+    grid.append(...tiles.map((t) => t.button));
+
+    const ends = svg(doc, 'svg', { class: 'river-ends', viewBox: '0 0 720 600', 'aria-hidden': 'true', focusable: 'false' });
+    const springEnd = svg(doc, 'g', {});
+    springEnd.append(
+      svg(doc, 'path', { class: 'river-bank', d: 'M22 0H60' }),
+      svg(doc, 'path', { class: 'river-water river-source', d: 'M22 0H60' }),
+      svg(doc, 'circle', { class: 'river-pool', cx: 22, cy: 0, r: 15 })
+    );
+    const seaEnd = svg(doc, 'g', {});
+    const wave = (y) => `M687 ${y}c3.3-4.5 6.7-4.5 10 0c3.3 4.5 6.7 4.5 10 0c3.3-4.5 6.7-4.5 10 0`;
+    seaEnd.append(
+      svg(doc, 'path', { class: 'river-bank', d: 'M660 0H683' }),
+      svg(doc, 'path', { class: 'river-water river-mouth', d: 'M660 0H683' }),
+      svg(doc, 'path', { class: 'river-waves', d: wave(-7) + wave(7) }),
+      svg(doc, 'rect', { class: 'river-seal', x: 692, y: 20, width: 20, height: 20, rx: 2 })
+    );
+    ends.append(springEnd, seaEnd);
+
+    const label = (className, text) => {
+      const node = el(doc, 'span', 'river-label ' + className, text);
+      node.setAttribute('aria-hidden', 'true');
+      return node;
+    };
+    const play = el(doc, 'div', 'river-play');
+    if (reducedMotion) play.classList.add('is-still');
+    play.append(ends, grid, label('river-label-spring', 'Spring'), label('river-label-sea', 'Sea'));
+
+    const layout = el(doc, 'div', 'river-layout');
+    layout.append(words, play, after);
+    hero.append(context(doc, 'BlockNSFW blocked this page.'), layout);
+
+    // Lay out a new river: its pieces, and where the spring and the sea are.
+    function deal() {
+      river.tiles.forEach((t, i) => {
+        tiles[i].bank.setAttribute('d', RIVER_PIECES[t.base].d);
+        tiles[i].water.setAttribute('d', RIVER_PIECES[t.base].d);
+      });
+      springEnd.setAttribute('transform', `translate(0 ${river.spring * 100 + 50})`);
+      seaEnd.setAttribute('transform', `translate(0 ${river.sea * 100 + 50})`);
+      play.style.setProperty('--river-spring', String(river.spring));
+      play.style.setProperty('--river-sea', String(river.sea));
+      draw();
+    }
+
+    function draw() {
+      const flow = riverFlow(river);
+      solved = flow.solved;
+      // Tiles the ink has only just reached fill one after another, outward
+      // from the turn that let it through, so the ink is seen to run.
+      const fresh = flow.depth.filter((d, i) => d >= 0 && !tiles[i].button.classList.contains('is-wet'));
+      const from = fresh.length ? Math.min(...fresh) : 0;
+      river.tiles.forEach((t, i) => {
+        const view = tiles[i];
+        const wet = flow.depth[i] >= 0;
+        const delay = wet && !view.button.classList.contains('is-wet') ? (flow.depth[i] - from) * 0.06 : 0;
+        view.water.style.setProperty('transition-delay', `${delay.toFixed(2)}s`);
+        view.face.style.setProperty('transform', `rotate(${t.turns * 90}deg)`);
+        view.button.classList.toggle('is-wet', wet);
+        view.button.tabIndex = i === focus ? 0 : -1;
+        view.button.setAttribute('aria-disabled', solved ? 'true' : 'false');
+        view.button.setAttribute('aria-label',
+          `Row ${Math.floor(i / n) + 1}, column ${(i % n) + 1}, ${RIVER_PIECES[t.base].name}` +
+          (wet ? ', the ink reaches it' : ''));
+      });
+      play.classList.toggle('is-solved', solved);
+      count.textContent = String(flow.reach);
+      unit.textContent = flow.reach === 1 ? 'tile the river reaches' : 'tiles the river reaches';
+      turnsLine.textContent = moves === 0 ? 'No turns yet' : moves + (moves === 1 ? ' turn' : ' turns');
+      status.textContent = solved
+        ? 'The river reaches the sea. How is the urge now?'
+        : moves === 0
+          ? 'Ink runs as far as the channel lets it.'
+          : 'Keep turning. Follow the ink from the spring.';
+    }
+
+    function turn(i) {
+      if (solved) return;
+      river.tiles[i].turns += 1;
+      moves += 1;
+      focus = i;
+      draw();
+    }
+
+    // Arrow keys move between tiles, Home and End along a row; Enter and
+    // Space turn one, as a button does.
+    function step(i, e) {
+      const r = Math.floor(i / n);
+      const c = i % n;
+      const to = {
+        ArrowUp: r > 0 ? i - n : i,
+        ArrowDown: r < n - 1 ? i + n : i,
+        ArrowLeft: c > 0 ? i - 1 : i,
+        ArrowRight: c < n - 1 ? i + 1 : i,
+        Home: r * n,
+        End: r * n + n - 1
+      }[e.key];
+      if (to === undefined) return;
+      e.preventDefault();
+      focus = to;
+      tiles.forEach((t, k) => { t.button.tabIndex = k === focus ? 0 : -1; });
+      if (typeof tiles[to].button.focus === 'function') tiles[to].button.focus();
+    }
+
+    again.addEventListener('click', () => {
+      river = riverBuild(newSeed());
+      moves = 0;
+      focus = river.spring * n;
+      deal();
+    });
+
+    deal();
+  }
+
   // --- registry --------------------------------------------------------------
 
   const THEMES = [
@@ -845,6 +1140,12 @@
       name: 'Motivation',
       blurb: 'A red X for every day of protection. Mark today, and don’t break the chain.',
       render: renderMotivation
+    },
+    {
+      id: 'play',
+      name: 'Play',
+      blurb: 'Turn the tiles to lead a river of ink to the sea while the urge passes.',
+      render: renderPlay
     }
   ];
 
@@ -865,6 +1166,10 @@
     MILESTONES,
     CHAIN_WEEKS,
     chainDays,
+    RIVER_SIZE,
+    riverTurn,
+    riverBuild,
+    riverFlow,
     panelWidth,
     lightLayout
   };

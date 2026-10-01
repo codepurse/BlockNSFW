@@ -1614,6 +1614,33 @@ function buildDesignThumb(id) {
       cal.appendChild(path);
     }
     thumb.appendChild(cal);
+  } else if (id === 'play') {
+    // A board of six by five tiles: the river in ink from the spring to the
+    // sea, a few loose pieces of empty channel, and the sea's red seal.
+    const ns = 'http://www.w3.org/2000/svg';
+    const board = document.createElementNS(ns, 'svg');
+    board.setAttribute('class', 't-river');
+    board.setAttribute('viewBox', '0 0 80 50');
+    let cells = '';
+    for (let i = 0; i < 30; i++) {
+      cells += 'M' + (16 + (i % 6) * 8) + ' ' + (5 + Math.floor(i / 6) * 8) + 'h8v8h-8z';
+    }
+    for (const [cls, d] of [
+      ['t-cells', cells],
+      ['t-dry', 'M20 9H36M52 9V17M20 41H36M60 17V25M28 33V41M60 41H64'],
+      ['t-ink', 'M8 25H28V17H44V33H72'],
+      ['t-waves', 'M73 30q1.5-2 3 0t3 0M73 36q1.5-2 3 0t3 0'],
+      ['t-seal', 'M73 40h5v5h-5z']
+    ]) {
+      const path = document.createElementNS(ns, 'path');
+      path.setAttribute('class', cls);
+      path.setAttribute('d', d);
+      board.appendChild(path);
+    }
+    const pool = document.createElementNS(ns, 'circle');
+    for (const [k, v] of Object.entries({ class: 't-pool', cx: 8, cy: 25, r: 2.6 })) pool.setAttribute(k, String(v));
+    board.appendChild(pool);
+    thumb.appendChild(board);
   }
   return thumb;
 }
