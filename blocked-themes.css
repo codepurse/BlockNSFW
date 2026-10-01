@@ -1,0 +1,943 @@
+/* blocked-themes.css — the three chosen designs for the blocked page.
+ *
+ * Scoped to html[data-theme], which blocked.js sets only when a design other
+ * than Classic is chosen. Classic is untouched.
+ *
+ * One system under all three, so they read as the same product:
+ *  - A single left-aligned column, 36rem, set from the top of the page. Text
+ *    first. No cards, no glass, no gradients, no shadows.
+ *  - The first line says what happened. Then the design's content. Then the
+ *    way out, under a hairline rule.
+ *  - One filled button per page: Go back, because stepping away is the action
+ *    being encouraged. Everything else is a text link.
+ *  - 4px corners on the few things that have edges. Rules separate; nothing
+ *    floats.
+ *  - Motion only where it does a job: Calm's brush, which moves only with the
+ *    breath, and the Motivation timer ticking. Nothing drifts, glows or
+ *    fades in.
+ * Each design then takes its palette and type from what it is: a breathing
+ * exercise drawn as an ensō on washi, a verse read under a cross of light in
+ * a concrete wall, a streak drawn as a climb.
+ */
+
+/* ===== Shared ============================================================= */
+
+html[data-theme] {
+  --t-sans: var(--font-sans);
+  --t-serif: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif;
+
+  /* The Classic card's tokens, pointed at the design's palette, so the reason,
+     the address and the buttons take the design's colours. */
+  --foreground: var(--t-ink);
+  --foreground-muted: var(--t-muted);
+  --foreground-dim: var(--t-muted);
+  --primary: var(--t-accent);
+  --primary-hover: var(--t-accent-strong);
+  --primary-foreground: var(--t-on-accent);
+  --primary-soft: transparent;
+  --primary-glow: var(--t-focus);
+  --secondary: transparent;
+  --secondary-hover: transparent;
+  --secondary-foreground: var(--t-ink);
+  --card-border: var(--t-rule);
+  --card-border-hover: var(--t-rule);
+  --input-bg: transparent;
+  --input-border: var(--t-rule);
+  --radius-sm: 4px;
+}
+
+html[data-theme] body {
+  place-items: start center;
+  padding: clamp(2.5rem, 12vh, 7rem) 1.25rem 3rem;
+  background: var(--t-bg);
+  color: var(--t-ink);
+}
+
+html[data-theme] .container { max-width: 36rem; }
+
+.theme-context {
+  margin: 0 0 2rem;
+  font-family: var(--t-sans);
+  font-size: 0.875rem;
+  color: var(--t-muted);
+}
+
+.theme-title {
+  margin: 0 0 2rem;
+  font-size: 1.75rem;
+  font-weight: 600;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+  color: var(--t-ink);
+}
+
+/* A button that reads as a link: for secondary actions. */
+.theme-link {
+  appearance: none;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 0.9rem;
+  color: var(--t-ink);
+  text-decoration: underline;
+  text-decoration-color: var(--t-underline);
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.theme-link:hover { text-decoration-color: currentColor; }
+.theme-link:focus-visible {
+  outline: 2px solid var(--t-ink);
+  outline-offset: 3px;
+  border-radius: 2px;
+}
+
+/* ----- The way out: the Classic card, set as a plain section ----- */
+
+html[data-theme] .blocked-card {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  margin-top: 3rem;
+  padding: 1.5rem 0 0;
+  font-family: var(--t-sans);
+  background: none;
+  border: 0;
+  border-top: 1px solid var(--t-rule);
+  border-radius: 0;
+  box-shadow: none;
+  overflow: visible;
+  animation: none;
+}
+html[data-theme] .blocked-card:hover {
+  border-color: var(--t-rule);
+  box-shadow: none;
+}
+html[data-theme] .blocked-card::before,
+html[data-theme] .blocked-header { display: none; }
+
+html[data-theme] .blocked-actions { order: 1; align-items: center; gap: 1rem; }
+html[data-theme] .support { order: 2; }
+html[data-theme] .why { order: 3; }
+
+html[data-theme] .button {
+  border-radius: 4px;
+  padding: 0.6rem 1.1rem;
+  font-weight: 600;
+  transition: none;
+}
+html[data-theme] .button:focus-visible {
+  box-shadow: none;
+  outline: 2px solid var(--t-ink);
+  outline-offset: 2px;
+}
+html[data-theme] #back-button {
+  order: -1;
+  background: var(--t-accent);
+  border-color: var(--t-accent);
+  color: var(--t-on-accent);
+}
+html[data-theme] #back-button:hover {
+  background: var(--t-accent-strong);
+  border-color: var(--t-accent-strong);
+}
+html[data-theme] #settings {
+  padding-left: 0;
+  padding-right: 0;
+  background: none;
+  border-color: transparent;
+  color: var(--t-ink);
+  font-weight: 400;
+  text-decoration: underline;
+  text-decoration-color: var(--t-underline);
+  text-underline-offset: 3px;
+}
+html[data-theme] #settings:hover {
+  background: none;
+  text-decoration-color: currentColor;
+}
+/* Classic stacks its buttons full width on a phone. Go back keeps that (an
+   easy target with a thumb); Settings stays a link. */
+@media (max-width: 560px) {
+  html[data-theme] #settings {
+    width: auto;
+    align-self: flex-start;
+  }
+}
+
+/* "Struggling right now? Read community stories" as one line of text. */
+html[data-theme] .support {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.25rem 0.5rem;
+  margin: 0;
+  padding: 0;
+  background: none;
+  border: 0;
+  border-radius: 0;
+}
+html[data-theme] .support-head,
+html[data-theme] .support-head > div { display: contents; }
+html[data-theme] .support-icon,
+html[data-theme] .support-text { display: none; }
+html[data-theme] .support-title {
+  margin: 0;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--t-ink);
+}
+html[data-theme] .support-cta {
+  width: auto;
+  padding: 0;
+  background: none;
+  border: 0;
+  border-radius: 0;
+  font-size: 0.9rem;
+  font-weight: 400;
+  color: var(--t-ink);
+  text-decoration: underline;
+  text-decoration-color: var(--t-underline);
+  text-underline-offset: 3px;
+}
+html[data-theme] .support-cta:hover {
+  background: none;
+  text-decoration-color: currentColor;
+}
+
+/* "Why was this blocked?" Always open on Classic, where its summary is
+   hidden; a text link under a design. */
+.why > summary { display: none; }
+html[data-theme] .why > summary {
+  display: inline;
+  list-style: none;
+  cursor: pointer;
+  font-size: 0.85rem;
+  color: var(--t-muted);
+  text-decoration: underline;
+  text-decoration-color: var(--t-underline);
+  text-underline-offset: 3px;
+}
+html[data-theme] .why > summary::-webkit-details-marker { display: none; }
+html[data-theme] .why > summary:hover { text-decoration-color: currentColor; }
+html[data-theme] .why > summary:focus-visible {
+  outline: 2px solid var(--t-ink);
+  outline-offset: 3px;
+  border-radius: 2px;
+}
+html[data-theme] .why[open] > summary {
+  display: inline-block;
+  margin-bottom: 0.75rem;
+}
+html[data-theme] .blocked-content { margin: 0; }
+html[data-theme] .blocked-message {
+  margin-bottom: 0.75rem;
+  font-size: 0.85rem;
+  color: var(--t-muted);
+}
+html[data-theme] .blocked-url-label {
+  margin-bottom: 0.3rem;
+  font-size: 0.7rem;
+  color: var(--t-muted);
+}
+html[data-theme] .blocked-url,
+html[data-theme] .blocked-url:hover {
+  padding: 0.5rem 0.6rem;
+  border-radius: 4px;
+  border-color: var(--t-rule);
+  background: none;
+  color: var(--t-ink);
+  transition: none;
+}
+html[data-theme] .muted { color: var(--t-muted); }
+html[data-theme] .matched-term,
+html[data-theme] .matched-term:hover {
+  border-radius: 4px;
+  border-color: var(--t-rule);
+  background: none;
+  color: var(--t-ink);
+  transition: none;
+}
+
+/* ===== Calm: the ensō ======================================================
+   The Zen circle drawn in one movement of the brush, one breath at a time.
+   Sumi ink on washi by day; by night pale ink on dark paper, so the page does
+   not glare at 2am. The ink's edges bleed (an SVG displacement filter), the
+   tail runs dry, and a red seal signs the page after the fifth breath. Type
+   is Newsreader, the face Verse ships in fonts/. */
+
+html[data-theme="calm"] {
+  --t-bg: #f3eee4;
+  --t-ink: #1d1b18;
+  --t-muted: #655e54;
+  --t-rule: #ddd3c2;
+  --t-underline: #a99d88;
+  --t-accent: #1d1b18;
+  --t-accent-strong: #3a352e;
+  --t-on-accent: #f3eee4;
+  --t-focus: rgba(29, 27, 24, 0.3);
+  --enso-ink: #1d1b18;
+  --enso-path: #e0d6c4;
+  --enso-seal: #b3362b;
+  --enso-fibre: rgba(255, 255, 255, 0.4);
+  --enso-fibre-dark: rgba(120, 96, 60, 0.07);
+  --enso-fleck: rgba(90, 70, 40, 0.25);
+}
+@media (prefers-color-scheme: dark) {
+  html[data-theme="calm"] {
+    --t-bg: #16140f;
+    --t-ink: #ece3cf;
+    --t-muted: #a69d8b;
+    --t-rule: #2e2a22;
+    --t-underline: #6d6556;
+    --t-accent: #ece3cf;
+    --t-accent-strong: #fffaf0;
+    --t-on-accent: #16140f;
+    --t-focus: rgba(236, 227, 207, 0.35);
+    --enso-ink: #e8dfca;
+    --enso-path: #2c2820;
+    --enso-seal: #c2473a;
+    --enso-fibre: rgba(255, 255, 255, 0.035);
+    --enso-fibre-dark: rgba(0, 0, 0, 0.35);
+    --enso-fleck: rgba(236, 227, 207, 0.08);
+  }
+}
+
+/* The paper sits behind everything, so the body is its stacking frame. A
+   little less room above than the other designs: the circle needs it. */
+html[data-theme="calm"] body {
+  isolation: isolate;
+  padding-top: clamp(2rem, 8vh, 5rem);
+}
+.enso-paper {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+.enso-fibre { fill: none; stroke: var(--enso-fibre); stroke-linecap: round; }
+.enso-fibre-dark { stroke: var(--enso-fibre-dark); }
+.enso-fleck { fill: var(--enso-fleck); }
+
+/* Narrow: the words, the circle, then the count, in one column. */
+.enso-layout {
+  display: grid;
+  row-gap: 1.5rem;
+}
+html[data-theme="calm"] .blocked-card { margin-top: 2.25rem; }
+.enso-title {
+  margin: 0;
+  font-family: "Newsreader", var(--t-serif);
+  font-size: clamp(2rem, 1.4rem + 2vw, 2.9rem);
+  font-weight: 380;
+  line-height: 1.08;
+  letter-spacing: -0.01em;
+  text-wrap: balance;
+}
+.enso-guide {
+  margin: 1rem 0 0;
+  max-width: 24rem;
+  font-size: 1rem;
+  line-height: 1.6;
+  color: var(--t-muted);
+}
+
+.enso-stage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+}
+.enso-frame {
+  position: relative;
+  width: min(100%, 26rem, 44vh);
+  aspect-ratio: 1;
+}
+.enso {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+.enso-path { fill: none; stroke: var(--enso-path); stroke-width: 1.2; }
+.enso-stroke { fill: none; stroke: var(--enso-ink); stroke-linecap: round; }
+.enso-bristle { opacity: 0.4; }
+.enso-dry circle { fill: none; stroke: var(--t-bg); }
+.enso-pool,
+.enso-drops circle { fill: var(--enso-ink); }
+
+/* The breath drives the brush: the in-breath takes it halfway round, the
+   longer out-breath closes it, and between breaths the ink fades away. */
+.enso-ink { opacity: 0; }
+.enso-stage[data-phase="in"] .enso-ink,
+.enso-stage[data-phase="out"] .enso-ink,
+.enso-stage[data-phase="done"] .enso-ink { opacity: 1; }
+.enso-stage[data-phase="rest"] .enso-ink { transition: opacity 0.9s ease; }
+.enso-stage[data-phase="in"] .enso-stroke {
+  transition: stroke-dashoffset 4s cubic-bezier(0.35, 0, 0.6, 1);
+}
+.enso-stage[data-phase="out"] .enso-stroke {
+  transition: stroke-dashoffset 6s cubic-bezier(0.25, 0, 0.35, 1);
+}
+
+/* The circle itself is the button. */
+.enso-hold {
+  position: absolute;
+  inset: 8%;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  cursor: pointer;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.enso-hold:focus-visible {
+  outline: 2px solid var(--t-ink);
+  outline-offset: 6px;
+}
+.enso-cue {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-family: "Newsreader", var(--t-serif);
+  font-size: 1.2rem;
+  font-style: italic;
+  color: var(--t-muted);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+/* The words of the breath sit inside the circle on a phone, where the thumb
+   and the eyes already are; on a wide screen only the first "Hold" does,
+   and the breath is named beside the circle. */
+.enso-stage[data-phase="idle"] .enso-cue,
+.enso-stage[data-phase="in"] .enso-cue,
+.enso-stage[data-phase="out"] .enso-cue,
+.enso-stage[data-phase="rest"] .enso-cue { opacity: 1; }
+@media (max-width: 899px) {
+  .enso-phase {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}
+
+/* The signature: a line of inscription and the seal. Beside the circle on a
+   wide screen, set vertically as on a scroll; under it on a phone. */
+.enso-signature {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+}
+.enso-inscription {
+  margin: 0;
+  font-family: "Newsreader", var(--t-serif);
+  font-size: 0.95rem;
+  font-style: italic;
+  letter-spacing: 0.04em;
+  color: var(--t-muted);
+}
+.enso-seal {
+  flex: none;
+  width: 2.25rem;
+  height: 2.25rem;
+  opacity: 0;
+  transform: scale(1.15);
+  transition: opacity 0.25s ease-out, transform 0.25s ease-out;
+}
+.enso-stage[data-phase="done"] .enso-seal { opacity: 1; transform: none; }
+.enso-stage.is-still .enso-seal { transform: none; }
+.enso-seal-stone { fill: var(--enso-seal); }
+.enso-seal-cut { fill: none; stroke: var(--t-bg); stroke-width: 2.4; stroke-linecap: round; }
+.enso-seal-border { stroke-width: 1.1; }
+
+.enso-phase {
+  margin: 0;
+  min-height: 1.2em;
+  font-family: "Newsreader", var(--t-serif);
+  font-size: clamp(1.4rem, 1.1rem + 1vw, 1.75rem);
+  font-style: italic;
+  line-height: 1.2;
+}
+.enso-tally {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+  margin-top: 1rem;
+}
+.enso-slots { display: flex; gap: 0.5rem; }
+.enso-slot { width: 2rem; height: 2rem; overflow: visible; }
+.enso-slot-guide {
+  fill: none;
+  stroke: var(--t-muted);
+  stroke-width: 1.2;
+  stroke-dasharray: 1.4 3.2;
+}
+.enso-slot.is-drawn .enso-slot-guide { display: none; }
+.enso-slot-ink { fill: none; stroke: var(--enso-ink); stroke-linecap: round; }
+.enso-count { font-size: 0.8125rem; color: var(--t-muted); }
+.enso-done { margin-top: 1.25rem; }
+.enso-done-line { margin: 0; font-size: 0.95rem; line-height: 1.5; }
+.enso-again { margin-top: 0.35rem; }
+
+/* Wide: the words and the count on the left, the circle and its signature on
+   the right, the circle sized to the height of the window. */
+@media (min-width: 900px) {
+  html[data-theme="calm"] .container { max-width: min(76rem, 88vw); }
+  .enso-layout {
+    grid-template-columns: minmax(0, 22rem) minmax(0, 1fr);
+    grid-template-rows: auto 1fr;
+    grid-template-areas: "words stage" "status stage";
+    column-gap: clamp(2.5rem, 6vw, 6rem);
+    row-gap: 2.5rem;
+  }
+  .enso-stage:not([data-phase="idle"]) .enso-cue { opacity: 0; }
+  .enso-words { grid-area: words; }
+  .enso-status { grid-area: status; }
+  /* The signature hangs beside the circle's lower right, as on a scroll. */
+  .enso-stage {
+    --enso-size: min(calc(100% - 5rem), 51vh, 40rem);
+    position: relative;
+    grid-area: stage;
+    align-self: center;
+  }
+  .enso-frame { width: var(--enso-size); }
+  .enso-signature {
+    position: absolute;
+    bottom: 8%;
+    left: calc(50% + var(--enso-size) * 0.45);
+    flex-direction: column;
+  }
+  .enso-inscription { writing-mode: vertical-rl; }
+}
+
+/* ===== Verse: the light ====================================================
+   After Tadao Ando's Church of the Light: a wall of concrete in shadow, a
+   cross cut through it, and the light coming in. One palette, always evening:
+   warm concrete, and words the colour of the light. blocked-themes.js draws
+   the formwork and places the cross from where the words fall; this sets the
+   words and the column they fall in.
+
+   The verse is set in Newsreader (SIL Open Font License, fonts/), a book face
+   with light weights; the system serifs stand in if it ever fails to load. */
+
+@font-face {
+  font-family: "Newsreader";
+  src: url("fonts/Newsreader-latin.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 200 600;
+  font-display: swap;
+}
+
+html[data-theme="verse"] {
+  color-scheme: dark;
+  --t-bg: #1d1c1a;
+  --t-ink: #f0e8d7;
+  --t-muted: #a9a397;
+  --t-rule: #3a3833;
+  --t-underline: #6b655b;
+  --t-accent: #f0e8d7;
+  --t-accent-strong: #fbf5e8;
+  --t-on-accent: #1d1c1a;
+  --t-focus: rgba(244, 232, 205, 0.35);
+  --light: #f4e8cd;
+  --light-ref: #e6d2a3;
+  --light-link: #b8b1a4;
+  /* The verse's size sets the column: 21 of its ems, so a line holds about
+     45 characters at any width. */
+  --light-size: clamp(1.25rem, 0.95rem + 2.2vw, 1.45rem);
+  --light-col: calc(var(--light-size) * 21);
+}
+@media (min-width: 720px) {
+  html[data-theme="verse"] {
+    --light-size: clamp(1.3rem, 0.85rem + 1.35vw, 2.6rem);
+    /* The least margin left of the column, and the room between the column
+       and the cross. blocked-themes.js uses the same gap. */
+    --light-pad: clamp(1.5rem, 8vw, 10rem);
+    --light-gap: clamp(3rem, 9vw, 11.25rem);
+  }
+}
+
+/* The wall covers the whole page, however long, so the body is its frame. */
+/* place-items: the shared rule centres the column, and browsers now apply
+   that to block layout too, which would undo the margins set below. */
+html[data-theme="verse"] body {
+  display: block;
+  place-items: normal;
+  position: relative;
+  isolation: isolate;
+  min-height: 100dvh;
+  padding: 0;
+  overflow-x: hidden;
+}
+html[data-theme="verse"] .container,
+html[data-theme="verse"] .theme-hero { position: static; }
+
+/* Narrow: one column from the left edge, the cross cut above the verse. The
+   way out sits at the foot of the page when there is room. */
+html[data-theme="verse"] .container {
+  display: flex;
+  flex-direction: column;
+  width: auto;
+  max-width: var(--light-col);
+  min-height: 100dvh;
+  margin: 0;
+  padding: 3.25rem 1.5rem 2rem;
+}
+html[data-theme="verse"] .theme-hero { margin-bottom: 2.5rem; }
+html[data-theme="verse"] .theme-context {
+  margin: 0 0 clamp(6.5rem, 21vh, 12rem);
+  font-size: 0.875rem;
+}
+html[data-theme="verse"] .blocked-card {
+  margin-top: auto;
+  padding-top: 0;
+  border-top: 0;
+}
+
+/* Wide: the column stands left of the cross. On a large screen the two are
+   set so the cross falls at 60% of the width, rather than the words hugging
+   the left edge with the rest of the wall empty. */
+@media (min-width: 720px) {
+  html[data-theme="verse"] .container {
+    width: min(var(--light-col), calc(100% - 2 * var(--light-pad)));
+    max-width: none;
+    margin-left: max(var(--light-pad), calc(60vw - var(--light-gap) - var(--light-col)));
+    padding: max(2rem, 16vh) 0 2.5rem;
+  }
+  html[data-theme="verse"] .theme-context {
+    margin-bottom: max(3rem, 11vh);
+    font-size: 0.9375rem;
+  }
+  /* The way out in one line where it fits: Go back, Settings, the community,
+     and why it was blocked. */
+  html[data-theme="verse"] .blocked-card {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.75rem 1.75rem;
+  }
+  html[data-theme="verse"] .why[open] { flex-basis: 100%; }
+}
+
+.light-verse {
+  margin: 0;
+  font-family: "Newsreader", var(--t-serif);
+  font-size: var(--light-size);
+  font-weight: 340;
+  line-height: 1.42;
+  color: var(--t-ink);
+  text-wrap: pretty;
+}
+.light-ref {
+  margin: 1.75rem 0 0;
+  font-family: var(--t-sans);
+  font-size: 0.875rem;
+  letter-spacing: 0.02em;
+}
+.light-ref-name {
+  font-weight: 500;
+  color: var(--light-ref);
+}
+.light-ref-translation { color: var(--t-muted); }
+.light-ref-translation::before {
+  content: "·";
+  margin: 0 0.6em;
+}
+.light-another {
+  margin-top: 1.5rem;
+  font-size: 0.9375rem;
+  color: var(--light-link);
+}
+
+/* The wall, behind everything. Fair-faced concrete: faint joints, dark tie
+   holes with a worn rim, and a few panels a shade off. */
+.light-wall {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+}
+.light-formwork {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.light-joint { fill: none; stroke: rgba(255, 255, 255, 0.06); }
+.light-tie { fill: rgba(0, 0, 0, 0.45); }
+.light-tie-rim { fill: none; stroke: rgba(255, 255, 255, 0.07); }
+.light-pale { fill: rgba(255, 255, 255, 0.016); }
+.light-shade { fill: rgba(0, 0, 0, 0.1); }
+
+/* The cross: two slits of light, placed by blocked-themes.js. Until then they
+   have no size, so a page without layout never shows one across the words. */
+.light-slit {
+  position: absolute;
+  background: var(--light);
+}
+.light-upright { top: 0; }
+.light-upright.is-full { bottom: 0; }
+.light-arm { left: 0; right: 0; }
+
+/* In forced colours the slits would lose their light and read as bars. */
+@media (forced-colors: active) {
+  .light-wall { display: none; }
+}
+
+/* ===== Motivation: the climb ==============================================
+   The protection streak as a position on a mountain route, drawn in the same
+   engraved print as Calm's sea so the designs read as one family: paper, one
+   ink for the range, and vermilion for the trail. The walked trail is solid,
+   the rest dotted; camps at 7, 30 and 90 days. Map labels carry a halo in the
+   paper colour, as printed maps do, so no line runs through a word. By day a
+   forest ink on paper; at night a pale range on a dark map. */
+
+html[data-theme="motivation"] {
+  --t-bg: #eee6d3;
+  --t-ink: #1e2a22;
+  --t-muted: #59615a;
+  --t-rule: #cfc3aa;
+  --t-underline: #8f8672;
+  --t-accent: #1e2a22;
+  --t-accent-strong: #2f3f33;
+  --t-on-accent: #f6f0e3;
+  --t-focus: rgba(30, 42, 34, 0.3);
+  --mot-ink: #2a3a2f;
+  --mot-far: #a9ae9d;
+  --mot-route: #c43f28;
+}
+@media (prefers-color-scheme: dark) {
+  html[data-theme="motivation"] {
+    --t-bg: #12160f;
+    --t-ink: #e9e3d3;
+    --t-muted: #9ea596;
+    --t-rule: #2b3228;
+    --t-underline: #6a7163;
+    --t-accent: #e9e3d3;
+    --t-accent-strong: #fbf6ea;
+    --t-on-accent: #12160f;
+    --t-focus: rgba(233, 227, 211, 0.35);
+    --mot-ink: #a9b49e;
+    --mot-far: #4a5345;
+    --mot-route: #e2775c;
+  }
+}
+
+html[data-theme="motivation"] body {
+  padding-top: 0;
+  overflow-x: hidden;
+}
+.mot-stage {
+  position: relative;
+  width: 100vw;
+  height: clamp(340px, 58vh, 580px);
+  margin: 0 0 2.5rem calc(50% - 50vw);
+  overflow: hidden;
+}
+.mot-scene {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.mot-body { fill: var(--t-bg); }
+.mot-hatch,
+.mot-ridge,
+.mot-ridge-far,
+.mot-route,
+.mot-route-ahead { fill: none; }
+.mot-hatch { stroke: var(--mot-ink); stroke-width: 1; }
+.mot-ridge { stroke: var(--mot-ink); stroke-width: 2; stroke-linejoin: round; }
+.mot-ridge-far { stroke: var(--mot-far); stroke-width: 1.5; stroke-linejoin: round; }
+.mot-route {
+  stroke: var(--mot-route);
+  stroke-width: 3.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.mot-route-ahead {
+  stroke: var(--mot-route);
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-dasharray: 0.1 9;
+}
+
+/* Map marks: HTML over the scene, so the words are never stretched. Each
+   mark is a zero-size anchor on the trail. A camp's flag stands above it and
+   its label sits below, on the mountain face; "You are here" sits above. So
+   the two kinds of label are on opposite sides of the trail and cannot
+   collide, however close the camps are on a narrow screen. */
+.mot-marks { position: absolute; inset: 0; z-index: 1; }
+.mot-camp,
+.mot-you {
+  position: absolute;
+  width: 0;
+  height: 0;
+}
+
+/* A paper halo, as printed maps give their labels, so no line runs through a
+   word: it knocks the hatching out behind the text, not a glow. */
+.mot-camp-label,
+.mot-you-label,
+.mot-stage-text p {
+  text-shadow:
+    0 0 2px var(--t-bg), 0 0 2px var(--t-bg), 0 0 4px var(--t-bg), 0 0 6px var(--t-bg);
+}
+.mot-camp-label,
+.mot-you-label {
+  position: absolute;
+  left: 0;
+  white-space: nowrap;
+  font-family: var(--t-serif);
+  color: var(--t-ink);
+  transform: translateX(-50%);
+}
+.is-start > .mot-camp-label,
+.is-start > .mot-you-label { transform: translateX(-7px); }
+.is-end > .mot-camp-label,
+.is-end > .mot-you-label { transform: translateX(calc(-100% + 7px)); }
+
+.mot-camp-label {
+  top: 10px;
+  font-size: 0.9rem;
+  font-variant: small-caps;
+  letter-spacing: 0.04em;
+}
+.mot-camp.is-here .mot-camp-label { visibility: hidden; }
+.mot-flag {
+  position: absolute;
+  bottom: 0;
+  left: -0.75px;
+  width: 1.5px;
+  height: 24px;
+  background: var(--mot-ink);
+}
+.mot-flag::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 1.5px;
+  width: 14px;
+  height: 10px;
+  background: var(--mot-ink);
+  clip-path: polygon(0 0, 100% 50%, 0 100%);
+}
+.mot-camp.is-end .mot-flag::after {
+  left: auto;
+  right: 1.5px;
+  clip-path: polygon(100% 0, 0 50%, 100% 100%);
+}
+.mot-camp.is-reached .mot-flag::after { background: var(--mot-route); }
+
+.mot-you { z-index: 1; }
+.mot-you-label {
+  bottom: 14px;
+  font-size: 1rem;
+  font-style: italic;
+}
+.mot-you.is-below .mot-you-label { top: 14px; bottom: auto; }
+/* The ring is paper, knocking the dot out of the lines behind it. */
+.mot-you-dot {
+  position: absolute;
+  top: -7px;
+  left: -7px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--mot-route);
+  box-shadow: 0 0 0 4px var(--t-bg);
+}
+
+.mot-stage-text {
+  position: absolute;
+  z-index: 2;
+  top: 0;
+  left: 0;
+  right: 0;
+  width: min(36rem, calc(100% - 2.5rem));
+  margin: 0 auto;
+  padding-top: clamp(1.5rem, 4vh, 2.25rem);
+}
+.mot-stage-text .theme-context { margin-bottom: clamp(1rem, 3vh, 1.75rem); }
+.mot-count {
+  margin: 0 0 0.35rem;
+  font-family: var(--t-serif);
+  font-size: clamp(2.5rem, 6.5vw, 4rem);
+  font-style: italic;
+  font-weight: 400;
+  line-height: 1;
+  letter-spacing: -0.01em;
+  color: var(--t-ink);
+}
+.mot-unit {
+  margin: 0;
+  font-size: 1rem;
+  color: var(--t-muted);
+}
+.mot-next {
+  margin: 0.6rem 0 0;
+  font-size: 0.95rem;
+  color: var(--t-ink);
+}
+
+.mot-title {
+  margin-bottom: 0.75rem;
+  font-family: var(--t-serif);
+  font-size: 2rem;
+  font-weight: 400;
+}
+.mot-line {
+  margin: 0 0 1.75rem;
+  font-family: var(--t-serif);
+  font-size: 1.3rem;
+  font-style: italic;
+  line-height: 1.45;
+  text-wrap: balance;
+}
+.mot-timer { margin: 0 0 0.3rem; font-size: 1rem; }
+.mot-timer strong { font-variant-numeric: tabular-nums; }
+.mot-note {
+  margin: 0 0 2rem;
+  font-size: 0.875rem;
+  color: var(--t-muted);
+}
+.mot-list-label {
+  margin: 0 0 0.5rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+.mot-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--t-rule);
+}
+.mot-list li {
+  padding: 0.55rem 0;
+  border-bottom: 1px solid var(--t-rule);
+  font-size: 0.95rem;
+}
+
+/* A taller stage on a phone, so the words in the sky clear the far range. */
+@media (max-width: 560px) {
+  .mot-stage { height: 440px; }
+  .mot-camp-label { font-size: 0.8rem; }
+}
+
+/* ===== Reduced motion ======================================================
+   Nothing on these pages moves on its own. Calm's brush moves only while the
+   breath is held or let go, as the user asks it to; with motion reduced its
+   seal appears without the stamp. */

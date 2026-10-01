@@ -23,6 +23,7 @@ const DEFAULT_SETTINGS = {
   trustedImageDomains: [],
   debugMode: false,
   blockedPageType: 'default', // 'default', 'custom', 'plain_html'
+  blockedPageTheme: 'classic', // design of the built-in page; see blocked-themes.js
   searchResultTreatment: 'hide', // 'hide' | 'overlay' — web/text results only
   searchSummaryEnabled: true, // the "N results blocked" line on search pages
   blockCountDisplay: 'badge', // 'badge' (toolbar icon) | 'floating' (in-page pill)
@@ -1544,6 +1545,118 @@ async function dismissPinBanner() {
   if (banner) banner.classList.add('hidden');
 }
 
+// --- Blocked page design ----------------------------------------------------
+//
+// The picker is built from blocked-themes.js, the registry blocked.html renders
+// from, so a design added there appears here too. Each thumbnail is a CSS
+// sketch styled in options.html.
+
+function buildDesignThumb(id) {
+  const thumb = document.createElement('span');
+  thumb.className = 'design-thumb design-thumb-' + id;
+  thumb.setAttribute('aria-hidden', 'true');
+  const part = (className, parent = thumb, text = '') => {
+    const span = document.createElement('span');
+    span.className = className;
+    if (text) span.textContent = text;
+    parent.appendChild(span);
+    return span;
+  };
+  if (id === 'classic') {
+    const card = part('t-card');
+    part('t-dot', card);
+    part('t-line', card);
+    part('t-line t-short', card);
+  } else if (id === 'calm') {
+    part('t-line');
+    part('t-line t-short');
+    const ns = 'http://www.w3.org/2000/svg';
+    const ring = document.createElementNS(ns, 'svg');
+    ring.setAttribute('class', 't-enso');
+    ring.setAttribute('viewBox', '0 0 40 40');
+    const stroke = document.createElementNS(ns, 'circle');
+    for (const [k, v] of Object.entries({ cx: 20, cy: 20, r: 15, transform: 'rotate(120 20 20)', 'stroke-dasharray': '88 95' })) {
+      stroke.setAttribute(k, String(v));
+    }
+    ring.appendChild(stroke);
+    thumb.appendChild(ring);
+    part('t-seal');
+  } else if (id === 'verse') {
+    part('t-joint t-joint-v');
+    part('t-joint t-joint-v t-joint-far');
+    part('t-joint t-joint-h');
+    part('t-light t-upright');
+    part('t-light t-arm');
+    part('t-context');
+    const text = part('t-text');
+    part('t-line', text);
+    part('t-line', text);
+    part('t-line', text);
+    part('t-line t-short', text);
+  } else if (id === 'motivation') {
+    part('t-range');
+    part('t-flag');
+    part('t-you');
+  }
+  return thumb;
+}
+
+function buildDesignPicker(picker) {
+  const themes = globalThis.BlockedThemes;
+  if (!themes || picker.childElementCount) return;
+  for (const theme of themes.list) {
+    const option = document.createElement('label');
+    option.className = 'design-option';
+    option.dataset.design = theme.id;
+
+    const input = document.createElement('input');
+    input.type = 'radio';
+    input.name = 'blocked-design';
+    input.value = theme.id;
+
+    const name = document.createElement('span');
+    name.className = 'design-name';
+    name.textContent = theme.name;
+
+    const blurb = document.createElement('span');
+    blurb.className = 'design-blurb';
+    blurb.textContent = theme.blurb;
+
+    // A link inside a label follows the link without selecting the option.
+    const preview = document.createElement('a');
+    preview.className = 'design-preview';
+    preview.href = 'blocked.html?preview=' + encodeURIComponent(theme.id);
+    preview.target = '_blank';
+    preview.rel = 'noopener';
+    preview.textContent = 'Preview';
+    preview.setAttribute('aria-label', `Preview the ${theme.name} design`);
+
+    option.append(input, buildDesignThumb(theme.id), name, blurb, preview);
+    picker.appendChild(option);
+  }
+}
+
+function renderDesignPicker(settings) {
+  const picker = $('blocked-design-picker');
+  if (!picker) return;
+  buildDesignPicker(picker);
+  const themes = globalThis.BlockedThemes;
+  const current = themes ? themes.normalize(settings.blockedPageTheme) : 'classic';
+  picker.querySelectorAll('.design-option').forEach((option) => {
+    const selected = option.dataset.design === current;
+    option.classList.toggle('is-selected', selected);
+    const input = option.querySelector('input');
+    if (input) input.checked = selected;
+  });
+  // A custom URL or custom HTML replaces the built-in page, designs and all.
+  const overridden =
+    (settings.blockedPageType === 'custom' && !!String(settings.customBlockedPageUrl || '').trim()) ||
+    (settings.blockedPageType === 'plain_html' && !!String(settings.plainBlockedPageHtml || '').trim());
+  picker.classList.toggle('is-overridden', overridden);
+  const note = $('blocked-design-note');
+  if (note) note.hidden = !overridden;
+}
+
 async function render() {
   const settings = await getSettings();
   const stats = await getStats();
@@ -1800,6 +1913,7 @@ async function render() {
       ? 'HTML uploaded and saved'
       : 'No HTML uploaded yet';
   }
+  renderDesignPicker(settings);
   
   // Incognito status + link
   try {
@@ -2888,11 +3002,28 @@ async function init() {
     }
   });
 
+  const designPicker = $('blocked-design-picker');
+  if (designPicker) {
+    designPicker.addEventListener('change', async (e) => {
+      if (!e.target || e.target.name !== 'blocked-design') return;
+      // Presentation only: every design is still the blocked page, so this is
+      // not PIN-gated. Replacing the page with your own URL or HTML still is.
+      const themes = globalThis.BlockedThemes;
+      const settings = await getSettings();
+      settings.blockedPageTheme = themes ? themes.normalize(e.target.value) : 'classic';
+      await setSettings(settings);
+      renderDesignPicker(settings);
+      const theme = themes && themes.get(settings.blockedPageTheme);
+      showToast(`Blocked page design: ${theme ? theme.name : 'Classic'}`, 'success');
+    });
+  }
+
   $('reset-blocked-page-settings').addEventListener('click', async () => {
     if (!confirm('Reset blocked page settings to default?')) return;
-    
+
     const settings = await getSettings();
     settings.blockedPageType = 'default';
+    settings.blockedPageTheme = DEFAULT_SETTINGS.blockedPageTheme;
     settings.customBlockedPageUrl = '';
     settings.plainBlockedPageHtml = '';
 

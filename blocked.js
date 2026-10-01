@@ -26,6 +26,16 @@ let score = getParam('score') || '';
 // plain-HTML branch at the bottom of this file. content.js still sends it, so
 // older copies of the blocked page keep working during an update.
 
+// The settings page's Preview button opens ?preview=<design>. It can only pick
+// one of the registry's designs, and it shows a placeholder address, never a
+// real one: this page is web-accessible, so any website can open that URL.
+const PREVIEW_URL = 'https://example.com/';
+const previewTheme = (() => {
+  const themes = globalThis.BlockedThemes;
+  const id = getParam('preview');
+  return (themes && id && themes.get(id)) ? id : '';
+})();
+
 function getReasonMeta(reasonCode) {
   switch (reasonCode) {
     case 'dns_blocked':
@@ -219,11 +229,10 @@ async function loadStashedDetail() {
  * Only the substituted values are escaped. The template is the user's own
  * HTML and is meant to render as markup; that is the feature.
  *
- * @returns {Promise<boolean>} whether it took over the document
+ * @returns {boolean} whether it took over the document
  */
-async function renderPlainHtml() {
+function renderPlainHtml(settings) {
   try {
-    const { pblocker_settings: settings } = await browserAPI.storage.local.get('pblocker_settings');
     if (!settings || settings.blockedPageType !== 'plain_html') return false;
     const html = typeof settings.plainBlockedPageHtml === 'string' ? settings.plainBlockedPageHtml : '';
     if (!html || !html.trim()) return false;
@@ -239,24 +248,91 @@ async function renderPlainHtml() {
   }
 }
 
+async function loadSettings() {
+  try {
+    const { pblocker_settings: settings } = await browserAPI.storage.local.get('pblocker_settings');
+    return settings || null;
+  } catch (_) {
+    return null;
+  }
+}
+
+// --- Design -----------------------------------------------------------------
+//
+// Classic is this document as written. Any other design (blocked-themes.js)
+// renders a hero above the card and restyles the card through
+// html[data-theme]; the card keeps the reason, the address and the buttons.
+
+// Whole days protection has stayed on, the same streak the Statistics page
+// shows. It resets when protection is switched off, so it is described as
+// days of protection, never as days clean.
+function streakDays() {
+  return browserAPI.storage.local.get('pblocker_streak_start').then((stored) => {
+    const start = stored && stored.pblocker_streak_start;
+    if (typeof start !== 'number' || !isFinite(start)) return null;
+    return Math.floor((Date.now() - start) / (24 * 60 * 60 * 1000));
+  });
+}
+
+function applyTheme(settings) {
+  const themes = globalThis.BlockedThemes;
+  if (!themes) return;
+  const id = previewTheme || themes.normalize(settings && settings.blockedPageTheme);
+  const theme = themes.get(id);
+  const hero = document.getElementById('theme-hero');
+  if (!theme || typeof theme.render !== 'function' || !hero) return;
+
+  const reducedMotion = typeof matchMedia === 'function' &&
+    matchMedia('(prefers-reduced-motion: reduce)').matches;
+  document.documentElement.dataset.theme = id;
+  hero.hidden = false;
+  const why = document.getElementById('why');
+  if (why) why.open = false;
+  // A design's buttons are plain words; the emoji belong to Classic.
+  const back = document.getElementById('back-button');
+  if (back) back.textContent = 'Go back';
+  const settingsLink = document.getElementById('settings');
+  if (settingsLink) settingsLink.textContent = 'Settings';
+  theme.render({ doc: document, hero, reducedMotion, loadStreakDays: streakDays });
+}
+
+function revealPage() {
+  try {
+    document.documentElement.classList.remove('theme-pending');
+  } catch (_) {}
+}
+
 // Settles once the stashed detail has been read, or given up on. The popup's
 // question below waits on it rather than answering with the placeholder.
 let markDetailSettled;
 const detailSettled = new Promise(done => { markDetailSettled = done; });
 
-// One driver, so both rendering paths see the same detail. The stashed record
-// has to be read before either runs, or they render the query string's values
-// and the whole point of stashing it is lost.
+// One driver, so every rendering path sees the same detail. The stashed record
+// has to be read before any runs, or they render the query string's values and
+// the whole point of stashing it is lost.
 (async () => {
-  try {
-    await loadStashedDetail();
-  } catch (_) {
-    // Fall through and render whatever the query string carried.
+  if (previewTheme) {
+    url = PREVIEW_URL;
+    reason = 'default_blocklist';
+  } else {
+    try {
+      await loadStashedDetail();
+    } catch (_) {
+      // Fall through and render whatever the query string carried.
+    }
   }
   markDetailSettled();
+  // A preview shows the design it names, whatever page type is saved.
+  const settings = previewTheme ? null : await loadSettings();
   try {
-    if (await renderPlainHtml()) return;
+    if (renderPlainHtml(settings)) return;
   } catch (_) {}
+  try {
+    applyTheme(settings);
+  } catch (error) {
+    console.warn('BlockNSFW: could not apply the blocked-page design', error);
+  }
+  revealPage();
   try {
     renderDetail();
   } catch (error) {

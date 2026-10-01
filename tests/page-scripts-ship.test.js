@@ -1,9 +1,10 @@
-// Every script an extension page loads must be copied into both builds.
+// Every script and stylesheet an extension page loads must be copied into both
+// builds.
 //
 // The build scripts list their files by hand. A page that gains a new
-// <script src> works when the unpacked folder is loaded, but the packaged
-// extension is missing the file: the page loses whatever that script did, and
-// nothing reports it beyond a 404 in that page's console.
+// <script src> or <link rel="stylesheet"> works when the unpacked folder is
+// loaded, but the packaged extension is missing the file: the page loses
+// whatever it did, and nothing reports it beyond a 404 in that page's console.
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('fs');
@@ -18,13 +19,18 @@ function listIn(source, name) {
 }
 
 function localScripts(html) {
-  return [...html.matchAll(/<script\b[^>]*\bsrc="([^"]+)"/g)]
-    .map((m) => m[1])
+  const scripts = [...html.matchAll(/<script\b[^>]*\bsrc="([^"]+)"/g)].map((m) => m[1]);
+  const styles = [...html.matchAll(/<link\b[^>]*>/g)]
+    .map((m) => m[0])
+    .filter((tag) => /\brel="stylesheet"/.test(tag))
+    .map((tag) => (tag.match(/\bhref="([^"]+)"/) || [])[1])
+    .filter(Boolean);
+  return scripts.concat(styles)
     .filter((src) => !/^[a-z]+:/i.test(src) && !src.startsWith('//'));
 }
 
 for (const build of ['build-chrome.ps1', 'build-firefox.ps1']) {
-  test(`${build}: ships every script its pages load`, () => {
+  test(`${build}: ships every script and stylesheet its pages load`, () => {
     const source = fs.readFileSync(path.join(ROOT, build), 'utf8');
     const files = listIn(source, 'RuntimeFiles');
     const folders = listIn(source, 'RuntimeFolders');
@@ -41,7 +47,30 @@ for (const build of ['build-chrome.ps1', 'build-firefox.ps1']) {
         if (!shipped(rel)) missing.push(`${page} -> ${rel}`);
       }
     }
-    assert.deepEqual(missing, [], `${build} leaves out scripts its pages load`);
+    assert.deepEqual(missing, [], `${build} leaves out files its pages load`);
+  });
+
+  // A stylesheet's url() is the same trap one step further down: the Verse
+  // design's typeface is a file in fonts/, and a build without it falls back
+  // to another face without a word.
+  test(`${build}: ships every file its stylesheets load`, () => {
+    const source = fs.readFileSync(path.join(ROOT, build), 'utf8');
+    const files = listIn(source, 'RuntimeFiles');
+    const folders = listIn(source, 'RuntimeFolders');
+    const shipped = (p) => files.includes(p) || folders.some((f) => p.startsWith(f + '/'));
+
+    const missing = [];
+    for (const sheet of files.filter((f) => f.endsWith('.css'))) {
+      const css = fs.readFileSync(path.join(ROOT, sheet), 'utf8');
+      for (const m of css.matchAll(/url\(\s*["']?([^"')]+)["']?\s*\)/g)) {
+        const ref = m[1].trim();
+        if (/^[a-z-]+:/i.test(ref) || ref.startsWith('#') || ref.startsWith('//')) continue;
+        const rel = ref.replace(/^\.\//, '');
+        if (!shipped(rel)) missing.push(`${sheet} -> ${rel}`);
+        else if (!fs.existsSync(path.join(ROOT, rel))) missing.push(`${sheet} -> ${rel} (no such file)`);
+      }
+    }
+    assert.deepEqual(missing, [], `${build} leaves out files its stylesheets load`);
   });
 }
 

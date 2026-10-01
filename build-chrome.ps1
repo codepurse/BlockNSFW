@@ -22,6 +22,7 @@ $RuntimeFolders = @(
     "rules",
     "shared",
     "vendor",
+    "fonts",
     "nsfwjs",
     "models"
 )
@@ -39,6 +40,8 @@ $RuntimeFiles   = @(
     "options-layout.js",
     "blocked.html",
     "blocked.js",
+    "blocked-themes.js",
+    "blocked-themes.css",
     "changelog.html",
     "onboarding.html",
     "onboarding.js",
