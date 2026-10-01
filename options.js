@@ -1594,9 +1594,26 @@ function buildDesignThumb(id) {
     part('t-line', text);
     part('t-line t-short', text);
   } else if (id === 'motivation') {
-    part('t-range');
-    part('t-flag');
-    part('t-you');
+    // Three weeks of seven days: the first eighteen crossed, the nineteenth today.
+    const ns = 'http://www.w3.org/2000/svg';
+    const cal = document.createElementNS(ns, 'svg');
+    cal.setAttribute('class', 't-calendar');
+    cal.setAttribute('viewBox', '0 0 70 30');
+    let cells = '';
+    let marks = '';
+    for (let i = 0; i < 21; i++) {
+      const x = (i % 7) * 10;
+      const y = Math.floor(i / 7) * 10;
+      cells += 'M' + x + ' ' + y + 'h10v10h-10z';
+      if (i < 18) marks += 'M' + (x + 2.5) + ' ' + (y + 2.5) + 'l5 5M' + (x + 7.5) + ' ' + (y + 2.5) + 'l-5 5';
+    }
+    for (const [cls, d] of [['t-cells', cells], ['t-x', marks], ['t-today', 'M41 21h8v8h-8z']]) {
+      const path = document.createElementNS(ns, 'path');
+      path.setAttribute('class', cls);
+      path.setAttribute('d', d);
+      cal.appendChild(path);
+    }
+    thumb.appendChild(cal);
   }
   return thumb;
 }

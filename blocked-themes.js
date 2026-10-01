@@ -7,8 +7,8 @@
 //
 // Each design starts from what it is for, not from a mood: Calm is a breathing
 // exercise drawn as an ensō, Verse is scripture read in a moment of quiet,
-// Motivation is the streak as a climb. The blocked page is seen at a hard
-// moment, so none of the wording shames or lectures, and every page says
+// Motivation is the streak as a chain of days. The blocked page is seen at a
+// hard moment, so none of the wording shames or lectures, and every page says
 // plainly what happened in its first line.
 //
 // Everything is built with createElement and textContent. The content is
@@ -42,14 +42,6 @@
     { ref: 'Joshua 1:9', text: 'Have not I commanded thee? Be strong and of a good courage; be not afraid, neither be thou dismayed: for the LORD thy God is with thee whithersoever thou goest.' }
   ];
 
-  const MOTIVATION_LINES = [
-    'The urge is loud, but it isn’t in charge.',
-    'You closed this door for a reason. Trust the person who did.',
-    'You don’t have to win the whole day. Just this minute.',
-    'Every time you walk away, it gets a little easier.',
-    'A few minutes of discomfort beats hours of regret.'
-  ];
-
   const MOTIVATION_ACTIONS = [
     'Walk around the block',
     'Drink a glass of water',
@@ -69,24 +61,16 @@
 
   const SVG_NS = 'http://www.w3.org/2000/svg';
 
-  // Motivation is the climb: the protection streak as a position on a mountain
-  // route. Camps at 7 and 30 days (the Statistics page's goal) and the summit
-  // at 90, a common recovery milestone. Progress along the route follows the
-  // square root of the days, so the first week already covers visible ground.
-  const CAMPS = [7, 30, 90];
-  const SUMMIT_DAYS = 90;
-  const ROUTE_START = 0.03;
-  const ROUTE_SUMMIT = 0.84;
-
-  // Ridge lines as (x, y) fractions of the scene, y measured down from the top.
-  const NEAR_RIDGE = [
-    [0, 0.9], [0.1, 0.85], [0.2, 0.76], [0.28, 0.79], [0.38, 0.64], [0.47, 0.67],
-    [0.56, 0.5], [0.64, 0.54], [0.74, 0.34], [0.84, 0.17], [0.91, 0.32], [1, 0.5]
-  ];
-  const FAR_RIDGE = [
-    [0, 0.6], [0.14, 0.49], [0.27, 0.56], [0.41, 0.4], [0.53, 0.47], [0.66, 0.33],
-    [0.78, 0.43], [0.9, 0.37], [1, 0.44]
-  ];
+  // Motivation is the chain: "don't break the chain", the habit trick of
+  // crossing off a calendar day for every day kept, until the run of red X's
+  // is something you would hate to break. Each X here is a day protection
+  // stayed on. Milestones at 7 and 30 days (the Statistics page's goal) and
+  // at 90, a common recovery milestone.
+  const MILESTONES = [7, 30, 90];
+  const CHAIN_WEEKS = 5;
+  const DAY_MS = 24 * 60 * 60 * 1000;
+  // Today's X is the reader's own mark, kept in this browser for the day.
+  const MARK_KEY = 'blocknsfw-chain-marked';
 
   // --- helpers ---------------------------------------------------------------
 
@@ -665,274 +649,175 @@
     }
   }
 
-  // --- Motivation: the climb ---------------------------------------------------
+  // --- Motivation: the chain ---------------------------------------------------
 
-  function formatHeld(seconds) {
-    const m = Math.floor(seconds / 60);
-    const s = seconds % 60;
-    return m + ':' + String(s).padStart(2, '0');
+  // The weekday a calendar row starts on, as the reader's locale counts weeks
+  // (0 is Sunday, 1 Monday), where the browser can say; Monday otherwise.
+  function firstWeekday() {
+    try {
+      const locale = new Intl.Locale(navigator.language);
+      const info = typeof locale.getWeekInfo === 'function' ? locale.getWeekInfo() : locale.weekInfo;
+      if (info && info.firstDay) return info.firstDay % 7;
+    } catch (_) {}
+    return 1;
   }
 
-  // A smooth ridge through the control points (Catmull-Rom), sampled finely
-  // enough that a height looked up by x is exact to the eye.
-  function sampleRidge(points, perSegment) {
-    const out = [];
-    for (let i = 0; i < points.length - 1; i++) {
-      const p0 = points[Math.max(0, i - 1)];
-      const p1 = points[i];
-      const p2 = points[i + 1];
-      const p3 = points[Math.min(points.length - 1, i + 2)];
-      for (let s = 0; s < perSegment; s++) {
-        const t = s / perSegment;
-        const t2 = t * t;
-        const t3 = t2 * t;
-        const f = (a, b, c, d) => 0.5 * (2 * b + (c - a) * t +
-          (2 * a - 5 * b + 4 * c - d) * t2 + (3 * b - a - 3 * c + d) * t3);
-        out.push([f(p0[0], p1[0], p2[0], p3[0]), f(p0[1], p1[1], p2[1], p3[1])]);
-      }
-    }
-    out.push(points[points.length - 1]);
-    return out;
-  }
-
-  function heightAt(samples, x) {
-    for (let i = 1; i < samples.length; i++) {
-      if (samples[i][0] >= x) {
-        const [x0, y0] = samples[i - 1];
-        const [x1, y1] = samples[i];
-        const t = x1 === x0 ? 0 : (x - x0) / (x1 - x0);
-        return y0 + (y1 - y0) * t;
-      }
-    }
-    return samples[samples.length - 1][1];
-  }
-
-  function routeX(days) {
-    const d = Math.max(0, Math.min(days, SUMMIT_DAYS));
-    return ROUTE_START + (ROUTE_SUMMIT - ROUTE_START) * Math.sqrt(d / SUMMIT_DAYS);
-  }
-
-  // The scene is drawn in a 1000 x 500 box stretched to fill the stage, so an
-  // (x, y) fraction is the same point in the SVG and in the HTML labels.
-  const SCENE_W = 1000;
-  const SCENE_H = 500;
-  const ROUTE_LIFT = 0.014; // the trail sits just above the ridge line
-
-  function pathFrom(points) {
-    return points.map((p, i) => (i ? 'L' : 'M') +
-      (p[0] * SCENE_W).toFixed(1) + ' ' + (p[1] * SCENE_H).toFixed(1)).join(' ');
-  }
-
-  function closedFrom(points) {
-    return pathFrom(points) + ' L' + SCENE_W + ' ' + SCENE_H + ' L0 ' + SCENE_H + ' Z';
-  }
-
-  function hatch(doc, fromY, step, className) {
-    let d = '';
-    for (let y = fromY * SCENE_H; y <= SCENE_H; y += step) {
-      d += 'M0 ' + y.toFixed(1) + ' H' + SCENE_W + ' ';
-    }
-    return svg(doc, 'path', { class: className, d: d.trim(), 'vector-effect': 'non-scaling-stroke' });
-  }
-
-  function trailPoint(near, x) {
-    return [x, heightAt(near, x) - ROUTE_LIFT];
-  }
-
-  // The mountain, engraved like Calm's sea: a far range in light lines, then
-  // the near range hatched in front of it with its summit left bare, like snow.
-  // The route runs along the near ridge: walked in solid vermilion, the rest
-  // dotted.
-  function drawClimb(doc, near, far, youX) {
-    const scene = svg(doc, 'svg', {
-      class: 'mot-scene',
-      viewBox: '0 0 ' + SCENE_W + ' ' + SCENE_H,
-      preserveAspectRatio: 'none',
-      'aria-hidden': 'true',
-      focusable: 'false'
+  // CHAIN_WEEKS rows of a calendar, ending with the week that holds today.
+  // Each day knows how many days before today it is (negative ahead of it),
+  // and whether protection covered it: the streak's whole days are the days
+  // before today, counting back from yesterday.
+  function chainDays(today, streak, weekStart) {
+    const intoWeek = (today.getDay() - weekStart + 7) % 7;
+    const first = new Date(today.getFullYear(), today.getMonth(), today.getDate() - intoWeek - (CHAIN_WEEKS - 1) * 7);
+    return Array.from({ length: CHAIN_WEEKS * 7 }, (_, i) => {
+      const date = new Date(first.getFullYear(), first.getMonth(), first.getDate() + i);
+      const before = Math.round((today - date) / DAY_MS);
+      return { date, before, kept: before >= 1 && before <= streak, today: before === 0 };
     });
-
-    const defs = svg(doc, 'defs', {});
-    const nearClip = svg(doc, 'clipPath', { id: 'mot-clip-near' });
-    nearClip.append(svg(doc, 'path', { d: closedFrom(near) }));
-    defs.append(nearClip);
-    scene.append(defs);
-
-    // The far range is only an outline: hatching both ranges flattens them
-    // into ruled paper, and the near one stops standing in front.
-    scene.append(svg(doc, 'path', { class: 'mot-ridge-far', d: pathFrom(far), 'vector-effect': 'non-scaling-stroke' }));
-
-    // The near range in the paper colour, hiding the far one behind it.
-    scene.append(svg(doc, 'path', { class: 'mot-body', d: closedFrom(near) }));
-    const summitY = Math.min(...near.map((p) => p[1]));
-    const nearLines = svg(doc, 'g', { 'clip-path': 'url(#mot-clip-near)' });
-    nearLines.append(hatch(doc, summitY + 0.06, 8, 'mot-hatch'));
-    scene.append(nearLines,
-      svg(doc, 'path', { class: 'mot-ridge', d: pathFrom(near), 'vector-effect': 'non-scaling-stroke' }));
-
-    const between = (from, to) => near
-      .filter((p) => p[0] > from && p[0] < to)
-      .map((p) => [p[0], p[1] - ROUTE_LIFT]);
-    const start = trailPoint(near, ROUTE_START);
-    const you = trailPoint(near, youX);
-    const summit = trailPoint(near, ROUTE_SUMMIT);
-    if (youX > ROUTE_START) {
-      scene.append(svg(doc, 'path', {
-        class: 'mot-route',
-        d: pathFrom([start, ...between(ROUTE_START, youX), you]),
-        'vector-effect': 'non-scaling-stroke'
-      }));
-    }
-    if (youX < ROUTE_SUMMIT) {
-      scene.append(svg(doc, 'path', {
-        class: 'mot-route-ahead',
-        d: pathFrom([you, ...between(youX, ROUTE_SUMMIT), summit]),
-        'vector-effect': 'non-scaling-stroke'
-      }));
-    }
-    return scene;
   }
 
-  // HTML marks over the scene: labels stay crisp and unstretched, placed at the
-  // same fractions the SVG uses. Anchored left or right near the edges so they
-  // never run off the page.
-  function placeMark(node, point) {
-    node.style.left = (point[0] * 100).toFixed(2) + '%';
-    node.style.top = (point[1] * 100).toFixed(2) + '%';
-    node.classList.toggle('is-start', point[0] < 0.12);
-    node.classList.toggle('is-end', point[0] > 0.8);
+  // A red marker X, a little different on every date but the same each time
+  // that date is drawn, in an 80 x 80 box: low and right of centre, clear of
+  // the date in the corner.
+  function drawCross(doc, seed, className) {
+    let s = (seed % 2147483646) + 1;
+    const rnd = () => (s = (s * 16807) % 2147483647) / 2147483647;
+    const j = (n) => (rnd() - 0.5) * n;
+    const p = (x, y) => x.toFixed(1) + ' ' + y.toFixed(1);
+    const cross = svg(doc, 'svg', { class: className, viewBox: '0 0 80 80', 'aria-hidden': 'true', focusable: 'false' });
+    cross.append(
+      svg(doc, 'path', { class: 'chain-stroke', d: 'M' + p(24 + j(5), 27 + j(5)) + 'Q' + p(44 + j(8), 45 + j(8)) + ' ' + p(64 + j(5), 64 + j(5)) }),
+      svg(doc, 'path', { class: 'chain-stroke', d: 'M' + p(63 + j(5), 26 + j(5)) + 'Q' + p(44 + j(8), 46 + j(8)) + ' ' + p(25 + j(5), 65 + j(5)) })
+    );
+    return cross;
   }
+
+  const dateSeed = (d) => d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate();
+  const dateKey = (d) => d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate();
 
   function renderMotivation(ctx) {
-    const { doc, hero, loadStreakDays } = ctx;
-    const near = sampleRidge(NEAR_RIDGE, 24);
-    const far = sampleRidge(FAR_RIDGE, 24);
+    const { doc, hero, reducedMotion, loadStreakDays } = ctx;
+    const weekStart = firstWeekday();
+    const format = (options) => {
+      try {
+        return new Intl.DateTimeFormat(undefined, options);
+      } catch (_) {
+        return { format: (d) => d.toDateString() };
+      }
+    };
+    const monthYear = format({ month: 'long', year: 'numeric' });
+    const monthDay = format({ month: 'short', day: 'numeric' });
+    const weekday = format({ weekday: 'short' });
 
-    const count = el(doc, 'p', 'mot-count', '');
-    const unit = el(doc, 'p', 'mot-unit', '');
-    const next = el(doc, 'p', 'mot-next', '');
-    const overlay = el(doc, 'div', 'mot-stage-text');
-    overlay.append(context(doc, 'BlockNSFW blocked this page.'), count, unit, next);
+    let streak = 0;
+    let marked = false;
+    let today = new Date();
+    try {
+      marked = !!root.localStorage && root.localStorage.getItem(MARK_KEY) === dateKey(today);
+    } catch (_) {}
 
-    const stage = el(doc, 'div', 'mot-stage');
-    const marks = el(doc, 'div', 'mot-marks');
-    const camps = CAMPS.map((days) => {
-      const camp = el(doc, 'div', 'mot-camp');
-      camp.append(
-        el(doc, 'span', 'mot-camp-label', days === SUMMIT_DAYS ? days + ' days · summit' : days + ' days'),
-        el(doc, 'span', 'mot-flag')
-      );
-      camp.setAttribute('aria-hidden', 'true');
-      placeMark(camp, trailPoint(near, routeX(days)));
-      marks.append(camp);
-      return { days, camp };
-    });
-    const you = el(doc, 'div', 'mot-you');
-    you.append(el(doc, 'span', 'mot-you-label', 'You are here'), el(doc, 'span', 'mot-you-dot'));
-    you.setAttribute('aria-hidden', 'true');
-    marks.append(you);
-
-    // The words come first in the document, so they are read first; CSS
-    // stacks them above the scene.
-    let scene = drawClimb(doc, near, far, ROUTE_START);
-    stage.append(overlay, scene, marks);
-
-    const timer = el(doc, 'p', 'mot-timer');
-    const held = el(doc, 'strong', '', '0:00');
-    timer.append(doc.createTextNode('You’ve held on for '), held, doc.createTextNode('.'));
-    const opened = Date.now();
-    setInterval(() => {
-      held.textContent = formatHeld(Math.floor((Date.now() - opened) / 1000));
-    }, 1000);
-
-    const list = el(doc, 'ul', 'mot-list');
-    MOTIVATION_ACTIONS.forEach((a) => list.append(el(doc, 'li', '', a)));
-
-    hero.append(
-      stage,
-      el(doc, 'h1', 'theme-title mot-title', 'Keep climbing'),
-      el(doc, 'p', 'mot-line', MOTIVATION_LINES[randomIndex(MOTIVATION_LINES.length)]),
-      timer,
-      el(doc, 'p', 'mot-note', 'Urges rise, peak, and fade, often within 20 minutes. Let this one pass.'),
-      el(doc, 'p', 'mot-list-label', 'Instead, try one of these:'),
-      list
+    const count = el(doc, 'span', 'chain-count', '');
+    const unit = el(doc, 'span', 'chain-unit', '');
+    const tally = el(doc, 'p', 'chain-tally');
+    tally.append(count, unit);
+    const next = el(doc, 'p', 'chain-next', '');
+    const words = el(doc, 'div', 'chain-words');
+    words.append(
+      el(doc, 'h1', 'theme-title chain-title', 'Don’t break the chain.'),
+      el(doc, 'p', 'chain-guide',
+        'Every red X is a day protection stayed on. Hold on through today, then give it its X.'),
+      tally,
+      next
     );
 
-    // The streak is whole days protection has stayed on. It resets when
-    // protection is switched off, so it is days of protection, never days clean.
-    const showStreak = (value) => {
-      const n = (typeof value === 'number' && value >= 1) ? Math.floor(value) : 0;
+    const action = MOTIVATION_ACTIONS[randomIndex(MOTIVATION_ACTIONS.length)];
+    const nudge = 'Right now: ' + action.charAt(0).toLowerCase() + action.slice(1) + '.';
+    const status = el(doc, 'p', 'chain-status', nudge);
+    status.setAttribute('aria-live', 'polite');
+
+    const month = el(doc, 'p', 'chain-month', '');
+    const weekdays = el(doc, 'div', 'chain-weekdays');
+    weekdays.setAttribute('aria-hidden', 'true');
+    // 4 January 2026 was a Sunday.
+    for (let i = 0; i < 7; i++) {
+      weekdays.append(el(doc, 'span', '', weekday.format(new Date(2026, 0, 4 + ((weekStart + i) % 7)))));
+    }
+    const grid = el(doc, 'div', 'chain-grid');
+    const calendar = el(doc, 'div', 'chain-calendar');
+    calendar.append(month, weekdays, grid);
+
+    const layout = el(doc, 'div', 'chain-layout');
+    layout.append(words, calendar, status);
+    hero.append(context(doc, 'BlockNSFW blocked this page.'), layout);
+
+    // Today's square: the reader marks it, and the X draws itself in.
+    const mark = el(doc, 'button', 'chain-mark');
+    mark.type = 'button';
+    mark.setAttribute('aria-label', 'Mark today');
+    if (reducedMotion) mark.classList.add('is-still');
+    mark.append(drawCross(doc, dateSeed(today), 'chain-cross'), el(doc, 'span', 'chain-mark-label', 'Mark'));
+
+    const shown = () => streak + (marked ? 1 : 0);
+    const say = () => {
+      const n = shown();
       if (n === 0) {
         count.textContent = 'Day 1';
-        unit.textContent = 'Protection is on. This is base camp.';
+        unit.textContent = 'Protection is on. Mark today to start the chain.';
       } else {
-        count.textContent = n + (n === 1 ? ' day' : ' days');
-        unit.textContent = 'of protection in a row';
+        count.textContent = String(n);
+        unit.textContent = n === 1 ? 'day of protection in a row' : 'days of protection in a row';
       }
-      const camp = CAMPS.find((c) => c > n);
-      if (camp === undefined) {
-        next.textContent = 'Summit reached. Every day now is height you keep.';
-      } else {
-        const left = camp - n;
-        const where = camp === SUMMIT_DAYS ? 'the summit'
-          : (n < CAMPS[0] ? 'the first camp' : 'the next camp');
-        next.textContent = left + (left === 1 ? ' day' : ' days') + ' to ' + where + ', at ' + camp + '.';
-      }
-
-      const youX = routeX(n);
-      const fresh = drawClimb(doc, near, far, youX);
-      stage.replaceChild(fresh, scene);
-      scene = fresh;
-      youPoint = trailPoint(near, youX);
-      placeMark(you, youPoint);
-      camps.forEach(({ days, camp: node }) => {
-        node.classList.toggle('is-reached', n >= days);
-      });
-      settleLabels();
+      const goal = MILESTONES.find((m) => m > n);
+      next.textContent = goal === undefined
+        ? n + ' days and counting. Keep the chain going.'
+        : (goal - n) + ' more to ' + goal + ' days.';
+      status.textContent = marked ? 'Marked. Now hold it until midnight.' : nudge;
+      mark.classList.toggle('is-marked', marked);
+      mark.setAttribute('aria-pressed', marked ? 'true' : 'false');
     };
 
-    // "You are here" can land anywhere on the ridge, so where its label goes is
-    // decided by measuring, as a map labeller would: above the dot, or below it
-    // at the base and near the summit, whichever side is clear of the words in
-    // the sky and of the camp labels. If neither side is clear of a camp, that
-    // camp keeps its flag and gives up its label. Skipped where there is no
-    // layout to measure.
-    let youPoint = trailPoint(near, ROUTE_START);
-    function settleLabels() {
-      if (typeof doc.createRange !== 'function' || typeof you.getBoundingClientRect !== 'function') return;
-      const textBox = (node) => {
-        const range = doc.createRange();
-        range.selectNodeContents(node);
-        return range.getBoundingClientRect();
-      };
-      const hits = (a, b) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
-      const label = you.firstChild;
-      const sky = Array.from(overlay.children, textBox);
-      camps.forEach(({ camp }) => camp.classList.remove('is-here'));
-      const campBoxes = camps.map(({ camp }) => ({ camp, box: textBox(camp.firstChild) }));
+    mark.addEventListener('click', () => {
+      marked = !marked;
+      try {
+        if (marked) root.localStorage.setItem(MARK_KEY, dateKey(today));
+        else root.localStorage.removeItem(MARK_KEY);
+      } catch (_) {}
+      say();
+    });
 
-      const preferBelow = youPoint[0] < 0.12 || youPoint[1] < 0.32;
-      let fallback = null;
-      for (const below of [preferBelow, !preferBelow]) {
-        you.classList.toggle('is-below', below);
-        const box = label.getBoundingClientRect();
-        if (sky.some((s) => hits(box, s))) continue;
-        const clashes = campBoxes.filter((c) => hits(box, c.box));
-        if (!clashes.length) return;
-        if (!fallback) fallback = { below, clashes };
-      }
-      if (fallback) {
-        you.classList.toggle('is-below', fallback.below);
-        fallback.clashes.forEach((c) => c.camp.classList.add('is-here'));
-      } else {
-        you.classList.toggle('is-below', preferBelow);
-      }
+    function drawCalendar() {
+      today = new Date();
+      today.setHours(0, 0, 0, 0);
+      month.textContent = monthYear.format(today);
+      const goal = MILESTONES.find((m) => m > shown());
+      grid.replaceChildren(...chainDays(today, streak, weekStart).map((day, i) => {
+        const cell = el(doc, 'div', 'chain-day');
+        const first = i === 0 || day.date.getDate() === 1;
+        cell.append(el(doc, 'span', 'chain-date', first ? monthDay.format(day.date) : String(day.date.getDate())));
+        if (day.kept) {
+          cell.classList.add('is-kept');
+          cell.append(drawCross(doc, dateSeed(day.date), 'chain-cross'));
+        } else if (day.today) {
+          cell.classList.add('is-today');
+          cell.append(mark);
+        } else if (day.before < 0) {
+          cell.classList.add('is-ahead');
+          // The next milestone, if it falls this week, is ringed.
+          if (goal !== undefined && -day.before === goal - shown()) cell.classList.add('is-goal');
+        }
+        return cell;
+      }));
     }
-    if (typeof addEventListener === 'function') addEventListener('resize', settleLabels);
-    showStreak(null);
+
+    const show = (value) => {
+      streak = (typeof value === 'number' && value >= 1) ? Math.floor(value) : 0;
+      say();
+      drawCalendar();
+    };
+    show(null);
     Promise.resolve()
       .then(() => (typeof loadStreakDays === 'function' ? loadStreakDays() : null))
-      .then(showStreak, () => showStreak(null));
+      .then(show, () => show(null));
   }
 
   // --- registry --------------------------------------------------------------
@@ -958,7 +843,7 @@
     {
       id: 'motivation',
       name: 'Motivation',
-      blurb: 'Your streak as a climb, with camps at 7, 30 and 90 days.',
+      blurb: 'A red X for every day of protection. Mark today, and don’t break the chain.',
       render: renderMotivation
     }
   ];
@@ -973,14 +858,13 @@
     get,
     normalize: (id) => (get(id) ? id : CLASSIC),
     VERSES,
-    MOTIVATION_LINES,
     MOTIVATION_ACTIONS,
     ENSO_BREATHS,
     ENSO_IN_SECONDS,
     ENSO_OUT_SECONDS,
-    CAMPS,
-    SUMMIT_DAYS,
-    routeX,
+    MILESTONES,
+    CHAIN_WEEKS,
+    chainDays,
     panelWidth,
     lightLayout
   };

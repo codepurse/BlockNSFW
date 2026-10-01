@@ -2198,46 +2198,18 @@
     .design-thumb-verse .t-text { top: 43%; left: 10%; width: 50%; }
     .design-thumb-verse .t-text .t-line { height: 2px; margin: 0 0 8%; opacity: 0.75; }
     .design-thumb-verse .t-text .t-short { width: 44%; background: #e6d2a3; opacity: 1; }
-    /* The climb: a hatched range with the trail and the "you" dot on it. The
-       hatching is hard-edged stripes, drawn with a repeating pattern. */
+    /* The chain: a few weeks of a wall calendar, red marker X's on the days
+       kept and today's square outlined. Drawn as a small SVG in options.js. */
     .design-thumb-motivation {
+      display: grid;
+      place-items: center;
       padding: 0;
-      background: #eee6d3;
+      background: #f6f3ec;
     }
-    .design-thumb-motivation .t-range {
-      position: absolute;
-      inset: 18% 0 0;
-      background: repeating-linear-gradient(to bottom, #2a3a2f 0 1px, transparent 1px 4px);
-      clip-path: polygon(0 100%, 0 78%, 22% 58%, 34% 66%, 52% 40%, 62% 48%, 80% 4%, 92% 30%, 100% 44%, 100% 100%);
-    }
-    .design-thumb-motivation .t-you {
-      position: absolute;
-      top: 64%;
-      left: 31%;
-      width: 9px;
-      height: 9px;
-      border-radius: 50%;
-      background: #c43f28;
-      box-shadow: 0 0 0 2px #eee6d3;
-    }
-    .design-thumb-motivation .t-flag {
-      position: absolute;
-      top: 6%;
-      left: 79%;
-      width: 1px;
-      height: 16%;
-      background: #2a3a2f;
-    }
-    .design-thumb-motivation .t-flag::after {
-      content: "";
-      position: absolute;
-      top: 0;
-      left: 1px;
-      width: 7px;
-      height: 5px;
-      background: #2a3a2f;
-      clip-path: polygon(0 0, 100% 50%, 0 100%);
-    }
+    .design-thumb-motivation .t-calendar { width: 78%; overflow: visible; }
+    .design-thumb-motivation .t-calendar .t-cells { fill: none; stroke: #d8d2c6; stroke-width: 0.6; }
+    .design-thumb-motivation .t-calendar .t-x { fill: none; stroke: #cf2e2e; stroke-width: 1.4; stroke-linecap: round; }
+    .design-thumb-motivation .t-calendar .t-today { fill: none; stroke: #1f1d1a; stroke-width: 0.9; }
     /* Update Available Banner */
     .update-banner {
       display: flex;

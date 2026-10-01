@@ -13,11 +13,11 @@
  *  - 4px corners on the few things that have edges. Rules separate; nothing
  *    floats.
  *  - Motion only where it does a job: Calm's brush, which moves only with the
- *    breath, and the Motivation timer ticking. Nothing drifts, glows or
+ *    breath, and Motivation's X as today is marked. Nothing drifts, glows or
  *    fades in.
  * Each design then takes its palette and type from what it is: a breathing
  * exercise drawn as an ensō on washi, a verse read under a cross of light in
- * a concrete wall, a streak drawn as a climb.
+ * a concrete wall, a streak kept as a chain of red X's.
  */
 
 /* ===== Shared ============================================================= */
@@ -718,247 +718,277 @@ html[data-theme="verse"] .blocked-card {
   .light-wall { display: none; }
 }
 
-/* ===== Motivation: the climb ==============================================
-   The protection streak as a position on a mountain route, drawn in the same
-   engraved print as Calm's sea so the designs read as one family: paper, one
-   ink for the range, and vermilion for the trail. The walked trail is solid,
-   the rest dotted; camps at 7, 30 and 90 days. Map labels carry a halo in the
-   paper colour, as printed maps do, so no line runs through a word. By day a
-   forest ink on paper; at night a pale range on a dark map. */
+/* ===== Motivation: the chain ===============================================
+   "Don't break the chain": a wall calendar where every day of protection gets
+   a red marker X, and today's square waits to be marked. Paper and ink by day,
+   with a felt-tip red; by night pale ink on dark paper and a brighter red.
+   Titles are Newsreader, as on Calm and Verse; the count is the system sans
+   in bold, a number to be read at a glance. */
 
 html[data-theme="motivation"] {
-  --t-bg: #eee6d3;
-  --t-ink: #1e2a22;
-  --t-muted: #59615a;
-  --t-rule: #cfc3aa;
-  --t-underline: #8f8672;
-  --t-accent: #1e2a22;
-  --t-accent-strong: #2f3f33;
-  --t-on-accent: #f6f0e3;
-  --t-focus: rgba(30, 42, 34, 0.3);
-  --mot-ink: #2a3a2f;
-  --mot-far: #a9ae9d;
-  --mot-route: #c43f28;
+  --t-bg: #f6f3ec;
+  --t-ink: #1f1d1a;
+  --t-muted: #625d55;
+  --t-rule: #d8d2c6;
+  --t-underline: #b0a898;
+  --t-accent: #1f1d1a;
+  --t-accent-strong: #3a3631;
+  --t-on-accent: #f6f3ec;
+  --t-focus: rgba(31, 29, 26, 0.3);
+  --chain-grid: #d8d2c6;
+  --chain-marker: #cf2e2e;
+  --chain-off: #736c61;
 }
 @media (prefers-color-scheme: dark) {
   html[data-theme="motivation"] {
-    --t-bg: #12160f;
-    --t-ink: #e9e3d3;
-    --t-muted: #9ea596;
-    --t-rule: #2b3228;
-    --t-underline: #6a7163;
-    --t-accent: #e9e3d3;
-    --t-accent-strong: #fbf6ea;
-    --t-on-accent: #12160f;
-    --t-focus: rgba(233, 227, 211, 0.35);
-    --mot-ink: #a9b49e;
-    --mot-far: #4a5345;
-    --mot-route: #e2775c;
+    --t-bg: #171613;
+    --t-ink: #ece6da;
+    --t-muted: #a39c8e;
+    --t-rule: #34312b;
+    --t-underline: #6c665b;
+    --t-accent: #ece6da;
+    --t-accent-strong: #fffaf0;
+    --t-on-accent: #171613;
+    --t-focus: rgba(236, 230, 218, 0.35);
+    --chain-grid: #34312b;
+    --chain-marker: #e5534b;
+    --chain-off: #8f887b;
   }
 }
 
-html[data-theme="motivation"] body {
-  padding-top: 0;
-  overflow-x: hidden;
+html[data-theme="motivation"] body { padding-top: clamp(1.5rem, 5vh, 4rem); }
+html[data-theme="motivation"] .blocked-card { margin-top: 2.25rem; }
+
+/* Narrow: the words, the calendar, then what to do right now. */
+.chain-layout {
+  display: grid;
+  row-gap: 1.75rem;
 }
-.mot-stage {
-  position: relative;
-  width: 100vw;
-  height: clamp(340px, 58vh, 580px);
-  margin: 0 0 2.5rem calc(50% - 50vw);
+.chain-title {
+  margin: 0;
+  font-family: "Newsreader", var(--t-serif);
+  font-size: clamp(2rem, 1.4rem + 2vw, 2.9rem);
+  font-weight: 400;
+  line-height: 1.06;
+  letter-spacing: -0.01em;
+  text-wrap: balance;
+}
+.chain-guide {
+  margin: 1rem 0 0;
+  max-width: 24rem;
+  font-size: 1rem;
+  line-height: 1.6;
+  color: var(--t-muted);
+}
+.chain-tally {
+  display: flex;
+  align-items: baseline;
+  gap: 0.85rem;
+  margin: 1.75rem 0 0;
+}
+.chain-count {
+  flex: none;
+  font-size: clamp(3.5rem, 2.6rem + 3vw, 5.75rem);
+  font-weight: 700;
+  line-height: 0.9;
+  letter-spacing: -0.04em;
+  font-variant-numeric: tabular-nums;
+}
+.chain-unit {
+  max-width: 11rem;
+  font-size: 0.95rem;
+  line-height: 1.3;
+  color: var(--t-muted);
+  text-wrap: balance;
+}
+.chain-next { margin: 0.9rem 0 0; font-size: 0.95rem; }
+.chain-status {
+  margin: 0;
+  padding-top: 1rem;
+  border-top: 1px solid var(--t-rule);
+  font-family: "Newsreader", var(--t-serif);
+  font-size: 1.25rem;
+  font-style: italic;
+  line-height: 1.35;
+}
+
+/* The calendar: square days, so the X's are never stretched, at any width.
+   On a phone it shows the last four weeks rather than five, so the way out
+   stays on the first screen. */
+.chain-calendar { width: min(100%, 28rem); }
+@media (max-width: 599px) {
+  .chain-day:nth-child(-n+7) { display: none; }
+  /* Small squares: the X sits lower and to the right, clear of the date. */
+  .chain-day .chain-cross {
+    inset: 16% 0 0 16%;
+    width: 84%;
+    height: 84%;
+  }
+  .chain-mark .chain-cross {
+    inset: 9% -5px -5px 9%;
+    width: calc(91% + 5px);
+    height: calc(91% + 5px);
+  }
+}
+.chain-month {
+  margin: 0 0 0.75rem;
+  font-family: "Newsreader", var(--t-serif);
+  font-size: 1.6rem;
+  line-height: 1.1;
+}
+.chain-weekdays,
+.chain-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+}
+.chain-weekdays {
+  margin-bottom: 0.35rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--t-muted);
+}
+.chain-weekdays span {
+  padding-left: 0.45rem;
   overflow: hidden;
+  white-space: nowrap;
 }
-.mot-scene {
+.chain-grid {
+  border-top: 1px solid var(--chain-grid);
+  border-left: 1px solid var(--chain-grid);
+}
+.chain-day {
+  position: relative;
+  aspect-ratio: 1;
+  border-right: 1px solid var(--chain-grid);
+  border-bottom: 1px solid var(--chain-grid);
+}
+.chain-date {
+  position: absolute;
+  top: 0.35rem;
+  left: 0.45rem;
+  font-size: 0.75rem;
+  line-height: 1;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  color: var(--chain-off);
+}
+.chain-day.is-kept .chain-date,
+.chain-day.is-today .chain-date { color: var(--t-ink); }
+.chain-cross {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
+  overflow: visible;
+  pointer-events: none;
 }
-.mot-body { fill: var(--t-bg); }
-.mot-hatch,
-.mot-ridge,
-.mot-ridge-far,
-.mot-route,
-.mot-route-ahead { fill: none; }
-.mot-hatch { stroke: var(--mot-ink); stroke-width: 1; }
-.mot-ridge { stroke: var(--mot-ink); stroke-width: 2; stroke-linejoin: round; }
-.mot-ridge-far { stroke: var(--mot-far); stroke-width: 1.5; stroke-linejoin: round; }
-.mot-route {
-  stroke: var(--mot-route);
-  stroke-width: 3.5;
+.chain-stroke {
+  fill: none;
+  stroke: var(--chain-marker);
+  stroke-width: 6;
   stroke-linecap: round;
-  stroke-linejoin: round;
+  opacity: 0.92;
 }
-.mot-route-ahead {
-  stroke: var(--mot-route);
-  stroke-width: 3;
-  stroke-linecap: round;
-  stroke-dasharray: 0.1 9;
-}
-
-/* Map marks: HTML over the scene, so the words are never stretched. Each
-   mark is a zero-size anchor on the trail. A camp's flag stands above it and
-   its label sits below, on the mountain face; "You are here" sits above. So
-   the two kinds of label are on opposite sides of the trail and cannot
-   collide, however close the camps are on a narrow screen. */
-.mot-marks { position: absolute; inset: 0; z-index: 1; }
-.mot-camp,
-.mot-you {
-  position: absolute;
-  width: 0;
-  height: 0;
-}
-
-/* A paper halo, as printed maps give their labels, so no line runs through a
-   word: it knocks the hatching out behind the text, not a glow. */
-.mot-camp-label,
-.mot-you-label,
-.mot-stage-text p {
-  text-shadow:
-    0 0 2px var(--t-bg), 0 0 2px var(--t-bg), 0 0 4px var(--t-bg), 0 0 6px var(--t-bg);
-}
-.mot-camp-label,
-.mot-you-label {
-  position: absolute;
-  left: 0;
-  white-space: nowrap;
-  font-family: var(--t-serif);
-  color: var(--t-ink);
-  transform: translateX(-50%);
-}
-.is-start > .mot-camp-label,
-.is-start > .mot-you-label { transform: translateX(-7px); }
-.is-end > .mot-camp-label,
-.is-end > .mot-you-label { transform: translateX(calc(-100% + 7px)); }
-
-.mot-camp-label {
-  top: 10px;
-  font-size: 0.9rem;
-  font-variant: small-caps;
-  letter-spacing: 0.04em;
-}
-.mot-camp.is-here .mot-camp-label { visibility: hidden; }
-.mot-flag {
-  position: absolute;
-  bottom: 0;
-  left: -0.75px;
-  width: 1.5px;
-  height: 24px;
-  background: var(--mot-ink);
-}
-.mot-flag::after {
+/* The next milestone, when it falls this week, is ringed in marker. */
+.chain-day.is-goal::after {
   content: "";
   position: absolute;
-  top: 0;
-  left: 1.5px;
-  width: 14px;
-  height: 10px;
-  background: var(--mot-ink);
-  clip-path: polygon(0 0, 100% 50%, 0 100%);
-}
-.mot-camp.is-end .mot-flag::after {
-  left: auto;
-  right: 1.5px;
-  clip-path: polygon(100% 0, 0 50%, 100% 100%);
-}
-.mot-camp.is-reached .mot-flag::after { background: var(--mot-route); }
-
-.mot-you { z-index: 1; }
-.mot-you-label {
-  bottom: 14px;
-  font-size: 1rem;
-  font-style: italic;
-}
-.mot-you.is-below .mot-you-label { top: 14px; bottom: auto; }
-/* The ring is paper, knocking the dot out of the lines behind it. */
-.mot-you-dot {
-  position: absolute;
-  top: -7px;
-  left: -7px;
-  width: 14px;
-  height: 14px;
+  inset: 20%;
+  border: 2px dashed var(--chain-marker);
   border-radius: 50%;
-  background: var(--mot-route);
-  box-shadow: 0 0 0 4px var(--t-bg);
+  opacity: 0.75;
 }
 
-.mot-stage-text {
+/* Today: the square to mark. The X draws itself in, one stroke then the
+   other, as a marker would. */
+.chain-mark {
   position: absolute;
-  z-index: 2;
-  top: 0;
-  left: 0;
-  right: 0;
-  width: min(36rem, calc(100% - 2.5rem));
-  margin: 0 auto;
-  padding-top: clamp(1.5rem, 4vh, 2.25rem);
-}
-.mot-stage-text .theme-context { margin-bottom: clamp(1rem, 3vh, 1.75rem); }
-.mot-count {
-  margin: 0 0 0.35rem;
-  font-family: var(--t-serif);
-  font-size: clamp(2.5rem, 6.5vw, 4rem);
-  font-style: italic;
-  font-weight: 400;
-  line-height: 1;
-  letter-spacing: -0.01em;
-  color: var(--t-ink);
-}
-.mot-unit {
-  margin: 0;
-  font-size: 1rem;
-  color: var(--t-muted);
-}
-.mot-next {
-  margin: 0.6rem 0 0;
-  font-size: 0.95rem;
-  color: var(--t-ink);
-}
-
-.mot-title {
-  margin-bottom: 0.75rem;
-  font-family: var(--t-serif);
-  font-size: 2rem;
-  font-weight: 400;
-}
-.mot-line {
-  margin: 0 0 1.75rem;
-  font-family: var(--t-serif);
-  font-size: 1.3rem;
-  font-style: italic;
-  line-height: 1.45;
-  text-wrap: balance;
-}
-.mot-timer { margin: 0 0 0.3rem; font-size: 1rem; }
-.mot-timer strong { font-variant-numeric: tabular-nums; }
-.mot-note {
-  margin: 0 0 2rem;
-  font-size: 0.875rem;
-  color: var(--t-muted);
-}
-.mot-list-label {
-  margin: 0 0 0.5rem;
-  font-size: 0.875rem;
-  font-weight: 600;
-}
-.mot-list {
-  margin: 0;
+  inset: 3px;
   padding: 0;
-  list-style: none;
-  border-top: 1px solid var(--t-rule);
+  border: 2px solid var(--t-ink);
+  border-radius: 3px;
+  background: transparent;
+  color: var(--t-ink);
+  cursor: pointer;
 }
-.mot-list li {
-  padding: 0.55rem 0;
-  border-bottom: 1px solid var(--t-rule);
-  font-size: 0.95rem;
+.chain-mark:hover { border-color: var(--chain-marker); }
+.chain-mark:focus-visible {
+  outline: 2px solid var(--t-ink);
+  outline-offset: 3px;
 }
+.chain-mark .chain-cross {
+  inset: -5px;
+  width: calc(100% + 10px);
+  height: calc(100% + 10px);
+}
+.chain-mark .chain-stroke {
+  stroke-dasharray: 90;
+  stroke-dashoffset: 90;
+  transition: stroke-dashoffset 0.26s ease-in;
+}
+.chain-mark .chain-stroke + .chain-stroke { transition-delay: 0.24s; }
+.chain-mark.is-marked .chain-stroke { stroke-dashoffset: 0; }
+.chain-mark.is-still .chain-stroke { transition: none; }
+.chain-mark-label {
+  position: absolute;
+  right: 0;
+  bottom: 0.35rem;
+  left: 0;
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.chain-mark.is-marked .chain-mark-label { visibility: hidden; }
 
-/* A taller stage on a phone, so the words in the sky clear the far range. */
-@media (max-width: 560px) {
-  .mot-stage { height: 440px; }
-  .mot-camp-label { font-size: 0.8rem; }
+/* Wide: the words and the nudge on the left, the calendar on the right, sized
+   to the height of the window. From here up the page grows with the screen,
+   as Calm does, and sits centred from top to bottom. */
+@media (min-width: 900px) {
+  html[data-theme="motivation"] { font-size: clamp(16px, min(0.62vw, 1.15vh) + 6px, 26px); }
+  html[data-theme="motivation"] body {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding-top: clamp(2rem, 8vh, 5rem);
+  }
+  html[data-theme="motivation"] .container {
+    flex: 1 0 auto;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    max-width: min(76rem, 88vw);
+  }
+  .chain-layout {
+    grid-template-columns: minmax(0, 22rem) minmax(0, 1fr);
+    grid-template-rows: auto 1fr;
+    grid-template-areas: "words calendar" "status calendar";
+    column-gap: clamp(2.5rem, 6vw, 6rem);
+    row-gap: 2rem;
+  }
+  .chain-words { grid-area: words; }
+  .chain-status { grid-area: status; align-self: start; }
+  .chain-calendar {
+    grid-area: calendar;
+    width: min(100%, 64vh);
+    justify-self: center;
+    align-self: center;
+  }
+}
+/* A short window, a laptop at 720px say: a smaller count and tighter rows,
+   so the page still fits without scrolling. */
+@media (min-width: 900px) and (max-height: 820px) {
+  html[data-theme="motivation"] body { padding-top: 1.5rem; }
+  .chain-count { font-size: 4.5rem; }
+  .chain-tally { margin-top: 1.25rem; }
+  .chain-layout { row-gap: 1.5rem; }
+  html[data-theme="motivation"] .blocked-card { margin-top: 1.75rem; }
 }
 
 /* ===== Reduced motion ======================================================
    Nothing on these pages moves on its own. Calm's brush moves only while the
-   breath is held or let go, as the user asks it to; with motion reduced its
-   seal appears without the stamp. */
+   breath is held or let go, and Motivation's X only when today is marked, as
+   the user asks; with motion reduced the seal and the X appear without being
+   drawn in. */

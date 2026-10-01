@@ -196,7 +196,7 @@ test('calm: five breaths, in for 4 seconds and out for 6', () => {
 test('wording: nothing shames, and the streak is never called clean or sober', () => {
   const { themes } = loadThemes();
   const words = [
-    ...themes.MOTIVATION_LINES, ...themes.MOTIVATION_ACTIONS,
+    ...themes.MOTIVATION_ACTIONS,
     ...Array.from(themes.list, (t) => t.blurb)
   ].join(' ').toLowerCase();
   for (const word of ['clean', 'sober', 'relapse', 'failure', 'disgust', 'shame', 'porn']) {
@@ -415,67 +415,95 @@ test('verse: on a narrow page the cross is cut above the verse, clear of the fir
   }
 });
 
-async function streakView(days) {
+async function chainView(days) {
   const { hero } = renderInto('motivation', { loadStreakDays: () => days });
   await flush();
-  const camps = hero.all().filter((c) => c.classList.contains('mot-camp'));
+  const cells = hero.all().filter((c) => c.classList.contains('chain-day'));
   return {
-    count: hero.find('mot-count').textContent,
-    unit: hero.find('mot-unit').textContent,
-    next: hero.find('mot-next').textContent,
-    reached: camps.filter((c) => c.classList.contains('is-reached')).map((c) => c.find('mot-camp-label').textContent),
-    youLeft: parseFloat(hero.find('mot-you').style.left),
-    routes: hero.find('mot-scene').children.map((c) => c.attributes && c.attributes.class).filter(Boolean)
+    hero,
+    cells,
+    count: hero.find('chain-count').textContent,
+    unit: hero.find('chain-unit').textContent,
+    next: hero.find('chain-next').textContent,
+    kept: cells.filter((c) => c.classList.contains('is-kept')).length,
+    todayIndex: cells.findIndex((c) => c.classList.contains('is-today'))
   };
 }
 
-test('motivation: the streak is described as days of protection', async () => {
-  const twelve = await streakView(12);
-  assert.equal(twelve.count, '12 days');
-  assert.equal(twelve.unit, 'of protection in a row');
-  assert.equal((await streakView(1)).count, '1 day');
+test('motivation: five weeks of calendar, the days of protection crossed and today left open', async () => {
+  const view = await chainView(12);
+  assert.equal(view.cells.length, 35);
+  assert.ok(view.todayIndex >= 28, 'today is in the last row');
+  assert.equal(view.kept, 12);
+  for (let i = view.todayIndex - 12; i < view.todayIndex; i++) {
+    assert.ok(view.cells[i].classList.contains('is-kept'), 'the crossed days run up to today');
+    assert.ok(view.cells[i].find('chain-cross'));
+  }
+  assert.ok(view.cells[view.todayIndex].find('chain-mark'), 'today holds the button to mark it');
+  assert.ok(view.cells.slice(view.todayIndex + 1).every((c) => c.classList.contains('is-ahead')));
 });
 
-test('motivation: the next camp, counted down in days', async () => {
-  assert.equal((await streakView(3)).next, '4 days to the first camp, at 7.');
-  assert.equal((await streakView(12)).next, '18 days to the next camp, at 30.');
-  assert.equal((await streakView(29)).next, '1 day to the next camp, at 30.');
-  assert.equal((await streakView(45)).next, '45 days to the summit, at 90.');
-  assert.match((await streakView(90)).next, /^Summit reached/);
+test('motivation: the streak is days of protection in a row', async () => {
+  const twelve = await chainView(12);
+  assert.equal(twelve.count, '12');
+  assert.equal(twelve.unit, 'days of protection in a row');
+  assert.equal((await chainView(1)).unit, 'day of protection in a row');
 });
 
-test('motivation: camp flags turn as each camp is reached', async () => {
-  assert.deepEqual((await streakView(6)).reached, []);
-  assert.deepEqual((await streakView(12)).reached, ['7 days']);
-  assert.deepEqual((await streakView(95)).reached, ['7 days', '30 days', '90 days · summit']);
+test('motivation: the next milestone, counted down', async () => {
+  assert.equal((await chainView(3)).next, '4 more to 7 days.');
+  assert.equal((await chainView(12)).next, '18 more to 30 days.');
+  assert.equal((await chainView(45)).next, '45 more to 90 days.');
+  assert.match((await chainView(95)).next, /^95 days and counting/);
 });
 
-test('motivation: "You are here" climbs with the streak and stops at the summit', async () => {
-  const lefts = [];
-  for (const days of [0, 7, 12, 45, 90, 400]) lefts.push((await streakView(days)).youLeft);
-  for (let i = 1; i < 5; i++) assert.ok(lefts[i] > lefts[i - 1], `the marker should move up by day ${[0, 7, 12, 45, 90][i]}`);
-  assert.equal(lefts[5], lefts[4], 'past 90 days the marker stays on the summit');
+test('motivation: a streak longer than the calendar crosses every day before today', async () => {
+  const view = await chainView(200);
+  assert.equal(view.kept, view.todayIndex);
 });
 
-test('motivation: the walked trail is solid and the rest dotted', async () => {
-  assert.deepEqual((await streakView(0)).routes.filter((c) => c.startsWith('mot-route')), ['mot-route-ahead']);
-  assert.deepEqual((await streakView(12)).routes.filter((c) => c.startsWith('mot-route')), ['mot-route', 'mot-route-ahead']);
-  assert.deepEqual((await streakView(120)).routes.filter((c) => c.startsWith('mot-route')), ['mot-route']);
+test('motivation: marking today draws its X and counts it, and can be undone', async () => {
+  const view = await chainView(12);
+  const mark = view.hero.find('chain-mark');
+  assert.equal(mark.attributes['aria-pressed'], 'false');
+  mark.click();
+  assert.ok(mark.classList.contains('is-marked'));
+  assert.equal(mark.attributes['aria-pressed'], 'true');
+  assert.equal(view.hero.find('chain-count').textContent, '13');
+  assert.match(view.hero.find('chain-status').textContent, /^Marked\./);
+  mark.click();
+  assert.equal(mark.classList.contains('is-marked'), false);
+  assert.equal(view.hero.find('chain-count').textContent, '12');
+  assert.match(view.hero.find('chain-status').textContent, /^Right now: [a-z]/);
 });
 
-test('motivation: no streak yet reads as Day 1 at base camp, not zero', async () => {
+test('motivation: no streak yet reads as Day 1, not zero', async () => {
   for (const none of [null, 0, undefined, NaN]) {
-    const view = await streakView(none);
+    const view = await chainView(none);
     assert.equal(view.count, 'Day 1');
-    assert.match(view.unit, /base camp/);
-    assert.deepEqual(view.reached, []);
+    assert.match(view.unit, /start the chain/);
+    assert.equal(view.kept, 0);
   }
 });
 
 test('motivation: a failing streak read still renders the page', async () => {
   const { hero } = renderInto('motivation', { loadStreakDays: () => { throw new Error('no storage'); } });
   await flush();
-  assert.equal(hero.find('mot-count').textContent, 'Day 1');
+  assert.equal(hero.find('chain-count').textContent, 'Day 1');
+});
+
+test('motivation: weeks start on the reader\'s first weekday and end with the one holding today', () => {
+  const { themes } = loadThemes();
+  const thursday = new Date(2026, 9, 1);
+  for (const start of [0, 1]) {
+    const days = Array.from(themes.chainDays(thursday, 12, start));
+    assert.equal(days.length, 35);
+    assert.equal(days[0].date.getDay(), start, `rows start on day ${start}`);
+    const today = days.findIndex((d) => d.today);
+    assert.equal(Math.floor(today / 7), 4, 'today is in the last week');
+    assert.equal(days.filter((d) => d.kept).length, 12);
+    assert.ok(days[today - 1].kept && days[today - 12].kept && !days[today - 13].kept);
+  }
 });
 
 // --- blocked.js choosing a design ----------------------------------------------
@@ -538,5 +566,5 @@ test('blocked.js: the Motivation streak comes from the saved streak start', asyn
   await flush();
   await flush();
   const hero = doc.getElementById('theme-hero');
-  assert.equal(hero.find('mot-count').textContent, '12 days');
+  assert.equal(hero.find('chain-count').textContent, '12');
 });
