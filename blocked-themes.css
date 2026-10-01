@@ -107,7 +107,10 @@ html[data-theme] .blocked-card {
   border-radius: 0;
   box-shadow: none;
   overflow: visible;
+  /* Classic eases its card on every change, including the spacing a resize
+     moves; under a design nothing on the card animates. */
   animation: none;
+  transition: none;
 }
 html[data-theme] .blocked-card:hover {
   border-color: var(--t-rule);
@@ -494,7 +497,25 @@ html[data-theme="calm"] .blocked-card { margin-top: 2.25rem; }
 /* Wide: the words and the count on the left, the circle and its signature on
    the right, the circle sized to the height of the window. */
 @media (min-width: 900px) {
-  html[data-theme="calm"] .container { max-width: min(76rem, 88vw); }
+  /* On a large screen the whole page grows with it, as if zoomed in: the
+     root size follows the smaller of the window's width and height, from
+     16px on a laptop to 26px on a 4K screen, and everything set in rem
+     follows. Without it the page stops growing at laptop size and sits as
+     a small island on a big screen. */
+  html[data-theme="calm"] { font-size: clamp(16px, min(0.62vw, 1.15vh) + 6px, 26px); }
+  /* The page as one group, centred in the window from top to bottom. */
+  html[data-theme="calm"] body {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+  html[data-theme="calm"] .container {
+    flex: 1 0 auto;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    max-width: min(76rem, 88vw);
+  }
   .enso-layout {
     grid-template-columns: minmax(0, 22rem) minmax(0, 1fr);
     grid-template-rows: auto 1fr;
