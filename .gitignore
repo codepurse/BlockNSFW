@@ -33,3 +33,6 @@ artifacts/
 
 # Local verification harness (not shipped)
 .verify/
+
+# Text-model corpus (Common Crawl extracts: adult text + third-party content, never commit)
+tools/text_corpus/cache/

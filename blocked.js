@@ -26,6 +26,16 @@ let score = getParam('score') || '';
 // plain-HTML branch at the bottom of this file. content.js still sends it, so
 // older copies of the blocked page keep working during an update.
 
+// The settings page's Preview button opens ?preview=<design>. It can only pick
+// one of the registry's designs, and it shows a placeholder address, never a
+// real one: this page is web-accessible, so any website can open that URL.
+const PREVIEW_URL = 'https://example.com/';
+const previewTheme = (() => {
+  const themes = globalThis.BlockedThemes;
+  const id = getParam('preview');
+  return (themes && id && themes.get(id)) ? id : '';
+})();
+
 function getReasonMeta(reasonCode) {
   switch (reasonCode) {
     case 'dns_blocked':
@@ -219,11 +229,10 @@ async function loadStashedDetail() {
  * Only the substituted values are escaped. The template is the user's own
  * HTML and is meant to render as markup; that is the feature.
  *
- * @returns {Promise<boolean>} whether it took over the document
+ * @returns {boolean} whether it took over the document
  */
-async function renderPlainHtml() {
+function renderPlainHtml(settings) {
   try {
-    const { pblocker_settings: settings } = await browserAPI.storage.local.get('pblocker_settings');
     if (!settings || settings.privacyMode === true || settings.blockedPageType !== 'plain_html') return false;
     const html = typeof settings.plainBlockedPageHtml === 'string' ? settings.plainBlockedPageHtml : '';
     if (!html || !html.trim()) return false;
@@ -239,24 +248,141 @@ async function renderPlainHtml() {
   }
 }
 
-// One driver, so both rendering paths see the same detail. The stashed record
-// has to be read before either runs, or they render the query string's values
-// and the whole point of stashing it is lost.
-(async () => {
+async function loadSettings() {
   try {
-    await loadStashedDetail();
+    const { pblocker_settings: settings } = await browserAPI.storage.local.get('pblocker_settings');
+    return settings || null;
   } catch (_) {
-    // Fall through and render whatever the query string carried.
+    return null;
   }
+}
+
+// --- Design -----------------------------------------------------------------
+//
+// Classic is this document as written. Any other design (blocked-themes.js)
+// renders a hero above the card and restyles the card through
+// html[data-theme]; the card keeps the reason, the address and the buttons.
+
+// Whole days protection has stayed on, the same streak the Statistics page
+// shows. It resets when protection is switched off, so it is described as
+// days of protection, never as days clean.
+function streakDays() {
+  return browserAPI.storage.local.get('pblocker_streak_start').then((stored) => {
+    const start = stored && stored.pblocker_streak_start;
+    if (typeof start !== 'number' || !isFinite(start)) return null;
+    return Math.floor((Date.now() - start) / (24 * 60 * 60 * 1000));
+  });
+}
+
+function applyTheme(settings) {
+  const themes = globalThis.BlockedThemes;
+  if (!themes) return;
+  const id = previewTheme || themes.normalize(settings && settings.blockedPageTheme);
+  const theme = themes.get(id);
+  const hero = document.getElementById('theme-hero');
+  if (!theme || typeof theme.render !== 'function' || !hero) return;
+
+  const reducedMotion = typeof matchMedia === 'function' &&
+    matchMedia('(prefers-reduced-motion: reduce)').matches;
+  document.documentElement.dataset.theme = id;
+  hero.hidden = false;
+  const why = document.getElementById('why');
+  if (why) why.open = false;
+  // A design's buttons are plain words; the emoji belong to Classic.
+  const back = document.getElementById('back-button');
+  if (back) back.textContent = 'Go back';
+  const settingsLink = document.getElementById('settings');
+  if (settingsLink) settingsLink.textContent = 'Settings';
+  theme.render({ doc: document, hero, reducedMotion, loadStreakDays: streakDays });
+}
+
+function revealPage() {
   try {
-    if (await renderPlainHtml()) return;
+    document.documentElement.classList.remove('theme-pending');
   } catch (_) {}
+}
+
+// Settles once the stashed detail has been read, or given up on. The popup's
+// question below waits on it rather than answering with the placeholder.
+let markDetailSettled;
+const detailSettled = new Promise(done => { markDetailSettled = done; });
+
+// One driver, so every rendering path sees the same detail. The stashed record
+// has to be read before any runs, or they render the query string's values and
+// the whole point of stashing it is lost.
+(async () => {
+  if (previewTheme) {
+    url = PREVIEW_URL;
+    reason = 'default_blocklist';
+  } else {
+    try {
+      await loadStashedDetail();
+    } catch (_) {
+      // Fall through and render whatever the query string carried.
+    }
+  }
+  markDetailSettled();
+  // A preview shows the design it names, whatever page type is saved.
+  const settings = previewTheme ? null : await loadSettings();
+  try {
+    if (renderPlainHtml(settings)) return;
+  } catch (_) {}
+  try {
+    applyTheme(settings);
+  } catch (error) {
+    console.warn('BlockNSFW: could not apply the blocked-page design', error);
+  }
+  revealPage();
   try {
     renderDetail();
   } catch (error) {
     console.warn('BlockNSFW: could not render blocked-page detail', error);
   }
 })();
+
+// --- Telling the popup which site this is -----------------------------------
+//
+// "Unblock this website" in the popup has to whitelist the site this page
+// stands in for. It used to read that from ?url=, and still does for the
+// fallback form. But the address is now kept out of this page's URL, and the
+// record is deleted once read, so this page is the only thing that still
+// knows. The popup found no url= parameter, fell back to the tab's own
+// address, and whitelisted the extension's ID instead (issue #44, the same
+// symptom as #26).
+//
+// So the popup asks, naming the key from the tab's address. Every blocked tab
+// hears the question; only the one holding that key answers.
+function blockedTargetUrl() {
+  try {
+    const parsed = new URL(url);
+    return (parsed.protocol === 'http:' || parsed.protocol === 'https:') ? parsed.href : null;
+  } catch (_) {
+    return null; // still the 'Unknown URL' placeholder
+  }
+}
+
+function answerPopup(message, sender, sendResponse) {
+  if (!message || message.type !== 'blocked_page_target') return false;
+  if (!detailKey || message.key !== detailKey) return false;
+  // Only our popup. Content scripts share this bus, and one tab's page has no
+  // business learning what another tab blocked.
+  const popupUrl = browserAPI.runtime.getURL('popup.html');
+  if (!sender || sender.id !== browserAPI.runtime.id || sender.tab ||
+      String(sender.url || '').split(/[?#]/)[0] !== popupUrl) {
+    return false;
+  }
+  detailSettled.then(() => {
+    const target = blockedTargetUrl();
+    sendResponse(target ? { url: target } : null);
+  });
+  return true;
+}
+
+// Guarded: a throw here would stop the rest of this file, and the back button
+// below would never be bound.
+try {
+  browserAPI.runtime.onMessage.addListener(answerPopup);
+} catch (_) {}
 
 // --- Page chrome ------------------------------------------------------------
 

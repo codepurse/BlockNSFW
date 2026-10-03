@@ -1,0 +1,233 @@
+# Explicit terms for COUNTERFACTUAL AUGMENTATION in tools/train_text_classifier.py.
+#
+# This list never runs in the extension. The trainer copies each adult
+# training window with these terms removed and labels the copy benign, which
+# teaches the model that the page furniture around adult content ("watch",
+# "videos", "hot", "episodes", "updated daily") is not adult by itself -- only
+# the sexual vocabulary is. Without it, v4 blocked cooking-video and cat-video
+# pages at 0.99.
+#
+# Rules:
+#   - Unambiguous sexual vocabulary only. A word MISSING from this list is
+#     taught as benign wherever it appears in an adult window, so the list must
+#     be thorough.
+#   - Ambiguous words are deliberately ABSENT so they end up neutral: teen,
+#     mature, amateur, sexy, hot, nipple, breast, lesbian, gay, trans, escort,
+#     webcam, model, massage, lingerie, bikini, adult, 18, hardcore,
+#     uncensored. Several are trap vocabulary (sex education, breastfeeding,
+#     LGBTQ, lingerie shops, adult education).
+#
+# Syntax, matched against normalised tokens (lower-case, punctuation removed):
+#   word      the whole token
+#   word*     tokens starting with it
+#   *word*    tokens containing it
+
+# ---- English ----
+porn*
+*porn*
+*xxx*
+*hentai*
+*fuck*
+sex
+sexes
+sexxx
+sexcam*
+sexchat*
+sextape*
+pussy*
+cock
+cocks
+cocksucker*
+dick
+dicks
+cum
+cums
+cumming
+cumshot*
+creampie*
+blowjob*
+handjob*
+footjob*
+rimjob*
+titjob*
+deepthroat*
+gangbang*
+bukkake
+threesome*
+foursome*
+orgy
+orgies
+milf*
+gilf*
+dilf*
+anal
+tits
+titties
+titty
+boobs
+nude
+nudes
+nudity
+naked
+horny
+slut*
+whore*
+hooker*
+erotic*
+erotica
+erotik*
+nsfw
+onlyfans
+fansly
+chaturbate
+camgirl*
+camboy*
+stripchat
+stripper*
+striptease
+masturbat*
+orgasm*
+dildo*
+fetish*
+bdsm
+bondage
+kinky
+rule34
+futa
+futanari
+yaoi
+ecchi
+lolicon
+shotacon
+incest*
+stepmom*
+stepsis*
+stepsister*
+stepdaughter*
+stepbro*
+pornstar*
+xvideos
+xhamster
+xnxx
+redtube
+youporn
+brazzers
+bangbros
+realitykings
+spankbang
+eporner
+tnaflix
+beeg
+tube8
+motherless
+jav
+javhd
+squirt*
+squirting
+cuckold*
+softcore
+
+# ---- Spanish / Portuguese ----
+sexo
+follando
+follar
+folla*
+coño
+polla
+putas
+puta
+tetas
+mamada*
+corrida*
+chupando
+cachonda*
+putaria
+foda
+fodendo
+buceta*
+safada*
+peladas
+desnuda*
+desnudo*
+nua
+nuas
+
+# ---- French ----
+sexe
+baise*
+salope*
+pute*
+nue
+nues
+chaudasse*
+branle*
+
+# ---- German ----
+ficken
+fick*
+muschi*
+titten
+nackt*
+nackte*
+bumsen
+
+# ---- Italian ----
+scopare
+scopata*
+figa
+cazzo
+troia*
+pompino*
+nuda
+
+# ---- Dutch / Polish / Czech / Hungarian / Turkish ----
+neuken
+ruchanie
+jebanie
+cipka*
+kurwa*
+szex*
+szexi
+sikiş*
+sikis*
+porno
+amcık*
+kurvy
+šukání
+mrdání
+
+# ---- Indonesian / Malay / Vietnamese / Tagalog ----
+bokep
+ngentot*
+memek*
+kontol*
+colmek*
+ngewe*
+jilboobs
+địt
+lồn
+kantot*
+jakol*
+
+# ---- Russian / Ukrainian (Cyrillic) ----
+*порн*
+секс*
+трах*
+ебл*
+ебу*
+ебат*
+ебет*
+выеб*
+минет*
+сиськ*
+шлюх*
+голые
+голая
+голую
+эрот*
+проститут*
+анал
+анальн*
+мастурб*
+оргазм*
+хентай*

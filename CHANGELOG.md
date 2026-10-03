@@ -4,6 +4,212 @@ All notable project changes should be documented here going forward.
 
 ## [Unreleased]
 
+### Fixed
+
+- **The Settings sidebar never showed which section you were on.** Its
+  highlight and smooth scrolling were an inline `<script>` in `options.html`,
+  which the extension's content security policy (`script-src 'self'`) refuses
+  to run. In the installed extension the links jumped without scrolling and no
+  section was ever marked; it only worked when the page was opened outside the
+  extension. The code now lives in `options-layout.js`.
+
+- **The streak ring on the Statistics page never filled.** The same cause as
+  the sidebar above: the code that fills it toward the 30-day goal was an
+  inline `<script>` in `stats.html`, so in the installed extension the ring
+  always stayed empty. It now lives in `stats.js`, and the fill animation the
+  ring was styled with plays when the page opens.
+
+- **"Unblock this website" on the blocked page whitelisted the extension
+  again, not the site (#44).** The same symptom as #26, back in 1.8.0. To keep
+  blocked addresses out of browser history, the blocked page stopped carrying
+  `?url=` and holds only a key into session storage, and deletes the record
+  once read. The popup found nothing to unwrap and fell back to the tab's own
+  address, so the entry it saved was the extension's ID and the site stayed
+  blocked. The popup now asks the open blocked page which site it stands for.
+  Only that page answers, and only to the popup. A page that is not a website
+  (the blocked page once reloaded, `chrome://` pages, other extensions) no
+  longer shows the unblock or block rows at all, instead of offering to act on
+  a meaningless hostname. That also stops those rows vanishing on real sites
+  whose names start with "chrome", "edge" or "moz-extension".
+
+- **Large subscribed lists work, starting with OISD's NSFW list.** Subscribing
+  to `https://nsfw.oisd.nl/ublacklist` failed with "That file is too large to
+  use as a ruleset". The file is 12.5 MB and 481,222 rules, against caps of
+  5 MB and 50,000. Raising the caps alone would have changed the error to "No
+  rules found": the parser did not read uBlacklist match patterns
+  (`*://*.example.com/*`), which is how real uBlacklist lists are written, so
+  "uBlacklist ruleset files work as they are" was true only for lists that
+  avoided uBlacklist's own syntax.
+
+  Match patterns are now read. Any rule naming a whole site becomes a bare
+  host however it is spelled, including `*.example.com`, `.example.com` and
+  `example.com/*`. A whole TLD (`*://*.xxx/*`) stays a wildcard, and allow
+  rules (`@…`) and `*://*/*` are skipped. The caps are now 32 MB and 1,000,000
+  rules per list, with at most 2,000,000 hosts across all lists. Non-host
+  rules keep a separate cap of 1,000 per list, because they are checked one by
+  one on every page.
+
+  Holding that many hosts needed a different home:
+  - **Hosts live in IndexedDB, owned by the background.** Chrome gives
+    `storage.local` 10 MB and the bundled blocklist cache already uses about
+    half. Content scripts, which read `storage.local` in every frame, now
+    receive only the small pattern list. They ask the background about hosts
+    through `check_blocklist_hosts`, the same way they already ask about the
+    bundled list, and images get the same question when a subscription has
+    hosts.
+  - **Each list is stored as one sorted string and searched in place.** For
+    OISD that is about 10 MB and a 19 ms load on each service-worker wake,
+    against about 30 MB and 180 ms as a `Set`.
+  - **Hosts no longer become regexes.** Every subscribed entry used to compile
+    to its own RegExp and was tested one by one on every navigation. Hosts are
+    now a lookup, and only patterns are compiled.
+  - Public-suffix entries (`github.io`, `blogspot.com`) are dropped from
+    subscribed lists, as they already are from the bundled one.
+  - Lists saved by earlier versions move to the new storage on first start.
+    If saved hosts go missing (evicted, site data cleared), the list is
+    downloaded again.
+
+- **Update Now no longer gets a list's server to answer 503.** A list that
+  failed was retried on every background wake, and the service worker wakes
+  many times an hour. The file was also downloaded in full before the size
+  check refused it, so an oversized list was fetched again and again. The
+  button started a new download on every press. Now:
+  - an oversized file is refused from its `Content-Length`, or cut off mid-
+    stream, before it is read in full;
+  - after a failure, automatic retries wait an hour, and a 429 or 503 is left
+    alone for as long as `Retry-After` asks (ten minutes if it does not say);
+  - an unchanged list is confirmed with `If-None-Match` / `If-Modified-Since`
+    and a 304, with no download or re-parse;
+  - presses while a download is running join it, and a press within five
+    minutes of a successful check is answered from disk.
+
+  A refresh saving a stale copy of the list could also overwrite a remove or
+  toggle made during the download. All subscription writes now go through one
+  queue.
+
+- **A `*.` entry no longer matches text in the path.** The background compiled
+  `*.xxx` with a `.*` subdomain prefix that ran past the host, so
+  `https://en.wikipedia.org/wiki/a.xxx` was blocked at navigation. The same
+  bug meant a `*.example.com` entry blocked a Google search for
+  `site.example.com`. The prefix now stops at the first `/`, like the one for
+  bare hosts. OISD's list carries four TLD rules of this shape, so subscribing
+  to it would have exposed the bug widely.
+
+- **Subscription status says what is still blocking.** A failed refresh
+  showed only "Update failed", even though the last good download stays in
+  force. It now also shows when a retry is due and which rules are still
+  active. The Update Now toast said "Subscriptions updated" even when every
+  list failed. It now reports failures, "up to date", and "checked in the last
+  few minutes" separately.
+
+- **Saving moved entries above the heading they were written under.** A note
+  travelled with the one entry directly below it, so a heading over several
+  entries held on to only the first. Under `# A`, `/anana/` sorts ahead of
+  `/apricot/`, the entry the heading was attached to, and landed above the
+  heading. Notes are no longer sorted at all: they stay on the line where they
+  were written, and only the entries between two notes are sorted. Sections keep
+  the order they were written in. A list with no notes sorts exactly as before.
+  Applies to the blocklist, custom blocked words and trusted image domains.
+
+### Changed
+
+- **Settings uses the whole window on wide screens.** Suggested by a supporter
+  on a wide monitor. The page was one centred 1160px block, which left the
+  sidebar floating between two large empty gutters. The sidebar is now a
+  full-height rail pinned to the left edge, and the content is centred in the
+  rest, capped at 960px so text stays a readable line length.
+  - **A full-width toggle** sits beside the name at the top of the sidebar. It
+    lets the content run to the right edge, and is remembered on that device.
+    It only appears where it makes a difference, from 1304px wide.
+  - **What's New is a grid of tiles**, one per change: two columns at the
+    standard width, four or more with full width on, one on a phone. Lines drop
+    from about 130 characters to about 65.
+  - **With full width on, the Message from the Dev sits beside What's New**
+    (from 1600px wide), so the letter keeps a readable line length and the
+    release notes get more columns.
+
+- **The AI Text Blocker has a new model, and text alone can block a page
+  again.** Since 1.7.4 a temporary catch in `content.js` downgraded every
+  text-only block to "allow", because the v3 model could not be trusted on its
+  own. v4 replaces the model and the catch is gone.
+
+  v3 had three defects, and no threshold could fix any of them:
+  - **Its vocabulary was inverted.** It was trained on 217 hand-written adult
+    phrases averaging 1.7 words against benign sentences averaging 8, so
+    generic words absorbed the adult signal: "videos" outweighed "nude",
+    "naked" and "xxx" combined. That is what blocked `m.youtube.com`.
+  - **Its score grew with page length.** It summed weights over the whole
+    page, so every real page scored exactly 0 or 1. The three strictness
+    levels were unreachable and "AI confidence: 100%" was always 100%.
+  - **Ordinary text drowned out explicit text.** One explicit sentence inside
+    700 ordinary words scored 0, so it could only catch pages that were adult
+    from top to bottom, which the blocklist already catches.
+
+  v4 is trained on real page text from Common Crawl's public archive (about
+  2,900 pages from 817 sites, in the shape `content.js` reads a live page),
+  labelled by the blocklist and a curated list weighted toward sites that
+  share vocabulary with adult content but must never be blocked: porn-addiction
+  recovery, sex education, sexual health, lingerie, dating, LGBTQ, art,
+  parenting, video sites. It scores ~200-character windows, and a small second
+  model turns those into one calibrated page probability. The thresholds for
+  Relaxed, Balanced and Strict now live in the model file, chosen on held-out
+  pages for a target false-positive rate.
+
+  Measured on sites the model never saw (`tools/text_corpus/EVAL.md`):
+  - **At Balanced, 0 of 297 ordinary pages and 0 of 130 trap pages blocked.**
+  - **63% of adult pages caught at Balanced (76% of English ones).** The
+    detector is a second line behind the blocklist, not a replacement for it.
+  - **An explicit passage inside a long ordinary page is found 76% of the
+    time**, against 0% for v3.
+  - **Pages that simply talk about videos stay well clear of every block
+    bar** (cooking, cat, workout and stock-footage videos, YouTube's own
+    pages). An early v4 blocked those at 0.99, the same failure as v3's
+    YouTube block; see *For contributors* for how it was fixed.
+
+  It stays labelled **Beta**. It reads English and most European languages
+  well, but Japanese, Chinese and Russian adult pages mostly get past it: the
+  archive held too few of those sites to learn from. Settings now says so.
+
+- **Settings describes what the text blocker actually does.** It no longer
+  says text alone cannot block, and the strictness levels describe blocking
+  rather than "agreeing" with the image filter.
+- **The text model file is smaller and loads faster**: 223 KB to 157 KB, with
+  weights stored as packed binary instead of a JSON array of pairs.
+
+### For contributors
+
+- `tools/text_corpus/build_corpus.py` builds the corpus from Common Crawl
+  (resumable, byte-capped; about 290 MB of downloads). Its output in
+  `tools/text_corpus/cache/` is git-ignored and must stay so: it holds adult
+  text and third-party content. `tools/train_text_classifier.py` is rewritten
+  for v4 and writes `text-model.json`, the golden vectors and
+  `tools/text_corpus/EVAL.md`. `tools/README.md` explains the whole pipeline.
+- Pages are split by **site**, so evaluation only sees sites the model never
+  trained on. The page model is fitted through cross-fitting; thresholds come
+  from validation plus out-of-fold scores, never from test.
+- Two training measures fix the confounds that surfaced during development:
+  classes are balanced within each language (the multilingual blocklist
+  against an English-heavy benign list had taught "not English means adult"),
+  and each adult window is also added with its explicit words removed,
+  labelled benign (`tools/text_corpus/explicit_terms.txt`), so page furniture
+  like "watch", "videos" and "updated daily" stops counting as adult. That list
+  is used only in training; nothing in it runs in the extension.
+- `tools/text_corpus/label_overrides.tsv` excludes blocklisted sites that are
+  not adult from the corpus, each with a reason.
+- New tests: `tests/ai-text-wiring.test.js` runs the real `content.js` scan
+  against the shipped model. `tests/text-classifier-core.test.js` now checks
+  JS/Python parity down to the final page probability, and behaviour on text
+  written for the test rather than rows copied from training data.
+- `options-layout.js` is new. It loads from the `<head>` of `options.html`, so
+  a saved full-width choice applies before the first paint, and it is in both
+  build scripts' file lists. `tests/page-scripts-ship.test.js` fails if a page
+  loads a script that a build leaves out.
+- `tests/page-scripts-ship.test.js` also fails if a shipped page carries code
+  the CSP will refuse: an inline `<script>`, an inline `on…=` handler, or a
+  `javascript:` link.
+- What's New items are now written `<li><strong>Headline</strong> text</li>`,
+  with no dash after the headline: the headline is the top line of its tile.
+
 ## [1.8.0] - 2026-09-10
 
 > **Includes everything in 1.7.7**, which was prepared but never published

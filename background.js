@@ -672,9 +672,26 @@ let remoteBlocklistPromise = null;
 // site would be a remote off switch on a porn blocker, which is the one thing
 // this cannot become.
 const SUBSCRIPTIONS_KEY = 'pblocker_subscriptions';
+// Only the non-host rules live here now (capped, small), because content
+// scripts read this key directly. Hosts are in IndexedDB; see
+// "Ruleset subscriptions: host storage" below.
 const SUBSCRIPTION_RULES_KEY = 'pblocker_subscription_rules';
 const SUBSCRIPTION_TTL_MS = 24 * 60 * 60 * 1000; // once a day is plenty
 const MAX_SUBSCRIPTIONS = 20;
+// Hosts across every subscription together. 2,000,000 is four lists the size of
+// OISD's NSFW set, and about 45 MB held in the background.
+const MAX_TOTAL_SUBSCRIPTION_HOSTS = 2000000;
+// After a failed download, how long before an automatic retry. The background
+// wakes many times an hour, and it used to retry on every wake: a list that was
+// down, or too large to accept, was downloaded again each time. Against a host
+// that rate-limits (OISD answers 503) that is exactly what keeps it answering
+// 503.
+const SUBSCRIPTION_RETRY_BACKOFF_MS = 60 * 60 * 1000;
+// A manual "Update Now" inside this window after the last attempt is answered
+// from what is on disk instead of downloading again. Pressing the button five
+// times should cost the list's host one request, not five.
+const SUBSCRIPTION_MANUAL_REFRESH_GAP_MS = 5 * 60 * 1000;
+const SUBSCRIPTION_MANUAL_RETRY_GAP_MS = 60 * 1000;
 
 const REMOTE_WHITELIST_URL = 'https://raw.githubusercontent.com/codepurse/BlockNSFW/refs/heads/main/data/WHITELIST.txt';
 const REMOTE_WHITELIST_CACHE_KEY = 'pblocker_remote_whitelist_v1';
@@ -1067,8 +1084,9 @@ async function setSubscriptionRules(rules) {
 }
 
 /**
- * Every rule from every enabled subscription, flattened. Disabled ones are left
- * on disk so switching a subscription back on does not need a re-download.
+ * Every non-host rule from every enabled subscription, flattened. Disabled ones
+ * are left on disk so switching a subscription back on does not need a
+ * re-download. Hosts are not here: see hostListedInSubscriptions.
  */
 async function getActiveSubscriptionEntries() {
   const [subscriptions, rules] = await Promise.all([getSubscriptions(), getSubscriptionRules()]);
@@ -1087,66 +1105,533 @@ function subscriptionId(url) {
   return 'sub_' + String(url || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0, 80);
 }
 
+/**
+ * Every write to the subscription metadata and the pattern store goes through
+ * here, one at a time. A refresh holds its list across a download that can take
+ * many seconds; without this, a remove or a toggle made in the meantime was
+ * overwritten when the refresh saved its stale copy.
+ */
+let subscriptionMutation = Promise.resolve();
+function mutateSubscriptions(mutate) {
+  const run = subscriptionMutation.then(async () => {
+    const list = await getSubscriptions();
+    const result = await mutate(list);
+    await setSubscriptions(list);
+    return result;
+  });
+  subscriptionMutation = run.catch(() => {});
+  return run;
+}
+
+// --- Ruleset subscriptions: host storage -------------------------------------
+//
+// Hosts are kept out of storage.local. A list like OISD's NSFW set is 8.6 MB of
+// hosts; Chrome gives storage.local 10 MB, and the bundled blocklist cache
+// already uses about half. They are also kept out of the content scripts, which
+// read storage.local in every frame of every page: they ask the background
+// instead, over the check_blocklist_hosts message they already send for the
+// bundled list.
+//
+// So they live in IndexedDB, which has no such quota, packed one list to a
+// record (Ruleset.packHosts). A wake reads one string per list and indexes it
+// in a few milliseconds.
+
+const SUBSCRIPTION_DB_NAME = 'blocknsfw_subscriptions';
+const SUBSCRIPTION_DB_VERSION = 1;
+const SUBSCRIPTION_HOST_STORE = 'hosts';
+let subscriptionDbPromise = null;
+
+function openSubscriptionDb() {
+  if (subscriptionDbPromise) return subscriptionDbPromise;
+  subscriptionDbPromise = new Promise((resolve, reject) => {
+    if (typeof indexedDB === 'undefined') {
+      reject(new Error('IndexedDB is unavailable'));
+      return;
+    }
+    const request = indexedDB.open(SUBSCRIPTION_DB_NAME, SUBSCRIPTION_DB_VERSION);
+    request.onupgradeneeded = () => {
+      const db = request.result;
+      if (!db.objectStoreNames.contains(SUBSCRIPTION_HOST_STORE)) {
+        db.createObjectStore(SUBSCRIPTION_HOST_STORE);
+      }
+    };
+    request.onsuccess = () => {
+      const db = request.result;
+      const forget = () => { subscriptionDbPromise = null; };
+      db.onclose = forget;
+      db.onversionchange = () => { db.close(); forget(); };
+      resolve(db);
+    };
+    request.onerror = () => reject(request.error || new Error('Could not open subscription storage'));
+  });
+  subscriptionDbPromise.catch(() => { subscriptionDbPromise = null; });
+  return subscriptionDbPromise;
+}
+
+async function withSubscriptionHostStore(mode, operate) {
+  // One retry, on a fresh connection: the browser can close the database under
+  // a long-lived worker (site data cleared, storage pressure), and the next
+  // transaction on the dead handle throws rather than reconnecting.
+  for (let attempt = 0; ; attempt++) {
+    const db = await openSubscriptionDb();
+    try {
+      return await new Promise((resolve, reject) => {
+        const tx = db.transaction(SUBSCRIPTION_HOST_STORE, mode);
+        const request = operate(tx.objectStore(SUBSCRIPTION_HOST_STORE));
+        tx.oncomplete = () => resolve(request ? request.result : undefined);
+        tx.onerror = () => reject(tx.error || new Error('Subscription storage failed'));
+        tx.onabort = () => reject(tx.error || new Error('Subscription storage was interrupted'));
+      });
+    } catch (error) {
+      subscriptionDbPromise = null;
+      try { db.close(); } catch (_) {}
+      if (attempt >= 1) throw error;
+    }
+  }
+}
+
+function readSubscriptionHosts(id) {
+  return withSubscriptionHostStore('readonly', (store) => store.get(id));
+}
+
+function writeSubscriptionHosts(id, packed) {
+  return withSubscriptionHostStore('readwrite', (store) =>
+    packed ? store.put(packed, id) : store.delete(id));
+}
+
+function deleteSubscriptionHosts(id) {
+  return withSubscriptionHostStore('readwrite', (store) => store.delete(id));
+}
+
+// id -> { revision, index } for every enabled subscription that has hosts.
+// Keyed on revision, which changes only when a download brings new rules, so a
+// wake, a toggle or an unchanged daily check reuses the index already built.
+let subscriptionHostIndexes = new Map();
+let subscriptionHostLoad = Promise.resolve();
+// Subscriptions whose saved hosts could not be read on the last load, and those
+// already re-downloaded for it since this worker started. The second set is
+// what stops a storage fault that fails every read from turning into a
+// download on every load.
+const subscriptionHostsMissing = new Set();
+const subscriptionRecoveries = new Set();
+
+/**
+ * Brings the in-memory indexes in line with storage. Serialised, so that when a
+ * toggle, a refresh and a wake all ask at once, the last to finish reflects the
+ * latest state. The previous indexes stay in use until the new set is ready,
+ * so there is never a moment with no subscribed hosts loaded.
+ */
+function reloadSubscriptionHostIndexes() {
+  const run = subscriptionHostLoad.then(loadSubscriptionHostIndexes, loadSubscriptionHostIndexes);
+  subscriptionHostLoad = run.catch(() => {});
+  return run;
+}
+
+async function loadSubscriptionHostIndexes() {
+  if (!self.Ruleset || !self.Ruleset.createHostIndex) return;
+  const subscriptions = await getSubscriptions();
+  const next = new Map();
+  const missing = [];
+
+  for (const subscription of subscriptions) {
+    if (!subscription || subscription.enabled === false || !subscription.hostCount) continue;
+    const revision = subscription.revision || 0;
+    const current = subscriptionHostIndexes.get(subscription.id);
+    if (current && current.revision === revision) {
+      next.set(subscription.id, current);
+      continue;
+    }
+
+    let packed;
+    try {
+      packed = await readSubscriptionHosts(subscription.id);
+    } catch (error) {
+      console.warn('BlockNSFW: could not read a subscribed list', subscription.id, error);
+    }
+    if (typeof packed === 'string' && packed) {
+      next.set(subscription.id, { revision, index: self.Ruleset.createHostIndex(packed) });
+    } else {
+      missing.push(subscription.id);
+    }
+  }
+
+  subscriptionHostIndexes = next;
+  urlCheckCache.clear();
+  cacheVersion++;
+
+  // The metadata says hosts were saved, but storage has none: the browser
+  // evicted or cleared them. Download again rather than quietly blocking less.
+  subscriptionHostsMissing.clear();
+  for (const id of missing) {
+    subscriptionHostsMissing.add(id);
+    if (subscriptionRecoveries.has(id)) continue;
+    subscriptionRecoveries.add(id);
+    refreshSubscription(id, { mode: 'recover' })
+      .catch((error) => console.warn('BlockNSFW: could not restore a subscribed list', id, error));
+  }
+}
+
+function subscriptionIndexesHave(host) {
+  for (const entry of subscriptionHostIndexes.values()) {
+    if (entry.index.has(host)) return true;
+  }
+  return false;
+}
+
+/**
+ * Is this host, or a parent of it, on an enabled subscribed list? The same walk
+ * isUrlInDefaultBlocklist makes: exact name first, then each parent down to
+ * two labels, never through a shared CDN parent.
+ */
+function hostListedInSubscriptions(hostname) {
+  if (subscriptionHostIndexes.size === 0) return false;
+  const host = normalizeDomainForCache(hostname).replace(/\.+$/, '');
+  if (!host) return false;
+  if (subscriptionIndexesHave(host)) return true;
+
+  const labels = host.split('.');
+  for (let i = 1; i < labels.length - 1; i++) {
+    const parent = labels.slice(i).join('.');
+    if (isSharedCDNParent(parent)) continue;
+    if (subscriptionIndexesHave(parent)) return true;
+  }
+  return false;
+}
+
+/**
+ * Drops entries that are public suffixes, the same guard the bundled list gets
+ * (applyPublicSuffixGuard). A list someone else maintains carrying
+ * `github.io` or `co.uk` would otherwise block every site beneath it.
+ */
+async function withoutPublicSuffixes(hosts) {
+  if (!self.PublicSuffix) return { hosts, dropped: 0 };
+  const list = await loadPublicSuffixList();
+  const kept = [];
+  let dropped = 0;
+  for (const host of hosts) {
+    if (!INTENTIONAL_SUFFIX_BLOCKS.has(host) &&
+        self.PublicSuffix.isPublicSuffix(host, list, { wildcards: false })) {
+      dropped++;
+    } else {
+      kept.push(host);
+    }
+  }
+  return { hosts: kept, dropped };
+}
+
+/**
+ * Moves hosts saved by an older version out of storage.local. Those saved
+ * every rule in one array there; a subscription saved since has a hostCount,
+ * which is how the two are told apart. Safe to run on every start.
+ *
+ * If IndexedDB is unusable nothing is changed, and the old arrays keep working
+ * the way they always did — slowly, but blocking.
+ */
+async function migrateLegacySubscriptionRules() {
+  const subscriptions = await getSubscriptions();
+  if (!subscriptions.some((item) => item && item.hostCount === undefined)) return;
+
+  await mutateSubscriptions(async (list) => {
+    const rules = await getSubscriptionRules();
+    for (const subscription of list) {
+      if (!subscription || subscription.hostCount !== undefined) continue;
+      const split = self.Ruleset.splitEntries(rules[subscription.id] || []);
+      const hosts = Array.from(new Set(split.hosts));
+      await writeSubscriptionHosts(subscription.id, self.Ruleset.packHosts(hosts));
+      rules[subscription.id] = split.patterns;
+      subscription.hostCount = hosts.length;
+      subscription.patternCount = split.patterns.length;
+      subscription.revision = (subscription.revision || 0) + 1;
+    }
+    await setSubscriptionRules(rules);
+  });
+}
+
 // --- Ruleset subscriptions: fetching -----------------------------------------
 
-async function fetchSubscriptionRuleset(url) {
+class SubscriptionFetchError extends Error {
+  constructor(message, { status = 0, retryAfterMs = 0 } = {}) {
+    super(message);
+    this.status = status;
+    this.retryAfterMs = retryAfterMs;
+  }
+}
+
+function retryAfterMs(response) {
+  const value = response.headers.get('Retry-After');
+  if (!value) return 0;
+  const seconds = Number(value);
+  if (Number.isFinite(seconds)) return Math.max(0, seconds * 1000);
+  const at = Date.parse(value);
+  return Number.isFinite(at) ? Math.max(0, at - Date.now()) : 0;
+}
+
+function describeDownloadFailure(status) {
+  if (status === 429 || status === 503) {
+    return `The list's server is busy or limiting downloads (${status})`;
+  }
+  if (status === 404 || status === 410) return `Nothing was found at that address (${status})`;
+  return `Download failed (${status})`;
+}
+
+function tooLargeError() {
+  const megabytes = Math.round(self.Ruleset.MAX_FILE_BYTES / (1024 * 1024));
+  return new SubscriptionFetchError(`That list is larger than ${megabytes} MB, the most BlockNSFW can follow`);
+}
+
+/**
+ * The body as text, refused as soon as it passes the limit. The old check read
+ * the whole file first and measured it afterwards, so a list over the limit was
+ * downloaded in full on every attempt only to be thrown away.
+ */
+async function readCappedText(response, maxBytes) {
+  const declared = Number(response.headers.get('Content-Length'));
+  if (Number.isFinite(declared) && declared > maxBytes) throw tooLargeError();
+
+  if (!response.body || typeof response.body.getReader !== 'function') {
+    const text = await response.text();
+    if (text.length > maxBytes) throw tooLargeError();
+    return text;
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  const parts = [];
+  let received = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    received += value.byteLength;
+    if (received > maxBytes) {
+      try { await reader.cancel(); } catch (_) {}
+      throw tooLargeError();
+    }
+    parts.push(decoder.decode(value, { stream: true }));
+  }
+  parts.push(decoder.decode());
+  return parts.join('');
+}
+
+/**
+ * @param {string} url
+ * @param {{etag?: string, lastModified?: string}} validators  from the last
+ *   good download; when the list has not changed the server answers 304 and
+ *   nothing is downloaded or parsed.
+ * @returns {Promise<{notModified: true, etag: string, lastModified: string} |
+ *                   {notModified: false, parsed: object, etag: string, lastModified: string}>}
+ */
+async function fetchSubscriptionRuleset(url, validators = {}) {
   if (!self.Ruleset || !self.Ruleset.isHttpUrl(url)) {
-    throw new Error('Only http(s) addresses can be subscribed to');
-  }
-  const response = await fetch(url, { cache: 'no-store', redirect: 'follow' });
-  if (!response.ok) throw new Error(`Download failed (${response.status})`);
-
-  const text = await response.text();
-  if (text.length > self.Ruleset.MAX_FILE_BYTES) {
-    throw new Error('That file is too large to use as a ruleset');
+    throw new SubscriptionFetchError('Only http(s) addresses can be subscribed to');
   }
 
+  const headers = {};
+  if (validators.etag) headers['If-None-Match'] = validators.etag;
+  if (validators.lastModified) headers['If-Modified-Since'] = validators.lastModified;
+
+  let response;
+  try {
+    // no-store keeps the browser's HTTP cache out of it, so the conditional
+    // headers above reach the server as written and a 304 reaches this code.
+    response = await fetch(url, { cache: 'no-store', redirect: 'follow', headers });
+  } catch (_) {
+    throw new SubscriptionFetchError("Could not reach the list's server");
+  }
+
+  const etag = response.headers.get('ETag') || '';
+  const lastModified = response.headers.get('Last-Modified') || '';
+  if (response.status === 304) return { notModified: true, etag, lastModified };
+  if (!response.ok) {
+    throw new SubscriptionFetchError(describeDownloadFailure(response.status), {
+      status: response.status,
+      retryAfterMs: retryAfterMs(response)
+    });
+  }
+
+  const text = await readCappedText(response, self.Ruleset.MAX_FILE_BYTES);
   const parsed = self.Ruleset.parseRuleset(text);
   if (parsed.entries.length === 0) {
     // An HTML error page or a wrong link parses cleanly to nothing, so this is
     // the check that catches "you pasted the GitHub page, not the raw file".
-    throw new Error('No rules found at that address');
+    throw new SubscriptionFetchError('No rules found at that address');
   }
-  return parsed;
+  return { notModified: false, parsed, etag, lastModified };
 }
+
+/**
+ * Why this refresh should not download now, or '' if it should.
+ *
+ *   add       always downloads: the user is watching the box.
+ *   manual    "Update Now". Waits out a server's Retry-After, and answers from
+ *             disk if the list was checked in the last few minutes.
+ *   recover   the saved hosts went missing. Ignores the daily schedule but
+ *             still backs off from a failing server.
+ *   scheduled the daily check, run on every background wake. Backs off for an
+ *             hour after a failure instead of retrying on each wake.
+ */
+function subscriptionRefreshWait(subscription, mode, now) {
+  if (mode === 'add') return '';
+  if (subscription.retryAfterAt && now < subscription.retryAfterAt) return 'rate-limited';
+
+  if (mode === 'manual') {
+    const last = Math.max(subscription.checkedAt || 0, subscription.lastErrorAt || 0);
+    const gap = subscription.error ? SUBSCRIPTION_MANUAL_RETRY_GAP_MS : SUBSCRIPTION_MANUAL_REFRESH_GAP_MS;
+    return last && now - last < gap ? 'recent' : '';
+  }
+
+  if (subscription.error && subscription.lastErrorAt &&
+      now - subscription.lastErrorAt < SUBSCRIPTION_RETRY_BACKOFF_MS) {
+    return 'backoff';
+  }
+  if (mode === 'recover') return '';
+  const fresh = subscription.updatedAt && now - subscription.updatedAt <= SUBSCRIPTION_TTL_MS;
+  return fresh ? 'fresh' : '';
+}
+
+// One download per subscription at a time. A second request for the same list
+// (the button pressed again, or pressed while the wake-time check is running)
+// waits for the one already in flight instead of starting another.
+const subscriptionRefreshes = new Map();
 
 /**
  * Re-download one subscription. Failures are recorded on the subscription and
  * never throw outward: a list whose host is down must not stop the others, and
  * the rules already on disk keep working in the meantime.
+ *
+ * @returns {Promise<{ok: boolean, checked: boolean, reason?: string,
+ *                    changed?: boolean, entryCount?: number, error?: string}>}
  */
-async function refreshSubscription(id, options = {}) {
-  const { force = false } = options;
-  const subscriptions = await getSubscriptions();
-  const subscription = subscriptions.find((item) => item && item.id === id);
-  if (!subscription) return { ok: false, error: 'Subscription not found' };
+function refreshSubscription(id, options = {}) {
+  const running = subscriptionRefreshes.get(id);
+  if (running) return running;
+  const job = runSubscriptionRefresh(id, options)
+    .finally(() => subscriptionRefreshes.delete(id));
+  subscriptionRefreshes.set(id, job);
+  return job;
+}
 
-  const isStale = force || !subscription.updatedAt ||
-    (Date.now() - subscription.updatedAt) > SUBSCRIPTION_TTL_MS;
-  if (!isStale) return { ok: true, skipped: true };
+async function runSubscriptionRefresh(id, { mode = 'scheduled' } = {}) {
+  const subscription = (await getSubscriptions()).find((item) => item && item.id === id);
+  if (!subscription) return { ok: false, checked: false, error: 'Subscription not found' };
 
-  try {
-    const parsed = await fetchSubscriptionRuleset(subscription.url);
-    const rules = await getSubscriptionRules();
-    rules[id] = parsed.entries;
-    await setSubscriptionRules(rules);
-
-    subscription.name = subscription.customName || parsed.name || subscription.name;
-    subscription.homepage = parsed.homepage || '';
-    subscription.entryCount = parsed.entries.length;
-    subscription.skipped = parsed.skipped;
-    subscription.truncated = !!parsed.truncated;
-    subscription.updatedAt = Date.now();
-    subscription.error = '';
-    await setSubscriptions(subscriptions);
-    await rebuildCompiledPatterns();
-    return { ok: true, entryCount: parsed.entries.length, skipped: parsed.skipped };
-  } catch (error) {
-    subscription.error = error && error.message ? error.message : 'Update failed';
-    subscription.lastErrorAt = Date.now();
-    await setSubscriptions(subscriptions);
-    return { ok: false, error: subscription.error };
+  const now = Date.now();
+  const wait = subscriptionRefreshWait(subscription, mode, now);
+  if (wait) {
+    return { ok: !subscription.error, checked: false, reason: wait, error: subscription.error || '' };
   }
+
+  // Ask "has it changed?" only when there is something on disk to keep. The
+  // validators are only ever saved alongside the rules they describe, so after
+  // a failed refresh they still match what is stored. When the saved hosts went
+  // missing they do not, and a 304 would leave nothing.
+  const haveRules = subscription.updatedAt > 0 && subscription.entryCount > 0 &&
+    mode !== 'recover' && !subscriptionHostsMissing.has(id);
+  const validators = haveRules
+    ? { etag: subscription.etag || '', lastModified: subscription.lastModified || '' }
+    : {};
+
+  let fetched;
+  try {
+    fetched = await fetchSubscriptionRuleset(subscription.url, validators);
+  } catch (error) {
+    return recordSubscriptionFailure(id, error);
+  }
+
+  if (fetched.notModified) {
+    return mutateSubscriptions((list) => {
+      const current = list.find((item) => item && item.id === id);
+      if (!current) return { ok: false, checked: true, error: 'Subscription not found' };
+      Object.assign(current, {
+        updatedAt: Date.now(),
+        checkedAt: Date.now(),
+        etag: fetched.etag || current.etag || '',
+        lastModified: fetched.lastModified || current.lastModified || '',
+        error: '',
+        retryAfterAt: 0
+      });
+      return { ok: true, checked: true, changed: false, entryCount: current.entryCount || 0 };
+    });
+  }
+
+  const { parsed } = fetched;
+  let result;
+  try {
+    const guarded = await withoutPublicSuffixes(parsed.hosts);
+    const hosts = guarded.hosts;
+
+    result = await mutateSubscriptions(async (list) => {
+      const current = list.find((item) => item && item.id === id);
+      // Removed while the download ran: keep nothing of it.
+      if (!current) return { ok: false, checked: true, error: 'Subscription not found' };
+
+      const othersHostCount = list.reduce((sum, item) =>
+        (item && item.id !== id ? sum + (item.hostCount || 0) : sum), 0);
+      if (othersHostCount + hosts.length > MAX_TOTAL_SUBSCRIPTION_HOSTS) {
+        throw new SubscriptionFetchError(
+          `Together with your other lists that is more than ` +
+          `${MAX_TOTAL_SUBSCRIPTION_HOSTS.toLocaleString('en-US')} sites, the most BlockNSFW can hold`
+        );
+      }
+
+      await writeSubscriptionHosts(id, self.Ruleset.packHosts(hosts));
+      const rules = await getSubscriptionRules();
+      rules[id] = parsed.patterns;
+      await setSubscriptionRules(rules);
+
+      Object.assign(current, {
+        name: current.customName || parsed.name || current.name,
+        homepage: parsed.homepage || '',
+        entryCount: hosts.length + parsed.patterns.length,
+        hostCount: hosts.length,
+        patternCount: parsed.patterns.length,
+        skipped: parsed.skipped + guarded.dropped,
+        truncated: !!parsed.truncated,
+        revision: (current.revision || 0) + 1,
+        updatedAt: Date.now(),
+        checkedAt: Date.now(),
+        etag: fetched.etag,
+        lastModified: fetched.lastModified,
+        error: '',
+        retryAfterAt: 0
+      });
+      return {
+        ok: true,
+        checked: true,
+        changed: true,
+        entryCount: current.entryCount,
+        skippedLines: current.skipped
+      };
+    });
+  } catch (error) {
+    return recordSubscriptionFailure(id, error);
+  }
+
+  await reloadSubscriptionHostIndexes();
+  await rebuildCompiledPatterns();
+  return result;
+}
+
+async function recordSubscriptionFailure(id, error) {
+  const message = error && error.message ? error.message : 'Update failed';
+  return mutateSubscriptions((list) => {
+    const current = list.find((item) => item && item.id === id);
+    if (!current) return { ok: false, checked: true, error: message };
+    const now = Date.now();
+    current.error = message;
+    current.lastErrorAt = now;
+    current.checkedAt = now;
+    // A server that says it is overloaded gets left alone for as long as it
+    // asks, or ten minutes if it does not say. Capped at a day so a bad header
+    // cannot switch a list off for good.
+    const status = error && error.status;
+    if (status === 429 || status === 503) {
+      const wait = error.retryAfterMs || 10 * 60 * 1000;
+      current.retryAfterAt = now + Math.min(Math.max(wait, 60 * 1000), SUBSCRIPTION_TTL_MS);
+    } else {
+      current.retryAfterAt = 0;
+    }
+    return { ok: false, checked: true, error: message };
+  });
 }
 
 async function refreshAllSubscriptions(options = {}) {
@@ -1165,56 +1650,65 @@ async function addSubscription(url, name) {
     return { ok: false, error: 'Enter a full http:// or https:// address' };
   }
 
-  const subscriptions = await getSubscriptions();
-  if (subscriptions.length >= MAX_SUBSCRIPTIONS) {
-    return { ok: false, error: `You can follow up to ${MAX_SUBSCRIPTIONS} lists` };
-  }
-
   const id = subscriptionId(trimmed);
-  if (subscriptions.some((item) => item && item.id === id)) {
-    return { ok: false, error: 'You already follow that list' };
-  }
-
   const customName = String(name || '').trim().slice(0, 80);
-  subscriptions.push({
-    id,
-    url: trimmed,
-    name: customName || trimmed,
-    customName,
-    enabled: true,
-    addedAt: Date.now(),
-    updatedAt: 0,
-    entryCount: 0,
-    error: ''
+  const refusal = await mutateSubscriptions((list) => {
+    if (list.length >= MAX_SUBSCRIPTIONS) return `You can follow up to ${MAX_SUBSCRIPTIONS} lists`;
+    if (list.some((item) => item && item.id === id)) return 'You already follow that list';
+    list.push({
+      id,
+      url: trimmed,
+      name: customName || trimmed,
+      customName,
+      enabled: true,
+      addedAt: Date.now(),
+      updatedAt: 0,
+      entryCount: 0,
+      hostCount: 0,
+      patternCount: 0,
+      revision: 0,
+      error: ''
+    });
+    return '';
   });
-  await setSubscriptions(subscriptions);
+  if (refusal) return { ok: false, error: refusal };
 
   // Fetch immediately: a subscription that sits empty until some later refresh
   // looks broken, and this is also where a bad URL gets reported while the user
   // is still looking at the box.
-  const result = await refreshSubscription(id, { force: true });
+  const result = await refreshSubscription(id, { mode: 'add' });
   return { ok: true, id, fetch: result };
 }
 
 async function removeSubscription(id) {
-  const subscriptions = await getSubscriptions();
-  const next = subscriptions.filter((item) => item && item.id !== id);
-  await setSubscriptions(next);
+  await mutateSubscriptions(async (list) => {
+    const index = list.findIndex((item) => item && item.id === id);
+    if (index !== -1) list.splice(index, 1);
+    const rules = await getSubscriptionRules();
+    delete rules[id];
+    await setSubscriptionRules(rules);
+  });
+  try {
+    await deleteSubscriptionHosts(id);
+  } catch (error) {
+    // Unreachable storage only costs disk space: with the metadata gone the
+    // hosts are never loaded again.
+    console.warn('BlockNSFW: could not delete a removed list', id, error);
+  }
 
-  const rules = await getSubscriptionRules();
-  delete rules[id];
-  await setSubscriptionRules(rules);
-
+  await reloadSubscriptionHostIndexes();
   await rebuildCompiledPatterns();
   return { ok: true };
 }
 
 async function setSubscriptionEnabled(id, enabled) {
-  const subscriptions = await getSubscriptions();
-  const subscription = subscriptions.find((item) => item && item.id === id);
-  if (!subscription) return { ok: false, error: 'Subscription not found' };
-  subscription.enabled = !!enabled;
-  await setSubscriptions(subscriptions);
+  const found = await mutateSubscriptions((list) => {
+    const subscription = list.find((item) => item && item.id === id);
+    if (subscription) subscription.enabled = !!enabled;
+    return !!subscription;
+  });
+  if (!found) return { ok: false, error: 'Subscription not found' };
+  await reloadSubscriptionHostIndexes();
   await rebuildCompiledPatterns();
   return { ok: true };
 }
@@ -1394,8 +1888,15 @@ function buildHostPatterns(patterns) {
         // A bare host covers its subdomains, matching how the content script
         // reads the same entry (host === base || host endsWith '.' + base).
         // The two layers must agree or a site blocks on one and not the other.
+        //
+        // The subdomain prefix stops at the first '/'. The '*.' form used to
+        // allow '.*' there, which ran on into the path: '*.xxx' blocked any
+        // page whose path ended in "a.xxx", and '*.example.com' blocked a
+        // search for "site.example.com". Subscribed lists made that reachable
+        // at scale — OISD's NSFW list carries '*.xxx', '*.porn', '*.sex' and
+        // '*.adult'.
         const hostSrc = hostPart.startsWith('*.')
-          ? '(?:.*\\.)?' + globToRegexSource(hostPart.slice(2))
+          ? '(?:[^/]*\\.)?' + globToRegexSource(hostPart.slice(2))
           : '(?:[^/]*\\.)?' + globToRegexSource(hostPart);
         regex = new RegExp('^https?://' + hostSrc + globToRegexSource(pathPart) + '(/.*)?$', 'i');
       } else {
@@ -2301,6 +2802,8 @@ async function shouldBlock(urlStr) {
   const hostname = u.hostname.toLowerCase();
   if (isUrlInDefaultBlocklist(urlStr)) {
     shouldBlockResult = true;
+  } else if (hostListedInSubscriptions(hostname)) {
+    shouldBlockResult = true;
   } else if (!shouldBlockResult && urlMatchesCompiled(urlStr)) {
     shouldBlockResult = true;
   } else if (!shouldBlockResult && settings.useSmartBlocking && hostnameMatchesAdultKeywords(hostname)) {
@@ -2571,9 +3074,9 @@ browserAPI.runtime.onMessage.addListener((message, sender, sendResponse) => {
     (async () => {
       try {
         if (message.id) {
-          sendResponse(await refreshSubscription(message.id, { force: true }));
+          sendResponse(await refreshSubscription(message.id, { mode: 'manual' }));
         } else {
-          const results = await refreshAllSubscriptions({ force: true });
+          const results = await refreshAllSubscriptions({ mode: 'manual' });
           sendResponse({ ok: true, results });
         }
       } catch (error) {
@@ -2590,7 +3093,11 @@ browserAPI.runtime.onMessage.addListener((message, sender, sendResponse) => {
         for (const rawHost of hosts) {
           const host = normalizeDomainForCache(rawHost);
           if (!host) continue;
-          if (isUrlInDefaultBlocklist(`https://${host}/`)) blockedHosts.push(host);
+          // Subscribed hosts are answered here too: content scripts no longer
+          // hold them, so this is how images and search results learn of them.
+          if (isUrlInDefaultBlocklist(`https://${host}/`) || hostListedInSubscriptions(host)) {
+            blockedHosts.push(host);
+          }
         }
         sendResponse({ success: true, blockedHosts });
       } catch (error) {
@@ -3334,6 +3841,14 @@ function initializeBackground() {
   backgroundInitializationPromise = (async () => {
     await ensureSettingsDefaults();
     await loadDefaultBlocklist();
+    // Before the patterns are compiled, so hosts saved in the old one-array
+    // form are not compiled into a regex each on the way past.
+    await migrateLegacySubscriptionRules()
+      .catch(e => console.warn('BlockNSFW: subscription storage migration deferred', e));
+    // Awaited: ready means subscribed hosts are loaded, so a navigation in the
+    // first moments after a wake is checked against them too.
+    await reloadSubscriptionHostIndexes()
+      .catch(e => console.warn('BlockNSFW: subscribed lists could not be loaded', e));
     await rebuildCompiledPatterns();
     await initializeExtensionStateTracking();
     await updateDnrRules();

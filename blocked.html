@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" class="theme-pending">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -61,6 +61,16 @@
       padding: 0;
       box-sizing: border-box;
     }
+
+    /* Hidden until blocked.js has applied the chosen design (blocked-themes.js),
+       so a designed page never flashes the Classic one first. The animation
+       reveals the page anyway if the script never runs: a blocked page that
+       fails to appear is far worse than one that flickers. */
+    html.theme-pending body {
+      visibility: hidden;
+      animation: theme-reveal 0s linear 0.6s forwards;
+    }
+    @keyframes theme-reveal { to { visibility: visible; } }
 
     body {
       font-family: var(--font-sans);
@@ -341,9 +351,11 @@
       }
     }
   </style>
+  <link rel="stylesheet" href="blocked-themes.css" />
 </head>
 <body>
   <main class="container">
+    <section class="theme-hero" id="theme-hero" hidden></section>
     <div class="blocked-card">
       <div class="blocked-header">
         <div class="blocked-icon">🚫</div>
@@ -353,15 +365,18 @@
         </div>
       </div>
 
-      <div class="blocked-content">
-        <p class="blocked-message">
-          This site has been blocked because it matches your adult-content filters.
-          Your protection is active and working to keep your browsing experience safe.
-        </p>
+      <details class="why" id="why" open>
+        <summary>Why was this blocked?</summary>
+        <div class="blocked-content">
+          <p class="blocked-message">
+            This site has been blocked because it matches your adult-content filters.
+            Your protection is active and working to keep your browsing experience safe.
+          </p>
 
-        <div class="blocked-url-label">Blocked URL</div>
-        <div class="blocked-url" id="target-url">(loading...)</div>
-      </div>
+          <div class="blocked-url-label">Blocked URL</div>
+          <div class="blocked-url" id="target-url">(loading...)</div>
+        </div>
+      </details>
 
       <div class="support">
         <div class="support-head">
@@ -391,6 +406,7 @@
   </main>
 
   <script src="shared/privacy-guard.js"></script>
+  <script src="blocked-themes.js"></script>
   <script src="blocked.js"></script>
 </body>
 </html>

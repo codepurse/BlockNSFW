@@ -111,6 +111,24 @@ function renderStreak(streakData) {
   currentStreakEl.textContent = currentStreak;
   longestStreakEl.textContent = `${streakData.longestStreak || currentStreak} days`;
   startDateEl.textContent = `Started ${formatDate(streakData.streakStart)}`;
+  renderStreakRing(currentStreak);
+}
+
+// The ring fills toward a 30-day goal. This used to be an inline <script> in
+// stats.html, which the extension's CSP (script-src 'self') refuses to run, so
+// in the installed extension the ring always stayed empty.
+const STREAK_RING_GOAL_DAYS = 30;
+const STREAK_RING_CIRCUMFERENCE = 2 * Math.PI * 30; // r="30" in stats.html; 188.5 in its CSS
+
+function renderStreakRing(currentStreak) {
+  const ring = $('streak-ring-progress');
+  if (!ring) return;
+  const progress = Math.min(Math.max(currentStreak, 0) / STREAK_RING_GOAL_DAYS, 1);
+  // The banner was display:none a moment ago, and a transition cannot start
+  // from an element that had no style. Reading the style first gives the CSS
+  // fill animation a starting point to run from.
+  getComputedStyle(ring).strokeDashoffset;
+  ring.style.strokeDashoffset = STREAK_RING_CIRCUMFERENCE * (1 - progress);
 }
 
 function renderStats(stats) {

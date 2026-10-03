@@ -24,6 +24,7 @@ const DEFAULT_SETTINGS = {
   trustedImageDomains: [],
   debugMode: false,
   blockedPageType: 'default', // 'default', 'custom', 'plain_html'
+  blockedPageTheme: 'classic', // design of the built-in page; see blocked-themes.js
   searchResultTreatment: 'hide', // 'hide' | 'overlay' — web/text results only
   searchSummaryEnabled: true, // the "N results blocked" line on search pages
   blockCountDisplay: 'badge', // 'badge' (toolbar icon) | 'floating' (in-page pill)
@@ -182,24 +183,24 @@ function getAiStrictnessMeta(level) {
 // blocking.
 function getAiTextStrictnessMeta(level) {
   const normalized = normalizeAiStrictness(level);
-  // Wording note: text alone no longer blocks a page — every level below needs
-  // the AI Image Blocker to have flagged an image on the same page. These
-  // describe how readily the text side agrees, not what it blocks by itself.
+  // Each level is a threshold the model file carries, chosen on held-out pages
+  // for a target false-positive rate (tools/text_corpus/EVAL.md). Keep the
+  // copy in line with what that report measures.
   if (normalized === 'relaxed') {
     return {
       label: 'Relaxed',
-      detail: 'Agrees only on pages it is very confident are adult. Fewest false positives.'
+      detail: 'Blocks only pages it is almost certain are adult. Fewest false positives.'
     };
   }
   if (normalized === 'strict') {
     return {
       label: 'Strict',
-      detail: 'Also agrees on borderline pages. More likely to block benign text-heavy pages.'
+      detail: 'Also blocks borderline pages. Catches more, and will sometimes block an ordinary page.'
     };
   }
   return {
     label: 'Balanced',
-    detail: 'Balanced — agrees on confident pages while letting benign multilingual pages through.'
+    detail: 'Balanced — blocks clearly adult pages; tested not to block health, recovery or sex-education pages.'
   };
 }
 
@@ -940,18 +941,6 @@ function isCommentLine(entry) {
 }
 
 /**
- * Normalise a list box into what gets stored: blank lines dropped, entries
- * de-duplicated case-insensitively, and the whole thing sorted A–Z.
- *
- * Comments make the sort more than a sort. A note is almost always a heading for
- * the lines under it — `# === Social ===` — so sorting the lines individually
- * would strand every comment away from the group it labels. Entries are
- * therefore sorted in *blocks*: the comments immediately above an entry travel
- * with it. Comments are never de-duplicated, since two `# ---` rules are both
- * meant to be there, and trailing comments with no entry after them stay at the
- * end where they were written.
- */
-/**
  * What an entry is filed under. Leading punctuation is skipped, so `/apricots?/`
  * files under "a" beside the literal it stands in for rather than under "/".
  *
@@ -969,58 +958,61 @@ function entrySortKey(entry) {
   return stripped || value;
 }
 
+/**
+ * Normalise a list box into what gets stored: blank lines dropped, entries
+ * de-duplicated case-insensitively, and sorted A–Z.
+ *
+ * Comments are not sorted at all. They stay on the line where they were
+ * written, and entries are sorted only within the stretch between two
+ * comments, so a note works as a section heading: `# A` keeps every entry
+ * written under it, in order, until the next note. A list with no comments is
+ * one stretch and sorts exactly as a plain list.
+ *
+ * This replaced sorting in blocks, where each note travelled with the single
+ * entry below it. That broke the common case of a heading over several
+ * entries: under `# A`, `/anana/` sorted ahead of `/apricot/`, the entry the
+ * heading was attached to, and landed above the heading.
+ *
+ * Comments are never de-duplicated, since two `# ---` rules are both meant to
+ * be there. A repeated entry is dropped wherever it appears after the first, so
+ * the first spelling wins, even across sections.
+ */
 function serializePatterns(text) {
-  const byKey = new Map();
-  const blocks = [];
-  let pendingComments = [];
+  const seen = new Set();
+  const out = [];
+  let stretch = [];
+
+  const flushStretch = () => {
+    stretch.sort((a, b) => {
+      const byName = entrySortKey(a).localeCompare(
+        entrySortKey(b), undefined, { sensitivity: 'base' }
+      );
+      // `/porn/` and `porn` file under the same name; compare the raw text so
+      // the order of the pair is settled rather than left to the sort's stability.
+      return byName !== 0
+        ? byName
+        : a.localeCompare(b, undefined, { sensitivity: 'base' });
+    });
+    for (const entry of stretch) out.push(entry);
+    stretch = [];
+  };
 
   for (const line of text.split(/\r?\n/)) {
     const entry = line.trim();
     if (!entry) continue;
 
     if (isCommentLine(entry)) {
-      pendingComments.push(entry);
+      flushStretch();
+      out.push(entry);
       continue;
     }
 
     const key = entry.toLowerCase();
-    const existing = byKey.get(key);
-    if (existing) {
-      // The entry is a duplicate and goes, but the note above it describes that
-      // same entry — so it joins the block that already owns it rather than
-      // being dropped or drifting onto whatever sorts next.
-      for (const comment of pendingComments) {
-        if (!existing.comments.includes(comment)) existing.comments.push(comment);
-      }
-      pendingComments = [];
-      continue;
-    }
-
-    const block = { entry, comments: pendingComments };
-    byKey.set(key, block);
-    blocks.push(block);
-    pendingComments = [];
+    if (seen.has(key)) continue;
+    seen.add(key);
+    stretch.push(entry);
   }
-
-  blocks.sort((a, b) => {
-    const byName = entrySortKey(a.entry).localeCompare(
-      entrySortKey(b.entry), undefined, { sensitivity: 'base' }
-    );
-    // `/porn/` and `porn` file under the same name; compare the raw text so the
-    // order of the pair is settled rather than left to the sort's stability.
-    return byName !== 0
-      ? byName
-      : a.entry.localeCompare(b.entry, undefined, { sensitivity: 'base' });
-  });
-
-  const out = [];
-  for (const block of blocks) {
-    for (const comment of block.comments) out.push(comment);
-    out.push(block.entry);
-  }
-  // Comments after the last entry belong to nothing; keep them rather than lose
-  // what someone typed.
-  for (const comment of pendingComments) out.push(comment);
+  flushStretch();
   return out;
 }
 
@@ -1272,16 +1264,59 @@ function validateDomain(domain) {
 // --- Subscribed lists --------------------------------------------------------
 
 function subscriptionStatusText(subscription) {
-  if (subscription.error) return `Update failed: ${subscription.error}`;
+  const count = subscription.entryCount || 0;
+  const rules = `${count.toLocaleString()} ${count === 1 ? 'rule' : 'rules'}`;
+
+  if (subscription.error) {
+    let text = `Update failed: ${subscription.error}`;
+    if (subscription.retryAfterAt && subscription.retryAfterAt > Date.now()) {
+      text += ` · will try again after ${new Date(subscription.retryAfterAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+    }
+    // A failed refresh leaves the last good download in force. Saying only
+    // "failed" made a working list look like it was blocking nothing.
+    if (count && subscription.updatedAt) {
+      text += ` · still blocking the ${rules} from ${new Date(subscription.updatedAt).toLocaleString()}`;
+    }
+    return text;
+  }
   if (!subscription.updatedAt) return 'Not downloaded yet';
 
   const when = new Date(subscription.updatedAt).toLocaleString();
-  const count = subscription.entryCount || 0;
-  let text = `${count.toLocaleString()} ${count === 1 ? 'rule' : 'rules'} · updated ${when}`;
+  let text = `${rules} · updated ${when}`;
   // Say so out loud rather than quietly applying a partial list.
   if (subscription.truncated) text += ' · list was too long and was cut short';
   if (subscription.skipped) text += ` · ${subscription.skipped} unusable ${subscription.skipped === 1 ? 'line' : 'lines'} skipped`;
   return text;
+}
+
+/**
+ * One line for the toast after "Update Now". It used to say "Subscriptions
+ * updated" whatever happened, including when every list failed.
+ *
+ * @returns {[string, string]} message and toast type
+ */
+function subscriptionRefreshSummary(results) {
+  if (results.length === 0) return ['No enabled lists to update', 'info'];
+
+  const failed = results.filter((result) => result && result.checked && !result.ok).length;
+  if (failed) {
+    return [failed === results.length
+      ? (results.length === 1 ? 'The list could not be updated' : 'None of your lists could be updated')
+      : `${failed} of ${results.length} lists could not be updated`, 'warning'];
+  }
+
+  const checked = results.filter((result) => result && result.checked);
+  if (checked.length === 0) {
+    // Nothing was downloaded: every list was checked moments ago, or its
+    // server asked to be left alone for a while.
+    if (results.some((result) => result && result.reason === 'rate-limited')) {
+      return ["The list's server asked BlockNSFW to wait. It will try again later.", 'warning'];
+    }
+    return ['Already checked in the last few minutes', 'info'];
+  }
+  return checked.some((result) => result.changed)
+    ? ['Subscriptions updated', 'success']
+    : ['Subscriptions are up to date', 'success'];
 }
 
 async function renderSubscriptions() {
@@ -1509,6 +1544,135 @@ async function dismissPinBanner() {
   } catch (_) {}
   const banner = $('pin-banner');
   if (banner) banner.classList.add('hidden');
+}
+
+// --- Blocked page design ----------------------------------------------------
+//
+// The picker is built from blocked-themes.js, the registry blocked.html renders
+// from, so a design added there appears here too. Each thumbnail is a CSS
+// sketch styled in options.html.
+
+function buildDesignThumb(id) {
+  const thumb = document.createElement('span');
+  thumb.className = 'design-thumb design-thumb-' + id;
+  thumb.setAttribute('aria-hidden', 'true');
+  const part = (className, parent = thumb, text = '') => {
+    const span = document.createElement('span');
+    span.className = className;
+    if (text) span.textContent = text;
+    parent.appendChild(span);
+    return span;
+  };
+  if (id === 'classic') {
+    const card = part('t-card');
+    part('t-dot', card);
+    part('t-line', card);
+    part('t-line t-short', card);
+  } else if (id === 'calm') {
+    part('t-line');
+    part('t-line t-short');
+    const ns = 'http://www.w3.org/2000/svg';
+    const ring = document.createElementNS(ns, 'svg');
+    ring.setAttribute('class', 't-enso');
+    ring.setAttribute('viewBox', '0 0 40 40');
+    const stroke = document.createElementNS(ns, 'circle');
+    for (const [k, v] of Object.entries({ cx: 20, cy: 20, r: 15, transform: 'rotate(120 20 20)', 'stroke-dasharray': '88 95' })) {
+      stroke.setAttribute(k, String(v));
+    }
+    ring.appendChild(stroke);
+    thumb.appendChild(ring);
+    part('t-seal');
+  } else if (id === 'verse') {
+    part('t-joint t-joint-v');
+    part('t-joint t-joint-v t-joint-far');
+    part('t-joint t-joint-h');
+    part('t-light t-upright');
+    part('t-light t-arm');
+    part('t-context');
+    const text = part('t-text');
+    part('t-line', text);
+    part('t-line', text);
+    part('t-line', text);
+    part('t-line t-short', text);
+  } else if (id === 'motivation') {
+    // Three weeks of seven days: the first eighteen crossed, the nineteenth today.
+    const ns = 'http://www.w3.org/2000/svg';
+    const cal = document.createElementNS(ns, 'svg');
+    cal.setAttribute('class', 't-calendar');
+    cal.setAttribute('viewBox', '0 0 70 30');
+    let cells = '';
+    let marks = '';
+    for (let i = 0; i < 21; i++) {
+      const x = (i % 7) * 10;
+      const y = Math.floor(i / 7) * 10;
+      cells += 'M' + x + ' ' + y + 'h10v10h-10z';
+      if (i < 18) marks += 'M' + (x + 2.5) + ' ' + (y + 2.5) + 'l5 5M' + (x + 7.5) + ' ' + (y + 2.5) + 'l-5 5';
+    }
+    for (const [cls, d] of [['t-cells', cells], ['t-x', marks], ['t-today', 'M41 21h8v8h-8z']]) {
+      const path = document.createElementNS(ns, 'path');
+      path.setAttribute('class', cls);
+      path.setAttribute('d', d);
+      cal.appendChild(path);
+    }
+    thumb.appendChild(cal);
+  }
+  return thumb;
+}
+
+function buildDesignPicker(picker) {
+  const themes = globalThis.BlockedThemes;
+  if (!themes || picker.childElementCount) return;
+  for (const theme of themes.list) {
+    const option = document.createElement('label');
+    option.className = 'design-option';
+    option.dataset.design = theme.id;
+
+    const input = document.createElement('input');
+    input.type = 'radio';
+    input.name = 'blocked-design';
+    input.value = theme.id;
+
+    const name = document.createElement('span');
+    name.className = 'design-name';
+    name.textContent = theme.name;
+
+    const blurb = document.createElement('span');
+    blurb.className = 'design-blurb';
+    blurb.textContent = theme.blurb;
+
+    // A link inside a label follows the link without selecting the option.
+    const preview = document.createElement('a');
+    preview.className = 'design-preview';
+    preview.href = 'blocked.html?preview=' + encodeURIComponent(theme.id);
+    preview.target = '_blank';
+    preview.rel = 'noopener';
+    preview.textContent = 'Preview';
+    preview.setAttribute('aria-label', `Preview the ${theme.name} design`);
+
+    option.append(input, buildDesignThumb(theme.id), name, blurb, preview);
+    picker.appendChild(option);
+  }
+}
+
+function renderDesignPicker(settings) {
+  const picker = $('blocked-design-picker');
+  if (!picker) return;
+  buildDesignPicker(picker);
+  const themes = globalThis.BlockedThemes;
+  const current = themes ? themes.normalize(settings.blockedPageTheme) : 'classic';
+  picker.querySelectorAll('.design-option').forEach((option) => {
+    const selected = option.dataset.design === current;
+    option.classList.toggle('is-selected', selected);
+    const input = option.querySelector('input');
+    if (input) input.checked = selected;
+  });
+  // A custom URL or custom HTML replaces the built-in page, designs and all.
+  const overridden =
+    (settings.blockedPageType === 'custom' && !!String(settings.customBlockedPageUrl || '').trim()) ||
+    (settings.blockedPageType === 'plain_html' && !!String(settings.plainBlockedPageHtml || '').trim());
+  picker.classList.toggle('is-overridden', overridden);
+  const note = $('blocked-design-note');
+  if (note) note.hidden = !overridden;
 }
 
 async function render() {
@@ -1768,6 +1932,7 @@ async function render() {
       ? 'HTML uploaded and saved'
       : 'No HTML uploaded yet';
   }
+  renderDesignPicker(settings);
   
   // Incognito status + link
   try {
@@ -2663,9 +2828,10 @@ async function init() {
       refreshSubscriptionsBtn.disabled = true;
       refreshSubscriptionsBtn.textContent = 'Updating…';
       try {
-        await browserAPI.runtime.sendMessage({ type: 'subscription_refresh' });
+        const response = await browserAPI.runtime.sendMessage({ type: 'subscription_refresh' });
         await renderSubscriptions();
-        showToast('Subscriptions updated', 'success');
+        const [message, type] = subscriptionRefreshSummary((response && response.results) || []);
+        showToast(message, type);
       } catch (_) {
         showToast('Could not update subscriptions', 'error');
       } finally {
@@ -2866,11 +3032,28 @@ async function init() {
     }
   });
 
+  const designPicker = $('blocked-design-picker');
+  if (designPicker) {
+    designPicker.addEventListener('change', async (e) => {
+      if (!e.target || e.target.name !== 'blocked-design') return;
+      // Presentation only: every design is still the blocked page, so this is
+      // not PIN-gated. Replacing the page with your own URL or HTML still is.
+      const themes = globalThis.BlockedThemes;
+      const settings = await getSettings();
+      settings.blockedPageTheme = themes ? themes.normalize(e.target.value) : 'classic';
+      await setSettings(settings);
+      renderDesignPicker(settings);
+      const theme = themes && themes.get(settings.blockedPageTheme);
+      showToast(`Blocked page design: ${theme ? theme.name : 'Classic'}`, 'success');
+    });
+  }
+
   $('reset-blocked-page-settings').addEventListener('click', async () => {
     if (!confirm('Reset blocked page settings to default?')) return;
-    
+
     const settings = await getSettings();
     settings.blockedPageType = 'default';
+    settings.blockedPageTheme = DEFAULT_SETTINGS.blockedPageTheme;
     settings.customBlockedPageUrl = '';
     settings.plainBlockedPageHtml = '';
 
@@ -3369,8 +3552,9 @@ async function init() {
           }
           const existing = serializePatterns(textarea.value);
           const before = countRealEntries(existing);
-          // serializePatterns dedups (case-insensitively) and sorts the union,
-          // keeping each comment with the entry it was written above.
+          // serializePatterns dedups (case-insensitively) and sorts the union.
+          // Comments hold their places, so the file's sections land after the
+          // list's own, and entries at the top of the file join the last section.
           const merged = serializePatterns(existing.concat(imported).join('\n'));
           textarea.value = deserializePatterns(merged);
           const added = countRealEntries(merged) - before;
