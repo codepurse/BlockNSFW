@@ -309,6 +309,12 @@
     }
 
     /* Card Design */
+    /* Privacy mode refuses this row's network requests; see applyPrivacyModeLocks. */
+    .privacy-locked {
+      opacity: 0.5;
+      pointer-events: none;
+    }
+
     .card {
       background: var(--card-bg);
       border: 1px solid var(--card-border);
@@ -2338,6 +2344,7 @@
   </style>
   <!-- In <head> on purpose: it applies a saved full-width choice before the
        first paint. See the note at the top of the file. -->
+  <script src="shared/privacy-guard.js"></script>
   <script src="options-layout.js"></script>
 </head>
 <body>
@@ -2508,6 +2515,22 @@
           <h2 class="section-title">Protection</h2>
           <p class="section-desc">Core blocking, DNS-level filtering, and safe search.</p>
         </div>
+
+    <div class="card fade-in" id="privacy-mode-card">
+      <div class="card-header">
+        <h2 class="card-title">Privacy mode</h2>
+        <p class="card-description">Send nothing about your browsing to anyone except the DNS resolver you chose.</p>
+      </div>
+      <div class="switch-container">
+        <div class="switch-label">
+          <span class="label">Keep browsing data on this device</span>
+          <span class="description">Filtering keeps working: the blocklist, DNS Protection and AI image scanning all stay on.</span>
+        </div>
+        <label class="switch"><input type="checkbox" id="privacy-mode" /><span class="slider"></span></label>
+      </div>
+      <p class="card-description">While enabled, Reddit lookups, subscribed list updates, custom blocked pages, reports and community stories are turned off; those controls are locked below. Subscribed lists keep the copy already downloaded. Your saved choices come back when you turn this off.</p>
+      <p class="card-description">Download servers and your DNS resolver still see your IP address. This does not anonymize the websites you visit or browser sync. Reload open pages after enabling.</p>
+    </div>
 
     <div class="card fade-in">
       <div class="card-header">

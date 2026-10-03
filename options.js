@@ -16,6 +16,7 @@ const CUSTOM_DNS_ID = (self.DnsProviders && self.DnsProviders.CUSTOM_PROVIDER_ID
 
 const DEFAULT_SETTINGS = {
   enabled: true,
+  privacyMode: false,
   useSmartBlocking: true,
   imageFilterLevel: 'strict',
   customPatterns: [],
@@ -1674,11 +1675,40 @@ function renderDesignPicker(settings) {
   if (note) note.hidden = !overridden;
 }
 
+// Controls whose feature sends browsing data off the device. Privacy mode
+// refuses those requests at fetch(), so the controls render locked rather than
+// looking active while doing nothing.
+const PRIVACY_LOCKED_CONTROLS = [
+  'add-subscription', 'subscription-url', 'refresh-subscriptions',
+  'use-custom-blocked-page', 'custom-blocked-page-url', 'test-custom-url',
+  'use-plain-html-blocked-page', 'plain-blocked-page-file',
+  'report-url', 'report-type', 'report-category', 'report-notes', 'submit-report'
+];
+
+function applyPrivacyModeLocks(on) {
+  for (const id of PRIVACY_LOCKED_CONTROLS) {
+    const el = $(id);
+    if (!el) continue;
+    if (on) {
+      el.disabled = true;
+      el.dataset.privacyLocked = '1';
+    } else if (el.dataset.privacyLocked) {
+      el.disabled = false;
+      delete el.dataset.privacyLocked;
+    }
+    // Lock the row, not the card: a card can also hold local-only settings.
+    const row = el.closest('.switch-container, .input-group, .button-group, .form-group') || el;
+    row.classList.toggle('privacy-locked', on);
+  }
+}
+
 async function render() {
   const settings = await getSettings();
   const stats = await getStats();
   const pin = await getPIN();
 
+  if ($('privacy-mode')) $('privacy-mode').checked = settings.privacyMode === true;
+  applyPrivacyModeLocks(settings.privacyMode === true);
   $('enabled').checked = !!settings.enabled;
   $('smart').checked = !!settings.useSmartBlocking;
   $('debug-mode').checked = !!settings.debugMode;
@@ -2019,7 +2049,7 @@ async function updateReportCooldown() {
     cooldownEl.textContent = `Wait ${Math.ceil(remaining / 1000)}s`;
     setTimeout(updateReportCooldown, 1000);
   } else {
-    submitBtn.disabled = false;
+    submitBtn.disabled = !!submitBtn.dataset.privacyLocked;
     cooldownEl.textContent = '';
   }
 }
@@ -2405,6 +2435,27 @@ async function init() {
         detail.textContent = getAiTextStrictnessMeta(settings.aiTextStrictness).detail;
       }
       showToast(`AI text strictness set to ${getAiTextStrictnessMeta(settings.aiTextStrictness).label}`, 'success');
+    });
+  }
+
+  // Privacy mode toggle
+  const privacyToggle = $('privacy-mode');
+  if (privacyToggle) {
+    privacyToggle.addEventListener('change', async (event) => {
+      const settings = await getSettings();
+      // Turning it on stops Reddit lookups and subscribed list updates, both
+      // blocking layers, so it is gated like every other weakening toggle.
+      if (settings.privacyMode !== true && event.target.checked) {
+        const ok = await requirePINIfSet('turn on Privacy mode');
+        if (!ok) {
+          event.target.checked = false;
+          return;
+        }
+      }
+      settings.privacyMode = event.target.checked;
+      await setSettings(settings);
+      await render();
+      showToast('Privacy mode updated. Reload open pages to apply all filtering changes.', 'info');
     });
   }
 

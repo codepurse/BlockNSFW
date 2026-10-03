@@ -448,6 +448,7 @@ let facebookReelsEnabled = false;
 let instagramReelsEnabled = false;
 
 // Custom blocked page settings
+let privacyMode = false;
 let blockedPageType = 'default'; // 'default', 'custom', 'plain_html'
 let customBlockedPageUrl = ''; // URL for custom blocked page
 let plainBlockedPageHtml = '';
@@ -1087,7 +1088,8 @@ function stashBlockedDetail(payload) {
 }
 
 function getBlockedRedirectUrl(targetUrl, reason, settings, detail) {
-  const pageType = (settings && settings.blockedPageType) ? settings.blockedPageType : blockedPageType;
+  const privateMode = settings ? settings.privacyMode === true : (typeof privacyMode !== 'undefined' && privacyMode);
+  const pageType = privateMode ? 'default' : ((settings && settings.blockedPageType) ? settings.blockedPageType : blockedPageType);
   const customUrl = (settings && typeof settings.customBlockedPageUrl === 'string') ? settings.customBlockedPageUrl : customBlockedPageUrl;
   const plainHtml = (settings && typeof settings.plainBlockedPageHtml === 'string') ? settings.plainBlockedPageHtml : plainBlockedPageHtml;
 
@@ -1126,6 +1128,8 @@ function getBlockedRedirectUrl(targetUrl, reason, settings, detail) {
       ? detail.score : null
   });
   if (key) return base + '?k=' + encodeURIComponent(key);
+  // Never put browsing data into a fallback URL in privacy mode.
+  if (privateMode) return base;
 
   if (pageType === 'plain_html' && plainHtml && plainHtml.trim()) {
     return base +
@@ -1827,6 +1831,7 @@ async function loadSettings() {
     } else {
       isEnabled = settings.enabled;
     }
+    privacyMode = settings.privacyMode === true;
     useSmartBlocking = settings.useSmartBlocking;
     imageFilterLevel = normalizeImageFilterLevel(settings.imageFilterLevel);
     customKeywordList = liveListEntries(settings.customKeywordList);
@@ -3086,7 +3091,7 @@ function extractSubredditFromURL(url) {
 }
 
 async function checkRedditSubredditNSFW(subredditName) {
-  if (!useSmartBlocking) return false;
+  if (privacyMode || !useSmartBlocking) return false;
   if (!subredditName) return false;
   
   const cacheKey = subredditName.toLowerCase();

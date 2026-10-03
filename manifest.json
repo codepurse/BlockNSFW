@@ -50,6 +50,7 @@
       "all_frames": true,
       "match_about_blank": true,
       "js": [
+        "shared/privacy-guard.js",
         "shared/hostname.js",
         "shared/host-keywords.js",
         "shared/validate-domain.js",

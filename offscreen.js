@@ -81,7 +81,7 @@ async function classify(src, modelId) {
 
   // Fetch with extension permissions (page CSP / hotlink rules don't apply).
   // force-cache reuses the image the page just loaded, so this is usually free.
-  const resp = await fetch(src, { credentials: 'omit', cache: 'force-cache' });
+  const resp = await PrivacyGuard.fetchImage(src, { credentials: 'omit', cache: 'force-cache' });
   if (!resp.ok) throw new Error('HTTP ' + resp.status);
   const blob = await resp.blob();
 

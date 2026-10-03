@@ -37,10 +37,11 @@ function functionSource(source, name) {
 }
 
 // Run getBlockedRedirectUrl() with a controllable session-storage stub.
-function buildRedirect({ sessionAvailable = true, pageType = 'default' } = {}) {
+function buildRedirect({ sessionAvailable = true, pageType = 'default', privacyMode = false } = {}) {
   const written = {};
   const sandbox = {
     console,
+    privacyMode,
     URL,
     crypto: { randomUUID: () => '1111-2222' },
     Date,
@@ -153,4 +154,16 @@ test('H3/M3: the background widens session-storage access for content scripts', 
   const background = fs.readFileSync(path.join(ROOT, 'background.js'), 'utf8');
   assert.match(background, /setAccessLevel\(\{/);
   assert.match(background, /TRUSTED_AND_UNTRUSTED_CONTEXTS/);
+});
+
+
+test('privacy mode replaces an external blocked page with the built-in page', () => {
+  const { url } = buildRedirect({ pageType: 'custom', privacyMode: true });
+  assert.match(url, /^chrome-extension:\/\/abc\/blocked\.html\?k=/);
+  assert.ok(!url.includes('explicit.test'));
+});
+
+test('privacy mode does not embed browsing data when session storage is unavailable', () => {
+  const { url } = buildRedirect({ pageType: 'custom', privacyMode: true, sessionAvailable: false });
+  assert.equal(url, 'chrome-extension://abc/blocked.html');
 });

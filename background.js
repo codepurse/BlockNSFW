@@ -1,4 +1,6 @@
 /* BlockNSFW background service worker */
+// Install before any feature or vendor code can capture fetch.
+if (typeof importScripts === 'function') importScripts('shared/privacy-guard.js');
 const browserAPI = typeof browser !== 'undefined' ? browser : chrome;
 
 // Shared browser-safe hostname normalization helpers (RFC 3492 punycode
@@ -457,6 +459,7 @@ const DAILY_HISTORY_KEY = 'pblocker_daily_history';
 // Default settings
 const DEFAULT_SETTINGS = {
   enabled: true,
+  privacyMode: false,
   useSmartBlocking: true,
   customPatterns: [], // user patterns, wildcard supported e.g. *.example.com, example.com/path
   trustedImageDomains: [], // domains where images should never be blocked
@@ -3196,7 +3199,7 @@ browserAPI.runtime.onMessage.addListener((message, sender, sendResponse) => {
           blob = new Blob([arr instanceof ArrayBuffer ? arr : new Uint8Array(arr)],
             { type: message.mimeType || 'image/jpeg' });
         } else {
-          const resp = await fetch(message.src, {
+          const resp = await PrivacyGuard.fetchImage(message.src, {
             credentials: 'omit',
             cache: 'force-cache',
           });

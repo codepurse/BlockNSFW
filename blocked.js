@@ -233,7 +233,7 @@ async function loadStashedDetail() {
  */
 function renderPlainHtml(settings) {
   try {
-    if (!settings || settings.blockedPageType !== 'plain_html') return false;
+    if (!settings || settings.privacyMode === true || settings.blockedPageType !== 'plain_html') return false;
     const html = typeof settings.plainBlockedPageHtml === 'string' ? settings.plainBlockedPageHtml : '';
     if (!html || !html.trim()) return false;
     const rendered = html

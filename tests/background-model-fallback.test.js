@@ -120,6 +120,9 @@ function classifyMsg(ctx, message) {
 function stubBlobFetch(ctx) {
   // classifyImageBytes fetches the image itself when given only a src.
   ctx.fetch = async () => ({ ok: true, status: 200, blob: async () => ({ fake: 'blob' }) });
+  // background.js re-fetches through the privacy guard, which this harness
+  // does not load.
+  ctx.PrivacyGuard = { fetchImage: (...args) => ctx.fetch(...args) };
   ctx.createImageBitmap = async () => ({ close() {} });
   ctx.Blob = class { constructor(parts) { this.parts = parts; } };
 }
