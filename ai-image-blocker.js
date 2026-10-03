@@ -240,7 +240,6 @@
   }
 
   function isAiActive() {
-    if (state.settings && state.settings.privacyMode === true) return false;
     return !!(state.settings &&
       state.settings.enabled !== false &&
       state.settings.aiImageBlocker !== false);

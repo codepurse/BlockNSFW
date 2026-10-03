@@ -1,39 +1,50 @@
 # Privacy mode: scope and verification
 
 Enable **Settings → Protection → Privacy mode**, then reload open pages.
-The mode is opt-in so existing DNS and community features do not silently stop
-working after an update. It does not change system DNS or proxy settings.
+The goal: nothing about your browsing reaches a third party, except a DNS
+lookup sent to the resolver you chose. Turning it on requires the PIN, if one
+is set, because it stops two blocking layers (Reddit lookups and subscribed
+list updates). It does not change system DNS or proxy settings.
 
-The extension continues to filter using local data and may keep local logs.
-It may download only these shared, fixed resources from its GitHub repository:
+Filtering keeps working. The blocklist, DNS Protection, AI image and text
+scanning, SafeSearch, local lists and statistics all stay on. What still
+leaves the device:
 
-- `data/HOSTS.txt`
-- `data/WHITELIST.txt`
-- `data/version.json`
+- **Public downloads.** These are fixed files in this repository:
+  `data/HOSTS.txt`, `data/WHITELIST.txt`, `data/version.json` and the AI model
+  weights under `data/models/`. The guard rebuilds each request as a bare GET
+  with no caller body, headers, credentials or referrer. A query string or
+  fragment is rejected. Redirects are followed, because the target only learns
+  the fixed public URL, and this keeps updates working if GitHub moves raw
+  content.
+- **DNS-over-HTTPS queries.** These go to a built-in resolver, or to the
+  user's own endpoint once they have saved one. The request carries only the
+  checked hostname, in the `name=…&type=A` or `dns=…` form that
+  `shared/dns-providers.js` sends, plus a DoH `Accept` header. Credentials and
+  referrer are dropped, and redirects are rejected so the query cannot be
+  handed to another host.
+- **AI image re-fetches.** These go through `PrivacyGuard.fetchImage()` only.
+  It repeats a request for an image the page already loaded, to the host that
+  served it, without cookies or referrer and from cache, so it tells that host
+  nothing new. Plain `fetch()` of the same URL is refused.
 
-The fetch boundary constructs a new GET request with no caller-provided body,
-headers, credentials or referrer; redirects are rejected. A query string or
-fragment on an approved resource is rejected too. The server necessarily sees
-the connection's IP address. These requests contain no browsing URL or page
-content supplied by the extension.
-
-Other extension fetches are refused before reaching the native network API.
-This covers DNS, Reddit, Appwrite, subscription URLs and remote image/model
-loads, even if their saved feature setting is still enabled. AI image scanning
-is suspended to avoid repeated failures and extra image requests. Text/URL
-filtering, SafeSearch, local lists and statistics remain available. The AI
-text feature's existing dependence on corroborating AI images still applies.
-Custom HTML and remote blocked pages are replaced by the packaged page so
-their markup/navigation cannot transmit a blocked URL. If session storage is
-unavailable, the fallback page omits the URL instead of putting it in its query.
+Everything else is refused before it reaches the native network API. That
+covers Appwrite reports and community stories, Reddit lookups, subscribed list
+downloads and anything not listed above. It applies even when the feature's own
+setting is still on. The matching Options controls render locked. Subscribed
+lists keep the copy they already downloaded. Custom HTML and remote blocked
+pages are replaced by the packaged page, so their markup or navigation cannot
+send a blocked URL. If session storage is unavailable, the fallback page leaves
+the URL out of its query.
 
 ## Implementation boundary
 
 `shared/privacy-guard.js` installs before other scripts in content contexts,
 extension pages and background/offscreen contexts. Content scripts run in the
 browser's isolated world; this wrapper does not replace a website's own fetch.
-The guard reads the current setting for each fetch and rejects on storage-read
-failure. Navigation behavior is updated when content-script settings reload;
+The guard reads settings once per context and keeps them current through
+`storage.onChanged`, so a fetch with the mode off costs nothing extra. A failed
+settings read rejects the fetch (it fails closed) and is retried on the next one. Navigation behavior is updated when content-script settings reload;
 reload open pages after enabling. It cannot recall an already sent request.
 
 This does not prevent normal website traffic, browser history sync, the store's
@@ -55,8 +66,9 @@ Chrome job builds the actual package with `build-chrome.ps1`; an unavailable
 browser or failed assertion fails the job rather than skipping it. The existing
 build workflow still includes these unit tests in `npm test`.
 
-`tests/fixtures/privacy-contract.json` declares approved downloads, required
-request options, denied request examples and permissions requiring review.
+`tests/fixtures/privacy-contract.json` declares approved downloads, approved
+DNS queries, required request options for each, denied request examples and
+permissions requiring review.
 Tests read this independently of the implementation. Changing a privacy promise
 therefore requires an explicit, reviewable change to the contract. This is not
 a declaration that the entire application is safe: other transports, browser
@@ -86,10 +98,12 @@ Run `npm test` (Node's built-in runner; no runtime dependencies needed).
 
 `tests/privacy-egress.test.js` captures calls that would reach native fetch and
 uses synthetic private markers. It exercises the real report/community and
-DNS clients, Reddit lookup and offscreen image fetch; verifies the public
-download request reconstruction, destination/method restrictions, storage
-failure and setting changes; and checks guard loading order and known alternate
-transport entry points. No test sends these synthetic markers to a server.
+DNS clients (built-in and custom resolvers), Reddit lookup and offscreen image
+re-fetch. It verifies how public download and DNS requests are rebuilt, the
+destination and method restrictions, refused subscription downloads, the
+settings cache, storage failure and setting changes. It also checks the guard's
+load order, that only the AI classifiers call `fetchImage()`, and known
+alternate transport entry points. No test sends these synthetic markers to a server.
 
 `tests/blocked-detail-privacy.test.js` tests remote-page replacement and fallback
 URLs. `tests/blocked-page-escaping.test.js` tests that private mode never renders
@@ -112,7 +126,8 @@ This installs the test package in that profile and enables incognito access.
 HTTP requests in the attached test page and service worker are intercepted and
 answered with synthetic responses, so private test markers are not sent to a
 remote server. The test asserts that blocked operations never reach that
-interception boundary, while a public download does. It is a bounded smoke test,
+interception boundary, while a public download and a DNS query to the chosen
+resolver do, without cookies or referrer. It is a bounded smoke test,
 not an exhaustive network audit. Close/discard the disposable profile afterwards.
 
 Before release, also test Firefox, settings transitions, navigation and longer

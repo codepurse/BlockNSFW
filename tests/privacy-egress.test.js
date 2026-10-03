@@ -29,6 +29,8 @@ function functionSource(file, name) {
 function context(settings = { privacyMode: true }) {
   const requests = [];
   const disk = { pblocker_settings: settings };
+  const listeners = [];
+  const reads = { count: 0 };
   const ctx = {
     URL,
     URLSearchParams,
@@ -38,6 +40,9 @@ function context(settings = { privacyMode: true }) {
     Map,
     Set,
     AbortController,
+    btoa,
+    atob,
+    TextEncoder,
     console: { log() {}, warn() {}, error() {} },
     setTimeout,
     clearTimeout,
@@ -46,9 +51,20 @@ function context(settings = { privacyMode: true }) {
       runtime: { getURL: (p) => BASE + p, getManifest: () => ({ version: 'test' }) },
       storage: {
         local: {
-          get: async (key) => (typeof key === 'string' ? { [key]: disk[key] } : disk),
-          set: async (values) => Object.assign(disk, values),
+          get: async (key) => {
+            reads.count++;
+            return typeof key === 'string' ? { [key]: disk[key] } : disk;
+          },
+          set: async (values) => {
+            const changes = {};
+            for (const [key, newValue] of Object.entries(values)) {
+              changes[key] = { oldValue: disk[key], newValue };
+            }
+            Object.assign(disk, values);
+            for (const listener of listeners) listener(changes, 'local');
+          },
         },
+        onChanged: { addListener: (listener) => listeners.push(listener) },
       },
     },
     fetch: async (url, init) => {
@@ -56,16 +72,24 @@ function context(settings = { privacyMode: true }) {
       return {
         ok: true,
         json: async () => ({ ok: true, Status: 0, data: { over18: false }, stories: [] }),
+        arrayBuffer: async () => new ArrayBuffer(0),
       };
     },
   };
   ctx.self = ctx;
   vm.createContext(ctx);
   vm.runInContext(read('shared/privacy-guard.js'), ctx);
-  return { ctx, requests, disk };
+  return { ctx, requests, disk, reads };
 }
 
-test('public downloads strip headers, credentials and referrer; redirects cannot forward them', async () => {
+function assertClean(request, options) {
+  for (const [key, value] of Object.entries(options)) {
+    assert.equal(request.init[key], value, key);
+  }
+  assert.ok(!JSON.stringify(request).includes('PRIVATE_'), JSON.stringify(request));
+}
+
+test('public downloads strip headers, credentials and referrer before following a redirect', async () => {
   const { ctx, requests } = context();
   await ctx.fetch(DOWNLOAD, {
     headers: { Authorization: 'PRIVATE_SECRET', 'X-Page': PRIVATE_URL },
@@ -76,7 +100,10 @@ test('public downloads strip headers, credentials and referrer; redirects cannot
   assert.equal(requests.length, 1);
   assert.equal(requests[0].init.credentials, 'omit');
   assert.equal(requests[0].init.referrerPolicy, 'no-referrer');
-  assert.equal(requests[0].init.redirect, 'error');
+  // A redirect only ever sees the fixed public URL, so following one is safe
+  // and keeps list updates working if GitHub moves raw content.
+  assert.equal(requests[0].init.redirect, 'follow');
+  assert.equal(requests[0].init.headers, undefined);
   assert.ok(!JSON.stringify(requests).includes('PRIVATE_'));
 });
 
@@ -98,16 +125,30 @@ for (const url of contract.allowedDownloads) {
     });
     assert.equal(requests.length, 1);
     assert.equal(requests[0].url, url);
-    for (const [key, value] of Object.entries(contract.requiredRequestOptions)) {
-      assert.equal(requests[0].init[key], value, key);
-    }
-    assert.ok(!JSON.stringify(requests).includes('PRIVATE_'));
+    assertClean(requests[0], contract.requiredRequestOptions);
+  });
+}
+
+for (const url of contract.allowedDnsQueries) {
+  test(`privacy contract allows a bare DNS query to a chosen resolver: ${new URL(url).host}`, async () => {
+    const { ctx, requests } = context();
+    vm.runInContext(read('shared/dns-providers.js'), ctx);
+    await ctx.fetch(url, {
+      headers: { Accept: 'application/dns-message', 'X-Page': PRIVATE_URL },
+      credentials: 'include',
+      referrer: PRIVATE_URL,
+    });
+    assert.equal(requests.length, 1);
+    assert.equal(requests[0].url, url);
+    assert.deepEqual({ ...requests[0].init.headers }, { Accept: 'application/dns-message' });
+    assertClean(requests[0], contract.requiredDnsRequestOptions);
   });
 }
 
 for (const { name, url, method = 'GET', body } of contract.deniedRequests) {
   test(`privacy contract rejects ${name}`, async () => {
     const { ctx, requests } = context();
+    vm.runInContext(read('shared/dns-providers.js'), ctx);
     await assert.rejects(ctx.fetch(url, { method, ...(body ? { body } : {}) }));
     assert.equal(requests.length, 0);
   });
@@ -156,12 +197,32 @@ test('a settings read failure fails closed', async () => {
   assert.equal(requests.length, 0);
 });
 
-test('changes in privacy setting apply to the next fetch in the same context', async () => {
-  const { ctx, requests, disk } = context({ privacyMode: false });
+test('a failed settings read is retried rather than cached', async () => {
+  const { ctx, requests } = context({ privacyMode: false });
+  const get = ctx.chrome.storage.local.get;
+  ctx.chrome.storage.local.get = async () => {
+    throw new Error('storage unavailable');
+  };
+  await assert.rejects(ctx.fetch(PRIVATE_URL), /storage unavailable/);
+  ctx.chrome.storage.local.get = get;
   await ctx.fetch(PRIVATE_URL);
-  disk.pblocker_settings.privacyMode = true;
-  await assert.rejects(ctx.fetch(PRIVATE_URL), /Privacy mode/);
   assert.equal(requests.length, 1);
+});
+
+test('settings are read once, not on every fetch', async () => {
+  const { ctx, reads } = context({ privacyMode: false });
+  for (let i = 0; i < 5; i++) await ctx.fetch(PRIVATE_URL);
+  assert.equal(reads.count, 1);
+});
+
+test('changes in privacy setting apply to the next fetch in the same context', async () => {
+  const { ctx, requests } = context({ privacyMode: false });
+  await ctx.fetch(PRIVATE_URL);
+  await ctx.chrome.storage.local.set({ pblocker_settings: { privacyMode: true } });
+  await assert.rejects(ctx.fetch(PRIVATE_URL), /Privacy mode/);
+  await ctx.chrome.storage.local.set({ pblocker_settings: { privacyMode: false } });
+  await ctx.fetch(PRIVATE_URL);
+  assert.equal(requests.length, 2);
 });
 
 test('real report and community clients cannot transmit content or identifiers', async () => {
@@ -193,16 +254,40 @@ test('real report and community clients cannot transmit content or identifiers',
   assert.equal(requests.length, 0);
 });
 
-test('real DNS provider client cannot disclose the checked hostname', async () => {
+test('real DNS client sends only the hostname, to the chosen resolver', async () => {
   const { ctx, requests } = context();
   vm.runInContext(read('shared/dns-providers.js'), ctx);
-  const result = await ctx.DnsProviders.queryProvider(
-    ctx.DnsProviders.getProviderOrDefault('cloudflare'),
-    'private.example.com',
+  for (const id of ['cloudflare', 'adguard']) {
+    await ctx.DnsProviders.queryProvider(
+      ctx.DnsProviders.getProviderOrDefault(id),
+      'checked.example.com',
+      100,
+    );
+  }
+  assert.equal(requests.length, 2);
+  assert.equal(new URL(requests[0].url).host, 'family.cloudflare-dns.com');
+  assert.equal(new URL(requests[1].url).host, 'dns-family.adguard.com');
+  for (const request of requests) assertClean(request, contract.requiredDnsRequestOptions);
+});
+
+test('a custom resolver is reachable only once the user has set it', async () => {
+  const custom = 'https://dns.resolver.example/abc123';
+  const query = custom + '?dns=AAABAAABAAAAAAAAB2V4YW1wbGUDY29tAAABAAE';
+  const unset = context();
+  vm.runInContext(read('shared/dns-providers.js'), unset.ctx);
+  await assert.rejects(unset.ctx.fetch(query), /Privacy mode/);
+  assert.equal(unset.requests.length, 0);
+
+  const chosen = context({ privacyMode: true, dnsProvider: 'custom', dnsCustomUrl: custom });
+  vm.runInContext(read('shared/dns-providers.js'), chosen.ctx);
+  await chosen.ctx.DnsProviders.queryProvider(
+    chosen.ctx.DnsProviders.makeCustomProvider(custom),
+    'checked.example.com',
     100,
   );
-  assert.equal(result, null);
-  assert.equal(requests.length, 0);
+  assert.equal(chosen.requests.length, 1);
+  assert.ok(chosen.requests[0].url.startsWith(custom + '?dns='));
+  assertClean(chosen.requests[0], contract.requiredDnsRequestOptions);
 });
 
 test('Reddit lookup is skipped in privacy mode even with smart blocking on', async () => {
@@ -228,14 +313,48 @@ test('guard also stops a Reddit lookup from a stale content-script setting', asy
   assert.equal(requests.length, 0);
 });
 
-test('offscreen image classifier cannot re-request a private image address', async () => {
+test('AI image re-fetch repeats the image request bare, from cache', async () => {
   const { ctx, requests } = context();
   Object.assign(ctx, {
     Models: { resolveModel: () => ({ inputSize: 224 }) },
     loadModel: async () => ({}),
   });
   vm.runInContext(functionSource('offscreen.js', 'classify'), ctx);
-  await assert.rejects(ctx.classify(PRIVATE_URL, 'nsfwjs'), /Privacy mode/);
+  const image = 'https://images.example/photo.jpg';
+  // The stub response has no pixels; only the request matters here.
+  await assert.rejects(ctx.classify(image, 'nsfwjs'));
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0].url, image);
+  assertClean(requests[0], {
+    method: 'GET',
+    credentials: 'omit',
+    referrerPolicy: 'no-referrer',
+    cache: 'force-cache',
+  });
+  assert.equal(requests[0].init.headers, undefined);
+});
+
+test('AI image re-fetch refuses non-web addresses and plain fetch refuses images', async () => {
+  const { ctx, requests } = context();
+  await assert.rejects(ctx.PrivacyGuard.fetchImage('ftp://images.example/photo.jpg'), /Privacy mode/);
+  await assert.rejects(ctx.fetch('https://images.example/photo.jpg'), /Privacy mode/);
+  assert.equal(requests.length, 0);
+});
+
+test('only the AI classifiers use the image re-fetch path', () => {
+  const runtime = fs
+    .readdirSync(ROOT)
+    .filter((f) => f.endsWith('.js'))
+    .filter((f) => read(f).includes('fetchImage('));
+  assert.deepEqual(runtime.sort(), ['background.js', 'offscreen.js']);
+});
+
+test('subscribed list downloads are refused', async () => {
+  const { ctx, requests } = context();
+  await assert.rejects(
+    ctx.fetch('https://lists.example/nsfw.txt', { cache: 'no-store', redirect: 'follow' }),
+    /Privacy mode/,
+  );
   assert.equal(requests.length, 0);
 });
 

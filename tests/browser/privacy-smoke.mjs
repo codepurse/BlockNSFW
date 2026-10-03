@@ -126,9 +126,12 @@ try {
     probes.every((x) => x.includes('Privacy mode')),
     JSON.stringify(probes),
   );
+  // DNS Protection stays on in privacy mode: the resolver the user chose is
+  // the one party allowed to see a hostname. The stubbed answer has no Status,
+  // so the verdict is "unknown" (null); only the request shape matters here.
   const dns = await evaluate(
     worker,
-    "checkDnsFilter('private-marker.example.com','cloudflare','')",
+    "checkDnsFilter('checked.example.com','cloudflare','')",
   );
   assert.equal(dns, null);
   await evaluate(
@@ -139,10 +142,19 @@ try {
   // Startup refreshes can finish concurrently on slower CI machines. They must
   // satisfy the same contract; do not require a timing-dependent request count.
   assert.ok(relevant.some((request) => request.url.endsWith('/data/version.json')));
+  const dohHosts = new Set(contract.allowedDnsQueries.map((url) => new URL(url).host));
+  const dnsRequests = relevant.filter((request) => dohHosts.has(new URL(request.url).host));
+  assert.ok(
+    dnsRequests.some((request) => request.url.includes('checked.example.com')),
+    'DNS Protection still queries the chosen resolver',
+  );
   for (const request of relevant) {
-    assert.ok(contract.allowedDownloads.includes(request.url), JSON.stringify(request));
+    const isDns = dnsRequests.includes(request);
+    assert.ok(isDns || contract.allowedDownloads.includes(request.url), JSON.stringify(request));
     assert.equal(request.method, 'GET');
     assert.equal(request.body, undefined);
+    const headers = Object.keys(request.headers || {}).map((name) => name.toLowerCase());
+    assert.ok(!headers.includes('cookie') && !headers.includes('referer'), JSON.stringify(request));
   }
   assert.ok(!JSON.stringify(relevant).includes('PRIVATE_MARKER'));
   const { browserContextId } = await send('Target.createBrowserContext');

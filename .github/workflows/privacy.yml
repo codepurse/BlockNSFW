@@ -23,9 +23,12 @@ jobs:
         with:
           node-version: '22'
       - name: Run declarative privacy and security regressions
+        # shell: bash adds pipefail, so a failing test still fails the step
+        # while tee keeps the output visible in the job log.
+        shell: bash
         run: |
           mkdir -p artifacts/privacy
-          npm run test:privacy > artifacts/privacy/contract.log 2>&1
+          npm run test:privacy 2>&1 | tee artifacts/privacy/contract.log
       - name: Preserve test results
         if: always()
         uses: actions/upload-artifact@v4

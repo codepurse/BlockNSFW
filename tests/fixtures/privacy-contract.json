@@ -3,38 +3,62 @@
   "allowedDownloads": [
     "https://raw.githubusercontent.com/codepurse/BlockNSFW/refs/heads/main/data/HOSTS.txt",
     "https://raw.githubusercontent.com/codepurse/BlockNSFW/refs/heads/main/data/WHITELIST.txt",
-    "https://raw.githubusercontent.com/codepurse/BlockNSFW/refs/heads/main/data/version.json"
+    "https://raw.githubusercontent.com/codepurse/BlockNSFW/refs/heads/main/data/version.json",
+    "https://raw.githubusercontent.com/codepurse/BlockNSFW/refs/heads/main/data/models/vit384/group1-shard1of1.bin"
   ],
   "requiredRequestOptions": {
+    "method": "GET",
+    "credentials": "omit",
+    "referrerPolicy": "no-referrer",
+    "redirect": "follow"
+  },
+  "allowedDnsQueries": [
+    "https://family.cloudflare-dns.com/dns-query?name=example.com&type=A",
+    "https://dns-family.adguard.com/dns-query?dns=AAABAAABAAAAAAAAB2V4YW1wbGUDY29tAAABAAE",
+    "https://family.dns.mullvad.net/dns-query?dns=AAABAAABAAAAAAAAB2V4YW1wbGUDY29tAAABAAE",
+    "https://doh.cleanbrowsing.org/doh/adult-filter/?dns=AAABAAABAAAAAAAAB2V4YW1wbGUDY29tAAABAAE"
+  ],
+  "requiredDnsRequestOptions": {
     "method": "GET",
     "credentials": "omit",
     "referrerPolicy": "no-referrer",
     "redirect": "error"
   },
   "deniedRequests": [
-    { "name": "page URL", "url": "https://private.example/path?search=PRIVATE_SEARCH_MARKER" },
     {
-      "name": "DNS lookup",
-      "url": "https://family.cloudflare-dns.com/dns-query?name=PRIVATE_SEARCH_MARKER.example.com&type=A"
+      "name": "page URL",
+      "url": "https://private.example/path?search=PRIVATE_SEARCH_MARKER"
     },
-    { "name": "Reddit lookup", "url": "https://www.reddit.com/r/PRIVATE_SEARCH_MARKER/about.json" },
+    {
+      "name": "Reddit lookup",
+      "url": "https://www.reddit.com/r/PRIVATE_SEARCH_MARKER/about.json"
+    },
     {
       "name": "community report",
       "url": "https://699ac1b100018b3f455a.sgp.appwrite.run",
       "method": "POST",
       "body": "PRIVATE_SEARCH_MARKER"
     },
-    { "name": "community request", "url": "https://6a3aafbf000d1e70cc28.sgp.appwrite.run" },
     {
-      "name": "image refetch",
+      "name": "community request",
+      "url": "https://6a3aafbf000d1e70cc28.sgp.appwrite.run"
+    },
+    {
+      "name": "image refetch through plain fetch",
       "url": "https://images.example/photo.jpg?token=PRIVATE_SEARCH_MARKER"
     },
     {
       "name": "external blocked page",
       "url": "https://example.test/blocked?url=PRIVATE_SEARCH_MARKER"
     },
-    { "name": "relative URL", "url": "/PRIVATE_SEARCH_MARKER" },
-    { "name": "protocol-relative URL", "url": "//example.test/PRIVATE_SEARCH_MARKER" },
+    {
+      "name": "relative URL",
+      "url": "/PRIVATE_SEARCH_MARKER"
+    },
+    {
+      "name": "protocol-relative URL",
+      "url": "//example.test/PRIVATE_SEARCH_MARKER"
+    },
     {
       "name": "download query",
       "url": "https://raw.githubusercontent.com/codepurse/BlockNSFW/refs/heads/main/data/HOSTS.txt?page=PRIVATE_SEARCH_MARKER"
@@ -52,6 +76,36 @@
       "url": "https://raw.githubusercontent.com/codepurse/BlockNSFW/refs/heads/main/data/HOSTS.txt",
       "method": "POST",
       "body": "PRIVATE_SEARCH_MARKER"
+    },
+    {
+      "name": "DNS lookup with extra page data",
+      "url": "https://family.cloudflare-dns.com/dns-query?name=example.com&type=A&page=PRIVATE_SEARCH_MARKER"
+    },
+    {
+      "name": "DNS lookup POST",
+      "url": "https://family.cloudflare-dns.com/dns-query?name=example.com&type=A",
+      "method": "POST",
+      "body": "PRIVATE_SEARCH_MARKER"
+    },
+    {
+      "name": "lookalike DNS host",
+      "url": "https://family.cloudflare-dns.com.evil.example/dns-query?name=example.com&type=A"
+    },
+    {
+      "name": "DNS path traversal",
+      "url": "https://family.cloudflare-dns.com/dns-query/PRIVATE_SEARCH_MARKER?name=example.com&type=A"
+    },
+    {
+      "name": "subscribed list download",
+      "url": "https://lists.example/nsfw.txt"
+    },
+    {
+      "name": "model download with query",
+      "url": "https://raw.githubusercontent.com/codepurse/BlockNSFW/refs/heads/main/data/models/vit384/group1-shard1of1.bin?page=PRIVATE_SEARCH_MARKER"
+    },
+    {
+      "name": "repository file outside the public data",
+      "url": "https://raw.githubusercontent.com/codepurse/BlockNSFW/refs/heads/main/background.js"
     }
   ],
   "forbiddenPermissions": [

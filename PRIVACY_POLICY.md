@@ -12,19 +12,24 @@ Most filtering decisions are made locally in your browser. We do not sell person
 
 ### Optional Privacy mode
 
-In Settings → Protection, **Privacy mode** limits extension-initiated fetches
-to the three public GitHub files for the blocklist, whitelist and version.
-These downloads omit credentials and referrers, discard caller-provided
-headers and reject HTTP redirects. Their hosts still receive your IP address
-and ordinary connection metadata. The mode is off by default for compatibility
-with existing optional features.
+In Settings → Protection, **Privacy mode** stops the extension from sending
+anything about your browsing to a third party, except DNS lookups to the
+resolver you chose. It is off by default, and turning it on requires your PIN
+if one is set.
 
-While on, DNS checks, Reddit API lookups, AI image scanning and model downloads,
-custom list subscriptions, reports and community requests are unavailable.
-Saved settings are preserved, but a built-in blocked page replaces external
-or custom HTML blocked pages. Local filtering, SafeSearch and local statistics
-remain available. Reload existing pages after switching the mode; requests
-already sent cannot be recalled.
+While on, the extension may still download the public blocklist, whitelist,
+version file and AI model weights from its GitHub repository. These requests
+carry no credentials, referrer or caller-supplied headers. DNS Protection
+still sends the hostname being checked to your chosen DNS-over-HTTPS resolver.
+AI image scanning may re-request an image the page already loaded, from the
+same host, without cookies or referrer. These hosts still receive your IP
+address and ordinary connection metadata.
+
+Reddit API lookups, custom list subscription updates, reports and community
+stories are unavailable. A built-in blocked page replaces external or custom
+HTML blocked pages. Saved settings are kept for when you turn the mode off.
+Reload existing pages after switching the mode; requests already sent cannot
+be recalled.
 
 This is a restriction on this extension's data transfers, not anonymity for
 your browser: websites you visit, browser sync, other extensions, and browser

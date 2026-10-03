@@ -2813,7 +2813,7 @@ async function shouldBlock(urlStr) {
   // DNS-over-HTTPS check via the user's chosen filtering resolver (runs only
   // if nothing else caught it).
   let dnsAnswered = true;
-  if (!shouldBlockResult && settings.dnsFilterEnabled && !settings.privacyMode) {
+  if (!shouldBlockResult && settings.dnsFilterEnabled) {
     try {
       const verdict = await checkDnsFilter(hostname, settings.dnsProvider, settings.dnsCustomUrl);
       if (verdict === null) dnsAnswered = false;
@@ -3199,7 +3199,7 @@ browserAPI.runtime.onMessage.addListener((message, sender, sendResponse) => {
           blob = new Blob([arr instanceof ArrayBuffer ? arr : new Uint8Array(arr)],
             { type: message.mimeType || 'image/jpeg' });
         } else {
-          const resp = await fetch(message.src, {
+          const resp = await PrivacyGuard.fetchImage(message.src, {
             credentials: 'omit',
             cache: 'force-cache',
           });
