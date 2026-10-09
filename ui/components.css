@@ -978,6 +978,17 @@ textarea.input {
   background: var(--color-on-band-2);
   border-color: var(--color-on-band-2);
 }
+/* A ghost button on the band: the band's ink on a hairline of it, the
+   hairline turning to ink on hover. */
+.band-pine .btn-ghost {
+  background: transparent;
+  border-color: var(--color-on-band-2);
+  color: var(--color-on-band);
+}
+.band-pine .btn-ghost:hover {
+  background: transparent;
+  border-color: var(--color-on-band);
+}
 .band-pine .arrow-link,
 .band-pine .link {
   color: var(--color-on-band);

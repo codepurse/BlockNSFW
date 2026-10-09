@@ -220,23 +220,290 @@
       color: var(--color-ink);
     }
 
+    /* One section at a time. The sidebar picks it and the address keeps it
+       (options.html#security); options-layout.js sets data-section on <html>
+       from <head>, so the first paint already shows only that section. */
+    html[data-section] .main > .section {
+      display: none;
+    }
+    html[data-section="welcome"] #section-welcome,
+    html[data-section="protection"] #section-protection,
+    html[data-section="customization"] #section-customization,
+    html[data-section="security"] #section-security,
+    html[data-section="community"] #section-community,
+    html[data-section="about"] #section-about {
+      display: block;
+    }
+    /* Each section is its own page now, with its own heading; the sidebar
+       already says "Settings". */
+    .page-title {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      clip: rect(0 0 0 0);
+      white-space: nowrap;
+    }
+
     .section {
-      padding-top: var(--space-6);
       scroll-margin-top: var(--space-4);
     }
-    .section + .section {
-      margin-top: var(--space-6);
+    /* Each section opens on a header of its own: a numbered label, the serif
+       title, one line on what the section is for, and an ink rule that
+       closes the header off from the groups below. */
+    .section-header {
+      position: relative;
+      min-height: 200px;
+      padding-bottom: var(--space-6);
+      border-bottom: 1px solid var(--color-ink);
+    }
+    .section-header > :not(.section-threshold) {
+      position: relative;
+    }
+    /* Behind every section's header, the mark's idea at the scale of the
+       header: things arrive from the right and stop at one line; one is let
+       through. Hairlines and one brass square, nothing else. */
+    /* The words stop short of where the let-through line begins (38% into
+       the drawing), however wide the column is. */
+    .section-header > .section-desc,
+    .section-header > .section-lock {
+      max-width: min(var(--measure), calc(100% - 0.62 * min(560px, 58%) - var(--space-4)));
+    }
+    .section-threshold {
+      position: absolute;
+      top: -8px;
+      right: 0;
+      width: min(560px, 58%);
+      height: auto;
+      overflow: visible;
+      pointer-events: none;
+    }
+    .section-threshold path {
+      fill: none;
+      stroke-width: 1;
+      vector-effect: non-scaling-stroke;
+    }
+    .threshold-arrivals {
+      stroke: var(--color-rule-2);
+    }
+    .threshold-line {
+      stroke: var(--color-rule-3);
+    }
+    .threshold-through {
+      stroke: var(--color-pine-2);
+    }
+    .threshold-held {
+      fill: var(--color-brass);
+    }
+    /* Too narrow to sit beside the words: it steps aside rather than run
+       behind them. */
+    @media (max-width: 70rem) {
+      html:not([data-layout="full"]) .section-threshold {
+        display: none;
+      }
+      html:not([data-layout="full"]) .section-header {
+        min-height: 0;
+      }
+      html:not([data-layout="full"]) .section-header > .section-desc,
+      html:not([data-layout="full"]) .section-header > .section-lock {
+        max-width: var(--measure);
+      }
+    }
+    @media (max-width: 52rem) {
+      .section-threshold {
+        display: none;
+      }
+      .section-header {
+        min-height: 0;
+      }
+      .section-header > .section-desc,
+      .section-header > .section-lock {
+        max-width: var(--measure);
+      }
+    }
+    .section-eyebrow {
+      display: flex;
+      align-items: baseline;
+      gap: var(--space-2);
+      font-family: var(--font-mono);
+      font-size: var(--text-meta);
+      font-weight: 500;
+      line-height: 1.35;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: var(--color-ink-3);
+    }
+    .section-eyebrow .index {
+      color: var(--color-brass);
+      font-variant-numeric: tabular-nums;
+    }
+    .section-eyebrow .index::after {
+      content: "·";
+      margin-left: var(--space-2);
+      color: var(--color-ink-3);
+    }
+    .section-header .section-head {
+      display: block;
+      margin-top: var(--space-3);
+      font-family: var(--font-display);
+      font-size: 40px;
+      font-weight: 400;
+      line-height: 1.1;
+      letter-spacing: -0.01em;
+      text-transform: none;
+      color: var(--color-ink);
+    }
+    .section-header .section-head:focus {
+      outline: none;
     }
     .section-desc {
-      margin-top: var(--space-2);
+      margin-top: var(--space-3);
+      font-size: 16px;
+      line-height: 1.5;
       color: var(--color-ink-2);
+    }
+    .section-header + * {
+      margin-top: var(--space-7);
+    }
+    /* The header's rule already sits above a list that opens the section. */
+    .section-header + .group > .rows:first-child {
+      border-top: 0;
+    }
+    /* The toolbar tip is a first-visit note: it belongs on Welcome, not above
+       every section's header. Update notices still show everywhere. */
+    html[data-section]:not([data-section="welcome"]) #pin-banner {
+      display: none;
+    }
+    @media (max-width: 40rem) {
+      .section-header .section-head {
+        font-size: 32px;
+      }
     }
     .group-desc {
       font-size: 14px;
     }
 
+    /* Groups: a firmer rule and a wide gap between them; rows inside keep
+       the faint hairline. */
     .group {
-      margin-top: var(--space-6);
+      margin-top: var(--space-7);
+    }
+    .group + .group {
+      padding-top: var(--space-6);
+      border-top: 1px solid var(--color-rule-2);
+    }
+    /* The next divider closes a group's rows; a hairline above it would
+       double it. */
+    .group > .rows-closed:last-child,
+    .group-body > .rows-closed:last-child {
+      border-bottom: 0;
+    }
+    .group-title {
+      font-size: 17px;
+    }
+
+    /* Wide enough, a group is two columns: its name and what it's for on the
+       left, its controls on the right. Scan the left edge to find a topic;
+       read its explanation only when you want it. */
+    @media (min-width: 60rem) {
+      .group-split {
+        display: grid;
+        grid-template-columns: minmax(0, 14rem) minmax(0, 1fr);
+        column-gap: var(--space-7);
+        align-items: start;
+      }
+      .group-split > .group-aside .group-head {
+        display: block;
+      }
+      .group-split > .group-aside .status-word {
+        display: block;
+        margin-top: var(--space-1);
+      }
+      .group-split > .group-aside .group-desc {
+        margin-top: var(--space-2);
+        font-size: 13px;
+        line-height: 1.5;
+      }
+      /* The first row lines up with the group's name: no rule above it. */
+      .group-split > .group-body > :first-child {
+        margin-top: 0;
+      }
+      /* The first thing showing may follow a hidden alternative (the Pact's
+         off and on states). */
+      .group-split > .group-body > .rows:first-child,
+      .group-split > .group-body > :first-child > .rows:first-child,
+      .group-split > .group-body > [hidden]:first-child + * > .rows:first-child {
+        border-top: 0;
+      }
+      .group-split > .group-body > .rows:first-child > .row:first-child,
+      .group-split > .group-body > :first-child > .rows:first-child > .row:first-child,
+      .group-split > .group-body > [hidden]:first-child + * > .rows:first-child > .row:first-child {
+        padding-top: 0;
+      }
+    }
+    @media (max-width: 59.99rem) {
+      .group-split > .group-body {
+        margin-top: var(--space-4);
+      }
+      .group-split > .group-body > :first-child {
+        margin-top: 0;
+      }
+    }
+
+    /* Under each section head: what loosening anything here asks for, said
+       once instead of under every row. */
+    .section-lock {
+      display: flex;
+      align-items: baseline;
+      gap: var(--space-2);
+      margin-top: var(--space-4);
+      font-size: 13px;
+      color: var(--color-ink);
+    }
+    .section-lock::before {
+      content: "";
+      flex: none;
+      width: 6px;
+      height: 6px;
+      background: var(--color-pine);
+      transform: translateY(-1px);
+    }
+
+    /* A longer explanation, folded to one line until it's wanted. */
+    .note-more {
+      max-width: var(--measure);
+    }
+    .note-more > summary {
+      display: inline-flex;
+      align-items: baseline;
+      gap: var(--space-2);
+      list-style: none;
+      cursor: pointer;
+      font-size: 13px;
+      color: var(--color-ink-2);
+    }
+    .note-more > summary::-webkit-details-marker {
+      display: none;
+    }
+    .note-more > summary::before {
+      content: "";
+      flex: none;
+      width: 6px;
+      height: 6px;
+      border-right: 1px solid currentColor;
+      border-bottom: 1px solid currentColor;
+      transform: translateY(-2px) rotate(-45deg);
+      transition: transform var(--dur-state) var(--ease-in-out-quart);
+    }
+    .note-more[open] > summary::before {
+      transform: translateY(-3px) rotate(45deg);
+    }
+    .note-more > summary:hover {
+      color: var(--color-pine-2);
+    }
+    .note-more > .note {
+      margin-top: var(--space-2);
+      padding-left: var(--space-4);
     }
     .group-head .meta,
     .status-word {
@@ -245,16 +512,17 @@
     .status-word[data-state="on"] {
       color: var(--color-pine);
     }
-    .group > .rows,
-    .group > .field,
-    .group > .btn-row,
-    .group > .textarea-syntax,
-    .group > .domain-list,
-    .group > .records,
-    .group > .note {
+    :is(.group, .group-body) > .rows,
+    :is(.group, .group-body) > .field,
+    :is(.group, .group-body) > .btn-row,
+    :is(.group, .group-body) > .textarea-syntax,
+    :is(.group, .group-body) > .domain-list,
+    :is(.group, .group-body) > .records,
+    :is(.group, .group-body) > .note,
+    :is(.group, .group-body) > .note-more {
       margin-top: var(--space-4);
     }
-    .group > .btn-row + .btn-row {
+    :is(.group, .group-body) > .btn-row + .btn-row {
       margin-top: var(--space-3);
     }
     .row .field {
@@ -301,6 +569,11 @@
       margin-top: var(--space-4);
       padding-top: var(--space-4);
       border-top: 1px solid var(--color-rule);
+    }
+    /* A list already closes on a rule; a second one right under it doubles. */
+    :is(.rows-closed, .domain-list) + .danger-zone {
+      padding-top: 0;
+      border-top: 0;
     }
 
     /* Hints that change with a check: the words carry it. */
@@ -1310,7 +1583,17 @@
            New stays folded until the next version; the banner opens again on
            every visit. -->
       <section class="section" id="section-welcome" aria-labelledby="h-welcome">
-        <h2 class="section-head" id="h-welcome"><span class="index">01</span>Welcome</h2>
+        <header class="section-header">
+          <svg class="section-threshold" viewBox="0 0 560 220" aria-hidden="true" focusable="false">
+            <path class="threshold-arrivals" d="M548 20H330M470 36H330M484 36H524M520 52H330M534 52H558M432 68H330M446 68H506M560 84H330M496 100H330M510 100H542M452 148H330M466 148H514M540 164H330M488 180H330M502 180H530M516 196H330M530 196H550" />
+            <path class="threshold-line" d="M330 4V200" />
+            <path class="threshold-through" d="M560 124H220" />
+            <rect class="threshold-held" x="212" y="120" width="8" height="8" />
+          </svg>
+          <p class="section-eyebrow" aria-hidden="true"><span class="index">01</span><span>Settings</span></p>
+          <h2 class="section-head" id="h-welcome">Welcome</h2>
+          <p class="section-desc">What’s new in this version, and where to start.</p>
+        </header>
 
         <div class="welcome-card band-pine" id="dev-message-card">
           <button type="button" class="welcome-strip" data-welcome="open">
@@ -1360,7 +1643,7 @@
           <!-- One change per <li>: <details class="wn-item"><summary>Headline</summary><p>Text</p></details>.
                The headline is the row; the text opens under it. -->
           <ul class="wn-list">
-            <li><details class="wn-item"><summary>The Pact <span class="badge-new">New</span></summary><p>Choose a wait, from 15 minutes to 3 days. While a pact is on, every change that loosens protection waits it out before it happens, and you can cancel it any time before then. Making protection stronger never waits. Security &rsaquo; The Pact, below.</p></details></li>
+            <li><details class="wn-item"><summary>The Pact <span class="badge-new">New</span></summary><p>Choose a wait, from 15 minutes to 3 days. While a pact is on, every change that loosens protection waits it out before it happens, and you can cancel it any time before then. Making protection stronger never waits. It’s in Security &rsaquo; The Pact.</p></details></li>
             <li><details class="wn-item"><summary>A friend can hold the key <span class="badge-new">New</span></summary><p>Someone you trust scans a code into the authenticator app on their phone. When you need a change without the wait, you ask them for the six-digit code it shows. They never see your browsing, and nothing goes through a server.</p></details></li>
             <li><details class="wn-item"><summary>Storm Mode and risk hours <span class="badge-new">New</span></summary><p>For a hard few hours, or the same hours every day, every layer goes to its strongest and nothing that loosens protection can be changed until they end. Your own settings come back afterwards.</p></details></li>
             <li><details class="wn-item"><summary>A new look, in light and dark <span class="badge-new">New</span></summary><p>Every page BlockNSFW shows is redrawn in monolab&rsquo;s design: paper, ink and one evergreen, separated by fine hairlines. Customization &rsaquo; Appearance chooses System, Light or Dark.</p></details></li>
@@ -1388,17 +1671,29 @@
       </section>
 
       <section class="section" id="section-protection" aria-labelledby="h-protection">
-        <h2 class="section-head" id="h-protection"><span class="index">02</span>Protection</h2>
-        <p class="section-desc">Core blocking, filtering at the DNS level, and safe search.</p>
+        <header class="section-header">
+          <svg class="section-threshold" viewBox="0 0 560 220" aria-hidden="true" focusable="false">
+            <path class="threshold-arrivals" d="M548 20H330M470 36H330M484 36H524M520 52H330M534 52H558M432 68H330M446 68H506M560 84H330M496 100H330M510 100H542M452 148H330M466 148H514M540 164H330M488 180H330M502 180H530M516 196H330M530 196H550" />
+            <path class="threshold-line" d="M330 4V200" />
+            <path class="threshold-through" d="M560 124H220" />
+            <rect class="threshold-held" x="212" y="120" width="8" height="8" />
+          </svg>
+          <p class="section-eyebrow" aria-hidden="true"><span class="index">02</span><span>Settings</span></p>
+          <h2 class="section-head" id="h-protection">Protection</h2>
+          <p class="section-desc">Core blocking, filtering at the DNS level, and safe search.</p>
+        </header>
 
-        <div class="group">
+        <div class="group group-split">
+          <div class="group-aside">
           <h3 class="group-title">General</h3>
+          </div>
+          <div class="group-body">
           <div class="rows rows-closed">
             <div class="row">
               <div class="row-text">
                 <label class="row-label" for="enabled">Blocking</label>
                 <p class="row-desc" id="enabled-desc">Filters and blocks adult content as pages load.</p>
-                <span class="locked-note">Turning it off takes three confirmation steps.</span>
+                <span class="locked-note" data-unless-pact>Turning it off takes three confirmation steps.</span>
                 <span class="locked-note" data-lock="critical" data-lock-when="It also" hidden></span>
               </div>
               <label class="switch">
@@ -1422,11 +1717,15 @@
               </div>
             </div>
           </div>
+          </div>
         </div>
 
-        <div class="group">
+        <div class="group group-split">
+          <div class="group-aside">
           <h3 class="group-title"><label for="image-filter-level">Image filtering level</label></h3>
           <p class="group-desc">How hard images are filtered. Lower it if ordinary images are being hidden; protection stays where you want it.</p>
+          </div>
+          <div class="group-body">
           <div class="field">
             <span class="select">
               <select class="input" id="image-filter-level" aria-describedby="image-filter-level-detail">
@@ -1438,14 +1737,17 @@
             <p class="field-hint" id="image-filter-level-detail">Most aggressive filtering. Best protection, but may hide more borderline images.</p>
             <span class="locked-note" data-lock="tuning" data-lock-when="Lowering it" hidden></span>
           </div>
+          </div>
         </div>
 
-        <div class="group" id="ai-image-blocker-card">
+        <div class="group group-split" id="ai-image-blocker-card">
+          <div class="group-aside">
           <div class="group-head">
             <h3 class="group-title">AI image blocker <span class="meta meta-pine">beta</span></h3>
-            <span class="meta status-word" id="ai-image-blocker-status">off</span>
           </div>
           <p class="group-desc">On-device AI looks at each image and reads the page’s text, to catch adult content that keyword and blocklist filters miss, including on sites in other languages. Everything runs on your device; nothing is uploaded.</p>
+          </div>
+          <div class="group-body">
           <p class="note"><span class="note-title">This is a beta.</span> The AI image and text scanners are still being tuned, so now and then they can block an image or a page that isn’t adult. Both are off by default. Turn them on below to try them, and lower the strictness if you see ordinary content held.</p>
 
           <div class="rows rows-closed">
@@ -1509,15 +1811,18 @@
               </label>
             </div>
           </div>
-          <p class="note"><span class="note-title">What happens when an image is flagged.</span> It’s blurred in place, so it can’t be seen while the rest of the page keeps working. Nothing is removed or uploaded; the blur happens on your device. If the AI later decides the image is safe, the blur comes off by itself.</p>
+          <details class="note-more"><summary>What happens when an image is flagged</summary><p class="note">It’s blurred in place, so it can’t be seen while the rest of the page keeps working. Nothing is removed or uploaded; the blur happens on your device. If the AI later decides the image is safe, the blur comes off by itself.</p></details>
+          </div>
         </div>
 
-        <div class="group">
+        <div class="group group-split">
+          <div class="group-aside">
           <div class="group-head">
             <h3 class="group-title">AI text blocker <span class="meta meta-pine">beta</span></h3>
-            <span class="meta status-word" id="ai-text-blocker-status">off</span>
           </div>
           <p class="group-desc">A small on-device model reads each page’s text, to catch adult sites that keyword and blocklist filters miss. It reads English and most European languages best; Japanese, Chinese and Russian pages are left to the other filters for now. Nothing is uploaded.</p>
+          </div>
+          <div class="group-body">
           <div class="rows rows-closed">
             <div class="row">
               <div class="row-text">
@@ -1546,14 +1851,17 @@
               </div>
             </div>
           </div>
+          </div>
         </div>
 
-        <div class="group" id="dns-protection-card">
+        <div class="group group-split" id="dns-protection-card">
+          <div class="group-aside">
           <div class="group-head">
             <h3 class="group-title">DNS protection</h3>
-            <span class="meta status-word" id="dns-status">off</span>
           </div>
           <p class="group-desc">Asks a family-safe DNS resolver about each site before the page loads, as a second layer on top of the blocklist.</p>
+          </div>
+          <div class="group-body">
           <div class="rows rows-closed">
             <div class="row">
               <div class="row-text">
@@ -1593,12 +1901,16 @@
               <p class="field-hint pin-hint" id="dns-test-result" role="status"></p>
             </div>
           </div>
-          <p class="note">Queries go straight from your browser to the resolver you pick; they never pass through BlockNSFW’s servers. Only sites the local blocklist hasn’t already decided on are looked up, and each answer is kept for an hour. If a built-in resolver doesn’t answer, BlockNSFW asks a second one before giving up, so this layer doesn’t fail silently. A custom resolver is asked on its own, and nothing else.</p>
+          <details class="note-more"><summary>Where DNS lookups go</summary><p class="note">Queries go straight from your browser to the resolver you pick; they never pass through BlockNSFW’s servers. Only sites the local blocklist hasn’t already decided on are looked up, and each answer is kept for an hour. If a built-in resolver doesn’t answer, BlockNSFW asks a second one before giving up, so this layer doesn’t fail silently. A custom resolver is asked on its own, and nothing else.</p></details>
+          </div>
         </div>
 
-        <div class="group" id="safe-search-card">
+        <div class="group group-split" id="safe-search-card">
+          <div class="group-aside">
           <h3 class="group-title">Search and social</h3>
           <p class="group-desc">Forces family-safe results on the major search engines, and can hide Facebook and Instagram Reels.</p>
+          </div>
+          <div class="group-body">
           <div class="rows rows-closed">
             <div class="row">
               <div class="row-text">
@@ -1642,15 +1954,28 @@
             <span id="facebook-reels-status"></span>
             <span id="instagram-reels-status"></span>
           </p>
+          </div>
         </div>
       </section>
 
       <section class="section" id="section-customization" aria-labelledby="h-customization">
-        <h2 class="section-head" id="h-customization"><span class="index">03</span>Customization</h2>
-        <p class="section-desc">How BlockNSFW looks, the blocked page, your words and lists, and the sites you allow.</p>
+        <header class="section-header">
+          <svg class="section-threshold" viewBox="0 0 560 220" aria-hidden="true" focusable="false">
+            <path class="threshold-arrivals" d="M548 20H330M470 36H330M484 36H524M520 52H330M534 52H558M432 68H330M446 68H506M560 84H330M496 100H330M510 100H542M452 148H330M466 148H514M540 164H330M488 180H330M502 180H530M516 196H330M530 196H550" />
+            <path class="threshold-line" d="M330 4V200" />
+            <path class="threshold-through" d="M560 124H220" />
+            <rect class="threshold-held" x="212" y="120" width="8" height="8" />
+          </svg>
+          <p class="section-eyebrow" aria-hidden="true"><span class="index">03</span><span>Settings</span></p>
+          <h2 class="section-head" id="h-customization">Customization</h2>
+          <p class="section-desc">How BlockNSFW looks, the blocked page, your words and lists, and the sites you allow.</p>
+        </header>
 
-        <div class="group">
+        <div class="group group-split">
+          <div class="group-aside">
           <h3 class="group-title">Appearance</h3>
+          </div>
+          <div class="group-body">
           <div class="rows rows-closed">
             <div class="row">
               <div class="row-text">
@@ -1665,6 +1990,7 @@
                 </div>
               </div>
             </div>
+          </div>
           </div>
         </div>
 
@@ -1735,9 +2061,12 @@
           </div>
         </div>
 
-        <div class="group" id="own-words-group">
+        <div class="group group-split" id="own-words-group">
+          <div class="group-aside">
           <h3 class="group-title">Your own words</h3>
           <p class="group-desc">Written now, in a calm moment, and shown first whenever a page is held: your plan, a note to yourself, and someone to reach. They stay on this device.</p>
+          </div>
+          <div class="group-body">
           <div class="words-fields">
             <div class="field">
               <label class="field-label" for="own-words-plan">When it’s hard, I will…</label>
@@ -1762,11 +2091,15 @@
           <div class="btn-row">
             <button type="button" class="btn btn-ghost" id="own-words-save">Save your words</button>
           </div>
+          </div>
         </div>
 
-        <div class="group">
+        <div class="group group-split">
+          <div class="group-aside">
           <h3 class="group-title">Blocked search results</h3>
           <p class="group-desc">What a blocked result leaves behind on a search page.</p>
+          </div>
+          <div class="group-body">
           <div class="rows rows-closed">
             <div class="row row-stack">
               <div class="field">
@@ -1804,11 +2137,15 @@
               </div>
             </div>
           </div>
+          </div>
         </div>
 
-        <div class="group">
+        <div class="group group-split">
+          <div class="group-aside">
           <h3 class="group-title"><label for="trusted-domains">Trusted image sites</label></h3>
           <p class="group-desc">Images from these sites are never blocked, even when they match a keyword. One site per line. A line that starts with <code>#</code> or <code>!</code> is a note, ignored when matching.</p>
+          </div>
+          <div class="group-body">
           <div class="textarea-syntax">
             <textarea class="textarea" id="trusted-domains" spellcheck="false" placeholder="One site per line:
 # === Shopping ===
@@ -1830,12 +2167,16 @@ netflix.com"></textarea>
             <button type="button" class="btn btn-danger" id="reset-trusted">Reset to the default list</button>
             <span class="locked-note" data-lock="normal" data-lock-when="Resetting" hidden></span>
           </div>
+          </div>
         </div>
 
-        <div class="group">
+        <div class="group group-split">
+          <div class="group-aside">
           <h3 class="group-title"><label for="custom-keywords">Blocked words</label></h3>
           <p class="group-desc">Words or phrases that always block a page they appear on. One per line. A line wrapped in slashes is a regular expression, so one line can cover many spellings: <code>/p[o0]rn/</code> catches “porn” and “p0rn”, and <code>/escort(s|ing)?/</code> catches all three forms. Capitals don’t matter either way. Patterns are checked when you save, and one that is invalid or slow enough to freeze pages is refused, with the reason.</p>
-          <p class="note"><span class="note-title">Notes.</span> A line that starts with <code>#</code> or <code>!</code> is a note, ignored when matching. Notes never move when you save; only the words between two notes are sorted, so a note works as a heading. To block a word that really starts with one of those, put a backslash first: <code>\#nsfw</code>.</p>
+          </div>
+          <div class="group-body">
+          <details class="note-more"><summary>Notes and headings in the list</summary><p class="note">A line that starts with <code>#</code> or <code>!</code> is a note, ignored when matching. Notes never move when you save; only the words between two notes are sorted, so a note works as a heading. To block a word that really starts with one of those, put a backslash first: <code>\#nsfw</code>.</p></details>
           <div class="textarea-syntax">
             <textarea class="textarea" id="custom-keywords" spellcheck="false" placeholder="One word or phrase per line:
 # notes start with # or !
@@ -1856,18 +2197,22 @@ another phrase
             <button type="button" class="btn btn-danger" id="clear-keywords">Clear all words</button>
             <span class="locked-note" data-lock="normal" data-lock-when="Removing words" hidden></span>
           </div>
+          </div>
         </div>
 
-        <div class="group">
+        <div class="group group-split">
+          <div class="group-aside">
           <h3 class="group-title"><label for="patterns">Your blocklist</label></h3>
           <p class="group-desc">One entry per line. Four kinds of entry work:</p>
+          </div>
+          <div class="group-body">
           <div class="rows rows-closed">
             <div class="row"><div class="row-text"><span class="row-label">Sites, with wildcards</span><p class="row-desc"><code>pornhub.com</code> · <code>*.inappropriate.net</code> · <code>example.com/adult/*</code></p></div></div>
             <div class="row"><div class="row-text"><span class="row-label">A whole top-level domain</span><p class="row-desc"><code>.xyz</code> or <code>xyz</code> blocks every site that ends in it. Some endings are used almost only for spam and malware, and this covers all of them at once, which also makes it the broadest entry you can write, so check it’s what you want. Images from a blocked ending are hidden on the page rather than stopped on the network.</p></div></div>
             <div class="row"><div class="row-text"><span class="row-label">A regular expression on the address</span><p class="row-desc"><code>/example\.(net|org)/</code></p></div></div>
             <div class="row"><div class="row-text"><span class="row-label">A regular expression on the page title</span><p class="row-desc"><code>title/Example Domain/</code>. Title patterns match once the page loads, so the page shows briefly before it’s held; address patterns hold it before it loads at all.</p></div></div>
           </div>
-          <p class="note">Patterns are checked when you save, and one that is invalid or slow enough to freeze pages is refused, with the reason. A site you add here is also blocked as a source of images: its results are hidden in image search, and its pictures are blocked wherever they appear. A line that starts with <code>#</code> or <code>!</code> is a note; notes never move when the list is sorted, so a note works as a heading.</p>
+          <details class="note-more"><summary>How your entries are checked</summary><p class="note">Patterns are checked when you save, and one that is invalid or slow enough to freeze pages is refused, with the reason. A site you add here is also blocked as a source of images: its results are hidden in image search, and its pictures are blocked wherever they appear. A line that starts with <code>#</code> or <code>!</code> is a note; notes never move when the list is sorted, so a note works as a heading.</p></details>
           <div class="textarea-syntax">
             <textarea class="textarea" id="patterns" spellcheck="false" placeholder="One entry per line:
 # === Section heading ===
@@ -1891,11 +2236,15 @@ title/Example Domain/"></textarea>
             <button type="button" class="btn btn-danger" id="clear">Clear blocklist</button>
             <span class="locked-note" data-lock="normal" data-lock-when="Removing entries" hidden></span>
           </div>
+          </div>
         </div>
 
-        <div class="group">
+        <div class="group group-split">
+          <div class="group-aside">
           <h3 class="group-title"><label for="subscription-url">Lists you follow</label></h3>
           <p class="group-desc">Follow a blocklist someone else keeps. Give BlockNSFW the address of a ruleset file and it downloads it, applies it beside your own entries, and checks it for changes once a day. uBlacklist ruleset files work as they are, so addresses you follow there can be pasted straight in. A list you follow can only add blocks: it can never whitelist a site, unblock anything, or change your settings.</p>
+          </div>
+          <div class="group-body">
           <div class="field">
             <div class="input-row">
               <input type="url" class="input input-mono" id="subscription-url" placeholder="https://example.com/list.txt" autocomplete="off" aria-describedby="subscription-hint" />
@@ -1910,11 +2259,15 @@ title/Example Domain/"></textarea>
             <button type="button" class="btn btn-ghost" id="refresh-subscriptions">Update now</button>
             <span class="locked-note" data-lock="normal" data-lock-when="Turning a list off or removing it" hidden></span>
           </div>
+          </div>
         </div>
 
-        <div class="group">
+        <div class="group group-split">
+          <div class="group-aside">
           <h3 class="group-title"><label for="whitelist-domain">Whitelist</label></h3>
           <p class="group-desc">Sites and pages here are never blocked, even when they match. Add a whole site (<code>example.com</code>) or one part of it with a path (<code>reddit.com/r/NoFap</code>); the rest of the site stays protected.</p>
+          </div>
+          <div class="group-body">
           <div class="field">
             <div class="input-row">
               <input type="text" class="input" id="whitelist-domain" placeholder="example.com or reddit.com/r/NoFap" spellcheck="false" autocomplete="off" aria-describedby="whitelist-error whitelist-lock" />
@@ -1934,19 +2287,32 @@ title/Example Domain/"></textarea>
             <button type="button" class="btn btn-danger" id="clear-whitelist">Clear whitelist</button>
           </div>
           <input type="file" id="whitelist-file" accept=".json" hidden />
+          </div>
         </div>
       </section>
 
       <section class="section" id="section-security" aria-labelledby="h-security">
-        <h2 class="section-head" id="h-security"><span class="index">04</span>Security</h2>
-        <p class="section-desc">Lock your settings, and choose what happens in private windows.</p>
+        <header class="section-header">
+          <svg class="section-threshold" viewBox="0 0 560 220" aria-hidden="true" focusable="false">
+            <path class="threshold-arrivals" d="M548 20H330M470 36H330M484 36H524M520 52H330M534 52H558M432 68H330M446 68H506M560 84H330M496 100H330M510 100H542M452 148H330M466 148H514M540 164H330M488 180H330M502 180H530M516 196H330M530 196H550" />
+            <path class="threshold-line" d="M330 4V200" />
+            <path class="threshold-through" d="M560 124H220" />
+            <rect class="threshold-held" x="212" y="120" width="8" height="8" />
+          </svg>
+          <p class="section-eyebrow" aria-hidden="true"><span class="index">04</span><span>Settings</span></p>
+          <h2 class="section-head" id="h-security">Security</h2>
+          <p class="section-desc">Lock your settings, and choose what happens in private windows.</p>
+        </header>
 
-        <div class="group" id="pact-group">
+        <div class="group group-split" id="pact-group">
+          <div class="group-aside">
           <div class="group-head">
             <h3 class="group-title">The Pact</h3>
             <span class="meta status-word" id="pact-status">off</span>
           </div>
           <p class="group-desc">Make changes that loosen protection wait. You choose the wait now; later, turning protection off, whitelisting a site or switching off a layer only happens once it’s over. A craving rarely lasts that long. Making protection stronger never waits, and you can cancel a waiting change at any time.</p>
+          </div>
+          <div class="group-body">
           <div id="pact-off">
             <div class="btn-row">
               <button type="button" class="btn btn-primary" id="pact-start">Make a pact</button>
@@ -1984,28 +2350,36 @@ title/Example Domain/"></textarea>
               <button type="button" class="btn btn-danger" id="pact-end">End the pact</button>
             </div>
           </div>
+          </div>
         </div>
 
-        <div class="group" id="storm-group">
+        <div class="group group-split" id="storm-group">
+          <div class="group-aside">
           <div class="group-head">
             <h3 class="group-title">Storm Mode</h3>
             <span class="meta status-word" id="storm-status">off</span>
           </div>
           <p class="group-desc">For a hard moment. Every protection goes to its strongest, image searches are blurred, and nothing that loosens protection can be changed until it ends, not even with your pact or a witness. It can’t be stopped early. You can also start it from the toolbar popup.</p>
+          </div>
+          <div class="group-body">
           <div class="btn-row" id="storm-start-row">
             <button type="button" class="btn btn-ghost" data-storm-hours="1">1 hour</button>
             <button type="button" class="btn btn-ghost" data-storm-hours="4">4 hours</button>
             <button type="button" class="btn btn-ghost" data-storm-hours="12">12 hours</button>
           </div>
           <p class="row-desc storm-on-desc" id="storm-on-desc" hidden></p>
+          </div>
         </div>
 
-        <div class="group" id="risk-group">
+        <div class="group group-split" id="risk-group">
+          <div class="group-aside">
           <div class="group-head">
             <h3 class="group-title">Risk hours</h3>
             <span class="meta status-word" id="risk-status">off</span>
           </div>
           <p class="group-desc">The hours you know are hardest. Every day during them, strictness goes up, image searches are blurred, and nothing that loosens protection can be changed until they end.</p>
+          </div>
+          <div class="group-body">
           <div class="rows rows-closed">
             <div class="row">
               <div class="row-text">
@@ -2032,25 +2406,33 @@ title/Example Domain/"></textarea>
               </div>
             </div>
           </div>
+          </div>
         </div>
 
-        <div class="group">
+        <div class="group group-split">
+          <div class="group-aside">
           <div class="group-head">
             <h3 class="group-title">PIN</h3>
             <span class="meta status-word" id="pin-status">not set</span>
           </div>
           <p class="group-desc">With a PIN set, anything that loosens protection asks for it first.</p>
+          </div>
+          <div class="group-body">
           <div class="btn-row">
             <button type="button" class="btn btn-ghost" id="set-pin">Set PIN</button>
           </div>
           <div class="btn-row danger-zone">
             <button type="button" class="btn btn-danger" id="clear-pin">Clear PIN</button>
           </div>
+          </div>
         </div>
 
-        <div class="group">
+        <div class="group group-split">
+          <div class="group-aside">
           <h3 class="group-title">Access code</h3>
           <p class="group-desc">A second step on top of your PIN. A random code appears and you retype it by hand, with copy and paste turned off, so it takes real effort: long enough for an urge to pass. By default it only guards the big moments: turning blocking off, whitelisting a whole site, clearing your PIN, or weakening the code itself.</p>
+          </div>
+          <div class="group-body">
           <div class="rows rows-closed">
             <div class="row">
               <div class="row-text">
@@ -2091,14 +2473,18 @@ title/Example Domain/"></textarea>
               </div>
             </div>
           </div>
+          </div>
         </div>
 
-        <div class="group">
+        <div class="group group-split">
+          <div class="group-aside">
           <div class="group-head">
             <h3 class="group-title">Private windows</h3>
             <span class="meta status-word" id="incognito-status">checking</span>
           </div>
           <p class="group-desc">Whether BlockNSFW runs in private (incognito) windows. Your browser only lets you change this on the extension’s own page.</p>
+          </div>
+          <div class="group-body">
           <div class="rows rows-closed">
             <div class="row">
               <div class="row-text">
@@ -2113,10 +2499,14 @@ title/Example Domain/"></textarea>
             </div>
             <a class="row-link" id="open-incognito-settings" href="#" target="_blank" rel="noreferrer noopener">Open the extensions page <svg class="icon icon-up-right" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M4.5 11.5l7-7M6 4.5h5.5V10" /></svg></a>
           </div>
+          </div>
         </div>
 
-        <div class="group">
+        <div class="group group-split">
+          <div class="group-aside">
           <h3 class="group-title">Detection</h3>
+          </div>
+          <div class="group-body">
           <div class="rows rows-closed">
             <div class="row">
               <div class="row-text">
@@ -2142,16 +2532,29 @@ title/Example Domain/"></textarea>
               </label>
             </div>
           </div>
+          </div>
         </div>
       </section>
 
       <section class="section" id="section-community" aria-labelledby="h-community">
-        <h2 class="section-head" id="h-community"><span class="index">05</span>Community</h2>
-        <p class="section-desc">Help the blocklist: report a site that was missed, or one that was blocked by mistake.</p>
+        <header class="section-header">
+          <svg class="section-threshold" viewBox="0 0 560 220" aria-hidden="true" focusable="false">
+            <path class="threshold-arrivals" d="M548 20H330M470 36H330M484 36H524M520 52H330M534 52H558M432 68H330M446 68H506M560 84H330M496 100H330M510 100H542M452 148H330M466 148H514M540 164H330M488 180H330M502 180H530M516 196H330M530 196H550" />
+            <path class="threshold-line" d="M330 4V200" />
+            <path class="threshold-through" d="M560 124H220" />
+            <rect class="threshold-held" x="212" y="120" width="8" height="8" />
+          </svg>
+          <p class="section-eyebrow" aria-hidden="true"><span class="index">05</span><span>Settings</span></p>
+          <h2 class="section-head" id="h-community">Community</h2>
+          <p class="section-desc">Help the blocklist: report a site that was missed, or one that was blocked by mistake.</p>
+        </header>
 
-        <div class="group" id="community-reports-card">
+        <div class="group group-split" id="community-reports-card">
+          <div class="group-aside">
           <h3 class="group-title">Report a site</h3>
           <p class="group-desc">No account needed. Reports are grouped by site, so different pages of one site count as one report.</p>
+          </div>
+          <div class="group-body">
           <div class="rows rows-closed">
             <div class="row row-stack">
               <div class="field">
@@ -2196,11 +2599,22 @@ title/Example Domain/"></textarea>
             <span class="counter" id="report-cooldown" aria-live="polite"></span>
           </div>
           <p class="field-hint pin-hint" id="report-status" role="status">Reports are reviewed, and a site may be added to the built-in blocklist in a later update.</p>
+          </div>
         </div>
       </section>
 
       <section class="section" id="section-about" aria-labelledby="h-about">
-        <h2 class="section-head" id="h-about"><span class="index">06</span>About</h2>
+        <header class="section-header">
+          <svg class="section-threshold" viewBox="0 0 560 220" aria-hidden="true" focusable="false">
+            <path class="threshold-arrivals" d="M548 20H330M470 36H330M484 36H524M520 52H330M534 52H558M432 68H330M446 68H506M560 84H330M496 100H330M510 100H542M452 148H330M466 148H514M540 164H330M488 180H330M502 180H530M516 196H330M530 196H550" />
+            <path class="threshold-line" d="M330 4V200" />
+            <path class="threshold-through" d="M560 124H220" />
+            <rect class="threshold-held" x="212" y="120" width="8" height="8" />
+          </svg>
+          <p class="section-eyebrow" aria-hidden="true"><span class="index">06</span><span>Settings</span></p>
+          <h2 class="section-head" id="h-about">About</h2>
+          <p class="section-desc">The version you’re running, what changed, and the source code.</p>
+        </header>
         <div class="group">
           <div class="rows rows-closed">
             <div class="record">

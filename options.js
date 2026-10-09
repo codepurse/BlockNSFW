@@ -2650,11 +2650,41 @@ function renderLockNotes(hasPin, accessCode, pact) {
     if (!hasPin) return code ? 'asks for an access code' : '';
     return code ? 'asks for your PIN and an access code' : 'asks for your PIN';
   };
-  document.querySelectorAll('[data-lock]').forEach((el) => {
+  const textFor = (el) => {
     const [tier, mode] = String(el.dataset.lock).split(' ');
-    const text = predicate(tier, mode === 'set');
+    return predicate(tier, mode === 'set');
+  };
+  document.querySelectorAll('[data-lock]').forEach((el) => {
+    const text = textFor(el);
     el.textContent = text ? `${el.dataset.lockWhen || 'Changing this'} ${text}.` : '';
     el.hidden = !text;
+  });
+  // A pact's wait replaces the commitment steps, so their note goes with it.
+  document.querySelectorAll('[data-unless-pact]').forEach((el) => { el.hidden = !!waits; });
+
+  // When every guarded control in a section asks for the same thing, say it
+  // once under the section head instead of under every row. The dials keep
+  // their own line: they never wait.
+  document.querySelectorAll('.section').forEach((section) => {
+    const notes = [...section.querySelectorAll('[data-lock]')]
+      .filter((el) => String(el.dataset.lock).split(' ')[0] !== 'tuning');
+    const texts = notes.map(textFor);
+    const shared = notes.length > 1 && texts[0] && texts.every((t) => t === texts[0]) ? texts[0] : '';
+    const header = section.querySelector(':scope > .section-header');
+    let line = header && header.querySelector(':scope > .section-lock');
+    if (!line && shared && header) {
+      line = document.createElement('p');
+      line.className = 'section-lock';
+      header.appendChild(line);
+    }
+    if (line) {
+      line.textContent = !shared ? ''
+        : (waits && shared === `waits ${waits}`
+          ? `Under your pact, anything here that loosens protection waits ${waits}.`
+          : `Anything here that loosens protection ${shared}.`);
+      line.hidden = !shared;
+    }
+    if (shared) notes.forEach((el) => { el.hidden = true; });
   });
 }
 
@@ -2699,6 +2729,10 @@ async function render() {
 
   $('blocked-stats').textContent = (Number(stats.blockedCount) || 0).toLocaleString();
   setStatusWord($('pin-status'), pinIsSet(pin) ? 'set' : 'not set', pinIsSet(pin));
+  // Nothing to clear without a PIN; with one, the same button changes it.
+  const clearPinRow = $('clear-pin') && $('clear-pin').closest('.btn-row');
+  if (clearPinRow) clearPinRow.hidden = !pinIsSet(pin);
+  if ($('set-pin')) $('set-pin').textContent = pinIsSet(pin) ? 'Change PIN' : 'Set PIN';
   renderLockNotes(pinIsSet(pin), await getAccessCodeConfig(), await readPact());
   await renderPact();
   await renderHardMoments();
@@ -2908,6 +2942,7 @@ function applySubscribeQueryParam() {
 
     const hint = $('subscription-hint');
     if (hint) hint.textContent = 'Filled in from a subscribe link. Check the address, then press Subscribe.';
+    if (window.BlockNSFWSettings) window.BlockNSFWSettings.reveal(input);
     input.scrollIntoView({ block: 'center' });
     input.focus();
   } catch (_) {}

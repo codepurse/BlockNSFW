@@ -1,7 +1,7 @@
 // options-layout.js — the settings page's own layout behaviour: the
 // full-width toggle, the welcome cards folding to one line once read, the
-// Warden banner's countdown, and the sidebar nav's smooth scroll and active
-// section.
+// Warden banner's countdown, and the sidebar, which shows one section at a
+// time.
 //
 // Loaded from <head>, not the end of <body>, so a saved full-width choice is
 // on <html> before the first paint. Applied any later, the page would visibly
@@ -31,6 +31,21 @@
 
   try {
     applyFullWidth(localStorage.getItem(FULL_WIDTH_KEY) === '1');
+  } catch (_) {}
+
+  // Settings shows one section at a time, named in the address
+  // (options.html#security; the older #section-security still works). Set
+  // here, before the page is parsed, so the first paint shows only that
+  // section. An address that names something inside a section
+  // (#own-words-group) opens on Welcome for a moment, until the page exists
+  // and the section holding it can be found.
+  var SECTIONS = ['welcome', 'protection', 'customization', 'security', 'community', 'about'];
+  function sectionFromHash(hash) {
+    var name = String(hash || '').replace(/^#/, '').replace(/^section-/, '');
+    return SECTIONS.indexOf(name) >= 0 ? name : null;
+  }
+  try {
+    root.setAttribute('data-section', sectionFromHash(location.hash) || 'welcome');
   } catch (_) {}
 
   // The two cards at the top of Settings. What's New remembers the version it
@@ -147,53 +162,69 @@
     sync();
   }
 
+  // The sidebar opens one section at a time. Each is a page of its own in
+  // the history, so Back returns to the section before.
   function initNav() {
     var links = Array.prototype.slice.call(document.querySelectorAll('.nav-link[data-target]'));
     if (!links.length) return;
-    var byId = {};
-    links.forEach(function (l) { byId[l.dataset.target] = l; });
+    function nameOf(link) { return String(link.dataset.target).replace(/^section-/, ''); }
+    function heading(name) {
+      return document.querySelector('#section-' + name + ' .section-head');
+    }
+    function show(name, keepScroll) {
+      root.setAttribute('data-section', name);
+      links.forEach(function (l) {
+        var on = nameOf(l) === name;
+        l.classList.toggle('active', on);
+        if (on) l.setAttribute('aria-current', 'page');
+        else l.removeAttribute('aria-current');
+      });
+      if (!keepScroll) window.scrollTo(0, 0);
+    }
+    // Moves keyboard and screen-reader focus to the new section's title, so
+    // the change is announced and Tab starts from the top of it.
+    function focusHeading(name) {
+      var h = heading(name);
+      if (!h) return;
+      h.setAttribute('tabindex', '-1');
+      h.focus({ preventScroll: true });
+    }
+    // Something inside a section: open that section, then bring it into view.
+    function reveal(el) {
+      var section = el && el.closest ? el.closest('.main > .section') : null;
+      if (!section) return false;
+      var name = section.id.replace(/^section-/, '');
+      if (SECTIONS.indexOf(name) < 0) return false;
+      show(name, true);
+      el.scrollIntoView({ block: 'start' });
+      return true;
+    }
+    function route() {
+      var hash = location.hash;
+      var name = sectionFromHash(hash);
+      if (name) { show(name); return; }
+      var target = null;
+      try { target = hash.length > 1 ? document.getElementById(decodeURIComponent(hash.slice(1))) : null; } catch (_) {}
+      if (target && reveal(target)) return;
+      show(root.getAttribute('data-section') || SECTIONS[0], true);
+    }
     links.forEach(function (l) {
+      var name = nameOf(l);
+      l.setAttribute('href', '#' + name);
       l.addEventListener('click', function (e) {
+        // A new tab or window opens the section there, as a link would.
+        if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
         e.preventDefault();
-        var el = document.getElementById(l.dataset.target);
-        if (!el) return;
-        var still = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-        el.scrollIntoView({ behavior: still ? 'auto' : 'smooth', block: 'start' });
+        if (location.hash !== '#' + name) history.pushState(null, '', '#' + name);
+        show(name);
+        focusHeading(name);
       });
     });
-    var sections = links
-      .map(function (l) { return document.getElementById(l.dataset.target); })
-      .filter(Boolean);
-    function activate(link) {
-      links.forEach(function (x) {
-        x.classList.remove('active');
-        x.removeAttribute('aria-current');
-      });
-      link.classList.add('active');
-      link.setAttribute('aria-current', 'true');
-    }
-    // With both welcome cards folded, the first section is too short to ever
-    // reach the band below, and the second would be marked at the very top
-    // of the page. At the top, the first link is the one marked.
-    function atTop() { return window.scrollY < 8; }
-    var current = links[0]; // the section in the band
-    function sync() { activate(atTop() ? links[0] : current); }
-    if ('IntersectionObserver' in window) {
-      var obs = new IntersectionObserver(function (entries) {
-        entries.forEach(function (en) {
-          if (en.isIntersecting && byId[en.target.id]) current = byId[en.target.id];
-        });
-        sync();
-      }, { rootMargin: '-15% 0px -75% 0px', threshold: 0 });
-      sections.forEach(function (s) { obs.observe(s); });
-      var wasTop = atTop();
-      window.addEventListener('scroll', function () {
-        if (atTop() === wasTop) return;
-        wasTop = atTop();
-        sync();
-      }, { passive: true });
-    }
-    activate(links[0]);
+    window.addEventListener('popstate', route);
+    window.addEventListener('hashchange', route);
+    // For options.js: open the section holding a control before focusing it.
+    window.BlockNSFWSettings = { reveal: reveal };
+    route();
   }
 
   function init() {

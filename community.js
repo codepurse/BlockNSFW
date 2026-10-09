@@ -121,8 +121,103 @@
     feedState.replaceChildren();
   }
 
+  // --- A voice from the community -------------------------------------------
+  //
+  // A few words from one story, set large at the top of the page. Most
+  // stories are too long to quote whole, so the voice is the story's last
+  // sentence or two: where people tend to say what keeps them going. It is
+  // picked at random on every visit, and Read another steps through the rest
+  // in a shuffled order, so none comes round twice before all have. Until
+  // stories load, or when none has a passage short enough, the sentence in
+  // the markup stands.
+  const VOICE_MIN = 40;
+  const VOICE_MAX = 200;
+  const voiceQuote = document.getElementById('voice-quote');
+  const voiceCite = document.getElementById('voice-cite');
+  const voiceNext = document.getElementById('voice-next');
+  let voices = [];
+  let voiceAt = 0;
+
+  function flatten(text) {
+    return String(text || '').replace(/\s+/g, ' ').trim();
+  }
+
+  // The story whole if it is short enough, else its closing sentences, as
+  // many as fit. Null when even the last sentence is too long, or what fits
+  // is too short to stand alone.
+  function voicePassage(story) {
+    const whole = flatten(story && story.content);
+    if (whole.length <= VOICE_MAX) {
+      return whole.length >= VOICE_MIN ? { text: whole, excerpt: false } : null;
+    }
+    // A closing "PS" is an afterthought, not what the story came to say.
+    const sentences = whole.split(/(?<=[.!?])\s+/);
+    while (sentences.length > 1 && /^p\.?\s?s\b/i.test(sentences[sentences.length - 1])) sentences.pop();
+    let text = '';
+    for (let i = sentences.length - 1; i >= 0; i--) {
+      const next = text ? `${sentences[i]} ${text}` : sentences[i];
+      if (next.length > VOICE_MAX) break;
+      text = next;
+    }
+    return text.length >= VOICE_MIN ? { text, excerpt: true } : null;
+  }
+
+  function showVoice() {
+    const voice = voices[voiceAt];
+    if (!voice || !voiceQuote) return;
+    voiceQuote.textContent = voice.excerpt ? `…${voice.text}` : voice.text;
+    if (!voiceCite) return;
+    voiceCite.replaceChildren(voice.story.title ? `From “${voice.story.title}” · Anonymous` : 'Anonymous');
+    if (voice.excerpt && voice.post) {
+      const read = document.createElement('button');
+      read.type = 'button';
+      read.className = 'link voice-read';
+      read.textContent = 'Read it all';
+      read.addEventListener('click', () => {
+        const body = voice.post.querySelector('.story-body');
+        const more = voice.post.querySelector('.story-more');
+        if (body && body.classList.contains('is-folded') && more) more.click();
+        voice.post.tabIndex = -1;
+        voice.post.scrollIntoView({ block: 'start' });
+        voice.post.focus({ preventScroll: true });
+      });
+      voiceCite.append(' · ', read);
+    }
+    voiceCite.hidden = false;
+  }
+
+  function setVoices(stories, posts) {
+    voices = stories
+      .map((story, i) => {
+        const passage = voicePassage(story);
+        return passage ? Object.assign({ story, post: posts[i] }, passage) : null;
+      })
+      .filter(Boolean);
+    if (!voices.length) return;
+    // Fisher–Yates: every order equally likely.
+    for (let i = voices.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [voices[i], voices[j]] = [voices[j], voices[i]];
+    }
+    voiceAt = 0;
+    showVoice();
+    if (voiceNext) voiceNext.hidden = voices.length < 2;
+  }
+
+  if (voiceNext) {
+    voiceNext.addEventListener('click', () => {
+      if (voices.length < 2) return;
+      voiceAt = (voiceAt + 1) % voices.length;
+      showVoice();
+      announce(voiceQuote.textContent);
+    });
+  }
+
   // --- Post rendering -------------------------------------------------------
   let storySeq = 0;
+  // Stories longer than this may run past four lines and are folded; the
+  // fold comes off again where the whole story fits after all.
+  const FOLD_FROM = 220;
 
   function buildPost(story, likedSet) {
     const card = document.createElement('article');
@@ -138,11 +233,35 @@
       card.appendChild(title);
     }
 
-    // Body, with the author's line breaks kept
+    // Body, with the author's line breaks kept. A long one is folded after
+    // four lines; appendStories keeps the fold only where it hides something.
     const body = document.createElement('p');
     body.className = 'story-body';
+    body.id = `story-body-${++storySeq}`;
     body.textContent = story.content || '';
     card.appendChild(body);
+
+    if ((story.content || '').length > FOLD_FROM) {
+      body.classList.add('is-folded');
+      const more = document.createElement('button');
+      more.type = 'button';
+      more.className = 'link story-more';
+      more.textContent = 'Read the whole story';
+      more.setAttribute('aria-expanded', 'false');
+      more.setAttribute('aria-controls', body.id);
+      more.addEventListener('click', () => {
+        const open = !body.classList.toggle('is-folded');
+        more.setAttribute('aria-expanded', String(open));
+        more.textContent = open ? 'Show less' : 'Read the whole story';
+      });
+      card.appendChild(more);
+    }
+
+    // Every story is anonymous; the sign-off says so in the author's place.
+    const sign = document.createElement('p');
+    sign.className = 'story-sign';
+    sign.textContent = '— Anonymous';
+    card.appendChild(sign);
 
     const actions = document.createElement('div');
     actions.className = 'story-actions';
@@ -155,28 +274,27 @@
     let syncTimer = null;
     let syncing = false;
 
-    // "Like · 12": one label, so the underline runs unbroken. The check
-    // shows only while pressed; the label itself never changes.
+    // "This helped me 12": what the count means, on a page that exists to
+    // help. The check shows only while pressed; the label never changes, and
+    // the count only shows once someone has been helped.
     const likeBtn = document.createElement('button');
     likeBtn.type = 'button';
-    likeBtn.className = 'btn btn-text story-like';
+    likeBtn.className = 'btn btn-ghost btn-sm story-like';
     const check = icon('check');
     if (check) likeBtn.appendChild(check);
     const likeLabel = document.createElement('span');
-    const likeDot = document.createElement('span');
-    likeDot.setAttribute('aria-hidden', 'true');
-    likeDot.textContent = '·';
+    likeLabel.textContent = 'This helped me';
     const likeCount = document.createElement('span');
-    likeCount.className = 'mono tnum';
-    likeLabel.append('Like ', likeDot, ' ', likeCount);
-    likeBtn.appendChild(likeLabel);
+    likeCount.className = 'mono tnum story-like-count';
+    likeBtn.append(likeLabel, likeCount);
 
     function renderLike() {
       const shown = uiLiked === serverLiked
         ? serverLikes
         : Math.max(0, serverLikes + (uiLiked ? 1 : -1));
       likeBtn.setAttribute('aria-pressed', String(uiLiked));
-      likeCount.textContent = formatCount(shown);
+      likeCount.textContent = shown > 0 ? formatCount(shown) : '';
+      likeCount.hidden = shown <= 0;
     }
     renderLike();
 
@@ -246,18 +364,34 @@
   let loadingMore = false;
   let feedLoading = false;
 
-  // Appends a page of stories and returns the first new one.
+  // Appends a page of stories and returns the new posts, in order.
   function appendStories(stories) {
     const frag = document.createDocumentFragment();
-    let first = null;
+    const posts = [];
     for (const story of stories) {
       const post = buildPost(story, likedSet);
-      if (!first) first = post;
+      posts.push(post);
       frag.appendChild(post);
     }
     feed.appendChild(frag);
     loaded += stories.length;
-    return first;
+    unfoldWhatFits();
+    return posts;
+  }
+
+  // A folded story whose words all fit in four lines needs no fold and no
+  // "Read the whole story".
+  function unfoldWhatFits() {
+    requestAnimationFrame(() => {
+      feed.querySelectorAll('.story-body.is-folded:not([data-fold-checked])').forEach((body) => {
+        body.dataset.foldChecked = '1';
+        if (body.scrollHeight <= body.clientHeight + 1) {
+          body.classList.remove('is-folded');
+          const more = body.parentElement && body.parentElement.querySelector('.story-more');
+          if (more) more.remove();
+        }
+      });
+    });
   }
 
   function renderFooter() {
@@ -289,9 +423,10 @@
       return;
     }
     clearState();
-    appendStories(stories);
+    const posts = appendStories(stories);
     updateCount(total);
     renderFooter();
+    setVoices(stories, posts);
   }
 
   async function loadInitial({ force = false } = {}) {
@@ -344,7 +479,7 @@
     try {
       const page = await PBlockerStories.fetchStories({ offset: loaded, limit: PAGE_SIZE });
       total = page.total;
-      const first = appendStories(page.stories);
+      const first = appendStories(page.stories)[0] || null;
       updateCount(total);
       renderFooter();
       // The button was replaced; carry focus on to the first new story.

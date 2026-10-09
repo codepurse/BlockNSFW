@@ -8,8 +8,10 @@
   <link rel="stylesheet" href="ui/tokens.css" />
   <link rel="stylesheet" href="ui/components.css" />
   <style>
-    /* The changelog: one left-aligned column of releases. Each release is a
-       meta head with its version in brass, then its groups as hairline rows. */
+    /* The changelog: the same centered 960px column as Settings and
+       Statistics. Wide enough, each release is two columns, its version,
+       date and status on the left and its changes on the right, so the
+       sentences keep to a reading measure. */
     body {
       padding: var(--space-6) var(--space-4) var(--space-7);
     }
@@ -20,7 +22,11 @@
       }
     }
     .page {
-      max-width: 40rem;
+      max-width: 960px;
+      margin-inline: auto;
+    }
+    .page-lede {
+      max-width: var(--measure);
     }
 
     .page-links {
@@ -40,12 +46,41 @@
     .release {
       margin-top: var(--space-7);
     }
+    .release + .release {
+      padding-top: var(--space-6);
+      border-top: 1px solid var(--color-rule-2);
+    }
     .release > .section-head {
       flex-wrap: wrap;
       row-gap: var(--space-1);
     }
     .release-status {
       margin-left: auto;
+    }
+    @media (min-width: 52rem) {
+      .release {
+        display: grid;
+        grid-template-columns: minmax(0, 13rem) minmax(0, 1fr);
+        column-gap: var(--space-7);
+        align-items: start;
+      }
+      /* The release's name, stacked: the version large, then when, then
+         whether it is the one installed. */
+      .release > .section-head {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: var(--space-2);
+      }
+      .release > .section-head .release-version {
+        font-size: 20px;
+        letter-spacing: 0.04em;
+      }
+      .release-status {
+        margin-left: 0;
+      }
+      .release-body > :first-child {
+        margin-top: 0;
+      }
     }
     .release-intro {
       margin-top: var(--space-4);
@@ -127,6 +162,7 @@
         <span>October 2026</span>
         <span class="release-status meta-pine" data-status="current">Current</span>
       </h2>
+      <div class="release-body">
 
       <div class="group">
         <h3 class="group-label">New</h3>
@@ -261,6 +297,7 @@
           </li>
         </ul>
       </div>
+      </div>
     </section>
 
     <!-- ===================== 1.9.0 ===================== -->
@@ -269,6 +306,7 @@
         <span class="index release-version">1.9.0</span>
         <span>October 2026</span>
       </h2>
+      <div class="release-body">
 
       <div class="group">
         <h3 class="group-label">New</h3>
@@ -347,6 +385,7 @@
           </li>
         </ul>
       </div>
+      </div>
     </section>
 
     <!-- ===================== 1.8.0 ===================== -->
@@ -355,6 +394,7 @@
         <span class="index release-version">1.8.0</span>
         <span>September 2026</span>
       </h2>
+      <div class="release-body">
 
       <div class="group">
         <h3 class="group-label">New</h3>
@@ -405,6 +445,7 @@
           </li>
         </ul>
       </div>
+      </div>
     </section>
 
     <!-- ===================== 1.7.7 ===================== -->
@@ -414,6 +455,7 @@
         <span>September 2026</span>
         <span class="release-status" data-status="folded">Included in 1.8.0</span>
       </h2>
+      <div class="release-body">
       <p class="release-intro">
         1.7.7 was prepared but never published on its own, so these fixes reached you as part of 1.8.0. They are listed separately as a record of what changed.
       </p>
@@ -471,6 +513,7 @@
           </li>
         </ul>
       </div>
+      </div>
     </section>
 
     <!-- ===================== 1.7.6 ===================== -->
@@ -479,6 +522,7 @@
         <span class="index release-version">1.7.6</span>
         <span>August 2026</span>
       </h2>
+      <div class="release-body">
 
       <div class="group">
         <h3 class="group-label">New</h3>
@@ -636,6 +680,7 @@
           </li>
         </ul>
       </div>
+      </div>
     </section>
 
     <!-- ===================== 1.7.5 ===================== -->
@@ -644,6 +689,7 @@
         <span class="index release-version">1.7.5</span>
         <span>August 2026</span>
       </h2>
+      <div class="release-body">
 
       <div class="group">
         <h3 class="group-label">New</h3>
@@ -768,6 +814,7 @@
           </li>
         </ul>
       </div>
+      </div>
     </section>
 
     <!-- ===================== 1.7.4 ===================== -->
@@ -776,6 +823,7 @@
         <span class="index release-version">1.7.4</span>
         <span>17 August 2026</span>
       </h2>
+      <div class="release-body">
 
       <div class="group">
         <h3 class="group-label">New</h3>
@@ -922,6 +970,7 @@
             </p>
           </li>
         </ul>
+      </div>
       </div>
     </section>
 

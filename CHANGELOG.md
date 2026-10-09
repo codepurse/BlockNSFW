@@ -114,13 +114,32 @@ the urge works even when you know every PIN.
 - **The popup is 360px wide.** It opens on the protection switch, shows the
   counts as figures, and says beside each guarded control what it will ask for
   ("Asks for your PIN.").
-- **Settings sections are numbered and set as rows.** The column is 960px,
-  centered beside the sidebar, and its sentences keep to a reading measure;
-  the full-width button still lets it run to the edge. Notices are
+- **Settings shows one section at a time.** The sidebar opens Welcome,
+  Protection, Customization, Security, Community or About as a page of its
+  own, with its own address (`options.html#security`), so Back returns to the
+  section before. Each section opens on its own header: a numbered label,
+  the title, what the section is for, and behind it a hairline drawing of
+  the monolab mark's idea, things arriving at a line and one let through.
+  Each group is two columns: its name and what it's for on
+  the left, its controls on the right. When everything in a section asks for
+  the same thing (under a pact, the same wait), that is said once under the
+  section's title instead of under every switch, and the longest explanations
+  fold to one line until opened. Clear PIN only shows once there is a PIN.
+  The column is 960px, centered beside the sidebar, and its sentences keep to
+  a reading measure; the full-width button still lets it run to the edge.
+  Notices are
   read out by screen readers, and every confirmation is a dialog that keeps
   focus, closes with Escape and returns you to where you were. Clearing your
   uploaded HTML and resetting trusted sites now ask to confirm first, like the
   other destructive actions.
+- **Community stories open on a voice from the community.** The page starts
+  on the deep band with a few words from one story, set large: its closing
+  sentences, where people tend to say what keeps them going. A different
+  one is picked at random on every visit; Read another steps through the
+  rest, and Read it all opens the whole story. Stories are
+  set in the serif at reading size and signed "— Anonymous", long ones fold
+  after four lines, and Like is now "This helped me". The page ends on an
+  invitation to write the next one.
 - **What BlockNSFW draws on web pages lives in a closed shadow root.** The
   held image placeholder, the search-result notice, the summary line and the
   floating counter can no longer be restyled or read by the page they sit on,
