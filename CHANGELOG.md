@@ -4,6 +4,35 @@ All notable project changes should be documented here going forward.
 
 ## [Unreleased]
 
+## [1.9.0] - 2026-10-07
+
+The blocked page becomes something to do while the urge passes, the AI text
+blocker gets a model that can be trusted to block on its own, and large
+community lists such as OISD's work at last.
+
+### Added
+
+- **A choice of design for the blocked page.** Settings > Blocked Page now
+  offers four designs beside Classic, each with a thumbnail and a Preview
+  button. Each one is built around getting through the moment rather than
+  only reporting the block:
+  - **Calm**: an ensō, the Zen circle, drawn one breath at a time. Hold to
+    breathe in and the brush starts the circle; let go to breathe out and it
+    closes. A red seal signs the page after the fifth breath.
+  - **Verse**: a King James verse under a cross of light cut through a
+    concrete wall. The cross is placed from where the words fall, so it never
+    crosses the text, from a 320px phone to a 4K screen.
+  - **Motivation**: "don't break the chain". A wall calendar of the last five
+    weeks with a red X on every day protection stayed on, and today's square
+    left open to mark. The next milestone (7, 30, 90 days) is counted down.
+  - **Play**: a six-by-six board of channel tiles to turn until the ink runs
+    from the spring to the sea. Every river is solvable and never dealt
+    solved. No clock, no score, nothing saved.
+
+  The choice is presentation only, so it is not behind the PIN. A custom
+  blocked-page URL or your own HTML still takes over from any design. Every
+  design fits from a small phone to a 4K screen, and follows light and dark.
+
 ### Fixed
 
 - **The Settings sidebar never showed which section you were on.** Its
@@ -121,12 +150,23 @@ All notable project changes should be documented here going forward.
   - **A full-width toggle** sits beside the name at the top of the sidebar. It
     lets the content run to the right edge, and is remembered on that device.
     It only appears where it makes a difference, from 1304px wide.
-  - **What's New is a grid of tiles**, one per change: two columns at the
-    standard width, four or more with full width on, one on a phone. Lines drop
-    from about 130 characters to about 65.
-  - **With full width on, the Message from the Dev sits beside What's New**
-    (from 1600px wide), so the letter keeps a readable line length and the
-    release notes get more columns.
+
+- **What's New and the Message from the Dev no longer take over the top of
+  Settings.** Users said the two cards took up the top of the page, about
+  690px before the first setting at a typical width; it is now about 400px.
+  - **The Message from the Dev is a short Warden banner**, in Warden's own
+    type and colours: "In a weak moment, Warden makes you wait", one
+    sentence, and links to join the beta list and to learn more. A watch-face
+    dial on the right counts down a cool-down, as an illustration of
+    Warden's delay; it stands still for anyone who prefers reduced motion.
+    Folded, its line keeps the countdown.
+  - **What's New lists headlines.** Each change is one row; its explanation
+    opens under it with a click. The card is about 270px instead of 475px.
+  - **"Got it" folds What's New to one line** until the next version, when it
+    opens in full again by itself. Opening it from its line is for that visit
+    only.
+  - **The banner opens on every visit.** Its × folds it to one line for that
+    visit only.
 
 - **The AI Text Blocker has a new model, and text alone can block a page
   again.** Since 1.7.4 a temporary catch in `content.js` downgraded every
@@ -178,6 +218,11 @@ All notable project changes should be documented here going forward.
 
 ### For contributors
 
+- `blocked-themes.js` is the one registry of blocked-page designs, read by both
+  `blocked.html` and the Settings picker, so the two cannot disagree. The verse
+  is set in Newsreader (SIL OFL), shipped in `fonts/` with its licence.
+  `tests/page-scripts-ship.test.js` now also fails if a stylesheet loads a file
+  by `url()` that a build leaves out.
 - `tools/text_corpus/build_corpus.py` builds the corpus from Common Crawl
   (resumable, byte-capped; about 290 MB of downloads). Its output in
   `tools/text_corpus/cache/` is git-ignored and must stay so: it holds adult
@@ -207,8 +252,14 @@ All notable project changes should be documented here going forward.
 - `tests/page-scripts-ship.test.js` also fails if a shipped page carries code
   the CSP will refuse: an inline `<script>`, an inline `on…=` handler, or a
   `javascript:` link.
-- What's New items are now written `<li><strong>Headline</strong> text</li>`,
-  with no dash after the headline: the headline is the top line of its tile.
+- What's New items are now written
+  `<li><details class="wn-item"><summary>Headline</summary><p>Text</p></details></li>`:
+  the headline is the row, and the text opens under it.
+  `tests/options-welcome-cards.test.js` fails on an item written any other
+  way, or when the hand-written "Show N more" no longer counts what it hides.
+- A folded What's New is kept in `localStorage` (`pblocker_whats_new_read`
+  holds the version), and `options-layout.js` reads it from `<head>` so a
+  folded card never shows in full first.
 
 ## [1.8.0] - 2026-09-10
 

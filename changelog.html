@@ -291,11 +291,94 @@
 
   <div class="container">
 
+    <!-- ===================== 1.9.0 ===================== -->
+    <div class="release">
+      <div class="release-head">
+        <span class="release-version">1.9.0</span>
+        <span class="tag tag-current">Current</span>
+        <span class="release-date">October 2026</span>
+      </div>
+
+      <div class="group">
+        <div class="group-title">New</div>
+
+        <div class="entry">
+          <div class="entry-title">Choose a design for the blocked page</div>
+          <div class="entry-body">
+            Settings &rsaquo; Blocked Page now offers four designs beside Classic, each with a thumbnail and a preview, and each made for getting through the moment rather than only reporting the block. <strong>Calm</strong> is an ens&#333;, the Zen circle, drawn one breath at a time: hold to breathe in, let go to breathe out, and a red seal signs the page after the fifth breath. <strong>Verse</strong> sets a King James verse under a cross of light cut through a concrete wall. <strong>Motivation</strong> is a wall calendar with a red X on every day your protection stayed on, and today's square left for you to mark &mdash; don't break the chain. <strong>Play</strong> is a board of channel tiles to turn until a river of ink runs to the sea, with no clock and no score. The choice is not behind your PIN, since it changes only how the page looks, and a custom blocked page of your own still takes over from any design.
+          </div>
+        </div>
+
+        <div class="entry">
+          <div class="entry-title">The AI text blocker has a new model</div>
+          <div class="entry-body">
+            The old model could not tell explicit text from ordinary text reliably, so since 1.7.4 text alone was never allowed to block a page. The new model is trained on real web pages, with extra weight on the sites that share vocabulary with adult content but must never be blocked: recovery, sex education, sexual health, dating, art, parenting. Tested on sites it never saw, at Balanced it blocked none of 297 ordinary pages and none of 130 of those lookalike pages, and it finds an explicit passage hidden inside a long ordinary page three times in four, where the old model never did. It stays labelled Beta: it reads English and most European languages well, but Japanese, Chinese and Russian pages mostly get past it, and the blocklist remains the first line.
+          </div>
+        </div>
+      </div>
+
+      <div class="group">
+        <div class="group-title">Fixed</div>
+
+        <div class="entry">
+          <div class="entry-title">Large lists like OISD's NSFW list work</div>
+          <div class="entry-body">
+            Subscribing to <span class="code">https://nsfw.oisd.nl/ublacklist</span> failed with &ldquo;That file is too large to use as a ruleset&rdquo;. Lists of up to a million rules now work, including the match patterns uBlacklist lists are written in, and the sites in them are looked up instantly instead of being checked one rule at a time.
+          </div>
+        </div>
+
+        <div class="entry">
+          <div class="entry-title">List subscriptions no longer hammer their servers</div>
+          <div class="entry-body">
+            A list that failed to update was retried every time the background woke, many times an hour, until its server started refusing. Retries now wait an hour, or as long as the server asks; an unchanged list is confirmed without downloading it again; and when an update does fail, the status says which rules are still blocking.
+          </div>
+        </div>
+
+        <div class="entry">
+          <div class="entry-title">&ldquo;Unblock this website&rdquo; unblocks the site again</div>
+          <div class="entry-body">
+            Used on the blocked page, the popup's unblock switch added the extension itself to your whitelist instead of the site, so the site stayed blocked. The popup now asks the blocked page which site it stands for. On pages that are not websites, the unblock and block rows no longer appear at all.
+          </div>
+        </div>
+
+        <div class="entry">
+          <div class="entry-title">Notes in your lists stay where you wrote them</div>
+          <div class="entry-body">
+            Saving sorts your lists A&ndash;Z, and it used to move entries above the <span class="code">#</span> or <span class="code">!</span> note they were written under. Notes now never move: only the entries between two notes are sorted, so a note works as a section heading. A list without notes sorts exactly as before.
+          </div>
+        </div>
+
+        <div class="entry">
+          <div class="entry-title">A wildcard entry no longer blocks pages that only mention it</div>
+          <div class="entry-body">
+            An entry like <span class="code">*.xxx</span> also matched text later in an address, so the Wikipedia article about the domain was blocked, and an entry like <span class="code">*.example.com</span> blocked a Google search for a site under it. Wildcards match the site's own name only now.
+          </div>
+        </div>
+
+        <div class="entry">
+          <div class="entry-title">The streak ring and the Settings sidebar work in the installed extension</div>
+          <div class="entry-body">
+            Both were driven by code the extension's own security policy refuses to run, so in the installed extension the streak ring on Statistics never filled and the Settings sidebar never marked the section you were in. Both work now.
+          </div>
+        </div>
+      </div>
+
+      <div class="group">
+        <div class="group-title">Changed</div>
+
+        <div class="entry">
+          <div class="entry-title">Settings uses the whole window on wide screens</div>
+          <div class="entry-body">
+            The sidebar is pinned to the left edge, and on a wide monitor a full-width button beside the name lets the settings run to the right edge. What's New and the message at the top of Settings take far less room: What's New lists headlines you can open, and &ldquo;Got it&rdquo; folds it away until the next version.
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- ===================== 1.8.0 ===================== -->
     <div class="release">
       <div class="release-head">
         <span class="release-version">1.8.0</span>
-        <span class="tag tag-current">Current</span>
         <span class="release-date">September 2026</span>
       </div>
 

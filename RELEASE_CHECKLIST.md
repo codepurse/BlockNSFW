@@ -10,7 +10,8 @@ Use this before publishing Chrome Web Store or Firefox Add-ons update.
 - [ ] Update `package.json` (keep it in step with the manifests)
 - [ ] Update `CHANGELOG.md` or release notes
 - [ ] Update the "What's New" card in `options.html` — it is user-facing and
-      goes stale silently
+      goes stale silently. Readers who folded it see it in full again on the
+      new version, stale or not
 - [ ] Re-read any UI text describing behavior that changed this release
       (feature descriptions, toggle hints) so the UI does not describe the old
       behavior
