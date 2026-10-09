@@ -41,6 +41,9 @@ const DEFAULT_SETTINGS = {
   aiStrictness: 'balanced',
   aiTextBlocker: false,
   aiTextStrictness: 'balanced',
+  gateways: [], // built-in gateway ids turned on; all off until chosen (shared/gateways.js)
+  gatewaysCustom: [], // the user's own gateway sites: 'site.com' or 'site.com/path'
+  gatewayPauseSeconds: 10,
 };
 
 // The 24 sites Reset puts back on the trusted list.
@@ -690,6 +693,7 @@ const QrCode = self.QrCode || null;
 // Storm Mode, Risk Hours, own words, slips (shared/boost.js, moments.js).
 const Boost = self.Boost || null;
 const Moments = self.Moments || null;
+const Gateways = self.Gateways || null;
 
 // During Storm Mode or Risk Hours nothing that loosens protection can be done,
 // not even with a pact's wait or a witness code. Resolves true, after saying
@@ -2736,6 +2740,7 @@ async function render() {
   renderLockNotes(pinIsSet(pin), await getAccessCodeConfig(), await readPact());
   await renderPact();
   await renderHardMoments();
+  renderGateways(settings);
 
   const accessCode = await getAccessCodeConfig();
   const accessCodeToggle = $('access-code-enabled');
@@ -3118,6 +3123,186 @@ function setupColorSchemePicker() {
   });
 }
 
+// --- Gateways ----------------------------------------------------------------
+//
+// The sites where it tends to start (shared/gateways.js). Turning one on, or
+// adding a site, makes protection stronger and happens at once. Turning one
+// off, removing a site or shortening the pause loosens it, so it asks for what
+// every other loosening asks for: the PIN, and under a pact, the wait.
+
+function gatewayChange(removeFrom) {
+  return { kind: 'settings', payload: { removeFrom } };
+}
+
+function renderGateways(settings) {
+  if (!Gateways || !$('gateways-group')) return;
+  const g = Gateways.normalizeSettings(settings);
+  const on = g.on.length + g.custom.length;
+  setStatusWord($('gateways-status'), on ? `${on} on` : 'off', on > 0);
+
+  Gateways.BUILT_IN.forEach((gateway) => {
+    const input = $(`gateway-${gateway.id}`);
+    if (input) input.checked = g.on.includes(gateway.id);
+  });
+
+  const list = $('gateway-custom-list');
+  list.textContent = '';
+  list.hidden = g.custom.length === 0;
+  g.custom.forEach((entry) => {
+    const row = document.createElement('div');
+    row.className = 'domain-row';
+    const main = document.createElement('div');
+    main.className = 'domain-main';
+    const label = document.createElement('span');
+    label.className = 'domain';
+    label.textContent = entry;
+    label.title = entry;
+    const meta = document.createElement('span');
+    meta.className = 'domain-meta';
+    meta.textContent = entry.includes('/') ? 'Part of a site' : 'Whole site';
+    main.append(label, meta);
+    const remove = document.createElement('button');
+    remove.type = 'button';
+    remove.className = 'btn-text btn-danger';
+    remove.textContent = 'Remove';
+    remove.setAttribute('aria-label', `Remove ${entry} from your gateways`);
+    remove.addEventListener('click', () => removeCustomGateway(entry));
+    row.append(main, remove);
+    list.appendChild(row);
+  });
+
+  const pause = $('gateway-pause');
+  if (pause) pause.value = String(g.pause);
+}
+
+async function setGatewaySwitch(gateway, turnOn) {
+  const settings = await getSettings();
+  const current = Gateways.normalizeSettings(settings).on;
+  if (turnOn) {
+    settings.gateways = current.includes(gateway.id) ? current : [...current, gateway.id];
+    await setSettings(settings);
+    showToast(`${gateway.name} now asks you to pause first.`, 'success');
+  } else {
+    const ok = await guardWeakening(`stop pausing at ${gateway.name}`, {}, gatewayChange({ gateways: [gateway.id] }));
+    if (ok) {
+      settings.gateways = current.filter((id) => id !== gateway.id);
+      await setSettings(settings);
+      showToast(`${gateway.name} opens without a pause now.`, 'info');
+    }
+  }
+  renderGateways(await getSettings());
+}
+
+async function addCustomGateway() {
+  const input = $('gateway-custom');
+  const error = $('gateway-custom-error');
+  const entry = Gateways.normalizeCustom(input.value);
+  error.textContent = '';
+  if (!entry) {
+    error.textContent = 'That isn’t a site. Try site.com, or site.com/part.';
+    input.focus();
+    return;
+  }
+  const settings = await getSettings();
+  const current = Gateways.normalizeSettings(settings).custom;
+  if (current.includes(entry)) {
+    error.textContent = `${entry} is already one of your gateways.`;
+    return;
+  }
+  if (current.length >= Gateways.MAX_CUSTOM) {
+    error.textContent = `You can add up to ${Gateways.MAX_CUSTOM} of your own.`;
+    return;
+  }
+  settings.gatewaysCustom = [...current, entry];
+  await setSettings(settings);
+  input.value = '';
+  showToast(`${entry} now asks you to pause first.`, 'success');
+  renderGateways(await getSettings());
+}
+
+async function removeCustomGateway(entry) {
+  const ok = await guardWeakening(`remove ${entry} from your gateways`, {}, gatewayChange({ gatewaysCustom: [entry] }));
+  if (!ok) return;
+  const settings = await getSettings();
+  settings.gatewaysCustom = Gateways.normalizeSettings(settings).custom.filter((e) => e !== entry);
+  await setSettings(settings);
+  showToast(`${entry} opens without a pause now.`, 'info');
+  renderGateways(await getSettings());
+}
+
+function initGateways() {
+  if (!Gateways || !$('gateways-group')) return;
+  const rows = $('gateway-rows');
+  Gateways.BUILT_IN.forEach((gateway) => {
+    const id = `gateway-${gateway.id}`;
+    const row = document.createElement('div');
+    row.className = 'row';
+    const text = document.createElement('div');
+    text.className = 'row-text';
+    const label = document.createElement('label');
+    label.className = 'row-label';
+    label.htmlFor = id;
+    label.textContent = gateway.name;
+    const desc = document.createElement('p');
+    desc.className = 'row-desc';
+    desc.id = `${id}-desc`;
+    desc.textContent = gateway.where;
+    text.append(label, desc);
+
+    const sw = document.createElement('label');
+    sw.className = 'switch';
+    const input = document.createElement('input');
+    input.type = 'checkbox';
+    input.className = 'switch-input';
+    input.setAttribute('role', 'switch');
+    input.id = id;
+    input.setAttribute('aria-describedby', desc.id);
+    const track = document.createElement('span');
+    track.className = 'switch-track';
+    track.setAttribute('aria-hidden', 'true');
+    const thumb = document.createElement('span');
+    thumb.className = 'switch-thumb';
+    track.appendChild(thumb);
+    const state = document.createElement('span');
+    state.className = 'switch-state';
+    state.setAttribute('aria-hidden', 'true');
+    sw.append(input, track, state);
+    row.append(text, sw);
+    rows.appendChild(row);
+
+    input.addEventListener('change', async () => {
+      const turnOn = input.checked;
+      // Shown as it was until the change is made, or not.
+      input.checked = !turnOn;
+      await setGatewaySwitch(gateway, turnOn);
+    });
+  });
+
+  $('gateway-add').addEventListener('click', addCustomGateway);
+  $('gateway-custom').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      addCustomGateway();
+    }
+  });
+
+  $('gateway-pause').addEventListener('change', async (e) => {
+    const next = Gateways.normalizePause(e.target.value);
+    const settings = await getSettings();
+    const current = Gateways.normalizeSettings(settings).pause;
+    if (next < current) {
+      const ok = await guardWeakening(`shorten the gateway pause to ${next} seconds`, {}, settingsChange({ gatewayPauseSeconds: next }));
+      if (!ok) {
+        e.target.value = String(current);
+        return;
+      }
+    }
+    settings.gatewayPauseSeconds = next;
+    await setSettings(settings);
+    showToast(`Gateways now pause for ${next === 60 ? 'a minute' : `${next} seconds`}.`, 'success');
+  });
+}
+
 async function init() {
   setupColorSchemePicker();
   // Before the first render, so the boxes never show an unmigrated list.
@@ -3126,6 +3311,7 @@ async function init() {
   setupListSyntaxHighlighting();
   initPact();
   initHardMoments();
+  initGateways();
   await render();
 
   // Update-available banner

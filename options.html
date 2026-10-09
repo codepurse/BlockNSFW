@@ -1644,14 +1644,15 @@
                The headline is the row; the text opens under it. -->
           <ul class="wn-list">
             <li><details class="wn-item"><summary>The Pact <span class="badge-new">New</span></summary><p>Choose a wait, from 15 minutes to 3 days. While a pact is on, every change that loosens protection waits it out before it happens, and you can cancel it any time before then. Making protection stronger never waits. It’s in Security &rsaquo; The Pact.</p></details></li>
-            <li><details class="wn-item"><summary>A friend can hold the key <span class="badge-new">New</span></summary><p>Someone you trust scans a code into the authenticator app on their phone. When you need a change without the wait, you ask them for the six-digit code it shows. They never see your browsing, and nothing goes through a server.</p></details></li>
+            <li><details class="wn-item"><summary>Gateways <span class="badge-new">New</span></summary><p>Name the sites where it tends to start, such as Instagram Explore or Reddit. Opening one asks you to pause for ten seconds first, with your own words, and during your hard hours they stay closed. Protection &rsaquo; Gateways.</p></details></li>
             <li><details class="wn-item"><summary>Storm Mode and risk hours <span class="badge-new">New</span></summary><p>For a hard few hours, or the same hours every day, every layer goes to its strongest and nothing that loosens protection can be changed until they end. Your own settings come back afterwards.</p></details></li>
             <li><details class="wn-item"><summary>A new look, in light and dark <span class="badge-new">New</span></summary><p>Every page BlockNSFW shows is redrawn in monolab&rsquo;s design: paper, ink and one evergreen, separated by fine hairlines. Customization &rsaquo; Appearance chooses System, Light or Dark.</p></details></li>
           </ul>
           <div class="welcome-foot">
             <details class="wn-details">
-              <summary aria-label="Show the rest of this release&rsquo;s changes"><span class="wn-toggle-closed">Show 11 more</span><span class="wn-toggle-open">Show less</span> <svg class="icon icon-12" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M4 6l4 4 4-4" /></svg></summary>
+              <summary aria-label="Show the rest of this release&rsquo;s changes"><span class="wn-toggle-closed">Show 12 more</span><span class="wn-toggle-open">Show less</span> <svg class="icon icon-12" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M4 6l4 4 4-4" /></svg></summary>
               <ul class="wn-list">
+                <li><details class="wn-item"><summary>A friend can hold the key <span class="badge-new">New</span></summary><p>Someone you trust scans a code into the authenticator app on their phone. When you need a change without the wait, you ask them for the six-digit code it shows. They never see your browsing, and nothing goes through a server.</p></details></li>
                 <li><details class="wn-item"><summary>Your own words on the blocked page <span class="badge-new">New</span></summary><p>Write your plan, a note to yourself and someone to reach, in a calm moment. A blocked page shows them first, and offers to wait out the next ten or twenty minutes with you.</p></details></li>
                 <li><details class="wn-item"><summary>After a slip <span class="badge-new">New</span></summary><p>The popup&rsquo;s &ldquo;I slipped&rdquo; link opens a short, plain page. It counts as one day, never a reset, and offers what would help next time.</p></details></li>
                 <li><details class="wn-item"><summary>Days kept</summary><p>Statistics counts the days in the last 30 with protection on all day and no slip, beside your runs and the moments you waited out.</p></details></li>
@@ -1680,7 +1681,7 @@
           </svg>
           <p class="section-eyebrow" aria-hidden="true"><span class="index">02</span><span>Settings</span></p>
           <h2 class="section-head" id="h-protection">Protection</h2>
-          <p class="section-desc">Core blocking, filtering at the DNS level, and safe search.</p>
+          <p class="section-desc">Core blocking, the sites where it tends to start, filtering at the DNS level, and safe search.</p>
         </header>
 
         <div class="group group-split">
@@ -1715,6 +1716,54 @@
               <div class="row-control">
                 <button type="button" class="btn btn-ghost btn-sm" id="refresh-blocklist">Refresh blocklist</button>
               </div>
+            </div>
+          </div>
+          </div>
+        </div>
+
+        <div class="group group-split" id="gateways-group">
+          <div class="group-aside">
+          <div class="group-head">
+            <h3 class="group-title">Gateways</h3>
+            <span class="meta status-word" id="gateways-status">off</span>
+          </div>
+          <p class="group-desc">The sites where it tends to start. Opening one asks you to pause first, and during your risk hours and Storm Mode they stay closed.</p>
+          </div>
+          <div class="group-body">
+          <!-- One switch per built-in gateway, drawn by options.js from shared/gateways.js. -->
+          <div class="rows rows-closed" id="gateway-rows"></div>
+          <span class="locked-note" data-lock="normal" data-lock-when="Turning one off" hidden></span>
+          <div class="field">
+            <label class="field-label" for="gateway-custom">Add your own</label>
+            <div class="input-row">
+              <input type="text" class="input" id="gateway-custom" placeholder="site.com or site.com/path" spellcheck="false" autocomplete="off" aria-describedby="gateway-custom-hint gateway-custom-error" />
+              <button type="button" class="btn btn-primary" id="gateway-add">Add</button>
+            </div>
+            <p class="field-hint" id="gateway-custom-hint">A whole site, or one part of it with a path.</p>
+            <p class="field-error" id="gateway-custom-error" role="alert"></p>
+          </div>
+          <div class="domain-list" id="gateway-custom-list" aria-label="Your own gateways" hidden></div>
+          <div class="rows rows-closed">
+            <div class="row">
+              <div class="row-text">
+                <label class="row-label" for="gateway-pause">The pause</label>
+                <p class="row-desc" id="gateway-pause-desc">How long a gateway waits before Go on works.</p>
+              </div>
+              <div class="row-control">
+                <span class="select"><select class="input" id="gateway-pause" aria-describedby="gateway-pause-desc">
+                  <option value="5">5 seconds</option>
+                  <option value="10">10 seconds</option>
+                  <option value="30">30 seconds</option>
+                  <option value="60">1 minute</option>
+                </select></span>
+              </div>
+            </div>
+            <div class="row">
+              <div class="row-text">
+                <span class="row-label">In your hard hours</span>
+                <p class="row-desc">During your risk hours and Storm Mode, every gateway is closed: no pause, no Go on.</p>
+              </div>
+              <span class="meta meta-pine">Closed</span>
             </div>
           </div>
           </div>
@@ -2717,6 +2766,7 @@ title/Example Domain/"></textarea>
   <script src="shared/pact.js"></script>
   <script src="shared/boost.js"></script>
   <script src="shared/moments.js"></script>
+  <script src="shared/gateways.js"></script>
   <script src="shared/keyword-pattern.js"></script>
   <script src="shared/dns-providers.js"></script>
   <script src="shared/ai-image-models.js"></script>

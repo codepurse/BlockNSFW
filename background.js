@@ -479,6 +479,9 @@ const DEFAULT_SETTINGS = {
   aiStrictness: 'balanced',
   aiTextBlocker: false, // Beta — opt-in (off on fresh install)
   aiTextStrictness: 'balanced',
+  gateways: [], // built-in gateway ids turned on; all off until chosen (shared/gateways.js)
+  gatewaysCustom: [], // the user's own gateway sites: 'site.com' or 'site.com/path'
+  gatewayPauseSeconds: 10,
 };
 
 // Default trusted domains for images (gaming, social media, e-commerce platforms)

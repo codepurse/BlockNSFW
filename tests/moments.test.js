@@ -33,7 +33,7 @@ test('kept moments count up', () => {
 
 test('a slip is recorded as one day, with only known tags', () => {
   const slips = Moments.addSlip([], { tags: ['tired', 'tired', 'nonsense'], helped: ['wait'] }, NOW);
-  assert.deepEqual(slips, [{ day: '2026-10-09', hour: 21, tags: ['tired'], helped: ['wait'], at: NOW }]);
+  assert.deepEqual(slips, [{ day: '2026-10-09', hour: 21, tags: ['tired'], helped: ['wait'], start: null, at: NOW }]);
 });
 
 test('suggestedRiskHours: an hour before the slip to two after, across midnight', () => {
@@ -67,4 +67,11 @@ test('days kept: protection off right now breaks today', () => {
 test('days kept: a log that opens with "turned on" only costs that day', () => {
   const log = [{ enabled: true, timestamp: at(2026, 10, 2, 9) }];
   assert.equal(Moments.daysKept({ now: NOW, firstSeen: at(2026, 8, 1), slips: [], disabledLog: log, currentlyEnabled: true }).kept, 29);
+});
+
+test('a slip can say where it started, one place or none', () => {
+  const slips = Moments.addSlip([], { tags: [], helped: [], hour: 23, at: NOW, start: 'instagram-explore' }, NOW);
+  assert.equal(slips[0].start, 'instagram-explore');
+  assert.equal(Moments.addSlip([], { start: 'not-a-place', at: NOW }, NOW)[0].start, null);
+  assert.ok(Moments.SLIP_STARTS.some((s) => s.id === 'other'));
 });

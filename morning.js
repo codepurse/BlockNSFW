@@ -3,9 +3,9 @@
 // It records the slip as one day, with what was going on (shared/moments.js),
 // shows Days Kept so the number survives the day, and offers at most a few
 // things that would make next time easier, each matched to what the person
-// said: Risk Hours around the time it happened, a longer pact wait, someone to
-// reach, or Storm Mode if it's still hard right now. Everything stays on the
-// device.
+// said: making the site where it started a gateway, Risk Hours around the
+// time it happened, a longer pact wait, someone to reach, or Storm Mode if it's
+// still hard right now. Everything stays on the device.
 
 (function () {
   'use strict';
@@ -14,9 +14,12 @@
   const Moments = globalThis.Moments;
   const Boost = globalThis.Boost;
   const Pact = globalThis.Pact;
+  const Gateways = globalThis.Gateways;
   const $ = (id) => document.getElementById(id);
 
-  function chips(container, items) {
+  // Toggle chips. With `single`, choosing one clears the others: a question
+  // with one answer, or none.
+  function chips(container, items, single) {
     items.forEach((item) => {
       const button = document.createElement('button');
       button.type = 'button';
@@ -25,6 +28,9 @@
       button.setAttribute('aria-pressed', 'false');
       button.addEventListener('click', () => {
         const on = button.getAttribute('aria-pressed') !== 'true';
+        if (single && on) {
+          container.querySelectorAll('button[aria-pressed="true"]').forEach((b) => b.setAttribute('aria-pressed', 'false'));
+        }
         button.setAttribute('aria-pressed', on ? 'true' : 'false');
       });
       container.appendChild(button);
@@ -84,11 +90,40 @@
   }
 
   async function renderOffers(slip) {
-    const store = await browserAPI.storage.local.get([Boost.RISK_KEY, Moments.WORDS_KEY]);
+    const store = await browserAPI.storage.local.get([Boost.RISK_KEY, Moments.WORDS_KEY, 'pblocker_settings']);
     const risk = Boost.normalizeRisk(store[Boost.RISK_KEY]);
     const words = Moments.normalizeWords(store[Moments.WORDS_KEY]);
     const pact = Pact ? await Pact.readPact(browserAPI.storage.local) : null;
     const late = slip.hour >= 21 || slip.hour < 5;
+
+    // The place it started, made a gateway: a pause before it opens, and closed
+    // in the hard hours. Turning one on only adds protection, so it happens at
+    // once.
+    if (Gateways && slip.start) {
+      const current = Gateways.normalizeSettings(store.pblocker_settings);
+      if (slip.start === 'other') {
+        offer('Add the site where it started as a gateway, so it asks you to pause before it opens.', {
+          label: 'Open Settings',
+          href: 'options.html#gateways-group'
+        });
+      } else if (!current.on.includes(slip.start)) {
+        const name = Gateways.nameFor(slip.start);
+        offer(`Make ${name} a gateway: a ${current.pause}-second pause before it opens, and closed during your risk hours and Storm Mode.`, {
+          label: 'Add gateway',
+          run: async () => {
+            const { pblocker_settings: latest } = await browserAPI.storage.local.get('pblocker_settings');
+            // Never write a settings object of one key: everything else would
+            // read as unset. The background always stores the defaults first.
+            if (!latest || typeof latest !== 'object') return 'Open Settings › Protection to add it.';
+            const settings = latest;
+            const on = Gateways.normalizeSettings(settings).on;
+            if (!on.includes(slip.start)) on.push(slip.start);
+            await browserAPI.storage.local.set({ pblocker_settings: { ...settings, gateways: on } });
+            return `${name} now asks you to pause first.`;
+          }
+        });
+      }
+    }
 
     // Risk hours around the time it happened.
     if (!risk.enabled && (late || slip.tags.includes('late') || slip.tags.includes('tired') || slip.helped.includes('stronger'))) {
@@ -176,7 +211,13 @@
     // A time later than now on "today" is read as the day before.
     if (when.getTime() > Date.now()) when.setDate(when.getDate() - 1);
 
-    const slip = { tags: chosen($('tags')), helped: chosen($('helps')), hour, at: when.getTime() };
+    const slip = {
+      tags: chosen($('tags')),
+      helped: chosen($('helps')),
+      start: chosen($('starts'))[0] || null,
+      hour,
+      at: when.getTime()
+    };
     const { [Moments.SLIPS_KEY]: raw } = await browserAPI.storage.local.get(Moments.SLIPS_KEY);
     await browserAPI.storage.local.set({ [Moments.SLIPS_KEY]: Moments.addSlip(raw, slip, Date.now()) });
 
@@ -190,6 +231,7 @@
   function init() {
     if (!Moments || !Boost) return;
     chips($('tags'), Moments.SLIP_TAGS);
+    chips($('starts'), Moments.SLIP_STARTS, true);
     chips($('helps'), Moments.SLIP_HELPS);
     fillHours($('slip-hour'));
     $('slip-form').addEventListener('submit', record);

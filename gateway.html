@@ -1,0 +1,388 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>A pause · BlockNSFW</title>
+  <script src="ui/scheme.js"></script>
+  <link rel="stylesheet" href="ui/tokens.css" />
+  <link rel="stylesheet" href="ui/components.css" />
+  <style>
+    /* A gateway's pause: one calm column, like the blocked page. The question,
+       ten seconds drawn as one pine line, the person's own words, and the
+       choice. During Risk Hours and Storm Mode the same page says the site is
+       closed, with what helps instead. */
+    body {
+      min-height: 100vh;
+    }
+    .gate {
+      max-width: 38rem;
+      margin-inline: auto;
+      padding: clamp(var(--space-6), 12vh, 96px) var(--space-4) var(--space-7);
+    }
+    .gate-eyebrow {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--space-2);
+    }
+    .gate-eyebrow .gate-kind {
+      color: var(--color-brass);
+    }
+    .gate-where {
+      overflow-wrap: anywhere;
+    }
+    .gate-title {
+      margin-top: var(--space-4);
+      font-family: var(--font-display);
+      font-size: clamp(34px, 5vw, 48px);
+      font-weight: 400;
+      line-height: 1.1;
+      letter-spacing: -0.015em;
+      text-wrap: balance;
+    }
+    .gate-title:focus {
+      outline: none;
+    }
+    .gate-lede {
+      margin-top: var(--space-4);
+      font-size: 17px;
+      line-height: 1.55;
+      color: var(--color-ink-2);
+    }
+
+    /* The pause, drawn: a hairline that fills with pine. */
+    .gate-meter {
+      display: flex;
+      align-items: center;
+      gap: var(--space-4);
+      margin-top: var(--space-6);
+    }
+    .gate-bar {
+      flex: 1 1 auto;
+      height: 2px;
+      background: var(--color-recess);
+    }
+    .gate-fill {
+      display: block;
+      width: 0;
+      height: 100%;
+      background: var(--color-pine);
+      transition: width 1s linear;
+    }
+    .gate-clock {
+      flex: none;
+      font-size: 13px;
+      color: var(--color-ink-2);
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .gate-fill {
+        transition: none;
+      }
+    }
+
+    .gate-words {
+      margin-top: var(--space-6);
+      padding: var(--space-5) var(--space-6);
+      border: 1px solid var(--color-rule);
+    }
+    .gate-plan {
+      margin-top: var(--space-3);
+      font-family: var(--font-display);
+      font-style: italic;
+      font-size: 22px;
+      line-height: 1.45;
+      white-space: pre-line;
+      overflow-wrap: anywhere;
+    }
+    .gate-note {
+      margin-top: var(--space-3);
+      font-size: 15px;
+      line-height: 1.5;
+      color: var(--color-ink-2);
+      white-space: pre-line;
+      overflow-wrap: anywhere;
+    }
+
+    .gate-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--space-3);
+      margin-top: var(--space-6);
+    }
+    .gate-actions .btn {
+      min-height: 48px;
+      padding-inline: var(--space-5);
+      font-size: 15px;
+    }
+    .gate-actions .btn[aria-disabled="true"] {
+      color: var(--color-ink-3);
+      cursor: default;
+    }
+    .gate-actions .btn[aria-disabled="true"]:hover {
+      background: transparent;
+      border-color: var(--color-rule-2);
+    }
+
+    .gate-wait {
+      margin-top: var(--space-5);
+    }
+    .gate-wait-time {
+      font-size: 28px;
+    }
+    .gate-wait-text {
+      margin-top: var(--space-1);
+      color: var(--color-ink-2);
+    }
+    .gate-wait .btn {
+      margin-top: var(--space-3);
+    }
+
+    .gate-foot {
+      margin-top: var(--space-7);
+      font-size: 13px;
+      line-height: 1.5;
+      color: var(--color-ink-2);
+    }
+
+    /* After Not tonight: the threshold drawing from Settings, told as what
+       just happened. Each time someone stopped is a line that comes to the
+       door and turns back; tonight's is pine, comes closest, and ends held in
+       brass. The page widens so the drawing can sit beside the words. */
+    .gate[data-state="stopped"] {
+      max-width: 70rem;
+    }
+    .kept {
+      display: grid;
+      gap: var(--space-7);
+    }
+    @media (min-width: 60rem) {
+      .kept {
+        grid-template-columns: minmax(0, 34rem) minmax(0, 1fr);
+        align-items: center;
+        column-gap: 72px;
+      }
+    }
+    .kept-kind {
+      color: var(--color-pine);
+    }
+    .kept .gate-title {
+      font-size: clamp(36px, 5vw, 54px);
+      line-height: 1.06;
+      letter-spacing: -0.02em;
+    }
+    .kept .gate-lede {
+      max-width: 30rem;
+      font-size: 18px;
+    }
+    .kept-count {
+      display: flex;
+      align-items: baseline;
+      gap: var(--space-4);
+      margin-top: var(--space-6);
+      padding-top: 20px;
+      border-top: 1px solid var(--color-rule);
+    }
+    .kept-number {
+      font-family: var(--font-display);
+      font-size: 48px;
+      line-height: 1;
+      color: var(--color-brass);
+    }
+    .kept-count-text {
+      display: flex;
+      flex-direction: column;
+    }
+    .kept-count-label {
+      font-size: 16px;
+      font-weight: 500;
+    }
+    .kept-count-note {
+      font-size: 13px;
+      color: var(--color-ink-2);
+    }
+    .kept-glad {
+      margin-top: 28px;
+      font-family: var(--font-display);
+      font-style: italic;
+      font-size: 23px;
+      line-height: 1.4;
+    }
+    .kept .gate-actions {
+      margin-top: var(--space-6);
+    }
+    .kept-links {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--space-2) 20px;
+      margin-top: 20px;
+      font-size: 14px;
+    }
+    .kept-figure {
+      max-width: 36rem;
+      margin: 0;
+    }
+    .kept-drawing {
+      width: 100%;
+      height: auto;
+      overflow: visible;
+    }
+    .kept-drawing path,
+    .kept-drawing rect {
+      fill: none;
+    }
+    .kept-drawing .kept-door {
+      stroke: var(--color-rule-3);
+      stroke-width: 1.5;
+    }
+    .kept-drawing .kept-past {
+      stroke: var(--color-rule-2);
+    }
+    .kept-drawing .kept-past-end {
+      stroke: var(--color-rule-3);
+    }
+    .kept-drawing .kept-now {
+      stroke: var(--color-pine-2);
+      stroke-width: 2;
+    }
+    .kept-drawing .kept-held {
+      fill: var(--color-brass);
+    }
+    /* In the drawing's own units: about 11px at the size it's shown. */
+    .kept-label {
+      font-family: var(--font-mono);
+      font-size: 12.5px;
+      letter-spacing: 0.08em;
+      fill: var(--color-ink-3);
+    }
+    @media (max-width: 40rem) {
+      .kept-label {
+        font-size: 15px;
+      }
+    }
+    .kept-label-now {
+      fill: var(--color-brass);
+    }
+    .kept-caption {
+      margin-top: var(--space-3);
+      font-family: var(--font-mono);
+      font-size: 11px;
+      letter-spacing: 0.04em;
+      color: var(--color-ink-2);
+    }
+    /* Tonight's line is drawn once, then held. */
+    .kept-drawing .kept-now {
+      stroke-dasharray: 1;
+      stroke-dashoffset: 1;
+      animation: kept-draw 1.4s var(--ease-out-quint) 0.2s forwards;
+    }
+    .kept-drawing .kept-held {
+      opacity: 0;
+      animation: kept-hold 0.3s ease-out 1.4s forwards;
+    }
+    @keyframes kept-draw {
+      to {
+        stroke-dashoffset: 0;
+      }
+    }
+    @keyframes kept-hold {
+      to {
+        opacity: 1;
+      }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .kept-drawing .kept-now,
+      .kept-drawing .kept-held {
+        animation: none;
+        stroke-dashoffset: 0;
+        opacity: 1;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="gate">
+    <!-- The pause: shown on an ordinary day. -->
+    <section id="pause" aria-labelledby="pause-head" hidden>
+      <p class="meta gate-eyebrow"><span class="gate-kind">Gateway</span><span aria-hidden="true">·</span><span class="gate-where" id="pause-where"></span></p>
+      <h1 class="gate-title" id="pause-head" tabindex="-1">Is this where it starts?</h1>
+      <p class="gate-lede" id="pause-lede"></p>
+      <div class="gate-meter" aria-hidden="true">
+        <div class="gate-bar"><span class="gate-fill" id="pause-fill"></span></div>
+        <span class="mono tnum gate-clock" id="pause-clock"></span>
+      </div>
+      <div id="pause-words"></div>
+      <div class="gate-actions">
+        <button type="button" class="btn btn-primary" id="not-tonight">Not tonight</button>
+        <button type="button" class="btn btn-ghost" id="go-on" aria-disabled="true"></button>
+      </div>
+      <p class="gate-foot">Gateways are sites you chose. You can change them in <a class="link" id="settings-link" href="options.html#gateways-group">Settings › Protection</a>.</p>
+    </section>
+
+    <!-- After Not tonight: the win, said plainly, and drawn. -->
+    <section class="kept" id="stopped" aria-labelledby="stopped-head" hidden>
+      <div>
+        <p class="meta gate-eyebrow"><span class="kept-kind">Not tonight</span><span aria-hidden="true">·</span><span class="gate-where" id="stopped-where"></span><span aria-hidden="true">·</span><span id="stopped-time"></span></p>
+        <h1 class="gate-title" id="stopped-head" tabindex="-1">You turned back at the door.</h1>
+        <p class="gate-lede" id="stopped-lede"></p>
+        <div class="kept-count" id="stopped-count" hidden>
+          <span class="kept-number tnum" id="stopped-number"></span>
+          <span class="kept-count-text"><span class="kept-count-label" id="stopped-count-label"></span><span class="kept-count-note" id="stopped-count-note"></span></span>
+        </div>
+        <p class="kept-glad" id="stopped-glad"></p>
+        <div class="gate-actions">
+          <button type="button" class="btn btn-primary" id="close-tab">Close this tab</button>
+          <a class="btn btn-ghost" id="stopped-call" hidden></a>
+        </div>
+        <p class="kept-links">
+          <button type="button" class="link" id="stopped-wait-start">Still feel the pull? Wait it out with me · 10 min</button>
+          <a class="link" href="community.html">Read a story</a>
+        </p>
+        <div id="stopped-wait"></div>
+      </div>
+      <figure class="kept-figure">
+        <svg class="kept-drawing" id="stopped-drawing" role="img" aria-labelledby="stopped-drawing-title">
+          <title id="stopped-drawing-title"></title>
+        </svg>
+        <figcaption class="kept-caption">Each line is a time you came to the door and turned back.</figcaption>
+      </figure>
+    </section>
+
+    <!-- Closed: during Risk Hours and Storm Mode. -->
+    <section id="closed" aria-labelledby="closed-head" hidden>
+      <p class="meta gate-eyebrow"><span class="gate-kind">Gateway</span><span aria-hidden="true">·</span><span>Closed until <span id="closed-until"></span></span></p>
+      <h1 class="gate-title" id="closed-head" tabindex="-1"></h1>
+      <p class="gate-lede" id="closed-lede"></p>
+      <div id="closed-words"></div>
+      <div class="gate-actions">
+        <a class="btn btn-primary" id="closed-call" hidden></a>
+        <button type="button" class="btn btn-ghost" id="wait-start">Wait it out with me · 10 min</button>
+        <button type="button" class="btn btn-ghost" id="go-back">Go back</button>
+      </div>
+      <div id="closed-wait"></div>
+      <p class="gate-foot" id="closed-foot"></p>
+    </section>
+
+    <!-- Your own words, moved into whichever state is showing. -->
+    <section class="gate-words band-sheet" id="words" aria-label="Your words" hidden>
+      <p class="meta">Your words</p>
+      <p class="gate-plan" id="words-plan" hidden></p>
+      <p class="gate-note" id="words-note" hidden></p>
+    </section>
+
+    <!-- Ten minutes, waited out together; moved in the same way. -->
+    <div id="wait">
+      <div class="gate-wait" id="wait-running" aria-live="polite" hidden>
+        <p><span class="mono tnum gate-wait-time" id="wait-time">10:00</span></p>
+        <p class="gate-wait-text" id="wait-text">left. Most urges pass if you wait them out.</p>
+        <button type="button" class="btn btn-ghost" id="wait-ok">I’m OK now</button>
+      </div>
+      <p class="gate-wait gate-lede" id="wait-done" role="status" hidden></p>
+    </div>
+  </main>
+
+  <script src="shared/gateways.js"></script>
+  <script src="shared/moments.js"></script>
+  <script src="shared/boost.js"></script>
+  <script src="gateway.js"></script>
+</body>
+</html>

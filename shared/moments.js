@@ -46,6 +46,22 @@
     { id: 'away', label: 'Being away from the screen' },
     { id: 'stronger', label: 'Stronger protection at that hour' }
   ];
+  // Where it started: one choice, or none. The ids are the built-in gateways'
+  // (shared/gateways.js), so the slip page can offer to make it one.
+  var SLIP_STARTS = [
+    { id: 'instagram-explore', label: 'Instagram' },
+    { id: 'reddit', label: 'Reddit' },
+    { id: 'x-search', label: 'X' },
+    { id: 'tiktok', label: 'TikTok' },
+    { id: 'youtube-shorts', label: 'YouTube' },
+    { id: 'image-search', label: 'Image search' },
+    { id: 'other', label: 'Somewhere else' }
+  ];
+
+  function pickStart(id) {
+    for (var i = 0; i < SLIP_STARTS.length; i++) if (SLIP_STARTS[i].id === id) return id;
+    return null;
+  }
 
   function text(value, limit) {
     return String(value == null ? '' : value).replace(/\r\n?/g, '\n').trim().slice(0, limit);
@@ -120,6 +136,7 @@
           hour: hour >= 0 && hour < 24 ? Math.floor(hour) : null,
           tags: pick(s.tags, SLIP_TAGS),
           helped: pick(s.helped, SLIP_HELPS),
+          start: pickStart(s.start),
           at: Number(s.at) || 0
         };
       })
@@ -134,6 +151,7 @@
       hour: typeof slip.hour === 'number' ? slip.hour : new Date(at).getHours(),
       tags: pick(slip.tags, SLIP_TAGS),
       helped: pick(slip.helped, SLIP_HELPS),
+      start: pickStart(slip.start),
       at: at
     });
     return normalizeSlips(list);
@@ -215,6 +233,7 @@
     LIMITS: LIMITS,
     SLIP_TAGS: SLIP_TAGS,
     SLIP_HELPS: SLIP_HELPS,
+    SLIP_STARTS: SLIP_STARTS,
     normalizeWords: normalizeWords,
     hasWords: hasWords,
     telHref: telHref,

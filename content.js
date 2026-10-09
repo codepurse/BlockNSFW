@@ -1892,6 +1892,10 @@ async function loadSettings() {
     aiTextStrictness = settings.aiTextStrictness || 'balanced';
     searchImagesBlurred = settings.searchImagesBlurred === true;
     applySearchImageBlur();
+    // A gateway just added should meet the page already open, so the
+    // current address is checked again.
+    gatewaySettings = settings;
+    gatewayCheckedHref = '';
     // Page-text features are a top-frame concern. Left true in a sub-frame,
     // the MutationObserver would arm a debounced scan on every element
     // insertion in every ad slot, for a scan that then declines to run — the
@@ -2118,6 +2122,54 @@ function enforceInstagramReelsBlock() {
 
   ensureInstagramReelsStyle();
   markInstagramReelsEntryPoints();
+}
+
+// --- Gateways ------------------------------------------------------------------
+//
+// The sites the user named as where it tends to start (shared/gateways.js). An
+// address that matches one goes to the pause, gateway.html, unless a recent Go
+// on covers it; during Risk Hours and Storm Mode it goes there regardless, and
+// the page says the site is closed. Checked once per address, so an app that
+// navigates with pushState (Instagram's Explore) meets it too.
+const GATEWAY_BOOST_KEY = 'pblocker_boost_state';
+let gatewaySettings = null;
+let gatewayCheckedHref = '';
+let gatewayWatch = null;
+
+// On a site where a gateway lives, the address is watched: an app that moves
+// into the gateway with pushState loads no new page and may change nothing
+// else this script reacts to. Once a second is a string compare; on every
+// other site nothing runs at all.
+function watchGatewaySite() {
+  if (gatewayWatch || !IS_TOP_FRAME || !gatewaySettings || typeof Gateways === 'undefined') return;
+  if (!Gateways.onGatewaySite(window.location.href, gatewaySettings)) return;
+  gatewayWatch = setInterval(enforceGateways, 1000);
+  try {
+    if (window.navigation && typeof window.navigation.addEventListener === 'function') {
+      window.navigation.addEventListener('currententrychange', enforceGateways);
+    }
+  } catch (_) {}
+}
+
+function enforceGateways() {
+  if (!IS_TOP_FRAME || !isEnabled || !gatewaySettings || typeof Gateways === 'undefined') return;
+  watchGatewaySite();
+  const href = window.location.href;
+  if (href === gatewayCheckedHref) return;
+  gatewayCheckedHref = href;
+  const hit = Gateways.match(href, gatewaySettings);
+  if (!hit) return;
+  browserAPI.storage.local.get([GATEWAY_BOOST_KEY, Gateways.PASS_KEY]).then((store) => {
+    if (window.location.href !== href) return; // moved on while this was read
+    const now = Date.now();
+    const boost = store[GATEWAY_BOOST_KEY];
+    const closed = !!(boost && (boost.active === 'storm' || boost.active === 'risk') &&
+      (!Number(boost.until) || Number(boost.until) > now));
+    if (!closed && Gateways.passValid(store[Gateways.PASS_KEY], hit.key, now)) return;
+    try { window.stop(); } catch (_) {}
+    window.location.replace(browserAPI.runtime.getURL('gateway.html') +
+      '?g=' + encodeURIComponent(hit.key) + '&to=' + encodeURIComponent(href));
+  }).catch(() => {});
 }
 
 function sendRuntimeMessageForResponse(message) {
@@ -5115,6 +5167,7 @@ function notifyBackground(type, data = {}) {
 
 // Main processing functions
 async function processContent() {
+  enforceGateways();
   if (isProcessing) return;
   enforceFacebookReelsBlock();
   enforceInstagramReelsBlock();
@@ -5648,6 +5701,12 @@ function setupEventListeners() {
       setHeldUiScheme(changes.pblocker_color_scheme.newValue);
     }
 
+    // Storm Mode or Risk Hours starting closes a gateway already open.
+    if (changes[GATEWAY_BOOST_KEY]) {
+      gatewayCheckedHref = '';
+      enforceGateways();
+    }
+
     // The whitelist verdict is cached per URL, so adding or removing an entry —
     // or a temporary allowance being cleared — has to drop it, or the page keeps
     // filtering a site the user just allowed until it is reloaded.
@@ -5784,6 +5843,8 @@ async function init() {
     // Load settings, then warm the one canonical-list verdict needed by the
     // synchronous clean-page heuristics. The full list remains in background.
     await loadSettings();
+    // Before anything else is set up: a gateway leaves the page at once.
+    enforceGateways();
     // Logged after loadSettings, not before: debugMode is read there, so a
     // diagnostic emitted earlier could only ever see the default (off) and
     // would be dropped even for someone who had turned debugging on.

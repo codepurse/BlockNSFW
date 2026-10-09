@@ -63,6 +63,21 @@ the urge works even when you know every PIN.
   one day, never as a reset, and it offers what would help next time: risk
   hours around that hour, a longer pact (or a first one), a call to the person
   you named, or Storm Mode for four hours.
+- **Gateways** (Settings, Protection). Most slips begin somewhere ordinary:
+  Instagram Explore, a subreddit, image search, late at night. Name those
+  sites (Instagram Explore, Reddit, image search, X search and Explore, TikTok
+  and YouTube Shorts are offered, all off until chosen, or add your own site
+  or part of one), and opening one shows a pause first: "Is this where it
+  starts?", ten seconds drawn as one line, your own words, and a choice of
+  Not tonight or Go on. Not tonight is met with "You turned back at the door",
+  the count so far and a line drawn for each recent time you did, with a
+  ten-minute wait if the pull hasn't gone. Go on opens the site for fifteen
+  minutes. During risk hours and Storm Mode a gateway is closed outright, with
+  someone to call and a ten-minute wait instead. It catches apps that move
+  into the gateway without loading a page, as Instagram does. Turning one off,
+  removing a site or shortening the pause waits under a pact like any
+  loosening change. The slip page asks where it started and offers to make
+  that a gateway, and Statistics counts the times you stopped at the door.
 - **Days kept** (Statistics). Days in the last 30 with protection on all day
   and no slip, shown beside the current run, the longest run and the moments
   waited out. A slip costs a day, not the count.

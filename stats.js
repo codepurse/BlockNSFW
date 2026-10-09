@@ -151,10 +151,13 @@ function hostRow(host, side) {
 async function getKeptData() {
   const Moments = globalThis.Moments;
   if (!Moments) return null;
+  const Gateways = globalThis.Gateways;
   const store = await browserAPI.storage.local.get([
-    Moments.SLIPS_KEY, Moments.FIRST_SEEN_KEY, Moments.KEPT_KEY, 'pblocker_audit_disabled', 'pblocker_settings'
+    Moments.SLIPS_KEY, Moments.FIRST_SEEN_KEY, Moments.KEPT_KEY, 'pblocker_audit_disabled', 'pblocker_settings',
+    Gateways ? Gateways.STOPS_KEY : 'pblocker_gateway_stops'
   ]);
   const settings = store.pblocker_settings || {};
+  const stops = Gateways ? Gateways.normalizeStops(store[Gateways.STOPS_KEY]) : { total: 0 };
   return {
     days: Moments.daysKept({
       now: Date.now(),
@@ -163,8 +166,16 @@ async function getKeptData() {
       disabledLog: store.pblocker_audit_disabled,
       currentlyEnabled: settings.enabled !== false
     }),
-    moments: Moments.normalizeKept(store[Moments.KEPT_KEY]).count
+    moments: Moments.normalizeKept(store[Moments.KEPT_KEY]).count,
+    stops: stops.total,
+    stopPattern: Gateways ? Gateways.pattern(stops) : null
   };
+}
+
+function hourLabel(hour) {
+  const d = new Date();
+  d.setHours(hour, 0, 0, 0);
+  return d.toLocaleTimeString([], { hour: 'numeric' });
 }
 
 function renderStreak(streakData, kept) {
@@ -190,6 +201,16 @@ function renderStreak(streakData, kept) {
     const moments = $('kept-moments-record');
     if (moments) moments.hidden = kept.moments === 0;
     $('kept-moments').textContent = formatNumber(kept.moments);
+
+    // Times someone chose Not tonight on a gateway's pause.
+    const stopsRecord = $('gateway-stops-record');
+    if (stopsRecord) {
+      stopsRecord.hidden = !kept.stops;
+      $('gateway-stops').textContent = formatNumber(kept.stops || 0);
+      $('gateway-stops-desc').textContent = kept.stopPattern
+        ? `Most often at ${kept.stopPattern.name}, around ${hourLabel(kept.stopPattern.hour)}`
+        : 'Times you chose “Not tonight” on a gateway';
+    }
   }
 }
 

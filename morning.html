@@ -126,7 +126,7 @@
         Settings
       </a>
       <h1 class="title title-page page-title">After a slip</h1>
-      <p class="lede">It happened. It’s one day, not the end of anything, and it doesn’t erase the days before it. Three questions, then one or two things that could make next time easier. Nothing here leaves this device.</p>
+      <p class="lede">It happened. It’s one day, not the end of anything, and it doesn’t erase the days before it. A few questions, then one or two things that could make next time easier. Nothing here leaves this device.</p>
     </header>
 
     <form class="page" id="slip-form" novalidate>
@@ -144,6 +144,11 @@
           </select></span>
           <span class="select"><select class="input" id="slip-hour" aria-label="Around what time"></select></span>
         </div>
+      </section>
+      <section class="step" aria-labelledby="step-start">
+        <h2 class="step-title" id="step-start">Where did it start?</h2>
+        <p class="step-desc">The first site you opened on the way there, if you remember. Or skip it.</p>
+        <div class="segmented choices" id="starts" role="group" aria-labelledby="step-start"></div>
       </section>
       <section class="step" aria-labelledby="step-help">
         <h2 class="step-title" id="step-help">What would have helped?</h2>
@@ -170,6 +175,7 @@
   <script src="shared/moments.js"></script>
   <script src="shared/boost.js"></script>
   <script src="shared/pact.js"></script>
+  <script src="shared/gateways.js"></script>
   <script src="morning.js"></script>
 </body>
 </html>
