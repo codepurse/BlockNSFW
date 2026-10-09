@@ -2,11 +2,16 @@
 
 All notable project changes should be documented here going forward.
 
-## [Unreleased]
+## [2.0.0] - 2026-10-09
 
-The Pact: a promise made in a clear moment, kept by time and, if you want,
-by a friend. A PIN you set yourself stops nobody, because you know it. A wait
-longer than the urge works even when you know every PIN.
+BlockNSFW 2.0 is built for the hard moment, not only the blocking. **The
+Pact** makes every change that loosens protection wait, and lets a friend you
+trust hold the key. **Storm Mode** and **risk hours** raise everything to its
+strongest when it's hardest. The blocked page shows **your own words** first.
+And every page is redrawn in monolab's design system, in light and dark.
+
+A PIN you set yourself stops nobody, because you know it. A wait longer than
+the urge works even when you know every PIN.
 
 ### Added
 
@@ -70,34 +75,6 @@ longer than the urge works even when you know every PIN.
   doubling to an hour, across Settings and the popup.
 - **With a pact, the wait replaces the commitment sentence and the access
   code.** Without one, both work exactly as before.
-- **The Warden banner** now says what Warden adds beside a pact: the wait
-  across every browser and app on the PC, not only this browser.
-
-### Fixed
-
-- **Settings' Save could switch protection and smart detection off without
-  any check**, because it copied those two switches from the page. It can now
-  only switch them on.
-- **The setup wizard could be reopened later** to switch layers off or
-  overwrite the PIN without asking for anything. Once setup is done, or a pact
-  exists, it opens Settings instead, and it never replaces an existing PIN.
-- **The popup's PIN prompt threw away every second try**: a wrong PIN opened a
-  separate prompt whose answer was ignored. The next try now happens in that
-  prompt.
-- **Trusting an image site from its own Save button had no check at all.**
-  Under a pact it waits like any other loosening change.
-- **Pages with relative links logged errors on every scan**: the adult-URL
-  check read `/path` links as bad URLs. Links are now read against the page's
-  own address.
-
-## [1.10.0] - 2026-10-08
-
-Every page BlockNSFW shows is redrawn in monolab's design system: paper, ink
-and one evergreen, separated by 1px hairlines, in light and dark. Nothing that
-decides what is blocked has changed.
-
-### Changed
-
 - **One look on every surface.** The popup, the blocked page and its four
   designs, Settings, setup, Statistics, the audit log, Community stories, the
   changelog and the notices placed on web pages now share one set of tokens
@@ -122,9 +99,9 @@ decides what is blocked has changed.
   sets each section on its own band, its records in two columns, and draws
   the last seven days as bars instead of a list.
 - **The Warden banner at the top of Settings is a pine band.** It is the one
-  deep ground in Settings, with a serif headline, the cool-down dial in
-  brass, and a plain line saying the cool-down is a Pro feature that isn't on
-  sale yet. It stays about as tall as before, and folds to one pine line.
+  deep ground in Settings, with a serif headline and the cool-down dial in
+  brass, and it now says what Warden adds beside a pact: the wait across every
+  browser and app on the PC, not only this browser. It folds to one pine line.
 - **The type is bundled.** Newsreader (headlines), Instrument Sans (text) and
   JetBrains Mono (figures and labels) ship in `fonts/`, so no page loads
   anything from the network to draw itself. The Newsreader file is the smaller
@@ -152,6 +129,20 @@ decides what is blocked has changed.
 
 ### Fixed
 
+- **Settings' Save could switch protection and smart detection off without
+  any check**, because it copied those two switches from the page. It can now
+  only switch them on.
+- **The setup wizard could be reopened later** to switch layers off or
+  overwrite the PIN without asking for anything. Once setup is done, or a pact
+  exists, it opens Settings instead, and it never replaces an existing PIN.
+- **The popup's PIN prompt threw away every second try**: a wrong PIN opened a
+  separate prompt whose answer was ignored. The next try now happens in that
+  prompt.
+- **Trusting an image site from its own Save button had no check at all.**
+  Under a pact it waits like any other loosening change.
+- **Pages with relative links logged errors on every scan**: the adult-URL
+  check read `/path` links as bad URLs. Links are now read against the page's
+  own address.
 - **The blocked page showed the blocked address.** Classic printed the full
   URL, and the words a page had matched. It now shows the site's ending only
   (`••••••••.com`) and never the words. The audit log shows a site's name

@@ -120,10 +120,10 @@
     </header>
 
 
-    <!-- ===================== 1.10.0 ===================== -->
-    <section class="release" aria-labelledby="release-1-10-0">
-      <h2 class="section-head tnum" id="release-1-10-0">
-        <span class="index release-version">1.10.0</span>
+    <!-- ===================== 2.0.0 ===================== -->
+    <section class="release" aria-labelledby="release-2-0-0">
+      <h2 class="section-head tnum" id="release-2-0-0">
+        <span class="index release-version">2.0.0</span>
         <span>October 2026</span>
         <span class="release-status meta-pine" data-status="current">Current</span>
       </h2>
@@ -131,6 +131,41 @@
       <div class="group">
         <h3 class="group-label">New</h3>
         <ul class="rows rows-closed">
+          <li class="entry">
+            <h4 class="entry-title">The Pact</h4>
+            <p class="entry-body">
+              A PIN you set yourself stops nobody, because you know it. A pact makes every change that loosens protection wait before it happens: 15 minutes, an hour, a day or three days, chosen in a clear moment. A waiting change can be cancelled any time before then. Making protection stronger never waits. The wait is timed by the server&rsquo;s clock, so changing the computer&rsquo;s clock skips nothing.
+            </p>
+          </li>
+
+          <li class="entry">
+            <h4 class="entry-title">A friend can hold the key</h4>
+            <p class="entry-body">
+              Someone you trust scans a code into the authenticator app they already use, such as Google Authenticator. When you need a change without the wait, you ask them for the six-digit code it shows. They never see your browsing, and nothing goes through a server. They can hold your PIN too.
+            </p>
+          </li>
+
+          <li class="entry">
+            <h4 class="entry-title">Storm Mode and risk hours</h4>
+            <p class="entry-body">
+              For a hard few hours, start Storm Mode from the popup: every layer goes to its strongest, image searches are blurred, and nothing that loosens protection can be changed until it ends. Risk hours do the same every day, at the hours you know are hardest. Your own settings come back afterwards.
+            </p>
+          </li>
+
+          <li class="entry">
+            <h4 class="entry-title">Your own words on the blocked page</h4>
+            <p class="entry-body">
+              Write your plan, a note to yourself and someone to reach, in a calm moment. A blocked page shows them first, with a way to call that person, and offers to wait out the next ten or twenty minutes with you.
+            </p>
+          </li>
+
+          <li class="entry">
+            <h4 class="entry-title">After a slip, and days kept</h4>
+            <p class="entry-body">
+              The popup&rsquo;s &ldquo;I slipped&rdquo; link opens a short, plain page. A slip counts as one day, never a reset, and the page offers what would help next time. Statistics counts the days kept in the last 30.
+            </p>
+          </li>
+
           <li class="entry">
             <h4 class="entry-title">A new look, in light and dark</h4>
             <p class="entry-body">
@@ -150,6 +185,13 @@
       <div class="group">
         <h3 class="group-label">Changed</h3>
         <ul class="rows rows-closed">
+          <li class="entry">
+            <h4 class="entry-title">Your PIN is stored safely</h4>
+            <p class="entry-body">
+              It is kept as a salted hash instead of plain text, and five wrong tries lock PIN entry for a minute, doubling up to an hour. A PIN from an older version keeps working.
+            </p>
+          </li>
+
           <li class="entry">
             <h4 class="entry-title">The popup says whether you&rsquo;re protected</h4>
             <p class="entry-body">
@@ -176,6 +218,13 @@
       <div class="group">
         <h3 class="group-label">Fixed</h3>
         <ul class="rows rows-closed">
+          <li class="entry">
+            <h4 class="entry-title">No more ways round the checks</h4>
+            <p class="entry-body">
+              Settings&rsquo; Save button could switch protection off without asking for anything, and the setup wizard could be reopened to replace the PIN. Save can now only switch protection on, and once setup is done the wizard opens Settings instead.
+            </p>
+          </li>
+
           <li class="entry">
             <h4 class="entry-title">The blocked page no longer shows the blocked address</h4>
             <p class="entry-body">
