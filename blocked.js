@@ -36,148 +36,166 @@ const previewTheme = (() => {
   return (themes && id && themes.get(id)) ? id : '';
 })();
 
+// What held the page, in three forms:
+//  - `sourceLabel`: the name of the rule, for the "reason" line;
+//  - `detail`: the phrase a custom template's {{reason}} receives, unchanged so
+//    pages people have written keep reading the same;
+//  - `message`: one plain sentence for the "why" section.
+// `when` says whether the page was stopped before it loaded or closed after it
+// was read, so the line under the headline stays true.
 function getReasonMeta(reasonCode) {
   switch (reasonCode) {
     case 'dns_blocked':
       return {
-        sourceLabel: 'DNS Protection',
+        sourceLabel: 'DNS protection',
         detail: 'Blocked by DNS Protection',
-        message: 'This site was blocked by DNS Protection using Cloudflare for Families before the page could load.'
+        message: 'Your family-safe DNS resolver reported this site as adult before it loaded.',
+        when: 'before'
       };
     case 'custom_blocklist':
       return {
-        sourceLabel: 'Custom Blocklist',
+        sourceLabel: 'Your blocklist',
         detail: 'Blocked by your custom blocklist',
-        message: 'This site matches a rule in your custom blocklist, so BlockNSFW stopped it before it finished loading.'
+        message: 'This site matches an entry on your own blocklist.',
+        when: 'before'
       };
     case 'default_blocklist':
     case 'instant_host_match':
       return {
-        sourceLabel: 'Built-in Blocklist',
+        sourceLabel: 'Built-in blocklist',
         detail: 'Blocked by the built-in blocklist',
-        message: 'This site matches BlockNSFW\'s built-in blocklist and was blocked before it could load.'
+        message: 'This site is on BlockNSFW’s built-in blocklist.',
+        when: 'before'
       };
     case 'smart_filter':
     case 'instant_keyword_match':
       return {
-        sourceLabel: 'Smart Keyword Filter',
+        sourceLabel: 'Keyword filter',
         detail: 'Blocked by the smart keyword filter',
-        message: 'This site was blocked because it matched BlockNSFW\'s smart keyword filter.'
+        message: 'The address matched BlockNSFW’s keyword filter.',
+        when: 'before'
       };
     case 'search_query':
       return {
-        sourceLabel: 'Search Filter',
+        sourceLabel: 'Search filter',
         detail: 'Blocked by search query filter',
-        message: 'This page was blocked because the search query matched your adult-content filters.'
+        message: 'The search matched your adult-content filters.',
+        when: 'before'
       };
     case 'reddit_nsfw':
       return {
-        sourceLabel: 'NSFW Community Filter',
+        sourceLabel: 'NSFW community filter',
         detail: 'Blocked due to NSFW subreddit detection',
-        message: 'This page was blocked because it appears to belong to an NSFW Reddit community.'
+        message: 'This page belongs to a Reddit community marked NSFW.',
+        when: 'neutral'
       };
     case 'metadata_scan':
       return {
-        sourceLabel: 'Page Metadata Filter',
+        sourceLabel: 'Page details',
         detail: 'Blocked by metadata scan',
-        message: 'This page was blocked because its title or metadata matched your adult-content filters.'
+        message: 'The page’s title or description matched your adult-content filters.',
+        when: 'after'
       };
     case 'page_text_scan':
       return {
-        sourceLabel: 'Page Text Filter',
+        sourceLabel: 'Page text',
         detail: 'Blocked by page text scan',
-        message: 'This page was blocked because its visible text repeatedly matched explicit-content keywords.'
+        message: 'The page’s text matched explicit-content words again and again.',
+        when: 'after'
       };
     case 'ai_text_scan':
       return {
-        sourceLabel: 'AI Text Scan',
+        sourceLabel: 'On-device AI',
         detail: 'Blocked by AI text scan',
-        message: 'This page was blocked because the on-device AI text classifier judged its content to be adult/explicit.'
+        message: 'The AI on your device read the page’s text and judged it adult.',
+        when: 'after'
       };
     case 'blocked':
     case 'content':
     case 'local_filter':
       return {
-        sourceLabel: 'Local Filter Rules',
+        sourceLabel: 'Local filter rules',
         detail: 'Blocked by local filter rules',
-        message: 'This site was blocked because it matched BlockNSFW\'s local filtering rules.'
+        message: 'This page matched BlockNSFW’s local filter rules.',
+        when: 'neutral'
       };
     default:
       return {
-        sourceLabel: 'Protection Rules',
+        sourceLabel: 'Protection rules',
         detail: reasonCode ? reasonCode.replaceAll('_', ' ') : 'Blocked by protection rules',
-        message: 'This site has been blocked because it matched your protection settings.'
+        message: 'This page matched your protection settings.',
+        when: 'neutral'
       };
   }
 }
 
+const HELD_LINE = {
+  before: 'BlockNSFW stopped it before it loaded.',
+  after: 'BlockNSFW closed it as soon as it read the page.',
+  neutral: 'BlockNSFW stopped it from showing.'
+};
+
+// The address is never shown, on this page or any other: eight bullets and the
+// top-level domain, the same length whatever the site, so nothing about it can
+// be read off the screen. An IP address or an unreadable value keeps no ending.
+function redactedHost(address) {
+  const mask = '••••••••';
+  try {
+    const host = new URL(address).hostname;
+    const dot = host.lastIndexOf('.');
+    const ending = dot > 0 ? host.slice(dot + 1).toLowerCase() : '';
+    return /^[a-z][a-z0-9-]*$/.test(ending) ? `${mask}.${ending}` : mask;
+  } catch (_) {
+    return mask;
+  }
+}
+
+function addRecord(list, label, value, valueClass) {
+  if (!list) return;
+  const row = document.createElement('div');
+  row.className = 'record';
+  const term = document.createElement('dt');
+  term.className = 'meta';
+  term.textContent = label;
+  const data = document.createElement('dd');
+  data.className = valueClass || 'why-value';
+  data.textContent = value;
+  row.appendChild(term);
+  row.appendChild(data);
+  list.appendChild(row);
+}
+
+// The page title, its address, its favicon and the words it matched are all
+// part of what was held, so none of them is written here. The reason is named,
+// and the AI's confidence, which is a number, not the page's content.
 function renderDetail() {
-const reasonMeta = getReasonMeta(reason);
+  const reasonMeta = getReasonMeta(reason);
 
-const urlEl = document.getElementById('target-url');
-if (urlEl) {
-  urlEl.textContent = url;
-}
-
-const messageEl = document.querySelector('.blocked-message');
-if (messageEl && reasonMeta.message) {
-  messageEl.textContent = reasonMeta.message;
-}
-
-const subtitleEl = document.querySelector('.blocked-subtitle');
-if (subtitleEl && reasonMeta.sourceLabel) {
-  subtitleEl.textContent = `BlockNSFW – ${reasonMeta.sourceLabel}`;
-}
-
-if (reason && urlEl) {
-  const container = urlEl.parentNode;
-  // Insert new nodes right after `anchor`, advancing it so they stay in order.
-  let anchor = urlEl;
-  const insertAfterAnchor = (node) => {
-    container.insertBefore(node, anchor.nextSibling);
-    anchor = node;
-  };
-
-  const reasonEl = document.createElement('p');
-  reasonEl.className = 'muted';
-  reasonEl.textContent = 'Reason: ' + reasonMeta.detail;
-  insertAfterAnchor(reasonEl);
-
-  // The AI text scan reports a confidence score in [0,1]; show it as a percent.
-  const scorePct = score ? Math.round(parseFloat(score) * 100) : NaN;
-  if (!Number.isNaN(scorePct)) {
-    const conf = document.createElement('p');
-    conf.className = 'muted';
-    conf.textContent = `AI confidence: ${scorePct}%`;
-    insertAfterAnchor(conf);
+  const urlEl = document.getElementById('target-url');
+  if (urlEl) {
+    urlEl.textContent = redactedHost(url);
   }
 
-  // Show the specific text that triggered the block.
-  const matchedTerms = matched
-    ? matched.split(',').map(t => t.trim()).filter(Boolean)
-    : [];
-
-  if (matchedTerms.length > 0) {
-    const label = document.createElement('div');
-    label.className = 'blocked-url-label';
-    label.style.marginTop = '1rem';
-    label.textContent = reason === 'ai_text_scan'
-      ? 'Words that most influenced the AI'
-      : 'Detected text';
-    insertAfterAnchor(label);
-
-    const chips = document.createElement('div');
-    chips.className = 'matched-terms';
-    matchedTerms.forEach(term => {
-      const chip = document.createElement('span');
-      chip.className = 'matched-term';
-      chip.textContent = term;
-      chips.appendChild(chip);
-    });
-    insertAfterAnchor(chips);
+  const messageEl = document.querySelector('.blocked-message');
+  if (messageEl && reasonMeta.message) {
+    messageEl.textContent = reasonMeta.message;
   }
-}
 
+  const subtitleEl = document.querySelector('.blocked-subtitle');
+  if (subtitleEl) {
+    subtitleEl.textContent = HELD_LINE[reasonMeta.when] || HELD_LINE.neutral;
+  }
+
+  if (reason) {
+    const rows = document.getElementById('why-rows');
+    addRecord(rows, 'reason', reasonMeta.sourceLabel);
+
+    // The AI text scan reports a confidence score in [0,1]; show it as a percent.
+    const scorePct = score ? Math.round(parseFloat(score) * 100) : NaN;
+    if (!Number.isNaN(scorePct)) {
+      addRecord(rows, 'ai confidence', `${scorePct}%`, 'record-value tnum');
+    }
+  }
 }
 
 /**

@@ -1138,7 +1138,7 @@
     {
       id: 'motivation',
       name: 'Motivation',
-      blurb: 'A red X for every day of protection. Mark today, and don’t break the chain.',
+      blurb: 'An X for every day of protection. Mark today, and don’t break the chain.',
       render: renderMotivation
     },
     {

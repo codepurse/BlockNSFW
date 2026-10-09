@@ -1,431 +1,337 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Welcome to BlockNSFW</title>
+  <script src="ui/scheme.js"></script>
+  <link rel="stylesheet" href="ui/tokens.css" />
+  <link rel="stylesheet" href="ui/components.css" />
   <style>
-    :root {
-      /* Clean Modern Dark — single indigo accent (matches options.html / blocked.html) */
-      --background: #0b0c10;
-      --surface: #14161c;
-      --surface-2: #1a1d24;
-      --foreground: #f2f3f5;
-      --foreground-muted: #a4abb8;
-      --foreground-dim: #868e9e;
-      --card-bg: #14161c;
-      --card-border: rgba(255, 255, 255, 0.07);
-      --card-border-hover: rgba(255, 255, 255, 0.14);
-      --card-shadow: 0 18px 40px rgba(0, 0, 0, 0.45);
-      --primary: #6366f1;
-      --primary-hover: #818cf8;
-      --primary-soft: rgba(99, 102, 241, 0.12);
-      --primary-foreground: #ffffff;
-      --secondary: #1d2027;
-      --secondary-hover: #262a33;
-      --secondary-foreground: #e6e8ec;
-      --input-bg: #0f1116;
-      --input-border: rgba(255, 255, 255, 0.10);
-      --success: #10b981;
-      --success-soft: rgba(16, 185, 129, 0.12);
-      --destructive: #ef4444;
-      --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-      --radius: 10px;
-      --radius-sm: 8px;
-      --radius-lg: 14px;
-      --transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-    }
-
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-
+    /* First-run setup: five short screens and a last one, in one column on
+       paper. Each screen has one headline, a line or two on what it does, its
+       controls as hairline rows, and one primary action. */
     body {
-      font-family: var(--font-sans);
-      background: var(--background);
-      color: var(--foreground);
       min-height: 100vh;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 24px;
-      line-height: 1.55;
-      -webkit-font-smoothing: antialiased;
+      padding: clamp(32px, 10vh, 112px) var(--space-4) var(--space-7);
     }
-
-    .wizard {
+    .page {
       width: 100%;
-      max-width: 560px;
-      background: var(--card-bg);
-      border: 1px solid var(--card-border);
-      border-radius: var(--radius-lg);
-      box-shadow: var(--card-shadow);
-      overflow: hidden;
-      display: flex;
-      flex-direction: column;
+      max-width: 32rem;
+      margin: 0 auto;
+    }
+    .wordmark {
+      font-weight: 500;
+      color: var(--color-ink);
+    }
+    .wizard {
+      margin-top: var(--space-7);
     }
 
-    .wizard-head {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 20px 28px;
-      border-bottom: 1px solid var(--card-border);
+    .step-meta {
+      margin-bottom: var(--space-4);
+    }
+    .lede {
+      margin-top: var(--space-3);
+      color: var(--color-ink-2);
+    }
+    .lede + .lede {
+      margin-top: var(--space-2);
+    }
+    .step-body {
+      margin-top: var(--space-6);
+    }
+    .step-body > * + * {
+      margin-top: var(--space-5);
+    }
+    .row-text > label.row-label {
+      cursor: pointer;
     }
 
-    .brand {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      font-weight: 650;
-      font-size: 15px;
-      letter-spacing: -0.01em;
+    /* A short line under a group: a caveat or a link out. */
+    .aside {
+      font-size: 13px;
+      line-height: 1.45;
+      color: var(--color-ink-2);
     }
-    .brand-mark {
-      width: 30px; height: 30px;
-      display: grid; place-items: center;
-      background: var(--primary-soft);
-      border-radius: var(--radius-sm);
-      color: var(--primary-hover);
+
+    .pin-fields {
+      display: grid;
+      gap: var(--space-4);
+      max-width: 18rem;
     }
-    .brand-mark svg { width: 18px; height: 18px; }
-
-    .dots { display: flex; gap: 7px; }
-    .dot {
-      width: 7px; height: 7px; border-radius: 50%;
-      background: var(--input-border);
-      transition: var(--transition);
+    .pin-fields .input {
+      font-family: var(--font-mono);
+      letter-spacing: 0.2em;
     }
-    .dot.active { background: var(--primary); transform: scale(1.15); }
-    .dot.done { background: var(--success); }
 
-    .wizard-body { padding: 30px 28px 8px; min-height: 320px; }
-
-    .step { display: none; animation: fade 0.25s ease; }
-    .step.active { display: block; }
-    @keyframes fade { from { opacity: 0; transform: translateY(6px);} to { opacity: 1; transform: none; } }
-
-    .step-icon {
-      width: 46px; height: 46px;
-      display: grid; place-items: center;
-      background: var(--primary-soft);
-      color: var(--primary-hover);
-      border-radius: var(--radius);
-      margin-bottom: 16px;
+    /* Resolver addresses: two IPv4 addresses that wrap between, never inside. */
+    .device-rows {
+      margin-top: var(--space-4);
     }
-    .step-icon svg { width: 24px; height: 24px; }
-
-    h1 { font-size: 21px; font-weight: 680; letter-spacing: -0.02em; margin-bottom: 8px; }
-    .lede { color: var(--foreground-muted); font-size: 14.5px; margin-bottom: 22px; }
-
-    .feature-list { list-style: none; display: flex; flex-direction: column; gap: 12px; margin-bottom: 6px; }
-    .feature-list li { display: flex; gap: 11px; align-items: flex-start; font-size: 14px; color: var(--foreground-muted); }
-    .feature-list .tick {
-      flex: 0 0 auto; width: 20px; height: 20px; border-radius: 50%;
-      background: var(--success-soft); color: var(--success);
-      display: grid; place-items: center; margin-top: 1px;
+    .device .aside {
+      margin-top: var(--space-3);
     }
-    .feature-list .tick svg { width: 12px; height: 12px; }
-    .feature-list b { color: var(--foreground); font-weight: 600; }
-
-    /* Option rows (toggles) */
-    .opt {
-      display: flex; align-items: flex-start; gap: 14px;
-      padding: 15px 16px;
-      background: var(--surface-2);
-      border: 1px solid var(--card-border);
-      border-radius: var(--radius);
-      margin-bottom: 12px;
-      transition: var(--transition);
+    .dns-addr {
+      font-family: var(--font-mono);
+      font-size: 13px;
+      color: var(--color-ink);
     }
-    .opt:hover { border-color: var(--card-border-hover); }
-    .opt-txt { flex: 1; }
-    .opt-txt .t { font-weight: 600; font-size: 14.5px; }
-    .opt-txt .d { color: var(--foreground-dim); font-size: 13px; margin-top: 2px; }
-
-    /* Switch */
-    .switch { position: relative; flex: 0 0 auto; width: 42px; height: 24px; margin-top: 2px; }
-    .switch input { opacity: 0; width: 0; height: 0; }
-    .slider {
-      position: absolute; inset: 0; cursor: pointer;
-      background: var(--input-bg); border: 1px solid var(--input-border);
-      border-radius: 999px; transition: var(--transition);
-    }
-    .slider::before {
-      content: ""; position: absolute; height: 16px; width: 16px;
-      left: 3px; top: 50%; transform: translateY(-50%);
-      background: var(--foreground-dim); border-radius: 50%; transition: var(--transition);
-    }
-    .switch input:checked + .slider { background: var(--primary); border-color: var(--primary); }
-    .switch input:checked + .slider::before { transform: translate(18px, -50%); background: #fff; }
-
-    label.field { display: block; font-size: 13px; font-weight: 600; color: var(--foreground-muted); margin: 4px 0 7px; }
-
-    select, input[type="password"], input[type="text"] {
-      width: 100%; padding: 11px 13px;
-      background: var(--input-bg); color: var(--foreground);
-      border: 1px solid var(--input-border); border-radius: var(--radius-sm);
-      font-size: 14px; font-family: inherit; transition: var(--transition);
-    }
-    select:focus, input:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-soft); }
-
-    .detail { font-size: 12.5px; color: var(--foreground-dim); margin-top: 8px; min-height: 16px; }
-
-    .pin-row { display: flex; gap: 12px; }
-    .pin-row > div { flex: 1; }
-
-    .note {
-      display: flex; gap: 10px; align-items: flex-start;
-      background: var(--primary-soft); border: 1px solid rgba(99,102,241,0.2);
-      border-radius: var(--radius-sm); padding: 12px 14px;
-      font-size: 13px; color: var(--foreground-muted); margin-top: 18px;
-    }
-    .note svg { flex: 0 0 auto; width: 16px; height: 16px; color: var(--primary-hover); margin-top: 1px; }
-    .note.warn { background: rgba(239,68,68,0.08); border-color: rgba(239,68,68,0.2); }
-    .note.warn svg { color: var(--destructive); }
-
-    .err { color: var(--destructive); font-size: 12.5px; margin-top: 8px; min-height: 16px; }
-
-    .learn-link {
-      display: inline-flex; align-items: center; gap: 6px;
-      color: var(--primary-hover); text-decoration: none; font-weight: 600; font-size: 14px;
-    }
-    .learn-link:hover { text-decoration: underline; }
-
-    /* Device-level resolver addresses (step 5). Same shell as .opt, but the
-       right-hand control is a copy button rather than a switch. */
-    .dns-row {
-      display: flex; align-items: center; gap: 14px;
-      padding: 13px 16px;
-      background: var(--surface-2);
-      border: 1px solid var(--card-border);
-      border-radius: var(--radius);
-      margin-bottom: 10px;
-      transition: var(--transition);
-    }
-    .dns-row:hover { border-color: var(--card-border-hover); }
-    .dns-row .info { flex: 1; min-width: 0; }
-    .dns-row .name { font-weight: 600; font-size: 14px; }
-    .dns-row .addr {
-      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-      font-size: 12.5px; color: var(--foreground-muted); margin-top: 3px;
-      /* Two IPv4 addresses stay on one line at any wizard width. */
-      white-space: nowrap; overflow-x: auto;
+    .dns-addr > span {
+      white-space: nowrap;
     }
     .copy-btn {
-      flex: 0 0 auto; cursor: pointer;
-      background: var(--secondary); color: var(--secondary-foreground);
-      border: 1px solid var(--card-border); border-radius: var(--radius-sm);
-      padding: 7px 12px; font-size: 12.5px; font-weight: 600; font-family: inherit;
-      transition: var(--transition);
+      min-width: 5.5rem;
     }
-    .copy-btn:hover { background: var(--secondary-hover); border-color: var(--card-border-hover); }
-    .copy-btn.copied { background: var(--success-soft); border-color: rgba(16,185,129,0.3); color: var(--success); }
 
-    /* Footer / buttons */
     .wizard-foot {
-      display: flex; align-items: center; gap: 10px;
-      padding: 18px 28px 24px;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: var(--space-3);
+      margin-top: var(--space-6);
+      padding-top: var(--space-4);
+      border-top: 1px solid var(--color-rule);
     }
-    .wizard-foot[hidden] { display: none; }
-    .spacer { flex: 1; }
-    .btn {
-      padding: 10px 18px; border-radius: var(--radius-sm);
-      font-size: 14px; font-weight: 600; font-family: inherit;
-      border: 1px solid transparent; cursor: pointer; transition: var(--transition);
+    .foot-end {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: var(--space-4);
+      margin-left: auto;
     }
-    .btn.primary { background: var(--primary); color: var(--primary-foreground); }
-    .btn.primary:hover { background: var(--primary-hover); }
-    .btn.ghost { background: var(--secondary); color: var(--secondary-foreground); border-color: var(--card-border); }
-    .btn.ghost:hover { background: var(--secondary-hover); }
-    .btn[hidden] { display: none; }
 
-    /* Done screen */
-    .done-wrap { text-align: center; padding: 26px 10px 20px; display: none; }
-    .done-wrap.active { display: block; animation: fade 0.3s ease; }
-    .done-badge {
-      width: 64px; height: 64px; margin: 0 auto 18px;
-      display: grid; place-items: center;
-      background: var(--success-soft); color: var(--success); border-radius: 50%;
+    .done-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--space-2);
+      margin-top: var(--space-6);
     }
-    .done-badge svg { width: 32px; height: 32px; }
-    .done-actions { display: flex; gap: 10px; justify-content: center; margin-top: 24px; }
   </style>
 </head>
 <body>
-  <div class="wizard" id="wizard">
-    <div class="wizard-head">
-      <div class="brand">
-        <span class="brand-mark">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-        </span>
-        <span>BlockNSFW</span>
-      </div>
-      <div class="dots" id="dots">
-        <span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="dot"></span>
-      </div>
-    </div>
+  <div class="page">
+    <header>
+      <p class="wordmark">BlockNSFW</p>
+    </header>
 
-    <div class="wizard-body">
+    <main class="wizard" id="wizard">
       <!-- Step 1: Welcome -->
       <section class="step" data-step="1">
-        <div class="step-icon">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+        <p class="meta step-meta tnum" aria-hidden="true"><span class="meta-brass">01</span> / 05 · Welcome</p>
+        <h1 class="title title-page" tabindex="-1"><span class="visually-hidden">Step 1 of 5: </span>Welcome to BlockNSFW.</h1>
+        <p class="lede">Take a minute to choose how BlockNSFW protects you. You can change any of it later in Settings.</p>
+        <div class="step-body">
+          <ul class="rows rows-closed">
+            <li class="row">
+              <div class="row-text">
+                <span class="row-label">Runs on your device</span>
+                <p class="row-desc">Pages, images and text are checked in your browser. None of it is uploaded for filtering.</p>
+              </div>
+            </li>
+            <li class="row">
+              <div class="row-text">
+                <span class="row-label">Blocks adult sites as they load</span>
+                <p class="row-desc">A curated blocklist, plus keyword filtering in many languages.</p>
+              </div>
+            </li>
+            <li class="row">
+              <div class="row-text">
+                <span class="row-label">Optional on-device AI</span>
+                <p class="row-desc">Catches explicit images and pages the blocklist misses.</p>
+              </div>
+            </li>
+          </ul>
         </div>
-        <h1>Welcome to BlockNSFW</h1>
-        <p class="lede">Let's take 30 seconds to switch on the strongest protection. You can change any of this later in Settings.</p>
-        <ul class="feature-list">
-          <li><span class="tick"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></span><span><b>Runs entirely on your device.</b> Pages, images, and text are analysed locally — nothing is uploaded for filtering.</span></li>
-          <li><span class="tick"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></span><span><b>Blocks adult sites instantly</b> using a large curated blocklist plus multilingual keyword filtering.</span></li>
-          <li><span class="tick"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></span><span><b>Optional on-device AI</b> catches explicit images and pages the blocklist misses.</span></li>
-        </ul>
       </section>
 
       <!-- Step 2: AI protection -->
-      <section class="step" data-step="2">
-        <div class="step-icon">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v1a3 3 0 0 0-3 3 3 3 0 0 0 0 6 3 3 0 0 0 3 3v1a3 3 0 0 0 6 0v-1a3 3 0 0 0 3-3 3 3 0 0 0 0-6 3 3 0 0 0-3-3V5a3 3 0 0 0-3-3z"/></svg>
-        </div>
-        <h1>Turn on AI protection</h1>
-        <p class="lede">These catch explicit content the domain blocklist can't — including non-English sites. Recommended on.</p>
-
-        <div class="opt">
-          <div class="opt-txt">
-            <div class="t">AI Image Protection</div>
-            <div class="d">Blurs explicit images in place, on any site.</div>
+      <section class="step" data-step="2" hidden>
+        <p class="meta step-meta tnum" aria-hidden="true"><span class="meta-brass">02</span> / 05 · AI protection</p>
+        <h1 class="title title-page" tabindex="-1"><span class="visually-hidden">Step 2 of 5: </span>Turn on AI protection.</h1>
+        <p class="lede">These catch explicit content the blocklist misses. Keep both on for the most protection.</p>
+        <div class="step-body">
+          <div class="rows rows-closed">
+            <div class="row">
+              <div class="row-text">
+                <label class="row-label" for="ai-image" id="ai-image-label">AI image protection</label>
+                <p class="row-desc" id="ai-image-desc">Blurs explicit images in place, on any site.</p>
+              </div>
+              <label class="switch">
+                <input class="switch-input" type="checkbox" role="switch" id="ai-image"
+                       aria-labelledby="ai-image-label" aria-describedby="ai-image-desc" />
+                <span class="switch-track" aria-hidden="true"><span class="switch-thumb"></span></span>
+                <span class="switch-state" aria-hidden="true"></span>
+              </label>
+            </div>
+            <div class="row">
+              <div class="row-text">
+                <label class="row-label" for="ai-text" id="ai-text-label">AI text protection</label>
+                <p class="row-desc" id="ai-text-desc">Blocks pages whose text is clearly adult. In beta.</p>
+              </div>
+              <label class="switch">
+                <input class="switch-input" type="checkbox" role="switch" id="ai-text"
+                       aria-labelledby="ai-text-label" aria-describedby="ai-text-desc" />
+                <span class="switch-track" aria-hidden="true"><span class="switch-thumb"></span></span>
+                <span class="switch-state" aria-hidden="true"></span>
+              </label>
+            </div>
           </div>
-          <label class="switch"><input type="checkbox" id="ai-image"><span class="slider"></span></label>
-        </div>
 
-        <div class="opt">
-          <div class="opt-txt">
-            <div class="t">AI Text Protection</div>
-            <div class="d">Blocks pages whose text is clearly adult, read on your device.</div>
+          <div class="field">
+            <label class="field-label" for="strictness">Protection strength</label>
+            <span class="select">
+              <select class="input" id="strictness" aria-describedby="strictness-detail">
+                <option value="relaxed">Relaxed — only clearly explicit content</option>
+                <option value="balanced">Balanced — recommended</option>
+                <option value="strict">Strict — also catches borderline content</option>
+              </select>
+            </span>
+            <p class="field-hint" id="strictness-detail" aria-live="polite"></p>
           </div>
-          <label class="switch"><input type="checkbox" id="ai-text"><span class="slider"></span></label>
-        </div>
 
-        <label class="field" for="strictness">Protection strength</label>
-        <select id="strictness">
-          <option value="relaxed">Relaxed — only clearly explicit content</option>
-          <option value="balanced">Balanced — recommended</option>
-          <option value="strict">Strict — also catches borderline content</option>
-        </select>
-        <div class="detail" id="strictness-detail"></div>
-
-        <div class="note">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-          <span>All AI runs on your device. No images or page text ever leave your browser.</span>
+          <p class="aside">AI runs on your device. No images or page text leave your browser.</p>
         </div>
       </section>
 
-      <!-- Step 3: PIN / commitment lock -->
-      <section class="step" data-step="3">
-        <div class="step-icon">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-        </div>
-        <h1>Add a lock</h1>
-        <p class="lede">A PIN adds friction so protection can't be switched off on impulse. Optional — you can skip it.</p>
-
-        <div class="pin-row">
-          <div>
-            <label class="field" for="pin">PIN (min 4 characters)</label>
-            <input type="password" id="pin" autocomplete="new-password" inputmode="numeric" placeholder="••••">
+      <!-- Step 3: PIN -->
+      <section class="step" data-step="3" hidden>
+        <p class="meta step-meta tnum" aria-hidden="true"><span class="meta-brass">03</span> / 05 · PIN</p>
+        <h1 class="title title-page" tabindex="-1"><span class="visually-hidden">Step 3 of 5: </span>Add a PIN.</h1>
+        <p class="lede">A PIN puts a pause between you and turning protection off, so it can’t happen on impulse. You can skip this.</p>
+        <div class="step-body">
+          <div class="pin-fields">
+            <div class="field">
+              <label class="field-label" for="pin">PIN</label>
+              <input type="password" class="input" id="pin" autocomplete="new-password" inputmode="numeric"
+                     aria-describedby="pin-hint pin-err" />
+              <p class="field-hint" id="pin-hint">At least four characters.</p>
+            </div>
+            <div class="field">
+              <label class="field-label" for="pin2">Type it again</label>
+              <input type="password" class="input" id="pin2" autocomplete="new-password" inputmode="numeric"
+                     aria-describedby="pin-err" />
+            </div>
+            <p class="field-error" id="pin-err" role="alert"></p>
           </div>
-          <div>
-            <label class="field" for="pin2">Confirm PIN</label>
-            <input type="password" id="pin2" autocomplete="new-password" inputmode="numeric" placeholder="••••">
-          </div>
-        </div>
-        <div class="err" id="pin-err"></div>
 
-        <div class="note warn">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-          <span>A PIN is a speed bump, not tamper-proof — it can be cleared by removing the extension. For real uninstall protection, see the next step.</span>
+          <p class="aside">A PIN is a speed bump, not a lock. Removing the extension clears it; the next step covers that.</p>
         </div>
       </section>
 
       <!-- Step 4: Desktop Guard -->
-      <section class="step" data-step="4">
-        <div class="step-icon">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
-        </div>
-        <h1>Make it stick</h1>
-        <p class="lede">The browser can still be told to remove or disable this extension in two clicks. Desktop Guard closes that gap.</p>
-        <ul class="feature-list">
-          <li><span class="tick"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></span><span>A native companion app <b>greys out the browser's Remove and Disable buttons</b>.</span></li>
-          <li><span class="tick"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></span><span>A background service <b>re-applies protection</b> if anything tampers with it.</span></li>
-          <li><span class="tick"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></span><span>Uninstalling needs a password held by a parent or accountability partner.</span></li>
-        </ul>
-        <div class="note">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
-          <span>Now in beta for Windows &amp; Linux. &nbsp;<a class="learn-link" id="dg-link" href="https://github.com/codepurse/extension-guard" target="_blank" rel="noopener">Learn more →</a></span>
+      <section class="step" data-step="4" hidden>
+        <p class="meta step-meta tnum" aria-hidden="true"><span class="meta-brass">04</span> / 05 · Desktop Guard</p>
+        <h1 class="title title-page" tabindex="-1"><span class="visually-hidden">Step 4 of 5: </span>Make BlockNSFW hard to remove.</h1>
+        <p class="lede">Anyone can remove or disable this extension from the browser in two clicks. Desktop Guard, a separate app for Windows and Linux now in beta, closes that gap.</p>
+        <div class="step-body">
+          <ul class="rows rows-closed">
+            <li class="row">
+              <div class="row-text">
+                <span class="row-label">Remove and Disable are greyed out</span>
+                <p class="row-desc">A companion app on your computer turns off the browser’s buttons for this extension.</p>
+              </div>
+            </li>
+            <li class="row">
+              <div class="row-text">
+                <span class="row-label">Protection repairs itself</span>
+                <p class="row-desc">A background service re-applies protection if anything tampers with it.</p>
+              </div>
+            </li>
+            <li class="row">
+              <div class="row-text">
+                <span class="row-label">Uninstalling needs a password</span>
+                <p class="row-desc">A parent or an accountability partner holds it, not you.</p>
+              </div>
+            </li>
+          </ul>
+
+          <p class="aside">
+            <a class="arrow-link" id="dg-link" href="https://github.com/codepurse/extension-guard" target="_blank" rel="noopener noreferrer">
+              Read about Desktop Guard
+              <svg class="icon icon-14 icon-up-right" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M4.5 11.5l7-7M6 4.5h5.5V10" /></svg>
+            </a>
+          </p>
         </div>
       </section>
 
-      <!-- Step 5: DNS — inside the browser, and outside it -->
-      <section class="step" data-step="5">
-        <div class="step-icon">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
-        </div>
-        <h1>Block at the network level</h1>
-        <p class="lede">Domain blocking can happen before a page even starts loading. This works in two places — one inside BlockNSFW, one covering your whole device.</p>
-
-        <div class="opt">
-          <div class="opt-txt">
-            <div class="t">DNS check inside BlockNSFW</div>
-            <div class="d">Domains the local blocklist hasn't already decided on get a second opinion from a family-safe resolver. You choose which one in Settings.</div>
+      <!-- Step 5: DNS, inside the browser and outside it -->
+      <section class="step" data-step="5" hidden>
+        <p class="meta step-meta tnum" aria-hidden="true"><span class="meta-brass">05</span> / 05 · Network</p>
+        <h1 class="title title-page" tabindex="-1"><span class="visually-hidden">Step 5 of 5: </span>Block at the network level.</h1>
+        <p class="lede">Sites can be blocked before a page starts to load. Turn it on for this browser here, then for every app on your device.</p>
+        <div class="step-body">
+          <div class="rows rows-closed">
+            <div class="row">
+              <div class="row-text">
+                <label class="row-label" for="dns-filter" id="dns-filter-label">DNS check in BlockNSFW</label>
+                <p class="row-desc" id="dns-filter-desc">Sites the blocklist hasn’t decided on get a second opinion from a family-safe resolver. Choose which one in Settings.</p>
+              </div>
+              <label class="switch">
+                <input class="switch-input" type="checkbox" role="switch" id="dns-filter"
+                       aria-labelledby="dns-filter-label" aria-describedby="dns-filter-desc" />
+                <span class="switch-track" aria-hidden="true"><span class="switch-thumb"></span></span>
+                <span class="switch-state" aria-hidden="true"></span>
+              </label>
+            </div>
           </div>
-          <label class="switch"><input type="checkbox" id="dns-filter"><span class="slider"></span></label>
-        </div>
 
-        <label class="field">Then cover the rest of your device</label>
-        <div class="detail" style="margin-bottom: 12px;">
-          BlockNSFW only protects this browser. Setting one of these in your
-          computer's or router's network settings filters every app — and keeps
-          working even if this extension is removed.
-        </div>
+          <div class="device">
+            <h2 class="group-title">Cover the rest of your device</h2>
+            <p class="group-desc">BlockNSFW only protects this browser. Set one of these in your computer’s or router’s network settings to filter every app, even if the extension is removed.</p>
 
-        <div class="dns-row">
-          <div class="info">
-            <div class="name">CleanBrowsing Family</div>
-            <div class="addr">185.228.168.168 &nbsp;·&nbsp; 185.228.169.168</div>
+            <ul class="rows rows-closed device-rows">
+              <li class="row">
+                <div class="row-text">
+                  <span class="row-label" id="dns-cleanbrowsing">CleanBrowsing Family</span>
+                  <p class="row-desc dns-addr tnum"><span>185.228.168.168</span><span aria-hidden="true"> · </span><span>185.228.169.168</span></p>
+                </div>
+                <button type="button" class="btn btn-ghost btn-sm copy-btn" aria-describedby="dns-cleanbrowsing"
+                        data-name="CleanBrowsing Family" data-copy="185.228.168.168, 185.228.169.168">Copy</button>
+              </li>
+              <li class="row">
+                <div class="row-text">
+                  <span class="row-label" id="dns-family">DNS for Family</span>
+                  <p class="row-desc dns-addr tnum"><span>94.130.180.225</span><span aria-hidden="true"> · </span><span>78.47.64.161</span></p>
+                </div>
+                <button type="button" class="btn btn-ghost btn-sm copy-btn" aria-describedby="dns-family"
+                        data-name="DNS for Family" data-copy="94.130.180.225, 78.47.64.161">Copy</button>
+              </li>
+            </ul>
+
+            <p class="aside">
+              Both are free and need no account.
+              <a class="arrow-link" id="dns-link" href="https://cleanbrowsing.org/guides/" target="_blank" rel="noopener noreferrer">
+                How to set this up
+                <svg class="icon icon-14 icon-up-right" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M4.5 11.5l7-7M6 4.5h5.5V10" /></svg>
+              </a>
+            </p>
           </div>
-          <button class="copy-btn" type="button" data-copy="185.228.168.168, 185.228.169.168">Copy</button>
-        </div>
-
-        <div class="dns-row">
-          <div class="info">
-            <div class="name">DNS for Family</div>
-            <div class="addr">94.130.180.225 &nbsp;·&nbsp; 78.47.64.161</div>
-          </div>
-          <button class="copy-btn" type="button" data-copy="94.130.180.225, 78.47.64.161">Copy</button>
-        </div>
-
-        <div class="note">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
-          <span>Both are free and need no account. &nbsp;<a class="learn-link" id="dns-link" href="https://cleanbrowsing.org/guides/" target="_blank" rel="noopener">How to set this up →</a></span>
         </div>
       </section>
 
       <!-- Done -->
-      <div class="done-wrap" id="done">
-        <div class="done-badge">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
-        </div>
-        <h1>You're protected</h1>
+      <section class="done" id="done" hidden>
+        <p class="meta step-meta meta-pine">Setup complete</p>
+        <h1 class="title title-page" tabindex="-1">You’re protected.</h1>
         <p class="lede" id="done-summary">Your settings are saved.</p>
+        <p class="lede">You can change any of this in Settings.</p>
         <div class="done-actions">
-          <button class="btn ghost" id="done-close">Done</button>
-          <button class="btn primary" id="done-settings">Open Settings</button>
+          <button type="button" class="btn btn-primary" id="done-close">Done</button>
+          <button type="button" class="btn btn-ghost" id="done-settings">Open Settings</button>
+        </div>
+      </section>
+
+      <p class="visually-hidden" id="announce" role="status" aria-live="polite"></p>
+
+      <div class="wizard-foot" id="foot">
+        <button type="button" class="btn btn-ghost" id="back" hidden>Back</button>
+        <div class="foot-end">
+          <button type="button" class="btn btn-text" id="skip" hidden>Skip for now</button>
+          <button type="button" class="btn btn-primary" id="next">Start setup</button>
         </div>
       </div>
-    </div>
-
-    <div class="wizard-foot" id="foot">
-      <button class="btn ghost" id="back" hidden>Back</button>
-      <div class="spacer"></div>
-      <button class="btn ghost" id="skip" hidden>Skip for now</button>
-      <button class="btn primary" id="next">Get started</button>
-    </div>
+    </main>
   </div>
 
   <script src="onboarding.js"></script>

@@ -152,7 +152,7 @@ async function renderAiImageModel(settings) {
   if (downloadBtn) {
     downloadBtn.style.display = bundled || cached || unavailable ? 'none' : 'inline-flex';
     downloadBtn.disabled = false;
-    downloadBtn.textContent = 'Download model now';
+    downloadBtn.textContent = 'Download the model';
   }
   if (clearBtn) clearBtn.style.display = !bundled && cached ? 'inline-flex' : 'none';
 }
@@ -203,89 +203,101 @@ function getAiTextStrictnessMeta(level) {
   };
 }
 
-// Toast Notification System
+// Notices: one plain-text line at the foot of the window. Success and news go
+// to a polite status region; a problem goes to an alert region and is read out
+// at once. Status is a word, never a colour, so the two look the same.
+let noticeTimer = null;
 function showToast(message, type = 'info') {
-  const toast = document.createElement('div');
-  toast.className = `toast toast-${type}`;
-  toast.textContent = message;
-  
-  // Style based on type
-  const styles = {
-    success: { background: 'var(--success-color)', color: 'white' },
-    error: { background: 'var(--error-color)', color: 'white' },
-    warning: { background: 'var(--warning-color)', color: 'black' },
-    info: { background: 'var(--info-color)', color: 'white' }
-  };
-  
-  Object.assign(toast.style, {
-    position: 'fixed',
-    top: '20px',
-    right: '20px',
-    padding: '12px 20px',
-    borderRadius: '8px',
-    boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
-    zIndex: '10000',
-    maxWidth: '300px',
-    wordWrap: 'break-word',
-    animation: 'slideIn 0.3s ease-out',
-    ...styles[type]
-  });
-  
-  document.body.appendChild(toast);
-  
-  // Auto-remove after 3 seconds
-  setTimeout(() => {
-    toast.style.animation = 'slideOut 0.3s ease-in';
+  const problem = type === 'error' || type === 'warning';
+  const shown = $(problem ? 'notice-alert' : 'notice-status');
+  const other = $(problem ? 'notice-status' : 'notice-alert');
+  if (!shown) return;
+  if (other) {
+    other.classList.remove('is-shown');
+    other.textContent = '';
+  }
+  shown.textContent = message;
+  shown.classList.add('is-shown');
+  clearTimeout(noticeTimer);
+  noticeTimer = setTimeout(() => {
+    shown.classList.remove('is-shown');
     setTimeout(() => {
-      if (toast.parentNode) {
-        toast.parentNode.removeChild(toast);
-      }
-    }, 300);
-  }, 3000);
+      if (!shown.classList.contains('is-shown')) shown.textContent = '';
+    }, 200);
+  }, problem ? 6000 : 3500);
 }
 
-// Modal System for PIN Management
+// A hint line under a field, with its tone as a class: 'error' for a problem,
+// 'success' when something checked out. The words carry the meaning.
+function setHint(el, text, tone) {
+  if (!el) return;
+  el.textContent = text;
+  el.className = 'field-hint pin-hint' + (tone ? ' ' + tone : '');
+  el.removeAttribute('style');
+}
+
+// Dialogs. Every confirmation, PIN and access-code prompt on this page is one
+// of these: a sheet on a flat scrim with a title, one line of description, the
+// fields and the buttons. Focus moves in, stays in, and goes back to whatever
+// opened it; Escape and a click on the scrim cancel.
+let modalCount = 0;
+const MODAL_BUTTON_CLASS = {
+  primary: 'btn btn-primary',
+  secondary: 'btn btn-ghost',
+  destructive: 'btn btn-danger-confirm'
+};
+
 function createModal(config) {
   return new Promise((resolve) => {
+    const opener = document.activeElement;
+    const id = 'modal-' + (++modalCount);
+
     const overlay = document.createElement('div');
-    overlay.className = 'modal-overlay';
-    
+    overlay.className = 'dialog-scrim modal-overlay';
+
     const content = document.createElement('div');
-    content.className = 'modal-content';
-    
-    // Header
-    const header = document.createElement('div');
-    header.className = 'modal-header';
-    
-    const icon = document.createElement('div');
-    icon.className = 'modal-icon';
-    icon.textContent = config.icon || '🔒';
-    
+    content.className = 'dialog modal-content';
+    content.setAttribute('role', 'dialog');
+    content.setAttribute('aria-modal', 'true');
+    content.setAttribute('aria-labelledby', id + '-title');
+    content.setAttribute('aria-describedby', id + '-desc');
+
     const title = document.createElement('h2');
-    title.className = 'modal-title';
+    title.className = 'dialog-title modal-title';
+    title.id = id + '-title';
     title.textContent = config.title;
-    
+
     const description = document.createElement('p');
-    description.className = 'modal-description';
+    description.className = 'dialog-desc modal-description';
+    description.id = id + '-desc';
     description.textContent = config.description;
-    
-    header.appendChild(icon);
-    header.appendChild(title);
-    header.appendChild(description);
-    
-    // Body
+
+    // Body: static markup written in this file, plus plain-text parts that
+    // may carry an address or a list name and so are only ever text.
     const body = document.createElement('div');
-    body.className = 'modal-body';
-    body.innerHTML = config.bodyHTML;
-    
-    // Footer
+    body.className = 'dialog-body modal-body';
+    if (config.bodyHTML) body.innerHTML = config.bodyHTML;
+    if (config.code) {
+      const code = document.createElement('div');
+      code.className = 'access-code-display dialog-code';
+      code.textContent = config.code;
+      body.appendChild(code);
+    }
+    if (config.message) {
+      const message = document.createElement('p');
+      message.className = 'dialog-message';
+      message.textContent = config.message;
+      body.appendChild(message);
+    }
+    if (!body.childNodes.length) body.hidden = true;
+
     const footer = document.createElement('div');
-    footer.className = 'modal-footer';
-    
+    footer.className = 'dialog-actions modal-footer';
+
     config.buttons.forEach(btnConfig => {
       const btn = document.createElement('button');
       btn.type = 'button';
-      btn.className = `modal-button modal-button-${btnConfig.type}`;
+      btn.className = `${MODAL_BUTTON_CLASS[btnConfig.type] || 'btn btn-ghost'} modal-button modal-button-${btnConfig.type}`;
       btn.textContent = btnConfig.text;
       btn.onclick = () => {
         if (btnConfig.onClick) {
@@ -299,45 +311,67 @@ function createModal(config) {
       };
       footer.appendChild(btn);
     });
-    
-    content.appendChild(header);
+
+    content.appendChild(title);
+    content.appendChild(description);
     content.appendChild(body);
     content.appendChild(footer);
     overlay.appendChild(content);
     document.body.appendChild(overlay);
-    
-    // Close on overlay click
+
+    // Close on a click on the scrim
     overlay.addEventListener('click', (e) => {
       if (e.target === overlay) {
         closeModal(overlay, null);
       }
     });
-    
-    // Close on Escape
-    const escHandler = (e) => {
+
+    // Escape cancels; Tab stays inside the dialog.
+    const keyHandler = (e) => {
       if (e.key === 'Escape') {
         closeModal(overlay, null);
+        return;
       }
+      if (e.key !== 'Tab') return;
+      const focusable = [...content.querySelectorAll('button, input, select, textarea, [href], [tabindex]:not([tabindex="-1"])')]
+        .filter(node => !node.disabled && node.offsetParent !== null);
+      if (focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
     };
-    document.addEventListener('keydown', escHandler);
-    
-    // Focus first input
+    document.addEventListener('keydown', keyHandler);
+
+    // First focus: the first field, or Cancel when the dialog confirms
+    // something destructive, or else the main button.
     setTimeout(() => {
       const firstInput = body.querySelector('input');
-      if (firstInput) firstInput.focus();
+      const destructive = footer.querySelector('.modal-button-destructive');
+      const target = firstInput ||
+        (destructive ? footer.querySelector('.modal-button-secondary') : null) ||
+        footer.querySelector('.modal-button-primary') ||
+        footer.querySelector('button');
+      if (target) target.focus();
     }, 100);
-    
+
+    let closed = false;
     function closeModal(modalEl, value) {
-      document.removeEventListener('keydown', escHandler);
+      if (closed) return;
+      closed = true;
+      document.removeEventListener('keydown', keyHandler);
       modalEl.style.opacity = '0';
       setTimeout(() => {
         if (modalEl.parentNode) {
           modalEl.parentNode.removeChild(modalEl);
         }
+        if (opener && document.contains(opener) && typeof opener.focus === 'function') {
+          try { opener.focus({ preventScroll: true }); } catch (_) {}
+        }
         resolve(value);
-      }, 200);
+      }, 180);
     }
-    
+
     overlay.closeModal = (value) => closeModal(overlay, value);
   });
 }
@@ -347,21 +381,20 @@ async function showSetPINModal() {
   
   // Create modal without awaiting - this adds it to DOM immediately
   const modalPromise = createModal({
-    icon: '🔐',
-    title: 'Set Your PIN',
-    description: 'Create a secure PIN to protect your settings (minimum 4 characters)',
+    title: 'Set a PIN',
+    description: 'A PIN guards anything that loosens protection. Use at least 4 characters.',
     bodyHTML: `
-      <div class="pin-input-group">
-        <label class="pin-input-label">New PIN</label>
-        <input type="password" class="pin-input" id="modal-pin-input" placeholder="Enter PIN" maxlength="20" autocomplete="off">
-        <div class="pin-strength-indicator">
+      <div class="field pin-input-group">
+        <label class="field-label pin-input-label" for="modal-pin-input">New PIN</label>
+        <input type="password" class="input pin-input" id="modal-pin-input" maxlength="20" autocomplete="off" aria-describedby="modal-hint">
+        <div class="pin-strength-indicator" hidden>
           <div class="pin-strength-bar" id="modal-strength-bar"></div>
         </div>
-        <div class="pin-hint" id="modal-hint">Use at least 4 characters</div>
+        <p class="field-hint pin-hint" id="modal-hint" aria-live="polite">At least 4 characters.</p>
       </div>
-      <div class="pin-input-group">
-        <label class="pin-input-label">Confirm PIN</label>
-        <input type="password" class="pin-input" id="modal-confirm-input" placeholder="Confirm PIN" maxlength="20" autocomplete="off">
+      <div class="field pin-input-group">
+        <label class="field-label pin-input-label" for="modal-confirm-input">Type it again</label>
+        <input type="password" class="input pin-input" id="modal-confirm-input" maxlength="20" autocomplete="off" aria-describedby="modal-hint">
       </div>
     `,
     buttons: [
@@ -375,16 +408,16 @@ async function showSetPINModal() {
           
           if (pin.length < 4) {
             pinInput.classList.add('error');
-            hintText.textContent = '❌ PIN must be at least 4 characters';
-            hintText.className = 'pin-hint error';
+            pinInput.setAttribute('aria-invalid', 'true');
+            setHint(hintText, 'A PIN has at least 4 characters. Choose a longer one.', 'error');
             setTimeout(() => pinInput.classList.remove('error'), 500);
             return false; // Don't close modal
           }
-          
+
           if (pin !== confirm) {
             confirmInput.classList.add('error');
-            hintText.textContent = '❌ PINs do not match';
-            hintText.className = 'pin-hint error';
+            confirmInput.setAttribute('aria-invalid', 'true');
+            setHint(hintText, 'The two PINs don’t match. Type them again.', 'error');
             setTimeout(() => confirmInput.classList.remove('error'), 500);
             return false; // Don't close modal
           }
@@ -409,24 +442,24 @@ async function showSetPINModal() {
     pinInput.addEventListener('input', () => {
       const pin = pinInput.value;
       const length = pin.length;
-      
+      pinInput.removeAttribute('aria-invalid');
+      if (confirmInput) confirmInput.removeAttribute('aria-invalid');
+
+      // The length is said in words; the old coloured bar stays in the markup
+      // for anything that reads its class, but is never shown.
       strengthBar.className = 'pin-strength-bar';
       if (length === 0) {
         strengthBar.className = 'pin-strength-bar';
-        hintText.textContent = 'Use at least 4 characters';
-        hintText.className = 'pin-hint';
+        setHint(hintText, 'At least 4 characters.');
       } else if (length < 4) {
         strengthBar.classList.add('weak');
-        hintText.textContent = '⚠️ Too short';
-        hintText.className = 'pin-hint error';
+        setHint(hintText, 'Too short. Use at least 4 characters.');
       } else if (length < 6) {
         strengthBar.classList.add('medium');
-        hintText.textContent = '✓ Good';
-        hintText.className = 'pin-hint';
+        setHint(hintText, 'Long enough.');
       } else {
         strengthBar.classList.add('strong');
-        hintText.textContent = '✓ Strong';
-        hintText.className = 'pin-hint success';
+        setHint(hintText, 'Long enough, and harder to guess.', 'success');
       }
     });
   }
@@ -453,31 +486,30 @@ async function showVerifyPINModal(actionLabel = 'this action') {
   
   // Create modal without awaiting - this adds it to DOM immediately
   const modalPromise = createModal({
-    icon: '🔓',
-    title: 'Verify PIN',
-    description: `Enter your PIN to ${actionLabel}`,
+    title: 'Enter your PIN',
+    description: `Enter your PIN to ${actionLabel}.`,
     bodyHTML: `
-      <div class="pin-input-group">
-        <label class="pin-input-label">Enter PIN</label>
-        <input type="password" class="pin-input" id="modal-verify-input" placeholder="••••" maxlength="20" autocomplete="off">
-        <div class="pin-hint" id="modal-verify-hint">Enter your PIN to continue</div>
+      <div class="field pin-input-group">
+        <label class="field-label pin-input-label" for="modal-verify-input">PIN</label>
+        <input type="password" class="input pin-input" id="modal-verify-input" maxlength="20" autocomplete="off" aria-describedby="modal-verify-hint">
+        <p class="field-hint pin-hint" id="modal-verify-hint" aria-live="polite"></p>
       </div>
     `,
     buttons: [
       { text: 'Cancel', type: 'secondary', value: null },
-      { 
-        text: 'Verify', 
+      {
+        text: 'Continue',
         type: 'primary',
         onClick: () => {
           const pin = pinInput.value.trim();
-          
+
           if (pin === storedPIN) {
             return true;
           } else {
             pinInput.classList.add('error');
+            pinInput.setAttribute('aria-invalid', 'true');
             pinInput.value = '';
-            hintText.textContent = '❌ Incorrect PIN';
-            hintText.className = 'pin-hint error';
+            setHint(hintText, 'That PIN didn’t match. Try again.', 'error');
             setTimeout(() => pinInput.classList.remove('error'), 500);
             return false; // Don't close modal
           }
@@ -507,12 +539,13 @@ async function showVerifyPINModal(actionLabel = 'this action') {
   return await modalPromise;
 }
 
+// The confirm step. For a destructive action the confirm button is the one
+// place the danger fill appears.
 async function showConfirmModal(config) {
   return await createModal({
-    icon: config.icon || '⚠️',
     title: config.title,
     description: config.description,
-    bodyHTML: config.message ? `<p style="text-align: center; color: var(--foreground-muted); margin: 1rem 0;">${config.message}</p>` : '',
+    message: config.message || '',
     buttons: [
       { text: 'Cancel', type: 'secondary', value: false },
       { text: config.confirmText || 'Confirm', type: config.destructive ? 'destructive' : 'primary', value: true }
@@ -645,21 +678,26 @@ async function showAccessCodeModal(actionLabel = 'this action') {
   const { length } = await getAccessCodeConfig();
   let expected = generateAccessCode(length);
 
+  // The code goes in as text after the dialog exists. Written into the markup
+  // it was parsed as HTML, and an "&" followed by letters in the code could
+  // show as a different character from the one being checked.
   const modalPromise = createModal({
-    icon: '⌨️',
-    title: 'Access Code Required',
+    title: 'Type the access code',
     description: `Type the code below exactly to ${actionLabel}.`,
     bodyHTML: `
-      <div class="access-code-display" id="modal-access-code">${expected}</div>
-      <input type="text" class="pin-input access-code-input" id="modal-access-code-input"
-             placeholder="Type the code above" autocomplete="off" autocorrect="off"
-             autocapitalize="off" spellcheck="false">
-      <div class="pin-hint" id="modal-access-code-hint">Copy and paste are disabled on purpose.</div>
+      <div class="access-code-display" id="modal-access-code"></div>
+      <div class="field">
+        <label class="field-label" for="modal-access-code-input">The code, typed by hand</label>
+        <input type="text" class="input input-mono pin-input access-code-input" id="modal-access-code-input"
+               autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+               aria-describedby="modal-access-code-hint">
+        <p class="field-hint pin-hint" id="modal-access-code-hint" aria-live="polite">Copy and paste are turned off on purpose.</p>
+      </div>
     `,
     buttons: [
       { text: 'Cancel', type: 'secondary', value: false },
       {
-        text: 'Unlock',
+        text: 'Continue',
         type: 'primary',
         onClick: () => {
           const input = document.getElementById('modal-access-code-input');
@@ -674,11 +712,9 @@ async function showAccessCodeModal(actionLabel = 'this action') {
           if (display) display.textContent = expected;
           input.value = '';
           input.classList.add('error');
+          input.setAttribute('aria-invalid', 'true');
           setTimeout(() => input.classList.remove('error'), 500);
-          if (hint) {
-            hint.textContent = "❌ That didn't match. Here's a new code.";
-            hint.className = 'pin-hint error';
-          }
+          setHint(hint, 'That didn’t match. Type the new code above.', 'error');
           return false; // keep the modal open
         }
       }
@@ -687,6 +723,9 @@ async function showAccessCodeModal(actionLabel = 'this action') {
 
   // Wait for the modal to reach the DOM before wiring the guards.
   await new Promise(resolve => setTimeout(resolve, 50));
+
+  const codeDisplay = document.getElementById('modal-access-code');
+  if (codeDisplay) codeDisplay.textContent = expected;
 
   // Refuses paste/drop into the box and copy off the display — the feature is
   // worthless if the code can be moved across in two seconds.
@@ -750,15 +789,16 @@ function formatStreakDuration(ms) {
   return 'less than a minute';
 }
 
+// Said plainly: what has been kept, never a judgement of the person.
 function getStreakMessage(days) {
-  if (days >= 365) return "An incredible year+ of strength. You've built something truly powerful.";
-  if (days >= 180) return "Half a year of discipline. That's extraordinary willpower.";
-  if (days >= 90) return "Three months strong. Your future self is grateful.";
-  if (days >= 30) return "A full month of commitment. That takes real courage.";
-  if (days >= 14) return "Two weeks of resilience. You're building a new habit.";
-  if (days >= 7) return "A whole week of strength. Every day counts.";
-  if (days >= 1) return "You've started a streak. Don't let it end here.";
-  return "Every journey starts with a single step. Keep going.";
+  if (days >= 365) return 'More than a year of protection, kept one day at a time.';
+  if (days >= 180) return 'Half a year of protection, kept one day at a time.';
+  if (days >= 90) return 'Three months of protection.';
+  if (days >= 30) return 'A month of protection.';
+  if (days >= 14) return 'Two weeks of protection.';
+  if (days >= 7) return 'A week of protection.';
+  if (days >= 1) return 'Your days of protection have started.';
+  return 'Protection was turned on recently.';
 }
 
 const COMMITMENT_SENTENCE = 'By typing this sentence, I acknowledge that I am consciously choosing to override the protection I previously put in place to guard my focus, discipline, and personal growth. I understand that this action directly contradicts the commitment I made to become a stronger, more self-controlled, and purpose-driven version of myself. I accept full responsibility for this decision, including any negative impact it may have on my goals, my time, my mental clarity, and my long-term well-being. I recognize that this choice is not accidental, not forced, and not automatic it is entirely mine. I understand that I am stepping away from the standards I set for myself, and I do so knowingly, without excuses, and without blaming circumstances, emotions, or external triggers. I acknowledge that growth requires consistency and integrity, and by proceeding, I am choosing short-term gratification over long-term self-respect. I accept that this action reflects my current priorities, and I take complete ownership of whatever follows as a result of this decision.';
@@ -766,6 +806,7 @@ const COMMITMENT_SENTENCE = 'By typing this sentence, I acknowledge that I am co
 async function showCommitmentGate() {
   const overlay = $('commitment-overlay');
   if (!overlay) return false;
+  const opener = document.activeElement;
 
   const streakStart = await getStreakStart();
   const streakMs = streakStart ? Date.now() - streakStart : 0;
@@ -802,13 +843,20 @@ async function showCommitmentGate() {
 
   overlay.classList.remove('hidden');
   overlay.setAttribute('aria-hidden', 'false');
+  const firstChoice = $('commitment-keep-btn');
+  if (firstChoice) setTimeout(() => firstChoice.focus(), 0);
 
   return new Promise(resolve => {
     let currentStep = 1;
+    let handleOverlayKey = null;
 
     const cleanup = () => {
       overlay.classList.add('hidden');
       overlay.setAttribute('aria-hidden', 'true');
+      if (handleOverlayKey) document.removeEventListener('keydown', handleOverlayKey);
+      if (opener && document.contains(opener) && typeof opener.focus === 'function') {
+        try { opener.focus({ preventScroll: true }); } catch (_) {}
+      }
     };
 
     const goToStep = (step) => {
@@ -817,10 +865,12 @@ async function showCommitmentGate() {
       steps[step - 1].classList.remove('hidden');
       updateCommitmentProgress(step);
 
+      if (step === 1 && $('commitment-keep-btn')) $('commitment-keep-btn').focus();
       if (step === 2 && reflectInput) {
         reflectInput.focus();
         const reflectError = $('commitment-reflect-error');
         if (reflectError) reflectError.textContent = '';
+        reflectInput.removeAttribute('aria-invalid');
       }
       if (step === 3 && confirmInput) {
         confirmInput.value = '';
@@ -841,13 +891,13 @@ async function showCommitmentGate() {
       const target = COMMITMENT_SENTENCE.toLowerCase();
       const current = value.toLowerCase();
       if (target === current) {
-        matchIndicator.textContent = 'Sentence matches';
+        matchIndicator.textContent = 'It matches.';
         matchIndicator.className = 'commitment-match valid';
       } else if (target.startsWith(current)) {
-        matchIndicator.textContent = 'Keep typing...';
+        matchIndicator.textContent = 'Keep typing…';
         matchIndicator.className = 'commitment-match partial';
       } else {
-        matchIndicator.textContent = 'Doesn\'t match — check your spelling';
+        matchIndicator.textContent = 'It doesn’t match yet. Check the spelling.';
         matchIndicator.className = 'commitment-match invalid';
       }
     };
@@ -864,10 +914,12 @@ async function showCommitmentGate() {
       const val = reflectInput ? reflectInput.value.trim() : '';
       const reflectError = $('commitment-reflect-error');
       if (val.length < 10) {
-        if (reflectError) reflectError.textContent = 'Please write a more thoughtful answer (at least 10 characters).';
+        if (reflectError) reflectError.textContent = 'Write a little more: at least 10 characters.';
+        if (reflectInput) reflectInput.setAttribute('aria-invalid', 'true');
         return;
       }
       if (reflectError) reflectError.textContent = '';
+      if (reflectInput) reflectInput.removeAttribute('aria-invalid');
       goToStep(3);
     };
 
@@ -885,14 +937,12 @@ async function showCommitmentGate() {
       const val = confirmInput ? confirmInput.value.trim() : '';
       const confirmError = $('commitment-confirm-error');
       if (val.toLowerCase() !== COMMITMENT_SENTENCE.toLowerCase()) {
-        if (confirmError) confirmError.textContent = 'The sentence doesn\'t match. Please type it exactly.';
-        if (confirmInput) {
-          confirmInput.style.animation = 'shake 0.5s ease-in-out';
-          setTimeout(() => { confirmInput.style.animation = ''; }, 500);
-        }
+        if (confirmError) confirmError.textContent = 'The sentence doesn’t match. Type it exactly as shown.';
+        if (confirmInput) confirmInput.setAttribute('aria-invalid', 'true');
         return;
       }
       if (confirmError) confirmError.textContent = '';
+      if (confirmInput) confirmInput.removeAttribute('aria-invalid');
       cleanup();
       resolve(true);
     };
@@ -905,11 +955,10 @@ async function showCommitmentGate() {
       };
     }
 
-    const handleOverlayKey = (e) => {
+    handleOverlayKey = (e) => {
       if (e.key === 'Escape' && currentStep === 1) {
         cleanup();
         resolve(false);
-        document.removeEventListener('keydown', handleOverlayKey);
       }
     };
     document.addEventListener('keydown', handleOverlayKey);
@@ -1330,44 +1379,48 @@ async function renderSubscriptions() {
     subscriptions = [];
   }
 
-  container.innerHTML = '';
+  container.textContent = '';
   if (subscriptions.length === 0) {
-    const empty = document.createElement('div');
-    empty.className = 'whitelist-empty';
-    empty.textContent = 'No subscriptions yet.';
+    const empty = document.createElement('p');
+    empty.className = 'domain-empty whitelist-empty';
+    empty.textContent = 'You don’t follow any lists yet.';
     container.appendChild(empty);
     return;
   }
 
   subscriptions.forEach((subscription) => {
     const row = document.createElement('div');
-    row.style.cssText = 'display:flex;justify-content:space-between;align-items:flex-start;gap:12px;padding:10px 8px;border-bottom:1px solid color-mix(in oklab,CanvasText,transparent 85%);';
+    row.className = 'domain-row subscription-row';
+    if (subscription.enabled === false) row.dataset.state = 'off';
 
     const info = document.createElement('div');
-    info.style.cssText = 'min-width:0;flex:1;';
+    info.className = 'domain-main';
 
-    const name = document.createElement('strong');
+    const name = document.createElement('span');
+    name.className = 'subscription-name';
     name.textContent = subscription.name || subscription.url;
-    name.style.cssText = 'display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
-    if (subscription.enabled === false) name.style.opacity = '0.55';
     info.appendChild(name);
 
-    const url = document.createElement('div');
+    const url = document.createElement('span');
+    url.className = 'domain';
     url.textContent = subscription.url;
-    url.style.cssText = 'font-size:0.78rem;opacity:0.65;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+    url.title = subscription.url;
     info.appendChild(url);
 
-    const status = document.createElement('div');
-    status.textContent = subscriptionStatusText(subscription);
-    status.style.cssText = `font-size:0.78rem;margin-top:2px;${subscription.error ? 'color:var(--error-color,#ef4444);' : 'opacity:0.65;'}`;
+    const status = document.createElement('span');
+    status.className = 'domain-meta' + (subscription.error ? ' is-problem' : '');
+    status.textContent = (subscription.enabled === false ? 'Off · ' : '') + subscriptionStatusText(subscription);
     info.appendChild(status);
 
     const actions = document.createElement('div');
-    actions.style.cssText = 'display:flex;gap:6px;flex-shrink:0;';
+    actions.className = 'row-control';
 
+    const label = subscription.name || subscription.url;
     const toggle = document.createElement('button');
-    toggle.className = 'button';
-    toggle.textContent = subscription.enabled === false ? 'Enable' : 'Disable';
+    toggle.type = 'button';
+    toggle.className = 'btn btn-ghost btn-sm';
+    toggle.textContent = subscription.enabled === false ? 'Turn on' : 'Turn off';
+    toggle.setAttribute('aria-label', `${subscription.enabled === false ? 'Turn on' : 'Turn off'} ${label}`);
     toggle.addEventListener('click', async () => {
       // Turning a list off stops it blocking, which is a protection-weakening
       // change and gated like every other one. Turning it back on is not.
@@ -1385,20 +1438,22 @@ async function renderSubscriptions() {
     actions.appendChild(toggle);
 
     const remove = document.createElement('button');
-    remove.className = 'button button-destructive';
+    remove.type = 'button';
+    remove.className = 'btn btn-danger btn-sm';
     remove.textContent = 'Remove';
+    remove.setAttribute('aria-label', `Remove ${label}`);
     remove.addEventListener('click', async () => {
       const allowed = await requirePINIfSet('remove this subscribed list');
       if (!allowed) return;
       const confirmed = await showConfirmModal({
         title: 'Remove this list?',
-        description: `${subscription.name || subscription.url} currently blocks ${(subscription.entryCount || 0).toLocaleString()} entries. Removing it stops all of them.`,
-        confirmText: 'Remove',
+        description: `${subscription.name || subscription.url} blocks ${(subscription.entryCount || 0).toLocaleString()} entries now. Removing it stops all of them.`,
+        confirmText: 'Remove list',
         destructive: true
       });
       if (!confirmed) return;
       await browserAPI.runtime.sendMessage({ type: 'subscription_remove', id: subscription.id });
-      showToast('Subscription removed', 'success');
+      showToast('List removed.', 'success');
       await renderSubscriptions();
     });
     actions.appendChild(remove);
@@ -1413,34 +1468,47 @@ async function renderWhitelist() {
   const whitelist = await cleanExpiredWhitelist();
   const container = $('whitelist-display');
   
+  container.textContent = '';
+
   if (whitelist.length === 0) {
-    container.innerHTML = '<div class="whitelist-empty">No whitelisted domains</div>';
+    const empty = document.createElement('p');
+    empty.className = 'domain-empty whitelist-empty';
+    empty.textContent = 'No sites are whitelisted.';
+    container.appendChild(empty);
     return;
   }
-  
-  container.innerHTML = '';
-  
-  whitelist.forEach(item => {
-    const addedDate = new Date(item.addedAt).toLocaleDateString();
-    
-    const itemDiv = document.createElement('div');
-    itemDiv.style.cssText = 'display:flex;justify-content:space-between;align-items:center;padding:8px;border-bottom:1px solid color-mix(in oklab,CanvasText,transparent 85%);';
-    
-    const infoDiv = document.createElement('div');
-    
-    const domainStrong = document.createElement('strong');
-    domainStrong.textContent = item.path ? item.domain + item.path : item.domain;
 
-    const dateDiv = document.createElement('div');
-    dateDiv.style.cssText = 'font-size:12px;color:GrayText;';
-    dateDiv.textContent = item.path ? `Page only · Added ${addedDate}` : `Added ${addedDate}`;
+  whitelist.forEach(item => {
+    const addedDate = new Date(item.addedAt).toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' });
+    const label = item.path ? item.domain + item.path : item.domain;
+
+    const itemDiv = document.createElement('div');
+    itemDiv.className = 'domain-row';
+
+    const infoDiv = document.createElement('div');
+    infoDiv.className = 'domain-main';
+
+    const domainStrong = document.createElement('span');
+    domainStrong.className = 'domain';
+    domainStrong.textContent = label;
+    domainStrong.title = label;
+
+    const dateDiv = document.createElement('span');
+    dateDiv.className = 'domain-meta';
+    const scope = item.path ? 'Page only · ' : '';
+    dateDiv.textContent = item.type === 'temporary' && item.expiresAt
+      ? `${scope}Until ${new Date(item.expiresAt).toLocaleString([], { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })}`
+      : `${scope}Added ${addedDate}`;
 
     infoDiv.appendChild(domainStrong);
     infoDiv.appendChild(dateDiv);
 
+    // Removing an entry tightens protection, so it is a plain text action.
     const removeButton = document.createElement('button');
+    removeButton.type = 'button';
+    removeButton.className = 'btn-text';
     removeButton.textContent = 'Remove';
-    removeButton.style.cssText = 'background:#d32f2f;color:white;border:none;padding:4px 8px;border-radius:4px;cursor:pointer;';
+    removeButton.setAttribute('aria-label', `Remove ${label} from the whitelist`);
     removeButton.onclick = () => removeWhitelistItem(item.domain, item.path || null);
     
     itemDiv.appendChild(infoDiv);
@@ -1701,6 +1769,39 @@ function renderDesignPicker(settings) {
   if (note) note.hidden = !overridden;
 }
 
+// A status is a word in a meta label: pine when the thing is on, ink-3 when
+// it is off. No dots, no colours of its own.
+function setStatusWord(el, word, on) {
+  if (!el) return;
+  el.textContent = word;
+  el.dataset.state = on ? 'on' : 'off';
+  el.removeAttribute('style');
+}
+
+// The sentence beside each guarded control says what changing it will ask
+// for, so nothing is ever greyed out without a reason. It reads the same
+// settings the gates read and decides nothing itself.
+// Markup: data-lock="<tier>" (critical, normal or tuning), plus " set" where
+// the gate makes you create a PIN first, and data-lock-when for what triggers
+// it ("Turning it off"). With nothing to ask, the note stays hidden.
+function renderLockNotes(hasPin, accessCode) {
+  const asks = (tier) => !!accessCodeRequiredFor(accessCode, tier);
+  const predicate = (tier, mustSetPin) => {
+    const code = asks(tier);
+    if (!hasPin && mustSetPin) return code
+      ? 'asks you to set a PIN first, then for an access code'
+      : 'asks you to set a PIN first';
+    if (!hasPin) return code ? 'asks for an access code' : '';
+    return code ? 'asks for your PIN and an access code' : 'asks for your PIN';
+  };
+  document.querySelectorAll('[data-lock]').forEach((el) => {
+    const [tier, mode] = String(el.dataset.lock).split(' ');
+    const text = predicate(tier, mode === 'set');
+    el.textContent = text ? `${el.dataset.lockWhen || 'Changing this'} ${text}.` : '';
+    el.hidden = !text;
+  });
+}
+
 async function render() {
   const settings = await getSettings();
   const stats = await getStats();
@@ -1740,11 +1841,9 @@ async function render() {
   if (customKeywords) customKeywords.value = deserializePatterns(settings.customKeywordList || []);
   $('trusted-domains').value = deserializePatterns(settings.trustedImageDomains || []);
 
-  $('blocked-stats').textContent = `🛡️ Blocked: ${stats.blockedCount || 0} sites`;
-  $('pin-status').textContent = pin ? '🔒 PIN: Set' : '🔓 PIN: Not set';
-  $('pin-status').style.color = pin ? 'var(--success)' : 'var(--warning)';
-  $('pin-status').style.background = pin ? 'rgba(16, 185, 129, 0.1)' : 'rgba(245, 158, 11, 0.1)';
-  $('pin-status').style.borderColor = pin ? 'rgba(16, 185, 129, 0.2)' : 'rgba(245, 158, 11, 0.2)';
+  $('blocked-stats').textContent = (Number(stats.blockedCount) || 0).toLocaleString();
+  setStatusWord($('pin-status'), pin ? 'set' : 'not set', !!pin);
+  renderLockNotes(!!pin, await getAccessCodeConfig());
 
   const accessCode = await getAccessCodeConfig();
   const accessCodeToggle = $('access-code-enabled');
@@ -1803,19 +1902,15 @@ async function render() {
   const dnsBadge = $('dns-status');
   if (dnsBadge) {
     if (settings.dnsFilterEnabled) {
-      dnsBadge.textContent = isCustomDns
-        ? '🟢 DNS: Custom resolver'
-        : (activeDnsProvider ? `🟢 DNS: ${activeDnsProvider.label}` : '🟢 DNS: Active');
-      dnsBadge.style.background = 'rgba(16, 185, 129, 0.1)';
-      dnsBadge.style.borderColor = 'rgba(16, 185, 129, 0.2)';
-      dnsBadge.style.color = 'var(--success)';
+      setStatusWord(dnsBadge, isCustomDns
+        ? 'on · custom resolver'
+        : (activeDnsProvider ? `on · ${activeDnsProvider.label}` : 'on'), true);
     } else {
-      dnsBadge.textContent = '🌐 DNS: Off';
-      dnsBadge.style.background = '';
-      dnsBadge.style.borderColor = '';
-      dnsBadge.style.color = '';
+      setStatusWord(dnsBadge, 'off', false);
     }
   }
+  const dnsProviderLocked = $('dns-provider-locked');
+  if (dnsProviderLocked) dnsProviderLocked.hidden = !!settings.dnsFilterEnabled;
 
   // Render Safe Search + social filter settings
   const safeSearchOn = settings.safeSearchEnabled !== false;
@@ -1834,48 +1929,11 @@ async function render() {
   if (instagramReelsToggle) {
     instagramReelsToggle.checked = instagramReelsOn;
   }
-  const safeSearchBadge = $('safe-search-status');
-  if (safeSearchBadge) {
-    if (safeSearchOn) {
-      safeSearchBadge.textContent = '🔎 Safe Search: On';
-      safeSearchBadge.style.background = 'rgba(16, 185, 129, 0.1)';
-      safeSearchBadge.style.borderColor = 'rgba(16, 185, 129, 0.2)';
-      safeSearchBadge.style.color = 'var(--success)';
-    } else {
-      safeSearchBadge.textContent = '🔎 Safe Search: Off';
-      safeSearchBadge.style.background = '';
-      safeSearchBadge.style.borderColor = '';
-      safeSearchBadge.style.color = '';
-    }
-  }
-  const fbReelsBadge = $('facebook-reels-status');
-  if (fbReelsBadge) {
-    if (facebookReelsOn) {
-      fbReelsBadge.textContent = '📵 FB Reels: Disabled';
-      fbReelsBadge.style.background = 'rgba(16, 185, 129, 0.1)';
-      fbReelsBadge.style.borderColor = 'rgba(16, 185, 129, 0.2)';
-      fbReelsBadge.style.color = 'var(--success)';
-    } else {
-      fbReelsBadge.textContent = '📵 FB Reels: Off';
-      fbReelsBadge.style.background = '';
-      fbReelsBadge.style.borderColor = '';
-      fbReelsBadge.style.color = '';
-    }
-  }
-  const igReelsBadge = $('instagram-reels-status');
-  if (igReelsBadge) {
-    if (instagramReelsOn) {
-      igReelsBadge.textContent = '📵 IG Reels: Disabled';
-      igReelsBadge.style.background = 'rgba(16, 185, 129, 0.1)';
-      igReelsBadge.style.borderColor = 'rgba(16, 185, 129, 0.2)';
-      igReelsBadge.style.color = 'var(--success)';
-    } else {
-      igReelsBadge.textContent = '📵 IG Reels: Off';
-      igReelsBadge.style.background = '';
-      igReelsBadge.style.borderColor = '';
-      igReelsBadge.style.color = '';
-    }
-  }
+  // Each of these switches already shows its own state; the status words are
+  // kept for screen readers and anything that reads them.
+  setStatusWord($('safe-search-status'), safeSearchOn ? 'Safe Search on' : 'Safe Search off', safeSearchOn);
+  setStatusWord($('facebook-reels-status'), facebookReelsOn ? 'Facebook Reels hidden' : 'Facebook Reels shown', facebookReelsOn);
+  setStatusWord($('instagram-reels-status'), instagramReelsOn ? 'Instagram Reels hidden' : 'Instagram Reels shown', instagramReelsOn);
 
   // Render AI Image Blocker
   const aiImageBlockerOn = settings.aiImageBlocker !== false;
@@ -1883,20 +1941,7 @@ async function render() {
   if (aiImageBlockerToggle) {
     aiImageBlockerToggle.checked = aiImageBlockerOn;
   }
-  const aiImageBlockerBadge = $('ai-image-blocker-status');
-  if (aiImageBlockerBadge) {
-    if (aiImageBlockerOn) {
-      aiImageBlockerBadge.textContent = '🖼 AI Blocker: Active';
-      aiImageBlockerBadge.style.background = 'rgba(16, 185, 129, 0.1)';
-      aiImageBlockerBadge.style.borderColor = 'rgba(16, 185, 129, 0.2)';
-      aiImageBlockerBadge.style.color = 'var(--success)';
-    } else {
-      aiImageBlockerBadge.textContent = '🖼 AI Blocker: Off';
-      aiImageBlockerBadge.style.background = '';
-      aiImageBlockerBadge.style.borderColor = '';
-      aiImageBlockerBadge.style.color = '';
-    }
-  }
+  setStatusWord($('ai-image-blocker-status'), aiImageBlockerOn ? 'on' : 'off', aiImageBlockerOn);
   const aiImageScanAllToggle = $('ai-image-scan-all');
   if (aiImageScanAllToggle) {
     aiImageScanAllToggle.checked = settings.aiImageScanAllSites !== false;
@@ -1918,20 +1963,7 @@ async function render() {
   if (aiTextBlockerToggle) {
     aiTextBlockerToggle.checked = aiTextBlockerOn;
   }
-  const aiTextBlockerBadge = $('ai-text-blocker-status');
-  if (aiTextBlockerBadge) {
-    if (aiTextBlockerOn) {
-      aiTextBlockerBadge.textContent = '📝 AI Text Blocker: Active';
-      aiTextBlockerBadge.style.background = 'rgba(16, 185, 129, 0.1)';
-      aiTextBlockerBadge.style.borderColor = 'rgba(16, 185, 129, 0.2)';
-      aiTextBlockerBadge.style.color = 'var(--success)';
-    } else {
-      aiTextBlockerBadge.textContent = '📝 AI Text Blocker: Off';
-      aiTextBlockerBadge.style.background = '';
-      aiTextBlockerBadge.style.borderColor = '';
-      aiTextBlockerBadge.style.color = '';
-    }
-  }
+  setStatusWord($('ai-text-blocker-status'), aiTextBlockerOn ? 'on' : 'off', aiTextBlockerOn);
   const aiTextStrictness = normalizeAiStrictness(settings.aiTextStrictness);
   const aiTextStrictnessSelect = $('ai-text-strictness');
   if (aiTextStrictnessSelect) {
@@ -1954,8 +1986,8 @@ async function render() {
   const plainStatus = $('plain-html-status');
   if (plainStatus) {
     plainStatus.textContent = plainHtmlAvailable
-      ? 'HTML uploaded and saved'
-      : 'No HTML uploaded yet';
+      ? 'Your HTML page is saved.'
+      : 'No HTML file yet.';
   }
   renderDesignPicker(settings);
   
@@ -1972,19 +2004,7 @@ async function render() {
     const setIncognitoUI = function(allowed) {
       const badge = $('incognito-status');
       const toggle = $('allow-incognito');
-      if (badge) {
-        if (allowed) {
-          badge.textContent = '🟢 Incognito: Enabled';
-          badge.style.background = 'rgba(16, 185, 129, 0.1)';
-          badge.style.borderColor = 'rgba(16, 185, 129, 0.2)';
-          badge.style.color = 'var(--success)';
-        } else {
-          badge.textContent = '🟡 Incognito: Disabled';
-          badge.style.background = 'rgba(245, 158, 11, 0.1)';
-          badge.style.borderColor = 'rgba(245, 158, 11, 0.2)';
-          badge.style.color = 'var(--warning)';
-        }
-      }
+      setStatusWord(badge, allowed ? 'allowed' : 'not allowed', !!allowed);
       if (toggle) toggle.checked = !!allowed;
     };
 
@@ -2108,13 +2128,12 @@ async function openExtensionsManagePage() {
   try { await navigator.clipboard.writeText(manageUrl); } catch (_) {}
 
   await createModal({
-    icon: 'ℹ️',
-    title: 'Open Extensions Settings',
-    description: 'Your browser blocks opening this page directly from extensions.',
-    bodyHTML: `<div style="word-break: break-all; font-family: var(--font-mono); font-size: 12px; padding: 8px; border: 1px solid var(--input-border); border-radius: 6px; background: var(--input-bg);">${manageUrl}</div>
-               <p style="margin-top:8px; color: var(--foreground-dim);">The link has been copied to your clipboard. Paste it into the address bar to open your extension details and enable "Allow in incognito".</p>`,
+    title: 'Open the extensions page',
+    description: 'Your browser doesn’t let an extension open this page itself.',
+    code: manageUrl,
+    message: 'The link is copied. Paste it into the address bar, then turn on “Allow in incognito”.',
     buttons: [
-      { text: 'Copy Link Again', type: 'secondary', onClick: () => { try { navigator.clipboard.writeText(manageUrl); } catch(_) {}; return true; } },
+      { text: 'Copy the link again', type: 'secondary', onClick: () => { try { navigator.clipboard.writeText(manageUrl); } catch(_) {}; return true; } },
       { text: 'Done', type: 'primary', value: true }
     ]
   });
@@ -2138,8 +2157,8 @@ async function renderUpdateBanner() {
     const sub = $('update-banner-sub');
     if (sub) {
       const notes = (typeof info.notes === 'string' && info.notes.trim())
-        ? ' — ' + info.notes.trim() : '';
-      sub.textContent = `You're on v${info.current}. Version v${info.latest} is available${notes}`;
+        ? ' · ' + info.notes.trim() : '';
+      sub.textContent = `Version ${info.latest} is ready. You have ${info.current}.${notes}`;
     }
     const link = $('update-banner-link');
     if (link) link.href = info.url || 'https://github.com/codepurse/BlockNSFW/releases';
@@ -2184,7 +2203,30 @@ function applySievePromoLink() {
 }
 
 
+// The theme: system, light or dark. ui/scheme.js keeps the choice and applies
+// it; this only connects the three radios. It changes how pages look, not
+// what is blocked, so no PIN or access code stands in front of it.
+function setupColorSchemePicker() {
+  const picker = $('color-scheme-picker');
+  if (!picker || typeof UiScheme === 'undefined') return;
+  const radios = Array.from(picker.querySelectorAll('input[name="color-scheme"]'));
+  const show = (scheme) => {
+    radios.forEach((radio) => { radio.checked = radio.value === scheme; });
+  };
+  show(UiScheme.get());
+  UiScheme.onChange(show);
+  radios.forEach((radio) => {
+    radio.addEventListener('change', () => {
+      if (!radio.checked) return;
+      UiScheme.set(radio.value).catch(() => {
+        showToast('The theme couldn’t be saved. It applies until you close this page.', 'error');
+      });
+    });
+  });
+}
+
 async function init() {
+  setupColorSchemePicker();
   // Before the first render, so the boxes never show an unmigrated list.
   await migrateCommentSyntaxOnce();
   // Before render() too, so the first list painted is already highlighted.
@@ -2215,13 +2257,13 @@ async function init() {
       const notesInput = $('report-notes');
       const statusHint = $('report-status');
       if (!urlInput || !typeSelect || !categorySelect || !notesInput || !statusHint) {
-        showToast('Report form is not fully available. Please reload this page.', 'error');
+        showToast('The report form didn’t load. Reload this page to try again.', 'error');
         return;
       }
 
       const raw = (urlInput.value || '').trim();
       if (!raw) {
-        showToast('Please enter a website URL', 'error');
+        showToast('Enter the address of the site first.', 'error');
         urlInput.focus();
         return;
       }
@@ -2230,34 +2272,34 @@ async function init() {
       try {
         parsedUrl = new URL(raw.startsWith('http') ? raw : 'https://' + raw);
       } catch {
-        showToast('Please enter a valid URL', 'error');
+        showToast('That doesn’t look like a web address. Check it and try again.', 'error');
         urlInput.focus();
         return;
       }
 
       if (!/^https?:$/i.test(parsedUrl.protocol)) {
-        showToast('Only http:// or https:// websites are allowed', 'error');
+        showToast('Only addresses that start with http:// or https:// can be reported.', 'error');
         urlInput.focus();
         return;
       }
 
       const domain = validateDomain(parsedUrl.hostname);
       if (!domain) {
-        showToast('Please enter a valid website domain (e.g., example.com)', 'error');
+        showToast('That doesn’t look like a website. Check the address and try again.', 'error');
         urlInput.focus();
         return;
       }
 
       if (!typeSelect.value) {
-        showToast('Please select a report type', 'error');
+        showToast('Choose what kind of report this is.', 'error');
         typeSelect.focus();
         return;
       }
 
       submitReportBtn.disabled = true;
-      submitReportBtn.textContent = 'Submitting...';
-      statusHint.textContent = 'Submitting your report...';
-      statusHint.className = 'pin-hint';
+      submitReportBtn.setAttribute('aria-busy', 'true');
+      submitReportBtn.textContent = 'Sending…';
+      setHint(statusHint, 'Sending your report…');
 
       try {
         if (typeof PBlockerReports === 'undefined') {
@@ -2273,24 +2315,25 @@ async function init() {
         });
 
         const remaining = await PBlockerReports.getDailyRemaining();
-        showToast('Report submitted -- thank you!', 'success');
-        statusHint.textContent = `Report submitted! ${remaining} report${remaining === 1 ? '' : 's'} remaining today.`;
-        statusHint.className = 'pin-hint success';
+        showToast('Report sent. Thank you.', 'success');
+        setHint(statusHint, remaining > 0
+          ? `Report sent. You can send ${remaining} more today.`
+          : 'Report sent. That was your last report for today.', 'success');
 
         urlInput.value = '';
         notesInput.value = '';
         const counter = $('report-notes-counter');
         if (counter) {
           counter.textContent = '0 / 500';
-          counter.style.color = 'var(--foreground-dim)';
+          counter.classList.remove('is-near-limit');
         }
         updateReportCooldown();
       } catch (error) {
-        showToast(error.message || 'Failed to submit report', 'error');
-        statusHint.textContent = error.message || 'Submission failed. Please try again.';
-        statusHint.className = 'pin-hint error';
+        showToast(error.message || 'The report didn’t send. Try again in a minute.', 'error');
+        setHint(statusHint, error.message || 'The report didn’t send. Try again in a minute.', 'error');
       } finally {
-        submitReportBtn.textContent = 'Submit Report';
+        submitReportBtn.removeAttribute('aria-busy');
+        submitReportBtn.textContent = 'Send report';
         await updateReportCooldown();
       }
     });
@@ -2313,8 +2356,8 @@ async function init() {
     if (notesField && notesCounter) {
       notesField.addEventListener('input', () => {
         const len = notesField.value.length;
-        notesCounter.textContent = `${len} / 500`;
-        notesCounter.style.color = len >= 450 ? 'var(--warning)' : 'var(--foreground-dim)';
+        notesCounter.textContent = len >= 450 ? `${len} / 500 · near the limit` : `${len} / 500`;
+        notesCounter.classList.toggle('is-near-limit', len >= 450);
       });
     }
   }
@@ -2478,7 +2521,7 @@ async function init() {
       if (settings.dnsProvider === CUSTOM_DNS_ID) {
         const input = $('dns-custom-url');
         if (input) input.focus();
-        showToast('Enter your DNS-over-HTTPS address below', 'info');
+        showToast('Enter your DNS-over-HTTPS address below.', 'info');
         return;
       }
       const chosen =
@@ -2516,7 +2559,7 @@ async function init() {
       if (errorEl) errorEl.textContent = '';
       settings.dnsCustomUrl = check.url;
       await setSettings(settings);
-      showToast('Custom resolver saved — run Test DNS Connection to check it', 'success');
+      showToast('Custom resolver saved. Press Test DNS connection to check it.', 'success');
     };
 
     dnsCustomInputEl.addEventListener('blur', saveCustomDns);
@@ -2634,7 +2677,8 @@ async function init() {
       const settings = await getSettings();
       const modelId = normalizeAiImageModel(settings.aiImageModel);
       aiImageModelDownloadEl.disabled = true;
-      aiImageModelDownloadEl.textContent = 'Downloading...';
+      aiImageModelDownloadEl.setAttribute('aria-busy', 'true');
+      aiImageModelDownloadEl.textContent = 'Downloading…';
       // ai_ping_model resolves only once the weights are loaded, so awaiting
       // it is the download finishing (or failing).
       const res = await askBackground({ type: 'ai_ping_model', model: modelId, forceRetry: true });
@@ -2653,9 +2697,11 @@ async function init() {
             '. The bundled model is still filtering in the meantime.';
         }
         aiImageModelDownloadEl.disabled = false;
-        aiImageModelDownloadEl.textContent = 'Retry download';
+        aiImageModelDownloadEl.removeAttribute('aria-busy');
+        aiImageModelDownloadEl.textContent = 'Try the download again';
         return;
       }
+      aiImageModelDownloadEl.removeAttribute('aria-busy');
       await render();
     });
   }
@@ -2714,9 +2760,9 @@ async function init() {
     dnsTestBtn.addEventListener('click', async () => {
       const resultEl = $('dns-test-result');
       if (!resultEl) return;
-      resultEl.textContent = 'Testing DNS connection...';
-      resultEl.style.color = 'var(--foreground-muted)';
+      setHint(resultEl, 'Testing the resolver…');
       dnsTestBtn.disabled = true;
+      dnsTestBtn.setAttribute('aria-busy', 'true');
       try {
         if (!self.DnsProviders) throw new Error('DNS provider list failed to load');
         const settings = await getSettings();
@@ -2735,30 +2781,25 @@ async function init() {
         ]);
 
         if (adultVerdict === null && benignVerdict === null) {
-          resultEl.textContent =
+          setHint(resultEl,
             `${provider.label} did not respond. Check your internet connection, ` +
-            'or pick a different resolver above.';
-          resultEl.style.color = 'var(--destructive)';
+            'or pick a different resolver above.', 'error');
         } else if (adultVerdict !== true) {
-          resultEl.textContent =
+          setHint(resultEl,
             `${provider.label} is reachable but did not filter a known adult domain. ` +
-            'Something on your network may be intercepting DNS. Try another resolver.';
-          resultEl.style.color = 'var(--destructive)';
+            'Something on your network may be intercepting DNS. Try another resolver.', 'error');
         } else if (benignVerdict === true) {
-          resultEl.textContent =
+          setHint(resultEl,
             `${provider.label} blocked a domain that should be safe. ` +
-            'That usually means a captive portal is answering instead of the resolver.';
-          resultEl.style.color = 'var(--destructive)';
+            'That usually means a captive portal is answering instead of the resolver.', 'error');
         } else {
-          resultEl.textContent =
-            `${provider.label} is reachable and filtering correctly.`;
-          resultEl.style.color = 'var(--success)';
+          setHint(resultEl, `${provider.label} is reachable and filtering correctly.`, 'success');
         }
       } catch (err) {
-        resultEl.textContent = `DNS test failed: ${err.message}. Check your internet connection.`;
-        resultEl.style.color = 'var(--destructive)';
+        setHint(resultEl, `The test didn’t run: ${err.message}. Check your connection and try again.`, 'error');
       } finally {
         dnsTestBtn.disabled = false;
+        dnsTestBtn.removeAttribute('aria-busy');
       }
     });
   }
@@ -2796,7 +2837,7 @@ async function init() {
     }
 
     await setSettings(settings);
-    showToast('Blocked page settings updated', 'success');
+    showToast('Blocked page updated.', 'success');
   });
 
   const addSubscriptionBtn = $('add-subscription');
@@ -2805,7 +2846,7 @@ async function init() {
       const input = $('subscription-url');
       const url = (input.value || '').trim();
       if (!url) {
-        showToast('Enter the address of a ruleset file', 'warning');
+        showToast('Enter the address of a ruleset file first.', 'warning');
         return;
       }
 
@@ -2814,7 +2855,7 @@ async function init() {
       try {
         const result = await browserAPI.runtime.sendMessage({ type: 'subscription_add', url });
         if (!result || !result.ok) {
-          showToast((result && result.error) || 'Could not add that list', 'error');
+          showToast((result && result.error) || 'That list couldn’t be added. Check the address and try again.', 'error');
           return;
         }
         // Adding succeeds even when the download fails, so the failure has to be
@@ -2828,7 +2869,7 @@ async function init() {
         input.value = '';
         await renderSubscriptions();
       } catch (error) {
-        showToast('Could not add that list', 'error');
+        showToast('That list couldn’t be added. Check the address and try again.', 'error');
       } finally {
         addSubscriptionBtn.disabled = false;
         addSubscriptionBtn.textContent = 'Subscribe';
@@ -2847,7 +2888,7 @@ async function init() {
         const [message, type] = subscriptionRefreshSummary((response && response.results) || []);
         showToast(message, type);
       } catch (_) {
-        showToast('Could not update subscriptions', 'error');
+        showToast('The lists didn’t update. Try again in a few minutes.', 'error');
       } finally {
         refreshSubscriptionsBtn.disabled = false;
         refreshSubscriptionsBtn.textContent = 'Update Now';
@@ -2862,7 +2903,7 @@ async function init() {
     settings.searchResultTreatment = normalizeSearchResultTreatment(e.target.value);
     await setSettings(settings);
     renderSearchResultTreatment(settings);
-    showToast('Blocked search result style updated', 'success');
+    showToast('Search results setting saved.', 'success');
   });
 
   $('search-summary-enabled').addEventListener('change', async (e) => {
@@ -2879,7 +2920,7 @@ async function init() {
     renderSearchResultTreatment(settings);
     // Pinning only matters while the count lives on the icon.
     await renderPinBanner();
-    showToast('Block count display updated', 'success');
+    showToast('Count setting saved.', 'success');
   });
 
   $('use-plain-html-blocked-page').addEventListener('change', async (e) => {
@@ -2920,7 +2961,7 @@ async function init() {
     }
 
     await setSettings(settings);
-    showToast('Blocked page settings updated', 'success');
+    showToast('Blocked page updated.', 'success');
   });
 
   // Auto-save when custom URL is changed
@@ -2939,7 +2980,7 @@ async function init() {
       }
       settings.customBlockedPageUrl = nextUrl;
       await setSettings(settings);
-      showToast('Custom blocked page URL updated', 'success');
+      showToast('Your page’s address is saved.', 'success');
     }
   });
 
@@ -2951,7 +2992,7 @@ async function init() {
 
       const maxBytes = 1024 * 1024;
       if (typeof file.size === 'number' && file.size > maxBytes) {
-        showToast('HTML file too large (max 1MB)', 'error');
+        showToast('That file is over 1 MB. Choose a smaller one.', 'error');
         input.value = '';
         return;
       }
@@ -2978,7 +3019,7 @@ async function init() {
       $('use-custom-blocked-page').checked = false;
       $('custom-blocked-page-section').style.display = 'none';
       const plainStatus = $('plain-html-status');
-      if (plainStatus) plainStatus.textContent = 'HTML uploaded and saved';
+      if (plainStatus) plainStatus.textContent = 'Your HTML page is saved.';
 
       const settings = await getSettings();
       settings.blockedPageType = 'plain_html';
@@ -2986,13 +3027,20 @@ async function init() {
       settings.customBlockedPageUrl = '';
       await setSettings(settings);
       plainHtmlAvailable = true;
-      showToast('HTML uploaded and saved', 'success');
+      showToast('Your HTML page is saved.', 'success');
     } catch (_) {
-      showToast('Failed to read HTML file', 'error');
+      showToast('That file couldn’t be read. Try another .html file.', 'error');
     }
   });
 
   $('clear-plain-html').addEventListener('click', async () => {
+    const confirmed = await showConfirmModal({
+      title: 'Remove your HTML page?',
+      description: 'The HTML you uploaded is deleted, and the blocked page goes back to the design chosen above.',
+      confirmText: 'Remove HTML',
+      destructive: true
+    });
+    if (!confirmed) return;
     const fileInput = $('plain-blocked-page-file');
     if (fileInput) fileInput.value = '';
     const settings = await getSettings();
@@ -3002,7 +3050,7 @@ async function init() {
     }
     await setSettings(settings);
     await render();
-    showToast('Plain HTML cleared', 'success');
+    showToast('Your HTML page is removed.', 'success');
   });
 
   $('test-custom-url').addEventListener('click', async () => {
@@ -3011,8 +3059,8 @@ async function init() {
     const hint = $('url-validation-hint');
     
     if (!url) {
-      hint.textContent = '❌ Please enter a URL to test';
-      hint.className = 'pin-hint error';
+      setHint(hint, 'Enter the address of your page first.', 'error');
+      urlInput.setAttribute('aria-invalid', 'true');
       urlInput.focus();
       return;
     }
@@ -3024,25 +3072,23 @@ async function init() {
         throw new Error('URL must start with http:// or https://');
       }
     } catch (error) {
-      hint.textContent = '❌ Invalid URL format. Please enter a valid URL starting with http:// or https://';
-      hint.className = 'pin-hint error';
+      setHint(hint, 'That doesn’t look like a web address. It needs to start with http:// or https://.', 'error');
+      urlInput.setAttribute('aria-invalid', 'true');
       urlInput.focus();
       return;
     }
+    urlInput.removeAttribute('aria-invalid');
 
     // Test URL accessibility
-    hint.textContent = '⏳ Testing URL accessibility...';
-    hint.className = 'pin-hint';
-    
+    setHint(hint, 'Checking the address…');
+
     try {
       const response = await fetch(url, { method: 'HEAD', mode: 'no-cors' });
       // If we get here, the URL is accessible (even with CORS restrictions)
-      hint.textContent = '✅ URL is accessible and valid';
-      hint.className = 'pin-hint success';
+      setHint(hint, 'The address answers. It will be shown when a page is held.', 'success');
     } catch (error) {
       // Even with no-cors, we might get network errors
-      hint.textContent = '⚠️ URL may not be accessible. Please verify it works in your browser.';
-      hint.className = 'pin-hint warning';
+      setHint(hint, 'The address didn’t answer. Open it in a tab to check it works.', 'warning');
     }
   });
 
@@ -3063,7 +3109,13 @@ async function init() {
   }
 
   $('reset-blocked-page-settings').addEventListener('click', async () => {
-    if (!confirm('Reset blocked page settings to default?')) return;
+    const confirmed = await showConfirmModal({
+      title: 'Reset the blocked page?',
+      description: 'The blocked page goes back to Classic, and your own page or HTML is switched off.',
+      confirmText: 'Reset blocked page',
+      destructive: true
+    });
+    if (!confirmed) return;
 
     const settings = await getSettings();
     settings.blockedPageType = 'default';
@@ -3074,7 +3126,7 @@ async function init() {
     await setSettings(settings);
     await render();
 
-    showToast('Blocked page settings reset to default', 'success');
+    showToast('The blocked page is back to Classic.', 'success');
   });
 
   // Incognito handling
@@ -3084,9 +3136,9 @@ async function init() {
       // We cannot programmatically change incognito access. Open the extensions page.
       try {
         await openExtensionsManagePage();
-        showToast('Open the extensions page and toggle "Allow in incognito" for this extension.', 'info');
+        showToast('On the extensions page, turn on “Allow in incognito” for BlockNSFW.', 'info');
       } catch (err) {
-        showToast('Please open the extensions page and enable Incognito manually.', 'warning');
+        showToast('The extensions page didn’t open. Open it yourself and turn on “Allow in incognito”.', 'warning');
       } finally {
         // Reset toggle to reflect actual state after a brief delay
         setTimeout(async () => {
@@ -3101,9 +3153,7 @@ async function init() {
                 } catch (_) { resolve(false); }
               });
               if ($('allow-incognito')) $('allow-incognito').checked = !!allowed;
-              if ($('incognito-status')) {
-                $('incognito-status').textContent = allowed ? '🟢 Incognito: Enabled' : '🟡 Incognito: Disabled';
-              }
+              setStatusWord($('incognito-status'), allowed ? 'allowed' : 'not allowed', !!allowed);
             }
           } catch (_) {}
         }, 800);
@@ -3183,25 +3233,27 @@ async function init() {
     $('patterns').value = deserializePatterns(nextCustomPatterns);
     if (customKeywords) customKeywords.value = deserializePatterns(nextKeywords);
     $('trusted-domains').value = deserializePatterns(nextTrusted);
-    alert('Settings saved!');
+    showToast('Settings saved.', 'success');
   });
 
   $('refresh-blocklist').addEventListener('click', async () => {
     const btn = $('refresh-blocklist');
     btn.disabled = true;
-    btn.textContent = '⏳ Refreshing...';
+    btn.setAttribute('aria-busy', 'true');
+    btn.textContent = 'Refreshing…';
     try {
       const response = await browserAPI.runtime.sendMessage({ type: 'refresh_remote_blocklist' });
       if (response?.success) {
         showToast(`Blocklist updated — ${(response.count || 0).toLocaleString()} domains loaded`, 'success');
       } else {
-        showToast('Failed to refresh blocklist: ' + (response?.error || 'Unknown error'), 'error');
+        showToast('The blocklist didn’t refresh: ' + (response?.error || 'Unknown error'), 'error');
       }
     } catch (err) {
-      showToast('Failed to refresh blocklist: ' + err.message, 'error');
+      showToast('The blocklist didn’t refresh: ' + err.message, 'error');
     } finally {
       btn.disabled = false;
-      btn.textContent = '🔄 Refresh Blocklist';
+      btn.removeAttribute('aria-busy');
+      btn.textContent = 'Refresh blocklist';
     }
   });
 
@@ -3225,7 +3277,7 @@ async function init() {
       settings.customKeywordList = nextKeywords;
       await setSettings(settings);
       $('custom-keywords').value = deserializePatterns(nextKeywords);
-      alert('Custom blocked words saved!');
+      showToast('Blocked words saved.', 'success');
     });
   }
 
@@ -3234,7 +3286,13 @@ async function init() {
     resetKeywords.addEventListener('click', async () => {
       const ok = await requirePINIfSet('reset custom blocked words');
       if (!ok) return;
-      if (!confirm('Reset custom blocked words to defaults?')) return;
+      const confirmed = await showConfirmModal({
+        title: 'Reset your blocked words?',
+        description: 'Your list of blocked words goes back to its default, which is empty.',
+        confirmText: 'Reset blocked words',
+        destructive: true
+      });
+      if (!confirmed) return;
       const settings = await getSettings();
       settings.customKeywordList = [];
       await setSettings(settings);
@@ -3247,7 +3305,13 @@ async function init() {
     clearKeywords.addEventListener('click', async () => {
       const ok = await requirePINIfSet('clear custom blocked words');
       if (!ok) return;
-      if (!confirm('Clear your custom blocked words?')) return;
+      const confirmed = await showConfirmModal({
+        title: 'Clear your blocked words?',
+        description: 'Every word on the list is removed. Pages are no longer blocked for containing them.',
+        confirmText: 'Clear blocked words',
+        destructive: true
+      });
+      if (!confirmed) return;
       const settings = await getSettings();
       settings.customKeywordList = [];
       await setSettings(settings);
@@ -3259,12 +3323,19 @@ async function init() {
     const settings = await getSettings();
     settings.trustedImageDomains = serializePatterns($('trusted-domains').value);
     await setSettings(settings);
-    alert('Trusted domains saved!');
+    showToast('Trusted sites saved.', 'success');
   });
 
   $('reset-trusted').addEventListener('click', async () => {
     const ok = await requirePINIfSet('reset trusted domains');
     if (!ok) return;
+    const confirmed = await showConfirmModal({
+      title: 'Reset trusted sites?',
+      description: 'Your list is replaced with the default list of 24 sites. Sites you added yourself are removed.',
+      confirmText: 'Reset trusted sites',
+      destructive: true
+    });
+    if (!confirmed) return;
     // Get default trusted domains from background script
     const defaultDomains = [
       'steampowered.com',
@@ -3297,11 +3368,17 @@ async function init() {
     const settings = await getSettings();
     settings.trustedImageDomains = defaultDomains;
     await setSettings(settings);
-    alert('Trusted domains reset to defaults!');
+    showToast('Trusted sites are back to the default list.', 'success');
   });
 
   $('clear').addEventListener('click', async () => {
-    if (!confirm('Clear your custom blocklist?')) return;
+    const confirmed = await showConfirmModal({
+      title: 'Clear your blocklist?',
+      description: 'Every entry you added is removed. Sites on BlockNSFW’s own list stay blocked.',
+      confirmText: 'Clear blocklist',
+      destructive: true
+    });
+    if (!confirmed) return;
     const ok = await requirePINIfSet('clear custom blocklist');
     if (!ok) return;
     const s = await getSettings();
@@ -3317,7 +3394,13 @@ async function init() {
       const ok = await requirePINIfSet('reset settings');
       if (!ok) return;
     }
-    if (!confirm('Reset settings to defaults?')) return;
+    const confirmed = await showConfirmModal({
+      title: 'Reset settings to their defaults?',
+      description: 'Your blocklist, blocked words and trusted sites are cleared, and the other settings on this page go back to their defaults.',
+      confirmText: 'Reset settings',
+      destructive: true
+    });
+    if (!confirmed) return;
     await setSettings({
       enabled: true,
       useSmartBlocking: true,
@@ -3334,11 +3417,18 @@ async function init() {
   // Whitelist event listeners
   $('add-whitelist').addEventListener('click', async () => {
     const domainInput = $('whitelist-domain');
+    const errorEl = $('whitelist-error');
+    const fieldError = (message) => {
+      if (errorEl) errorEl.textContent = message;
+      if (message) domainInput.setAttribute('aria-invalid', 'true');
+      else domainInput.removeAttribute('aria-invalid');
+    };
     // Accepts a bare domain or a domain + path (e.g. reddit.com/r/NoFap).
     const parsed = self.DomainValidate.parseWhitelistInput(domainInput.value.trim());
 
     if (!parsed) {
-      alert('Please enter a valid domain or page (e.g., example.com or example.com/r/Name)');
+      fieldError('That doesn’t look like a web address. Check it and try again.');
+      domainInput.focus();
       return;
     }
 
@@ -3346,9 +3436,11 @@ async function init() {
     const exists = whitelist.some(item => item.domain === parsed.domain && (item.path || null) === (parsed.path || null));
 
     if (exists) {
-      alert(parsed.path ? 'This page is already whitelisted' : 'Domain is already whitelisted');
+      fieldError(parsed.path ? 'That page is already on the whitelist.' : 'That site is already on the whitelist.');
+      domainInput.focus();
       return;
     }
+    fieldError('');
 
     // Gate last, so a typo or a duplicate never costs someone a 256-character
     // code. A bare domain unlocks the whole site — as total as switching
@@ -3383,7 +3475,7 @@ async function init() {
     const whitelist = await getWhitelist();
     
     if (whitelist.length === 0) {
-      alert('No whitelisted domains to export. Add some domains first.');
+      showToast('There’s nothing on the whitelist to export yet.', 'warning');
       return;
     }
     
@@ -3416,7 +3508,7 @@ async function init() {
         
         // Validate file size (max 1MB)
         if (file.size > 1024 * 1024) {
-          alert('File too large. Maximum file size is 1MB.');
+          showToast('That file is over 1 MB. Choose a smaller one.', 'error');
           return;
         }
         
@@ -3500,7 +3592,13 @@ async function init() {
   $('clear-whitelist').addEventListener('click', async () => {
     const ok = await requirePIN('clear whitelist');
     if (!ok) return;
-    if (!confirm('Clear all whitelisted domains?')) return;
+    const confirmed = await showConfirmModal({
+      title: 'Clear the whitelist?',
+      description: 'Every whitelisted site and page is removed, so they are blocked again where they match.',
+      confirmText: 'Clear whitelist',
+      destructive: true
+    });
+    if (!confirmed) return;
     await setWhitelist([]);
     await renderWhitelist();
   });
@@ -3556,12 +3654,12 @@ async function init() {
         if (!file) return;
         try {
           if (typeof file.size === 'number' && file.size > MAX_IMPORT_BYTES) {
-            showToast('File too large (max 1MB)', 'error');
+            showToast('That file is over 1 MB. Choose a smaller one.', 'error');
             return;
           }
           const imported = parseListFile(await readFileAsText(file));
           if (imported.length === 0) {
-            showToast('No entries found in that file', 'warning');
+            showToast('That file has no entries in it.', 'warning');
             return;
           }
           const existing = serializePatterns(textarea.value);
@@ -3580,7 +3678,7 @@ async function init() {
             added > 0 ? 'success' : 'info'
           );
         } catch (_) {
-          showToast('Could not read that file', 'error');
+          showToast('That file couldn’t be read. Check that it’s a .csv or .txt file.', 'error');
         } finally {
           e.target.value = ''; // allow re-importing the same file
         }
@@ -3657,41 +3755,21 @@ async function init() {
     const newPin = await showSetPINModal();
     if (!newPin) return;
     await setPIN(newPin);
-    
-    // Show success message
-    const successModal = await createModal({
-      icon: '✅',
-      title: 'PIN Set Successfully',
-      description: 'Your settings are now protected with a secure PIN',
-      bodyHTML: '<div class="success-message">🔐 PIN has been set successfully!</div>',
-      buttons: [
-        { text: 'Done', type: 'primary', value: true }
-      ]
-    });
-    
+    showToast('Your PIN is set.', 'success');
     await render();
   });
 
   $('clear-pin').addEventListener('click', async () => {
     const stored = await getPIN();
     if (!stored) {
-      await createModal({
-        icon: 'ℹ️',
-        title: 'No PIN Set',
-        description: 'There is no PIN currently set',
-        bodyHTML: '<p style="text-align: center; color: var(--foreground-muted); margin: 1rem 0;">You need to set a PIN first before you can clear it.</p>',
-        buttons: [
-          { text: 'OK', type: 'primary', value: true }
-        ]
-      });
+      showToast('There’s no PIN to clear.', 'info');
       return;
     }
-    
+
     const confirmed = await showConfirmModal({
-      icon: '⚠️',
-      title: 'Clear PIN',
-      description: 'Are you sure you want to remove PIN protection?',
-      message: 'You will need to verify your current PIN to proceed.',
+      title: 'Clear your PIN?',
+      description: 'Anything that loosens protection will stop asking for it.',
+      message: 'You’ll enter your current PIN first.',
       confirmText: 'Clear PIN',
       destructive: true
     });
@@ -3706,18 +3784,7 @@ async function init() {
     if (!codeOk) return;
 
     await browserAPI.storage.local.remove(PIN_KEY);
-    
-    // Show success message
-    await createModal({
-      icon: '✅',
-      title: 'PIN Cleared',
-      description: 'PIN protection has been removed',
-      bodyHTML: '<div class="success-message">🔓 PIN has been cleared successfully!</div>',
-      buttons: [
-        { text: 'Done', type: 'primary', value: true }
-      ]
-    });
-    
+    showToast('Your PIN is cleared.', 'success');
     await render();
   });
 

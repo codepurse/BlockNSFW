@@ -156,15 +156,21 @@
       l.addEventListener('click', function (e) {
         e.preventDefault();
         var el = document.getElementById(l.dataset.target);
-        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        if (!el) return;
+        var still = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        el.scrollIntoView({ behavior: still ? 'auto' : 'smooth', block: 'start' });
       });
     });
     var sections = links
       .map(function (l) { return document.getElementById(l.dataset.target); })
       .filter(Boolean);
     function activate(link) {
-      links.forEach(function (x) { x.classList.remove('active'); });
+      links.forEach(function (x) {
+        x.classList.remove('active');
+        x.removeAttribute('aria-current');
+      });
       link.classList.add('active');
+      link.setAttribute('aria-current', 'true');
     }
     // With both welcome cards folded, the first section is too short to ever
     // reach the band below, and the second would be marked at the very top

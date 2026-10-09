@@ -121,10 +121,10 @@ test('the in-extension changelog page documents the version being built', () => 
 });
 
 test('exactly one release on the changelog page is tagged Current', () => {
-  // Two "Current" badges is the shape the miss takes when a release is added
+  // Two "Current" marks is the shape the miss takes when a release is added
   // and the previous one is not demoted.
   const page = read('changelog.html');
-  const current = page.match(/class="tag tag-current"/g) || [];
+  const current = page.match(/data-status="current"/g) || [];
   assert.equal(current.length, 1,
     `changelog.html marks ${current.length} releases as Current`);
 });

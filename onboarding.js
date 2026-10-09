@@ -22,8 +22,9 @@
   const STRICTNESS = {
     relaxed: 'Blocks only clearly explicit content. Fewest false positives.',
     balanced: 'Blocks clear adult content while letting most safe content through.',
-    strict: 'Also catches borderline / suggestive content. May hide some safe content.'
+    strict: 'Also catches borderline and suggestive content. May hide some safe content.'
   };
+  const STRICTNESS_LABEL = { relaxed: 'Relaxed', balanced: 'Balanced', strict: 'Strict' };
   function normalizeStrictness(v) {
     v = String(v || '').toLowerCase();
     return (v === 'relaxed' || v === 'strict') ? v : 'balanced';
@@ -54,13 +55,13 @@
   let idx = 0; // 0-based index into STEPS
 
   const els = {
-    dots: () => Array.from(document.querySelectorAll('#dots .dot')),
     steps: () => Array.from(document.querySelectorAll('.step')),
     foot: $('foot'),
     back: $('back'),
     skip: $('skip'),
     next: $('next'),
     done: $('done'),
+    announce: $('announce'),
     aiImage: $('ai-image'),
     aiText: $('ai-text'),
     strictness: $('strictness'),
@@ -73,25 +74,58 @@
 
   // Per-step footer configuration.
   const FOOT = {
-    1: { back: false, skip: false, next: 'Get started' },
-    2: { back: true, skip: false, next: 'Continue' },
-    3: { back: true, skip: true, next: 'Set PIN & Continue' },
+    1: { back: false, skip: false, next: 'Start setup' },
+    2: { back: true, skip: false, next: 'Save and continue' },
+    3: { back: true, skip: true, next: 'Set PIN and continue' },
     4: { back: true, skip: false, next: 'Continue' },
     5: { back: true, skip: true, next: 'Finish setup' }
   };
 
-  function render() {
+  // Moves focus to a screen's headline, so keyboard and screen-reader users
+  // start the new screen at its top. The headline carries "Step N of 5".
+  function focusHeading(section) {
+    const heading = section && section.querySelector('h1');
+    if (!heading) return;
+    try { window.scrollTo(0, 0); } catch (_) {}
+    try { heading.focus({ preventScroll: true }); } catch (_) { heading.focus(); }
+  }
+
+  // One polite message at a time, for changes nothing else announces.
+  let announceTimer = 0;
+  function announce(message) {
+    if (!els.announce) return;
+    clearTimeout(announceTimer);
+    els.announce.textContent = '';
+    announceTimer = setTimeout(() => { els.announce.textContent = message; }, 50);
+  }
+
+  function clearPinError() {
+    els.pinErr.textContent = '';
+    els.pin.removeAttribute('aria-invalid');
+    els.pin2.removeAttribute('aria-invalid');
+  }
+
+  function showPinError(field, message) {
+    clearPinError();
+    els.pinErr.textContent = message;
+    field.setAttribute('aria-invalid', 'true');
+    field.focus();
+  }
+
+  function render(moveFocus) {
     const step = STEPS[idx];
-    els.steps().forEach((s) => s.classList.toggle('active', Number(s.dataset.step) === step));
-    els.dots().forEach((d, i) => {
-      d.classList.toggle('active', i === idx);
-      d.classList.toggle('done', i < idx);
+    let current = null;
+    els.steps().forEach((s) => {
+      const on = Number(s.dataset.step) === step;
+      s.hidden = !on;
+      if (on) current = s;
     });
     const cfg = FOOT[step];
     els.back.hidden = !cfg.back;
     els.skip.hidden = !cfg.skip;
     els.next.textContent = cfg.next;
-    els.pinErr.textContent = '';
+    clearPinError();
+    if (moveFocus) focusHeading(current);
   }
 
   // ---- step side effects ---------------------------------------------------
@@ -113,9 +147,15 @@
   async function trySavePin() {
     const a = els.pin.value || '';
     const b = els.pin2.value || '';
-    if (!a && !b) { els.pinErr.textContent = ''; return true; } // treated as "no PIN"
-    if (a.length < 4) { els.pinErr.textContent = 'PIN must be at least 4 characters.'; return false; }
-    if (a !== b) { els.pinErr.textContent = 'The two PINs don’t match.'; return false; }
+    if (!a && !b) { clearPinError(); return true; } // treated as "no PIN"
+    if (a.length < 4) {
+      showPinError(els.pin, 'Your PIN is too short. Use at least four characters.');
+      return false;
+    }
+    if (a !== b) {
+      showPinError(els.pin2, 'The two PINs don’t match. Type the same PIN in both boxes.');
+      return false;
+    }
     await setStored({ [PIN_KEY]: a });
     return true;
   }
@@ -123,25 +163,25 @@
   async function finish() {
     await setStored({ [ONBOARDING_KEY]: true });
 
-    // Build a short summary of what was turned on.
+    // A short summary of what was turned on.
     const parts = [];
     const img = els.aiImage.checked, txt = els.aiText.checked;
-    if (img && txt) parts.push('AI image + text protection on');
+    if (img && txt) parts.push('AI image and text protection on');
     else if (img) parts.push('AI image protection on');
     else if (txt) parts.push('AI text protection on');
-    else parts.push('Core blocking on');
-    if (img || txt) parts.push('(' + normalizeStrictness(els.strictness.value) + ')');
+    else parts.push('Blocklist and keyword filter on');
+    if (img || txt) parts.push(STRICTNESS_LABEL[normalizeStrictness(els.strictness.value)] + ' strength');
     const hasPin = await getStored(PIN_KEY);
-    if (hasPin[PIN_KEY]) parts.push('· PIN set');
-    if (els.dnsFilter.checked) parts.push('· DNS check on');
+    if (hasPin[PIN_KEY]) parts.push('PIN set');
+    if (els.dnsFilter.checked) parts.push('DNS check on');
 
     const summary = $('done-summary');
-    if (summary) summary.textContent = parts.join(' ') + '. You can change any of this in Settings.';
+    if (summary) summary.textContent = parts.join(' · ');
 
     els.foot.hidden = true;
-    els.steps().forEach((s) => s.classList.remove('active'));
-    els.dots().forEach((d) => d.classList.add('done'));
-    els.done.classList.add('active');
+    els.steps().forEach((s) => { s.hidden = true; });
+    els.done.hidden = false;
+    focusHeading(els.done);
   }
 
   // ---- navigation ----------------------------------------------------------
@@ -159,7 +199,7 @@
         await finish();
         return;
       }
-      if (idx < STEPS.length - 1) { idx++; render(); }
+      if (idx < STEPS.length - 1) { idx++; render(true); }
     } finally {
       els.next.disabled = false;
     }
@@ -176,12 +216,12 @@
     }
     els.pin.value = '';
     els.pin2.value = '';
-    els.pinErr.textContent = '';
-    if (idx < STEPS.length - 1) { idx++; render(); }
+    clearPinError();
+    if (idx < STEPS.length - 1) { idx++; render(true); }
   }
 
   function goBack() {
-    if (idx > 0) { idx--; render(); }
+    if (idx > 0) { idx--; render(true); }
   }
 
   // ---- init ----------------------------------------------------------------
@@ -198,19 +238,25 @@
     });
     els.dnsFilter.checked = cur.dnsFilterEnabled === true; // off unless already on
 
-    // Copy buttons for the device-level resolver addresses.
+    // Copy buttons for the device-level resolver addresses. The label reads
+    // "Copied" for a moment; the live region says which addresses.
     document.querySelectorAll('.copy-btn').forEach((btn) => {
+      const original = btn.textContent;
+      let resetTimer = 0;
       btn.addEventListener('click', async () => {
         const text = btn.getAttribute('data-copy') || '';
+        const name = btn.getAttribute('data-name') || '';
         try {
           await navigator.clipboard.writeText(text);
         } catch (_) {
-          return; // clipboard blocked — the addresses are on screen to type
+          // Clipboard blocked: the addresses are on screen to type.
+          announce('Copying was blocked. Select the addresses and copy them yourself.');
+          return;
         }
-        const original = btn.textContent;
         btn.textContent = 'Copied';
-        btn.classList.add('copied');
-        setTimeout(() => { btn.textContent = original; btn.classList.remove('copied'); }, 1600);
+        announce(name ? 'Copied the ' + name + ' addresses.' : 'Copied the addresses.');
+        clearTimeout(resetTimer);
+        resetTimer = setTimeout(() => { btn.textContent = original; }, 1600);
       });
     });
 
@@ -231,7 +277,7 @@
       setTimeout(() => { window.location.href = 'options.html'; }, 150);
     });
 
-    render();
+    render(false);
   }
 
   if (document.readyState === 'loading') {

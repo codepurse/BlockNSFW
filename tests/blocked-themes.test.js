@@ -722,8 +722,28 @@ test('blocked.js: ?preview= shows that design with a placeholder address', async
   });
   await flush();
   assert.equal(doc.documentElement.dataset.theme, 'verse');
-  assert.equal(doc.getElementById('target-url').textContent, 'https://example.com/',
+  // The placeholder, example.com, redacted like any other address.
+  assert.equal(doc.getElementById('target-url').textContent, '••••••••.com',
     'a preview must never show an address from the URL');
+});
+
+test('blocked.js: the held address is never written out, only its ending', async () => {
+  for (const [target, shown] of [
+    ['https://www.explicit-site.test/some/path?q=term', '••••••••.test'],
+    ['https://sub.domain.co.uk/', '••••••••.uk'],
+    ['http://192.168.1.20/page', '••••••••'],
+    ['not a url', '••••••••']
+  ]) {
+    const { doc } = openBlockedPage({
+      query: '?url=' + encodeURIComponent(target) + '&reason=page_text_scan&matched=' + encodeURIComponent('termone, termtwo'),
+      settings: { blockedPageType: 'default', blockedPageTheme: 'classic' }
+    });
+    await flush();
+    assert.equal(doc.getElementById('target-url').textContent, shown, target);
+    // Nothing the page matched is shown either: not the words, not the path.
+    const written = JSON.stringify(doc.getElementById('why-rows').all().map((c) => c.textContent));
+    assert.doesNotMatch(written, /termone|termtwo|explicit-site|some\/path|domain/);
+  }
 });
 
 test('blocked.js: ?preview= with an unknown design is ignored', async () => {

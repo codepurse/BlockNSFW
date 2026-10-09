@@ -153,15 +153,14 @@ async function showAccessCodeModal(actionLabel = 'this action') {
   el.desc.textContent = `Type the code below exactly to ${actionLabel}.`;
   el.display.textContent = expected;
   el.input.value = '';
-  el.error.textContent = '';
+  setFieldError(el.input, el.error, '');
   // The markup is static and reused, so harden it once rather than stacking a
   // fresh set of listeners every time the modal opens.
   if (!el.input.dataset.hardened) {
     AccessCode.hardenEntry(el.input, el.display);
     el.input.dataset.hardened = '1';
   }
-  el.overlay.classList.remove('hidden');
-  el.overlay.setAttribute('aria-hidden', 'false');
+  openDialog(el.overlay);
   el.input.focus();
 
   return new Promise(resolve => {
@@ -169,8 +168,7 @@ async function showAccessCodeModal(actionLabel = 'this action') {
       el.ok.onclick = null;
       el.cancel.onclick = null;
       el.input.onkeydown = null;
-      el.overlay.classList.add('hidden');
-      el.overlay.setAttribute('aria-hidden', 'true');
+      closeDialog(el.overlay);
     };
     el.ok.onclick = () => {
       if (el.input.value === expected) {
@@ -183,7 +181,7 @@ async function showAccessCodeModal(actionLabel = 'this action') {
       el.display.textContent = expected;
       el.display.scrollTop = 0;
       el.input.value = '';
-      el.error.textContent = "That didn't match. Here's a new code.";
+      setFieldError(el.input, el.error, 'That didn’t match. Type the new code above.');
       el.input.focus();
     };
     el.cancel.onclick = () => { cleanup(); resolve(false); };
@@ -207,11 +205,11 @@ async function verifyPIN(actionLabel) {
   const stored = await getPIN();
   let attempt = 0;
   while (attempt < 3) {
-    const entered = await showPinModal(`Enter PIN to ${actionLabel}`);
+    const entered = await showPinModal(`Enter your PIN to ${actionLabel}.`);
     if (entered === null) return false; // Cancelled
     if (entered === stored) return true;
     attempt++;
-    await showPinModal('Incorrect PIN. Try again.', { errorOnly: true });
+    await showPinModal('That PIN didn’t match. Try again.', { errorOnly: true });
   }
   return false;
 }
@@ -258,32 +256,97 @@ function getPinElements() {
   };
 }
 
-function showOverlay() {
-  const { overlay } = getPinElements();
+// --- Dialog presentation ------------------------------------------------------
+//
+// The three dialogs share one way of opening and closing: focus goes into the
+// dialog and comes back to whatever opened it, Tab stays inside, and Escape
+// cancels. None of this decides anything; the gates above do.
+
+let dialogReturnFocus = null;
+
+function openDialog(overlay) {
+  if (!overlay) return;
+  const active = document.activeElement;
+  if (active && active !== document.body && !overlay.contains(active)) dialogReturnFocus = active;
   overlay.classList.remove('hidden');
   overlay.setAttribute('aria-hidden', 'false');
 }
 
-function hideOverlay() {
-  const { overlay } = getPinElements();
+function closeDialog(overlay) {
+  if (!overlay) return;
   overlay.classList.add('hidden');
   overlay.setAttribute('aria-hidden', 'true');
+  const target = dialogReturnFocus;
+  dialogReturnFocus = null;
+  if (target && document.contains(target) && typeof target.focus === 'function') {
+    try { target.focus({ preventScroll: true }); } catch (_) {}
+  }
+}
+
+// Keyboard rules for one dialog, wired once at load.
+function holdFocusIn(overlay, cancelButton) {
+  if (!overlay) return;
+  overlay.addEventListener('keydown', (e) => {
+    if (overlay.classList.contains('hidden')) return;
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      if (cancelButton) cancelButton.click();
+      return;
+    }
+    if (e.key !== 'Tab') return;
+    const focusable = [...overlay.querySelectorAll('button, input, [href], [tabindex]:not([tabindex="-1"])')]
+      .filter(node => !node.disabled && node.offsetParent !== null);
+    if (focusable.length === 0) return;
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+  });
+}
+
+// A problem with a field is said under it, and the field is marked invalid.
+function setFieldError(input, errorEl, message) {
+  if (errorEl) errorEl.textContent = message || '';
+  if (input) {
+    if (message) input.setAttribute('aria-invalid', 'true');
+    else input.removeAttribute('aria-invalid');
+  }
+}
+
+function showOverlay() {
+  const { overlay } = getPinElements();
+  openDialog(overlay);
+}
+
+function hideOverlay() {
+  const { overlay } = getPinElements();
+  closeDialog(overlay);
 }
 
 function setupPinToggle() {
   const { toggle, input } = getPinElements();
   if (!toggle || !input) return;
+  // Every dialog opens with the PIN hidden.
+  input.type = 'password';
+  toggle.textContent = 'Show';
+  toggle.setAttribute('aria-pressed', 'false');
   toggle.onclick = () => {
-    input.type = input.type === 'password' ? 'text' : 'password';
+    const showing = input.type === 'password';
+    input.type = showing ? 'text' : 'password';
+    toggle.textContent = showing ? 'Hide' : 'Show';
+    toggle.setAttribute('aria-pressed', showing ? 'true' : 'false');
   };
 }
 
 async function showPinModal(description, options = {}) {
   const el = getPinElements();
   if (!el.overlay) return prompt(description || 'Enter PIN');
-  el.title.textContent = 'Enter PIN';
-  el.desc.textContent = description || 'Enter PIN to continue.';
-  el.error.textContent = options.errorOnly ? description : '';
+  el.title.textContent = 'Enter your PIN';
+  el.desc.textContent = options.errorOnly
+    ? 'Enter your PIN to continue.'
+    : (description || 'Enter your PIN to continue.');
+  setFieldError(el.input, el.error, options.errorOnly ? description : '');
+  el.ok.textContent = 'Continue';
   el.confirmField.classList.add('hidden');
   el.input.value = '';
   showOverlay();
@@ -299,7 +362,7 @@ async function showPinModal(description, options = {}) {
     el.ok.onclick = () => {
       const val = el.input.value.trim();
       if (val.length < 4) {
-        el.error.textContent = 'PIN must be at least 4 digits.';
+        setFieldError(el.input, el.error, 'A PIN has at least 4 characters. Check it and try again.');
         return;
       }
       cleanup();
@@ -320,9 +383,10 @@ async function showSetPinModal() {
     if (!newPin || newPin.trim().length < 4) return null;
     return newPin.trim();
   }
-  el.title.textContent = 'Set PIN';
-  el.desc.textContent = 'Create a PIN to protect sensitive actions.';
-  el.error.textContent = '';
+  el.title.textContent = 'Set a PIN';
+  el.desc.textContent = 'A PIN guards anything that loosens protection. Choose one you will remember.';
+  setFieldError(el.input, el.error, '');
+  el.ok.textContent = 'Set PIN';
   el.input.value = '';
   el.confirmInput.value = '';
   el.confirmField.classList.remove('hidden');
@@ -337,12 +401,19 @@ async function showSetPinModal() {
       el.confirmInput.onkeydown = null;
       hideOverlay();
       el.confirmField.classList.add('hidden');
+      el.confirmInput.removeAttribute('aria-invalid');
     };
     el.ok.onclick = () => {
       const a = el.input.value.trim();
       const b = el.confirmInput.value.trim();
-      if (a.length < 4) { el.error.textContent = 'PIN must be at least 4 digits.'; return; }
-      if (a !== b) { el.error.textContent = 'PINs do not match.'; return; }
+      el.confirmInput.removeAttribute('aria-invalid');
+      if (a.length < 4) { setFieldError(el.input, el.error, 'A PIN has at least 4 characters. Choose a longer one.'); return; }
+      if (a !== b) {
+        setFieldError(null, el.error, 'The two PINs don’t match. Type them again.');
+        el.input.removeAttribute('aria-invalid');
+        el.confirmInput.setAttribute('aria-invalid', 'true');
+        return;
+      }
       cleanup();
       resolve(a);
     };
@@ -380,18 +451,20 @@ async function showDurationModal(options = {}) {
     if (isNaN(mins) || mins <= 0) return null; // invalid treated as cancel
     return { minutes: mins };
   }
-  const title = options.title || 'Choose Duration';
-  const description = options.description || 'Select a duration or choose Permanent.';
+  const title = options.title || 'Choose how long';
+  const description = options.description || 'Choose how long, or keep it for good.';
   el.title.textContent = title;
   el.desc.textContent = description;
-  el.error.textContent = '';
+  setFieldError(el.input, el.error, '');
   el.input.value = '';
   // Clear chip selection
-  [...el.chips.querySelectorAll('.chip')].forEach(c => c.classList.remove('selected'));
-  // Show overlay
-  el.overlay.classList.remove('hidden');
-  el.overlay.setAttribute('aria-hidden', 'false');
-  el.input.focus();
+  [...el.chips.querySelectorAll('.chip')].forEach(c => {
+    c.classList.remove('selected');
+    c.setAttribute('aria-pressed', 'false');
+  });
+  openDialog(el.overlay);
+  const firstChip = el.chips.querySelector('.chip');
+  if (firstChip) firstChip.focus(); else el.input.focus();
 
   return new Promise(resolve => {
     let selectedMinutes = undefined; // undefined = none, null = permanent, number = minutes
@@ -400,15 +473,18 @@ async function showDurationModal(options = {}) {
       el.cancel.onclick = null;
       el.input.onkeydown = null;
       el.chips.onclick = null;
-      el.overlay.classList.add('hidden');
-      el.overlay.setAttribute('aria-hidden', 'true');
+      closeDialog(el.overlay);
     };
     el.chips.onclick = (e) => {
       const btn = e.target.closest('.chip');
       if (!btn) return;
       // Toggle selected state
-      [...el.chips.querySelectorAll('.chip')].forEach(c => c.classList.remove('selected'));
+      [...el.chips.querySelectorAll('.chip')].forEach(c => {
+        c.classList.remove('selected');
+        c.setAttribute('aria-pressed', 'false');
+      });
       btn.classList.add('selected');
+      btn.setAttribute('aria-pressed', 'true');
       const minsAttr = btn.getAttribute('data-mins');
       const permAttr = btn.getAttribute('data-permanent');
       if (permAttr) {
@@ -430,7 +506,7 @@ async function showDurationModal(options = {}) {
       }
       const mins = parseInt(val, 10);
       if (isNaN(mins) || mins <= 0) {
-        el.error.textContent = 'Enter a positive number of minutes or choose a chip.';
+        setFieldError(el.input, el.error, 'That isn’t a number of minutes. Enter a whole number, or choose a length above.');
         return;
       }
       cleanup();
@@ -607,13 +683,14 @@ async function isCurrentSiteBlocked() {
 // whitelisted rather than adding an entry that would silently do nothing.
 async function blockCurrentSite() {
   try {
+    showNotice('');
     const domain = await getCurrentTabDomain();
     if (!domain) {
-      alert('Cannot determine current site domain');
+      showNotice(NOT_A_WEBSITE);
       return;
     }
     if (await isCurrentSiteWhitelisted()) {
-      alert('This site is on your whitelist, which overrides blocking. Remove it from the whitelist first.');
+      showNotice('This site is on your whitelist, which overrides blocking. Remove it from the whitelist first.');
       return;
     }
     const settings = await getSettings();
@@ -640,53 +717,119 @@ async function resetStats() {
   await updateUI();
 }
 
+// --- Presentation helpers -----------------------------------------------------
+
+const NOT_A_WEBSITE = 'This tab isn’t a website, so there’s nothing here to block or unblock.';
+
+// One line under the controls for anything that goes wrong. It is a
+// role="alert" region, so the words are read out when they change.
+function showNotice(message) {
+  const el = $('popup-notice');
+  if (el) el.textContent = message || '';
+}
+
+function formatCount(value) {
+  const n = Number(value) || 0;
+  try { return n.toLocaleString(); } catch (_) { return String(n); }
+}
+
+function formatTime(ms) {
+  try {
+    return new Date(ms).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  } catch (_) {
+    return '';
+  }
+}
+
+function formatDate(ms) {
+  try {
+    return new Date(ms).toLocaleDateString([], { day: 'numeric', month: 'short' });
+  } catch (_) {
+    return '';
+  }
+}
+
+// A switch shows its state as aria-checked; .active is kept for anything that
+// still reads the class.
+function setSwitch(el, on) {
+  if (!el) return;
+  el.classList.toggle('active', !!on);
+  el.setAttribute('aria-checked', on ? 'true' : 'false');
+}
+
+// The sentence beside a guarded control: what pressing it will ask for. It
+// reads the same storage the gates read and decides nothing itself.
+function gateSentence(hasPin, accessCodeAsked) {
+  if (!hasPin) return accessCodeAsked
+    ? 'Asks you to set a PIN first, then for an access code.'
+    : 'Asks you to set a PIN first.';
+  return accessCodeAsked ? 'Asks for your PIN and an access code.' : 'Asks for your PIN.';
+}
+
+async function updateLockNotes() {
+  try {
+    const hasPin = !!(await getPIN());
+    const config = await getAccessCodeConfig();
+    const asks = (critical) => !!AccessCode.requiredFor(config, critical);
+    const set = (id, text) => { const el = $(id); if (el) el.textContent = text; };
+    set('unblock-note', gateSentence(hasPin, asks(true)));
+    set('safesearch-note', gateSentence(hasPin, asks(false)));
+    set('whitelist-note', gateSentence(hasPin, asks(true)));
+  } catch (_) {}
+}
+
 async function updateWhitelistDisplay() {
   const whitelist = await cleanExpiredWhitelist();
   const listContainer = $('whitelist-list');
-  
+
+  listContainer.textContent = '';
+
   if (whitelist.length === 0) {
-    listContainer.innerHTML = '';
-    const emptyDiv = document.createElement('div');
-    emptyDiv.className = 'whitelist-empty';
-    emptyDiv.textContent = 'No whitelisted sites';
-    listContainer.appendChild(emptyDiv);
+    const empty = document.createElement('p');
+    empty.className = 'domain-empty whitelist-empty';
+    empty.textContent = 'No sites are whitelisted.';
+    listContainer.appendChild(empty);
     return;
   }
-  
-  listContainer.innerHTML = '';
-  
+
   whitelist.forEach(item => {
-    const addedDate = new Date(item.addedAt).toLocaleDateString();
-    
-    const itemDiv = document.createElement('div');
-    itemDiv.className = 'whitelist-item';
-    
-    const infoDiv = document.createElement('div');
-    infoDiv.className = 'whitelist-info';
-    
-    const domainStrong = document.createElement('strong');
+    const row = document.createElement('div');
+    row.className = 'domain-row whitelist-item';
+
+    const main = document.createElement('div');
+    main.className = 'domain-main whitelist-info';
+
+    const name = document.createElement('span');
+    name.className = 'domain';
     // Show the path scope (if any) so "reddit.com" and "reddit.com/r/NoFap"
     // are distinguishable in the list.
-    domainStrong.textContent = item.path ? item.domain + item.path : item.domain;
+    const label = item.path ? item.domain + item.path : item.domain;
+    name.textContent = label;
+    name.title = label;
 
-    const typeDiv = document.createElement('div');
-    typeDiv.className = 'whitelist-type';
-    typeDiv.textContent = item.path ? `Page only · Added ${addedDate}` : `Added ${addedDate}`;
+    const meta = document.createElement('span');
+    meta.className = 'domain-meta whitelist-type';
+    const scope = item.path ? 'Page only · ' : '';
+    meta.textContent = item.type === 'temporary' && item.expiresAt
+      ? `${scope}Until ${formatTime(item.expiresAt)}`
+      : `${scope}Added ${formatDate(item.addedAt)}`;
 
-    infoDiv.appendChild(domainStrong);
-    infoDiv.appendChild(typeDiv);
+    main.appendChild(name);
+    main.appendChild(meta);
 
     const removeButton = document.createElement('button');
-    removeButton.className = 'whitelist-remove';
+    removeButton.type = 'button';
+    removeButton.className = 'btn-text whitelist-remove';
     removeButton.textContent = 'Remove';
+    removeButton.setAttribute('aria-label', `Remove ${label} from the whitelist`);
     removeButton.addEventListener('click', async () => {
       await removeFromWhitelist(item.domain, item.path || null);
       await updateWhitelistDisplay();
     });
-    
-    itemDiv.appendChild(infoDiv);
-    itemDiv.appendChild(removeButton);
-    listContainer.appendChild(itemDiv);
+
+    row.appendChild(main);
+    row.appendChild(removeButton);
+    listContainer.appendChild(row);
   });
 }
 
@@ -697,20 +840,34 @@ async function updateUI() {
     const dailyStats = await getDailyStats();
     const { [TEMP_DISABLE_UNTIL_KEY]: tempUntil } = await browserAPI.storage.local.get(TEMP_DISABLE_UNTIL_KEY);
     
-    // Update status
-  const status = $('status');
-    if (settings.enabled) {
-      status.textContent = '🛡️ Protection Active';
-      status.className = 'status enabled';
-    } else {
-      if (tempUntil && tempUntil > Date.now()) {
-        const minsLeft = Math.max(1, Math.ceil((tempUntil - Date.now()) / 60000));
-        status.textContent = `⏳ Disabled (${minsLeft}m left)`;
-      } else {
-        status.textContent = '⚠️ Protection Disabled';
-      }
-      status.className = 'status disabled';
+    // The band says the state in words. On, it is the pine ground; off, it
+    // drops to plain sheet, so the change of ground carries the signal.
+    const status = $('status');
+    const statusNote = $('status-note');
+    const band = $('popup-band');
+    if (band) {
+      band.classList.toggle('band-pine', !!settings.enabled);
+      band.classList.toggle('band-sheet', !settings.enabled);
     }
+    if (settings.enabled) {
+      status.textContent = 'Protected';
+      status.dataset.state = 'on';
+      if (statusNote) statusNote.hidden = true;
+    } else {
+      status.textContent = 'Protection is off';
+      status.dataset.state = 'off';
+      if (statusNote) {
+        if (tempUntil && tempUntil > Date.now()) {
+          const minsLeft = Math.max(1, Math.ceil((tempUntil - Date.now()) / 60000));
+          statusNote.textContent = `back on in ${minsLeft} min`;
+          statusNote.hidden = false;
+        } else {
+          statusNote.hidden = true;
+        }
+      }
+    }
+    const toggleNote = $('toggle-note');
+    if (toggleNote) toggleNote.hidden = !settings.enabled;
     
     // Update unblock toggle visibility and state
     const domain = await getCurrentTabDomain();
@@ -727,7 +884,7 @@ async function updateUI() {
     if (domain) {
       unblockRow.style.display = 'flex';
       const isWhitelisted = await isCurrentSiteWhitelisted();
-      unblockToggle.classList.toggle('active', isWhitelisted);
+      setSwitch(unblockToggle, isWhitelisted);
 
       // Block row: show for any real site. Reflect current state on the button.
       if (blockRow) {
@@ -739,32 +896,29 @@ async function updateUI() {
         }
         if (blockDesc) {
           blockDesc.textContent = isWhitelisted
-            ? 'Whitelisted — remove from whitelist to block'
-            : (alreadyBlocked ? 'This site is on your blocklist' : 'Add current tab domain to your blocklist');
+            ? 'It’s on your whitelist. Remove it there to block it.'
+            : (alreadyBlocked ? 'This site is on your blocklist.' : 'Adds this site to your blocklist.');
         }
       }
     } else {
       unblockRow.style.display = 'none';
       if (blockRow) blockRow.style.display = 'none';
     }
-    
+
     // Update main toggle
-    const mainToggle = $('toggle');
-    mainToggle.classList.toggle('active', settings.enabled);
-    
+    setSwitch($('toggle'), settings.enabled);
+
     // Update SafeSearch toggle
-    const safeSearchToggle = $('safesearch-toggle');
-    if (safeSearchToggle) {
-      safeSearchToggle.classList.toggle('active', settings.safeSearchEnabled !== false);
-    }
-    
-    // Update stats
-    $('blocked-today').textContent = dailyStats.blockedToday || 0;
-    $('blocked-total').textContent = stats.blockedCount || 0;
-    $('images-filtered').textContent = dailyStats.imageBlocked || 0;
-    
+    setSwitch($('safesearch-toggle'), settings.safeSearchEnabled !== false);
+
+    // Counts, in mono with separators
+    $('blocked-today').textContent = formatCount(dailyStats.blockedToday);
+    $('blocked-total').textContent = formatCount(stats.blockedCount);
+    $('images-filtered').textContent = formatCount(dailyStats.imageBlocked);
+
     // Update whitelist display
     await updateWhitelistDisplay();
+    await updateLockNotes();
     
     document.body.classList.remove('loading');
   } catch (error) {
@@ -807,9 +961,10 @@ async function toggleBlocking() {
 
 async function toggleUnblockSite() {
   try {
+    showNotice('');
     const domain = await getCurrentTabDomain();
     if (!domain) {
-      alert('Cannot determine current site domain');
+      showNotice(NOT_A_WEBSITE);
       return;
     }
     
@@ -829,7 +984,7 @@ async function toggleUnblockSite() {
       // Ask for temporary duration via modal
       const result = await showDurationModal({
         title: 'Whitelist this site',
-        description: 'Whitelist temporarily? Select a duration or choose Permanent.'
+        description: 'Choose how long it stays allowed, or keep it for good.'
       });
       if (result === null) return; // cancelled
       if (result && typeof result.minutes === 'number') {
@@ -861,14 +1016,17 @@ function validateDomain(domain) {
 
 async function handleAddWhitelist(type) {
   const input = $('whitelist-input');
+  const errorEl = $('whitelist-error');
   // Accepts a bare domain or a domain + path (e.g. reddit.com/r/NoFap) so a
   // user can allow one section of an otherwise-blocked site.
   const parsed = self.DomainValidate.parseWhitelistInput(input.value.trim());
 
   if (!parsed) {
-    alert('Please enter a valid domain or page (e.g., example.com or example.com/r/Name)');
+    setFieldError(input, errorEl, 'That doesn’t look like a web address. Check it and try again.');
+    input.focus();
     return;
   }
+  setFieldError(input, errorEl, '');
 
   try {
     // A bare domain unlocks the whole site; a path-scoped entry opens one
@@ -890,11 +1048,11 @@ async function handleAddWhitelist(type) {
     await updateWhitelistDisplay();
   } catch (error) {
     console.error('Error adding to whitelist:', error);
-    alert('Failed to add to whitelist');
+    setFieldError(input, errorEl, 'That didn’t save. Try again.');
   }
 }
 
-// Show the running version in the header badge (was hardcoded markup).
+// Show the running version in the footer (was hardcoded markup).
 function setVersionBadge() {
   try {
     const v = browserAPI.runtime.getManifest().version;
@@ -920,7 +1078,8 @@ async function renderUpdateBanner() {
     if (sub) {
       const notes = (typeof info.notes === 'string' && info.notes.trim())
         ? ' · ' + info.notes.trim() : '';
-      sub.textContent = `v${info.current} → v${info.latest}${notes}`;
+      sub.textContent = `Version ${info.latest} is ready. You have ${info.current}.${notes}`;
+      sub.title = sub.textContent;
     }
     const link = $('update-banner-link');
     if (link) link.href = info.url || 'https://github.com/codepurse/BlockNSFW/releases';
@@ -986,6 +1145,10 @@ document.addEventListener('DOMContentLoaded', async () => {
       handleAddWhitelist('permanent');
     }
   });
+  // A corrected address clears the problem line as soon as it changes.
+  $('whitelist-input').addEventListener('input', () => {
+    setFieldError($('whitelist-input'), $('whitelist-error'), '');
+  });
   
   // SafeSearch toggle event listener
   const safeSearchToggle = $('safesearch-toggle');
@@ -1004,6 +1167,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   }
   
+  // Dialog keyboard rules: Escape cancels, Tab stays inside.
+  holdFocusIn($('pin-modal-overlay'), $('pin-cancel'));
+  holdFocusIn($('access-code-modal-overlay'), $('access-code-cancel'));
+  holdFocusIn($('duration-modal-overlay'), $('duration-cancel'));
+
   // Update-available banner
   setVersionBadge();
   const dismissBtn = $('update-banner-dismiss');
@@ -1016,6 +1184,12 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // Initial UI update
   await updateUI();
+
+  // First focus lands on the main control, so Space flips it straight away.
+  const mainSwitch = $('toggle');
+  if (mainSwitch && (!document.activeElement || document.activeElement === document.body)) {
+    try { mainSwitch.focus({ preventScroll: true }); } catch (_) {}
+  }
 
   // Listen for storage changes to update UI in real-time
   browserAPI.storage.onChanged.addListener((changes, area) => {

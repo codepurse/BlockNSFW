@@ -23,6 +23,7 @@ $RuntimeFolders = @(
     "shared",
     "vendor",
     "fonts",
+    "ui",
     "nsfwjs",
     "models"
 )

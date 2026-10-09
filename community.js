@@ -1,32 +1,38 @@
 /**
- * BlockNSFW community stories feed.
- * Fetches approved stories via PBlockerStories.fetchStories() and renders them
- * as social-style posts. Author text is inserted with textContent (never
- * innerHTML); innerHTML is used only for the static, trusted SVG icons below.
+ * BlockNSFW community stories.
+ * Fetches approved stories through PBlockerStories (appwrite-client.js) and
+ * sets them as hairline rows. Author text goes in with textContent, never
+ * innerHTML; the one icon comes from ui/icons.js, which builds it with
+ * createElementNS.
  */
 (() => {
   const api = (typeof browser !== 'undefined' && browser.storage) ? browser : (typeof chrome !== 'undefined' ? chrome : null);
   const LIKED_KEY = 'pblocker_liked_stories';
 
   const feed = document.getElementById('feed');
+  const feedState = document.getElementById('feed-state');
   const footer = document.getElementById('feed-footer');
   const refreshBtn = document.getElementById('refresh-btn');
   const countEl = document.getElementById('count');
+  const announcer = document.getElementById('announcer');
 
-  // --- Static icons (trusted markup) ----------------------------------------
-  const ICON_HEART =
-    '<svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 1 0-7.78 7.78L12 21.23l8.84-8.84a5.5 5.5 0 0 0 0-7.78z"/></svg>';
-  const ICON_SHARE =
-    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>';
-  const ICON_CHAT =
-    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>';
-  const ICON_ALERT =
-    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>';
+  function icon(name) {
+    if (typeof UiIcons === 'undefined') return null;
+    try { return UiIcons.create(name, { size: 12 }); } catch (_) { return null; }
+  }
 
-  function svgNode(markup) {
-    const span = document.createElement('span');
-    span.innerHTML = markup; // static SVG only
-    return span.firstElementChild;
+  function formatCount(n) {
+    return Number(n).toLocaleString('en-US');
+  }
+
+  // A short message for screen readers. Cleared first so the same words
+  // twice in a row are read twice.
+  let announceTimer = null;
+  function announce(message) {
+    if (!announcer) return;
+    clearTimeout(announceTimer);
+    announcer.textContent = '';
+    announceTimer = setTimeout(() => { announcer.textContent = message; }, 50);
   }
 
   // --- Local "liked" state (per device) -------------------------------------
@@ -84,66 +90,60 @@
   function updateCount(n) {
     if (!countEl) return;
     if (n > 0) {
-      countEl.textContent = `${n} ${n === 1 ? 'story' : 'stories'}`;
+      countEl.textContent = `${formatCount(n)} ${n === 1 ? 'story' : 'stories'}`;
       countEl.hidden = false;
     } else {
       countEl.hidden = true;
     }
   }
 
-  function showState({ className = '', icon, title, detail }) {
+  // Loading, empty and error each say one line in place of the feed; an
+  // error adds the detail when the code supplies one.
+  function showState(kind, message, detail) {
     feed.replaceChildren();
-    const wrap = document.createElement('div');
-    wrap.className = `state ${className}`.trim();
+    feedState.replaceChildren();
 
-    if (icon === 'spinner') {
-      const sp = document.createElement('div');
-      sp.className = 'spinner';
-      wrap.appendChild(sp);
-    } else if (icon) {
-      const ic = document.createElement('div');
-      ic.className = 'state-icon';
-      ic.appendChild(svgNode(icon));
-      wrap.appendChild(ic);
-    }
-    if (title) {
-      const h = document.createElement('p');
-      h.className = 'state-title';
-      h.textContent = title;
-      wrap.appendChild(h);
-    }
+    const line = document.createElement('p');
+    if (kind === 'loading') line.className = 'ink-2';
+    if (kind === 'error') line.className = 'state-title';
+    line.textContent = message;
+    feedState.appendChild(line);
+
     if (detail) {
-      const p = document.createElement('div');
-      p.textContent = detail;
-      wrap.appendChild(p);
+      const more = document.createElement('p');
+      more.className = 'state-detail ink-2';
+      more.textContent = detail;
+      feedState.appendChild(more);
     }
-    feed.appendChild(wrap);
+  }
+
+  function clearState() {
+    feedState.replaceChildren();
   }
 
   // --- Post rendering -------------------------------------------------------
-  function buildPost(story, i, likedSet) {
+  let storySeq = 0;
+
+  function buildPost(story, likedSet) {
     const card = document.createElement('article');
     card.className = 'story';
-    card.style.animationDelay = `${Math.min(i, 8) * 55}ms`;
-
-    const post = document.createElement('div');
-    post.className = 'post';
 
     // Optional title
     if (story.title) {
-      const title = document.createElement('h2');
+      const title = document.createElement('h3');
       title.className = 'story-title';
+      title.id = `story-title-${++storySeq}`;
       title.textContent = story.title;
-      post.appendChild(title);
+      card.setAttribute('aria-labelledby', title.id);
+      card.appendChild(title);
     }
 
-    // Body
+    // Body, with the author's line breaks kept
     const body = document.createElement('p');
     body.className = 'story-body';
     body.textContent = story.content || '';
-    post.appendChild(body);
+    card.appendChild(body);
 
-    // Action bar
     const actions = document.createElement('div');
     actions.className = 'story-actions';
 
@@ -155,20 +155,28 @@
     let syncTimer = null;
     let syncing = false;
 
+    // "Like · 12": one label, so the underline runs unbroken. The check
+    // shows only while pressed; the label itself never changes.
     const likeBtn = document.createElement('button');
     likeBtn.type = 'button';
-    likeBtn.className = 'act act-like';
-    likeBtn.appendChild(svgNode(ICON_HEART));
+    likeBtn.className = 'btn btn-text story-like';
+    const check = icon('check');
+    if (check) likeBtn.appendChild(check);
+    const likeLabel = document.createElement('span');
+    const likeDot = document.createElement('span');
+    likeDot.setAttribute('aria-hidden', 'true');
+    likeDot.textContent = '·';
     const likeCount = document.createElement('span');
-    likeBtn.appendChild(likeCount);
+    likeCount.className = 'mono tnum';
+    likeLabel.append('Like ', likeDot, ' ', likeCount);
+    likeBtn.appendChild(likeLabel);
 
     function renderLike() {
       const shown = uiLiked === serverLiked
         ? serverLikes
         : Math.max(0, serverLikes + (uiLiked ? 1 : -1));
-      likeBtn.classList.toggle('liked', uiLiked);
       likeBtn.setAttribute('aria-pressed', String(uiLiked));
-      likeCount.textContent = String(shown);
+      likeCount.textContent = formatCount(shown);
     }
     renderLike();
 
@@ -205,28 +213,29 @@
     });
     actions.appendChild(likeBtn);
 
-    // Share (copy story text)
-    const shareBtn = document.createElement('button');
-    shareBtn.type = 'button';
-    shareBtn.className = 'act act-share';
-    shareBtn.appendChild(svgNode(ICON_SHARE));
-    const shareLabel = document.createElement('span');
-    shareLabel.textContent = 'Share';
-    shareBtn.appendChild(shareLabel);
-    shareBtn.addEventListener('click', async () => {
+    // Copy the story text
+    const copyBtn = document.createElement('button');
+    copyBtn.type = 'button';
+    copyBtn.className = 'btn btn-text story-copy';
+    copyBtn.textContent = 'Copy';
+    let copyTimer = null;
+    copyBtn.addEventListener('click', async () => {
       const text = (story.title ? story.title + '\n\n' : '') + (story.content || '');
+      let message;
       try {
         await navigator.clipboard.writeText(text);
-        shareLabel.textContent = 'Copied!';
+        message = 'Copied';
       } catch (_) {
-        shareLabel.textContent = 'Copy failed';
+        message = 'Couldn’t copy';
       }
-      setTimeout(() => { shareLabel.textContent = 'Share'; }, 1500);
+      copyBtn.textContent = message;
+      announce(message);
+      clearTimeout(copyTimer);
+      copyTimer = setTimeout(() => { copyBtn.textContent = 'Copy'; }, 1500);
     });
-    actions.appendChild(shareBtn);
+    actions.appendChild(copyBtn);
 
-    post.appendChild(actions);
-    card.appendChild(post);
+    card.appendChild(actions);
     return card;
   }
 
@@ -235,27 +244,35 @@
   let loaded = 0;          // stories currently shown
   let total = 0;           // total approved stories
   let loadingMore = false;
+  let feedLoading = false;
 
+  // Appends a page of stories and returns the first new one.
   function appendStories(stories) {
     const frag = document.createDocumentFragment();
-    stories.forEach((story, idx) => frag.appendChild(buildPost(story, loaded + idx, likedSet)));
+    let first = null;
+    for (const story of stories) {
+      const post = buildPost(story, likedSet);
+      if (!first) first = post;
+      frag.appendChild(post);
+    }
     feed.appendChild(frag);
     loaded += stories.length;
+    return first;
   }
 
   function renderFooter() {
     footer.replaceChildren();
     if (loaded < total) {
       const btn = document.createElement('button');
-      btn.className = 'load-more';
       btn.type = 'button';
+      btn.className = 'btn btn-ghost load-more';
       btn.textContent = 'Load more stories';
       btn.addEventListener('click', loadMore);
       footer.appendChild(btn);
     } else if (total > 0) {
       const end = document.createElement('p');
-      end.className = 'feed-end';
-      end.textContent = "You've reached the end.";
+      end.className = 'feed-end ink-2';
+      end.textContent = 'You’ve reached the end.';
       footer.appendChild(end);
     }
   }
@@ -268,55 +285,51 @@
 
     if (!stories.length) {
       updateCount(0);
-      showState({
-        className: 'empty',
-        icon: ICON_CHAT,
-        title: 'No stories yet',
-        detail: 'Be the first to share your story and encourage others.',
-      });
+      showState('empty', 'No stories yet. Yours could be the first.');
       return;
     }
+    clearState();
     appendStories(stories);
     updateCount(total);
     renderFooter();
   }
 
   async function loadInitial({ force = false } = {}) {
-    refreshBtn.disabled = true;
+    feedLoading = true;
+    refreshBtn.setAttribute('aria-disabled', 'true');
 
-    // Liked set is always local — cheap.
-    try { likedSet = await getLikedSet(); } catch (_) { likedSet = new Set(); }
-
-    // Fresh cache and not forced → render it and make NO network request.
-    if (!force) {
-      const cached = await readFeedCache();
-      if (cached) {
-        renderFirstPage(cached.stories, cached.total);
-        refreshBtn.disabled = false;
-        return;
-      }
-    }
-
-    // Cache miss or forced refresh → fetch from the function.
-    showState({ icon: 'spinner', detail: 'Loading stories…' });
-    footer.replaceChildren();
     try {
-      if (typeof PBlockerStories === 'undefined') {
-        throw new Error('Story system not loaded.');
+      // Liked set is always local — cheap.
+      try { likedSet = await getLikedSet(); } catch (_) { likedSet = new Set(); }
+
+      // Fresh cache and not forced → render it and make NO network request.
+      if (!force) {
+        const cached = await readFeedCache();
+        if (cached) {
+          renderFirstPage(cached.stories, cached.total);
+          return;
+        }
       }
-      const page = await PBlockerStories.fetchStories({ offset: 0, limit: PAGE_SIZE });
-      renderFirstPage(page.stories, page.total);
-      writeFeedCache(page.stories, page.total);
-    } catch (err) {
-      updateCount(0);
-      showState({
-        className: 'error',
-        icon: ICON_ALERT,
-        title: "Couldn't load stories",
-        detail: err.message || 'Please try again in a moment.',
-      });
+
+      // Cache miss or forced refresh → fetch from the function.
+      feed.setAttribute('aria-busy', 'true');
+      showState('loading', 'Loading stories…');
+      footer.replaceChildren();
+      try {
+        if (typeof PBlockerStories === 'undefined') {
+          throw new Error('The story service didn’t start. Reload the page.');
+        }
+        const page = await PBlockerStories.fetchStories({ offset: 0, limit: PAGE_SIZE });
+        renderFirstPage(page.stories, page.total);
+        writeFeedCache(page.stories, page.total);
+      } catch (err) {
+        updateCount(0);
+        showState('error', 'The stories didn’t load. Try again in a moment.', (err && err.message) || '');
+      }
     } finally {
-      refreshBtn.disabled = false;
+      feed.removeAttribute('aria-busy');
+      feedLoading = false;
+      refreshBtn.removeAttribute('aria-disabled');
     }
   }
 
@@ -324,16 +337,27 @@
     if (loadingMore) return;
     loadingMore = true;
     const btn = footer.querySelector('.load-more');
-    if (btn) { btn.disabled = true; btn.textContent = 'Loading…'; }
+    const hadFocus = !!btn && document.activeElement === btn;
+    // Busy, not disabled, so keyboard focus stays on the button.
+    if (btn) { btn.setAttribute('aria-busy', 'true'); btn.textContent = 'Loading…'; }
 
     try {
       const page = await PBlockerStories.fetchStories({ offset: loaded, limit: PAGE_SIZE });
       total = page.total;
-      appendStories(page.stories);
+      const first = appendStories(page.stories);
       updateCount(total);
       renderFooter();
+      // The button was replaced; carry focus on to the first new story.
+      if (hadFocus) {
+        const next = first || footer.querySelector('.load-more');
+        if (next) {
+          if (next === first) next.tabIndex = -1;
+          next.focus();
+        }
+      }
     } catch (err) {
-      if (btn) { btn.disabled = false; btn.textContent = 'Try again'; }
+      if (btn) { btn.removeAttribute('aria-busy'); btn.textContent = 'Try again'; }
+      announce('More stories didn’t load. Try again.');
     } finally {
       loadingMore = false;
     }
@@ -341,97 +365,204 @@
 
   const REFRESH_COOLDOWN_MS = 5000;
   let refreshLockUntil = 0;
+  let refreshTimer = null;
 
   refreshBtn.addEventListener('click', async () => {
-    if (Date.now() < refreshLockUntil) return;          // throttle manual refreshes
+    if (feedLoading || Date.now() < refreshLockUntil) return;   // throttle manual refreshes
     refreshLockUntil = Date.now() + REFRESH_COOLDOWN_MS;
-    refreshBtn.classList.add('spinning');
+    clearTimeout(refreshTimer);
+    refreshBtn.setAttribute('aria-busy', 'true');
+    refreshBtn.textContent = 'Refreshing…';
     try {
       await loadInitial({ force: true });
     } finally {
-      refreshBtn.classList.remove('spinning');
-      refreshBtn.disabled = true;                       // hold disabled for the rest of the cooldown
+      refreshBtn.removeAttribute('aria-busy');
+      refreshBtn.textContent = 'Refresh';
+      // Held for the rest of the cooldown. aria-disabled rather than
+      // disabled, so keyboard focus stays where it was.
+      refreshBtn.setAttribute('aria-disabled', 'true');
       const remaining = Math.max(0, refreshLockUntil - Date.now());
-      setTimeout(() => { refreshBtn.disabled = false; }, remaining);
+      refreshTimer = setTimeout(() => {
+        if (!feedLoading) refreshBtn.removeAttribute('aria-disabled');
+      }, remaining);
     }
   });
 
-  // --- Share modal (inline composer) ----------------------------------------
+  // --- Share dialog ---------------------------------------------------------
+  //
+  // Focus goes into the dialog and comes back to the button that opened it;
+  // Tab stays inside, and Escape or a click on the backdrop closes it.
   function setupShareModal() {
     const openers = document.querySelectorAll('[data-open-share]');
     const modal = document.getElementById('share-modal');
+    const page = document.getElementById('page');
     const closeBtn = document.getElementById('share-close');
+    const cancelBtn = document.getElementById('share-cancel');
     const titleInput = document.getElementById('share-title-input');
     const contentInput = document.getElementById('share-content');
     const counter = document.getElementById('share-counter');
     const statusEl = document.getElementById('share-status');
+    const errorEl = document.getElementById('share-error');
     const submitBtn = document.getElementById('share-submit');
     if (!openers.length || !modal || !submitBtn) return;
 
+    const MAX_LENGTH = 2000;
+    const NEAR_LIMIT = 1800;
+    const SUBMIT_LABEL = 'Post story';
+
+    let returnFocus = null;
+    let closeTimer = null;
+    let posting = false;
+    let fieldInvalid = false;
+
+    const isOpen = () => !modal.classList.contains('hidden');
+
+    // Success and progress go to the status line; problems to the alert.
     function setStatus(msg, kind) {
-      statusEl.textContent = msg || '';
-      statusEl.className = 'modal-status' + (kind ? ' ' + kind : '');
+      if (kind === 'error') {
+        statusEl.textContent = '';
+        errorEl.textContent = msg || '';
+      } else {
+        errorEl.textContent = '';
+        statusEl.textContent = msg || '';
+      }
     }
 
-    async function open() {
-      modal.hidden = false;
+    function setFieldInvalid(invalid) {
+      fieldInvalid = invalid;
+      if (invalid) contentInput.setAttribute('aria-invalid', 'true');
+      else contentInput.removeAttribute('aria-invalid');
+    }
+
+    function updateCounter() {
+      const len = contentInput.value.length;
+      const near = len >= NEAR_LIMIT;
+      counter.textContent = near
+        ? `${len} / ${MAX_LENGTH} · close to the limit`
+        : `${len} / ${MAX_LENGTH}`;
+      counter.classList.toggle('is-near', near);
+    }
+
+    async function open(e) {
+      clearTimeout(closeTimer);
+      const active = document.activeElement;
+      returnFocus = (e && e.currentTarget) || (active && active !== document.body ? active : null);
+
+      modal.classList.remove('hidden');
+      modal.setAttribute('aria-hidden', 'false');
+      document.documentElement.classList.add('dialog-open');
+      if (page) page.inert = true;
+
       setStatus('');
+      setFieldInvalid(false);
+      updateCounter();
+      contentInput.focus();
+
       // Respect the per-device cooldown / weekly limit.
       try {
         const remaining = await PBlockerStories.getCooldownRemaining();
+        submitBtn.removeAttribute('aria-disabled');
         if (remaining > 0) {
           submitBtn.disabled = true;
-          setStatus(`You can share again in ${PBlockerStories.formatWait(remaining)}.`);
+          setStatus(`You can share another story in ${PBlockerStories.formatWait(remaining)}.`);
         } else {
           submitBtn.disabled = false;
         }
       } catch (_) {
+        submitBtn.removeAttribute('aria-disabled');
         submitBtn.disabled = false;
       }
-      setTimeout(() => contentInput.focus(), 50);
     }
 
     function close() {
-      modal.hidden = true;
+      clearTimeout(closeTimer);
+      modal.classList.add('hidden');
+      modal.setAttribute('aria-hidden', 'true');
+      document.documentElement.classList.remove('dialog-open');
+      if (page) page.inert = false;
+
+      const target = returnFocus;
+      returnFocus = null;
+      if (target && document.contains(target) && typeof target.focus === 'function') {
+        try { target.focus({ preventScroll: true }); } catch (_) {}
+      }
     }
 
     openers.forEach((el) => el.addEventListener('click', open));
     closeBtn.addEventListener('click', close);
-    modal.addEventListener('click', (e) => { if (e.target === modal) close(); });
-    document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !modal.hidden) close(); });
+    if (cancelBtn) cancelBtn.addEventListener('click', close);
+
+    // Only a click that starts and ends on the backdrop closes the dialog,
+    // so selecting text and releasing outside it keeps the draft open.
+    let downOnScrim = false;
+    modal.addEventListener('pointerdown', (e) => { downOnScrim = e.target === modal; });
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal && downOnScrim) close();
+      downOnScrim = false;
+    });
+
+    document.addEventListener('keydown', (e) => {
+      if (!isOpen() || e.isComposing) return;
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        close();
+        return;
+      }
+      if (e.key !== 'Tab') return;
+      const focusable = [...modal.querySelectorAll('button, input, textarea, [href], [tabindex]:not([tabindex="-1"])')]
+        .filter((node) => !node.disabled && node.offsetParent !== null);
+      if (focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      const current = document.activeElement;
+      const inside = focusable.includes(current);
+      if (e.shiftKey && (current === first || !inside)) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && (current === last || !inside)) { e.preventDefault(); first.focus(); }
+    });
 
     contentInput.addEventListener('input', () => {
-      const len = contentInput.value.length;
-      counter.textContent = `${len} / 2000`;
-      counter.style.color = len >= 1800 ? 'var(--warning, #f59e0b)' : 'var(--foreground-dim)';
+      updateCounter();
+      if (fieldInvalid && contentInput.value.trim().length >= 20) {
+        setFieldInvalid(false);
+        errorEl.textContent = '';
+      }
     });
 
     submitBtn.addEventListener('click', async () => {
+      if (posting || submitBtn.disabled || submitBtn.getAttribute('aria-disabled') === 'true') return;
+
       const content = (contentInput.value || '').trim();
       if (content.length < 20) {
-        setStatus('Story must be at least 20 characters.', 'error');
+        setFieldInvalid(true);
+        setStatus('Write at least 20 characters.', 'error');
         contentInput.focus();
         return;
       }
 
-      submitBtn.disabled = true;
-      const label = submitBtn.textContent;
+      posting = true;
+      setFieldInvalid(false);
+      // Busy, not disabled, so keyboard focus stays on the button.
+      submitBtn.setAttribute('aria-busy', 'true');
       submitBtn.textContent = 'Posting…';
-      setStatus('Submitting your story…');
+      setStatus('Sending your story…');
 
       try {
         await PBlockerStories.submitStory({ title: (titleInput && titleInput.value) || '', content });
-        setStatus('Story submitted for review! You can share again in a week.', 'success');
+        setStatus('Your story is in for review. You can share another in a week.');
         titleInput.value = '';
         contentInput.value = '';
-        counter.textContent = '0 / 2000';
-        counter.style.color = 'var(--foreground-dim)';
-        setTimeout(close, 1800);              // stays disabled — now on cooldown
+        updateCounter();
+        submitBtn.setAttribute('aria-disabled', 'true');   // on cooldown now
+        if (isOpen()) {
+          statusEl.focus();
+          closeTimer = setTimeout(close, 1800);
+        }
       } catch (err) {
-        setStatus(err.message || 'Failed to submit story.', 'error');
-        submitBtn.disabled = false;
+        setStatus((err && err.message) || 'Your story didn’t send. Check your connection and try again.', 'error');
       } finally {
-        submitBtn.textContent = label;
+        posting = false;
+        submitBtn.removeAttribute('aria-busy');
+        submitBtn.textContent = SUBMIT_LABEL;
       }
     });
   }

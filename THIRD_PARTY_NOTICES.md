@@ -69,6 +69,22 @@ Verified note:
   code or its converted artifacts are used: the model is converted from the
   Apache-2.0 Hugging Face source independently.
 
+## Fonts
+
+The extension pages use three typefaces, bundled as Latin-subset woff2 files
+in `fonts/` and loaded by `ui/tokens.css`. Nothing is fetched from a font
+service. All three are under the **SIL Open Font License 1.1**; the licence
+text, with each project's copyright line, travels beside the files.
+
+| File | Typeface | Licence file |
+| --- | --- | --- |
+| `fonts/Newsreader-latin.woff2`, `fonts/Newsreader-Italic-latin.woff2` | [Newsreader](https://github.com/productiontype/Newsreader), © 2020 The Newsreader Project Authors | `fonts/Newsreader-OFL.txt` |
+| `fonts/InstrumentSans-latin.woff2` | [Instrument Sans](https://github.com/Instrument/instrument-sans), © 2022 The Instrument Sans Project Authors | `fonts/InstrumentSans-OFL.txt` |
+| `fonts/JetBrainsMono-latin.woff2` | [JetBrains Mono](https://github.com/JetBrains/JetBrainsMono), © 2020 The JetBrains Mono Project Authors | `fonts/JetBrainsMono-OFL.txt` |
+
+The subsets are the ones monolab serves on its own site; they were not
+modified for the extension.
+
 ## Third-Party Services
 
 ### Cloudflare for Families

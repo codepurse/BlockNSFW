@@ -1,0 +1,295 @@
+/* BlockNSFW — Instrument tokens.
+
+   The one source for colour, type, space, radius and motion on every
+   extension page. Instrument is the operated sibling of monolab Threshold:
+   the same tokens, set for density. Names follow Threshold's tokens.json.
+
+   Light is Threshold's theme, unchanged. Dark is Instrument's own. Pages
+   follow the system unless Settings keeps them light or dark; ui/scheme.js
+   then puts data-scheme="light" or "dark" on <html>, and loads before this
+   file so the choice is there at the first paint.
+   The ratios beside each colour are WCAG contrast against color-paper unless
+   noted, and tests/ui-tokens.test.js asserts every pair. Re-run it whenever a
+   value here moves.
+
+   Threshold's site layout tokens (page, gutter, rail, bay-gap, masthead-h,
+   band-y, head-gap, column-gap) are left out: the extension has no rail, no
+   masthead and no bands. Load this file, then ui/components.css. */
+
+@font-face {
+  font-family: "Newsreader";
+  src: url("../fonts/Newsreader-latin.woff2") format("woff2");
+  font-weight: 200 800;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Newsreader";
+  src: url("../fonts/Newsreader-Italic-latin.woff2") format("woff2");
+  font-weight: 200 800;
+  font-style: italic;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Instrument Sans";
+  src: url("../fonts/InstrumentSans-latin.woff2") format("woff2");
+  font-weight: 400 700;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "JetBrains Mono";
+  src: url("../fonts/JetBrainsMono-latin.woff2") format("woff2");
+  font-weight: 100 800;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root {
+  color-scheme: light;
+
+  /* Grounds */
+  --color-paper: #f4f1e9;      /* page ground */
+  --color-sheet: #fbf9f4;      /* raised surfaces, inputs, dialogs */
+  --color-recess: #ebe6da;     /* switch track when off; never a text ground */
+  --color-recess-2: #ddd7c7;   /* deepest tone; unused by the extension */
+
+  /* Ink */
+  --color-ink: #1a1a16;        /* 15.46:1 */
+  --color-ink-2: #57574d;      /* 6.47:1 */
+  --color-ink-3: #6e6d63;      /* 4.62:1; 4.18:1 on recess, so labels never sit there */
+
+  /* Pine: the brand, held and protected */
+  --color-pine: #0d3b31;       /* 11.03:1 */
+  --color-pine-2: #1c5f4f;     /* links, hover, focus: 6.65:1 */
+  --color-pine-3: #d5e0da;     /* held ground; pine on it 9.19:1 */
+  --color-pine-ink: #9db3aa;   /* secondary text on a pine band; unused */
+
+  /* Brass: signal, index numerals */
+  --color-brass: #8a6218;      /* 4.84:1 */
+  --color-brass-2: #c99a3a;    /* brass on dark grounds */
+
+  /* Hairlines */
+  --color-rule: rgba(26, 26, 22, 0.15);    /* every divider */
+  --color-rule-2: rgba(26, 26, 22, 0.27);  /* ghost and danger button borders */
+  --color-rule-dark: rgba(255, 255, 255, 0.16);
+
+  /* Instrument only */
+  --color-rule-3: rgba(26, 26, 22, 0.5);   /* control edge: inputs, switch track; 3.25:1, 3.17:1 on recess */
+  --color-danger: #9a3a22;                 /* destructive or loosening actions only: 6.20:1 */
+  --color-on-danger: #fbf9f4;              /* label on the danger confirm fill: 6.65:1 */
+  --color-danger-hover: #1a1a16;           /* the confirm fill turns ink, as primary does */
+  --color-primary: #0d3b31;                /* primary fill */
+  --color-on-primary: #fbf9f4;             /* label on it: 11.83:1 */
+  --color-primary-hover: #1a1a16;          /* 16.59:1 */
+  --color-primary-busy: #1c5f4f;           /* 7.13:1 */
+  --color-scrim: rgba(26, 26, 22, 0.32);   /* flat tone behind a dialog */
+
+  /* The pine band: one deep ground per screen, and what sits on it */
+  --color-band: #0d3b31;
+  --color-on-band: #fbf9f4;                /* headlines and values: 11.83:1 */
+  --color-on-band-2: #9db3aa;              /* everything secondary: 5.61:1 */
+  --color-band-signal: #c99a3a;            /* index numerals, focus: 4.84:1 */
+  --color-band-rule: rgba(255, 255, 255, 0.16);
+
+  /* Paper tooth: monolab.dev's seamless 64px noise tile, set behind the
+     content and never over it. Inline, so no page fetches anything for it. */
+  --paper-tooth: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='64' height='64'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.055'/%3E%3C/svg%3E");
+
+  /* One of a pair shown per theme: the field drawing has a copy in each */
+  --show-light: block;
+  --show-dark: none;
+
+  /* Families */
+  --font-display: Newsreader, Georgia, "Times New Roman", serif;
+  --font-sans: "Instrument Sans", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  /* Fixed sizes. Pages read 15px body text; the popup sets 14px. */
+  --text-meta: 11px;
+  --text-small: 12px;
+  --text-body: 15px;
+  --text-row: 15px;
+  --text-title-popup: 20px;
+  --text-title-page: 28px;
+  --text-title-held: 32px;
+  --leading-body: 1.55;
+  --leading-title: 1.15;
+
+  /* Space: a 4px base */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  --measure: 36rem;
+  --label-gap: 0.875rem;
+  --row-y: 0.75rem;
+  --row-y-tight: 0.625rem;
+  --row-y-loose: 1.25rem;
+  --hang: 2.5rem;
+
+  /* Radius, depth, line */
+  --radius-none: 0;
+  --radius-xs: 2px;
+  --radius-knob: 1px;
+  --shadow-none: none;
+  --rule-width: 1px;
+  --icon-stroke: 1.25;
+  --threshold-stroke: 1.5;
+  --focus-width: 2px;
+  --focus-offset: 3px;
+
+  /* Motion */
+  --ease-out-quint: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in-out-quart: cubic-bezier(0.76, 0, 0.24, 1);
+  --dur-state: 180ms;
+  --dur-switch: 200ms;
+  --dur-held: 400ms;
+
+  /* Stacking */
+  --z-dialog: 60;
+  --z-notice: 70;
+  --z-skip: 100;
+}
+
+/* Dark. Pine is an accent here, never a ground; the primary button keeps a
+   deep pine fill of its own. It follows the system unless the page is kept
+   light, and applies regardless when it is kept dark. The two blocks carry
+   the same values, and tests/ui-tokens.test.js holds them equal. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-scheme="light"]) {
+    color-scheme: dark;
+
+    --color-paper: #151612;
+    --color-sheet: #1d1e1a;
+    --color-recess: #272822;
+    --color-recess-2: #31322b;
+
+    --color-ink: #f1ede3;      /* 15.55:1 */
+    --color-ink-2: #b8b4a7;    /* 8.76:1 */
+    --color-ink-3: #949183;    /* 5.74:1; 4.70:1 on recess; never on pine-3 (3.88:1) */
+
+    --color-pine: #7fb8a4;     /* 8.04:1 */
+    --color-pine-2: #8cc5b1;   /* 9.29:1 */
+    --color-pine-3: #1f3a32;   /* held ground; pine on it 5.44:1 */
+    --color-pine-ink: #9db3aa;
+
+    --color-brass: #c99a3a;    /* 7.07:1 */
+    --color-brass-2: #c99a3a;
+
+    --color-rule: rgba(241, 237, 227, 0.14);
+    --color-rule-2: rgba(241, 237, 227, 0.26);
+    --color-rule-dark: rgba(255, 255, 255, 0.16);
+
+    --color-rule-3: rgba(241, 237, 227, 0.4);  /* 3.45:1, 3.29:1 on recess */
+    --color-danger: #e3866b;                   /* 6.83:1 */
+    --color-on-danger: #151612;                /* 6.83:1 on the fill */
+    --color-danger-hover: #eb9c85;
+    --color-primary: #1c5f4f;
+    --color-on-primary: #fbf9f4;               /* 7.13:1 */
+    --color-primary-hover: #237361;            /* one step lighter: 5.40:1 */
+    --color-primary-busy: #237361;
+    --color-scrim: rgba(0, 0, 0, 0.55);
+
+    --color-band: #1f3a32;                    /* pine-3: in dark, pine is an accent */
+    --color-on-band: #f1ede3;                 /* 10.48:1 */
+    --color-on-band-2: #9db3aa;               /* 5.53:1 */
+    --color-band-signal: #c99a3a;             /* 4.77:1 */
+    --color-band-rule: rgba(241, 237, 227, 0.16);
+
+    --paper-tooth: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='64' height='64'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.07'/%3E%3C/svg%3E");
+
+    --show-light: none;
+    --show-dark: block;
+  }
+}
+:root[data-scheme="dark"] {
+  color-scheme: dark;
+
+  --color-paper: #151612;
+  --color-sheet: #1d1e1a;
+  --color-recess: #272822;
+  --color-recess-2: #31322b;
+
+  --color-ink: #f1ede3;      /* 15.55:1 */
+  --color-ink-2: #b8b4a7;    /* 8.76:1 */
+  --color-ink-3: #949183;    /* 5.74:1; 4.70:1 on recess; never on pine-3 (3.88:1) */
+
+  --color-pine: #7fb8a4;     /* 8.04:1 */
+  --color-pine-2: #8cc5b1;   /* 9.29:1 */
+  --color-pine-3: #1f3a32;   /* held ground; pine on it 5.44:1 */
+  --color-pine-ink: #9db3aa;
+
+  --color-brass: #c99a3a;    /* 7.07:1 */
+  --color-brass-2: #c99a3a;
+
+  --color-rule: rgba(241, 237, 227, 0.14);
+  --color-rule-2: rgba(241, 237, 227, 0.26);
+  --color-rule-dark: rgba(255, 255, 255, 0.16);
+
+  --color-rule-3: rgba(241, 237, 227, 0.4);  /* 3.45:1, 3.29:1 on recess */
+  --color-danger: #e3866b;                   /* 6.83:1 */
+  --color-on-danger: #151612;                /* 6.83:1 on the fill */
+  --color-danger-hover: #eb9c85;
+  --color-primary: #1c5f4f;
+  --color-on-primary: #fbf9f4;               /* 7.13:1 */
+  --color-primary-hover: #237361;            /* one step lighter: 5.40:1 */
+  --color-primary-busy: #237361;
+  --color-scrim: rgba(0, 0, 0, 0.55);
+
+  --color-band: #1f3a32;                    /* pine-3: in dark, pine is an accent */
+  --color-on-band: #f1ede3;                 /* 10.48:1 */
+  --color-on-band-2: #9db3aa;               /* 5.53:1 */
+  --color-band-signal: #c99a3a;             /* 4.77:1 */
+  --color-band-rule: rgba(241, 237, 227, 0.16);
+
+  --paper-tooth: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='64' height='64'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.07'/%3E%3C/svg%3E");
+
+  --show-light: none;
+  --show-dark: block;
+}
+
+/* Type styles */
+
+.meta {
+  font-family: var(--font-mono);
+  font-size: var(--text-meta);
+  line-height: 1.35;
+  font-weight: 500;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--color-ink-3);
+}
+.small {
+  font-size: var(--text-small);
+  line-height: 1.5;
+}
+.mono {
+  font-family: var(--font-mono);
+}
+.tnum {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+}
+.title {
+  font-family: var(--font-display);
+  font-weight: 400;
+  line-height: var(--leading-title);
+  letter-spacing: -0.015em;
+  color: var(--color-ink);
+  text-wrap: balance;
+}
+.title-popup {
+  font-size: var(--text-title-popup);
+  letter-spacing: -0.01em;
+}
+.title-page {
+  font-size: var(--text-title-page);
+}
+.title-held {
+  font-size: var(--text-title-held);
+  letter-spacing: -0.02em;
+}

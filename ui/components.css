@@ -1,0 +1,1064 @@
+/* BlockNSFW — Instrument components.
+
+   Built once and used on every extension page: base, focus, links, buttons,
+   the switch, rows, fields, domain rows, held, locked, notices, dialogs,
+   section heads and icons. Needs ui/tokens.css first.
+
+   Rules kept from monolab Threshold: depth from tone and 1px hairlines, no
+   shadows, 0 radius on surfaces and 2px on controls, status as a word,
+   and hover that changes colour without moving anything except an arrow. */
+
+/* ── Base ──────────────────────────────────────────────────────────────── */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+body {
+  margin: 0;
+  background-color: var(--color-paper);
+  background-image: var(--paper-tooth);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  font-size: var(--text-body);
+  line-height: var(--leading-body);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+h1,
+h2,
+h3,
+h4,
+p,
+ul,
+ol,
+dl,
+dd,
+figure {
+  margin: 0;
+}
+ul,
+ol {
+  padding: 0;
+  list-style: none;
+}
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+  letter-spacing: inherit;
+}
+button {
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+}
+a {
+  color: inherit;
+  text-decoration: none;
+}
+svg {
+  display: block;
+}
+[hidden],
+.hidden {
+  display: none !important;
+}
+::selection {
+  background: var(--color-pine-3);
+  color: var(--color-pine);
+}
+p {
+  text-wrap: pretty;
+}
+
+/* One focus treatment everywhere. */
+:focus {
+  outline: none;
+}
+:focus-visible {
+  outline: var(--focus-width) solid var(--color-pine-2);
+  outline-offset: var(--focus-offset);
+  border-radius: var(--radius-knob);
+}
+/* A message that takes focus only so it is read out wears no ring. */
+[tabindex="-1"]:focus-visible {
+  outline: none;
+}
+
+.visually-hidden {
+  position: absolute !important;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+.skip-link {
+  position: absolute;
+  top: var(--space-2);
+  left: var(--space-2);
+  z-index: var(--z-skip);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-xs);
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+  font-weight: 500;
+  transform: translateY(-200%);
+}
+.skip-link:focus-visible {
+  transform: none;
+}
+
+/* ── Icons ─────────────────────────────────────────────────────────────── */
+
+.icon {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: var(--icon-stroke);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.icon-12 {
+  width: 12px;
+  height: 12px;
+}
+.icon-14 {
+  width: 14px;
+  height: 14px;
+}
+.icon-20 {
+  width: 20px;
+  height: 20px;
+}
+.icon-fill {
+  fill: currentColor;
+  stroke: none;
+}
+
+/* ── Text ──────────────────────────────────────────────────────────────── */
+
+.ink-2 {
+  color: var(--color-ink-2);
+}
+.meta-pine {
+  color: var(--color-pine);
+}
+.meta-brass {
+  color: var(--color-brass);
+}
+
+/* An inline link: underlined at rest; on hover the underline steps back. */
+.link {
+  color: var(--color-pine-2);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.2em;
+  text-decoration-color: currentColor;
+  transition: text-decoration-color var(--dur-state) var(--ease-out-quint);
+}
+.link:hover {
+  text-decoration-color: transparent;
+}
+button.link {
+  padding: 0;
+  font: inherit;
+  text-align: left;
+}
+
+/* An arrow link: words, then an arrow that steps in its own direction. */
+.arrow-link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--color-pine-2);
+}
+.arrow-link .icon {
+  transition: transform var(--dur-state) var(--ease-out-quint);
+}
+.arrow-link:hover .icon {
+  transform: translateX(3px);
+}
+.arrow-link:hover .icon-up-right {
+  transform: translate(2px, -2px);
+}
+.arrow-link:hover .icon-left {
+  transform: translateX(-3px);
+}
+
+/* ── Buttons ───────────────────────────────────────────────────────────── */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: 36px;
+  padding: var(--space-2) var(--space-4);
+  border: 1px solid transparent;
+  border-radius: var(--radius-xs);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.2;
+  text-align: center;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background-color var(--dur-state) var(--ease-out-quint),
+    border-color var(--dur-state) var(--ease-out-quint),
+    color var(--dur-state) var(--ease-out-quint);
+}
+.btn-sm {
+  min-height: 30px;
+  padding: var(--space-1) var(--space-3);
+  font-size: 13px;
+}
+.btn-block {
+  width: 100%;
+}
+
+.btn-primary {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: var(--color-on-primary);
+}
+.btn-primary:hover {
+  background: var(--color-primary-hover);
+  border-color: var(--color-primary-hover);
+}
+
+.btn-ghost {
+  background: transparent;
+  border-color: var(--color-rule-2);
+  color: var(--color-ink);
+}
+.btn-ghost:hover {
+  background: var(--color-sheet);
+  border-color: var(--color-ink);
+}
+
+/* Danger: for destructive actions and for anything that loosens protection.
+   Text and border only; the fill appears on the confirm step. */
+.btn-danger {
+  background: transparent;
+  border-color: var(--color-rule-2);
+  color: var(--color-danger);
+}
+.btn-danger:hover {
+  background: var(--color-sheet);
+  border-color: var(--color-danger);
+}
+.btn-danger-confirm {
+  background: var(--color-danger);
+  border-color: var(--color-danger);
+  color: var(--color-on-danger);
+}
+.btn-danger-confirm:hover {
+  background: var(--color-danger-hover);
+  border-color: var(--color-danger-hover);
+}
+
+/* A text action, such as Remove on a domain row. */
+.btn-text {
+  min-height: 0;
+  padding: var(--space-1) 0;
+  border: 0;
+  background: none;
+  color: var(--color-ink-2);
+  font-size: 13px;
+  font-weight: 500;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.2em;
+  text-decoration-color: var(--color-rule-2);
+}
+.btn-text:hover {
+  color: var(--color-pine-2);
+  text-decoration-color: currentColor;
+}
+.btn-text.btn-danger {
+  color: var(--color-danger);
+}
+
+/* Busy says what it is doing and holds its hover. */
+.btn-primary[aria-busy="true"],
+.btn-primary[aria-busy="true"]:hover {
+  background: var(--color-primary-busy);
+  border-color: var(--color-primary-busy);
+  cursor: progress;
+}
+.btn[aria-busy="true"] {
+  cursor: progress;
+}
+
+/* Unavailable: the reason is said in text beside it. */
+.btn:disabled:not([aria-busy="true"]),
+.btn[aria-disabled="true"]:not([aria-busy="true"]) {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.btn:disabled:not([aria-busy="true"]):hover,
+.btn[aria-disabled="true"]:not([aria-busy="true"]):hover {
+  background: transparent;
+  border-color: var(--color-rule-2);
+}
+.btn-primary:disabled:not([aria-busy="true"]):hover,
+.btn-primary[aria-disabled="true"]:not([aria-busy="true"]):hover {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+}
+
+.btn-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* A choice of a few values: plain buttons side by side. */
+.segmented {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+.segmented > button {
+  min-height: 30px;
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid var(--color-rule-2);
+  border-radius: var(--radius-xs);
+  font-size: 13px;
+  font-weight: 500;
+  transition:
+    background-color var(--dur-state) var(--ease-out-quint),
+    border-color var(--dur-state) var(--ease-out-quint),
+    color var(--dur-state) var(--ease-out-quint);
+}
+.segmented > button:hover {
+  border-color: var(--color-ink);
+}
+.segmented > button[aria-pressed="true"],
+.segmented > button[aria-selected="true"],
+.segmented > button.selected {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: var(--color-on-primary);
+}
+/* The same look over radios, for a choice of one that is kept: the checked
+   input carries the state and the arrow keys move it.
+   <label class="segment"><input type="radio" class="segment-input">
+   <span class="segment-label">…</span></label> */
+.segment {
+  position: relative;
+  display: inline-flex;
+}
+.segment-input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+.segment-label {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid var(--color-rule-2);
+  border-radius: var(--radius-xs);
+  font-size: 13px;
+  font-weight: 500;
+  transition:
+    background-color var(--dur-state) var(--ease-out-quint),
+    border-color var(--dur-state) var(--ease-out-quint),
+    color var(--dur-state) var(--ease-out-quint);
+}
+.segment-input:hover + .segment-label {
+  border-color: var(--color-ink);
+}
+.segment-input:checked + .segment-label {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: var(--color-on-primary);
+}
+.segment-input:focus-visible {
+  outline: none;
+}
+.segment-input:focus-visible + .segment-label {
+  outline: var(--focus-width) solid var(--color-pine-2);
+  outline-offset: var(--focus-offset);
+}
+
+/* ── Switch ────────────────────────────────────────────────────────────────
+   Square, never a pill. Two forms share the look:
+   - <button class="switch" role="switch" aria-checked> with track, thumb and
+     state spans, where script keeps aria-checked;
+   - <label class="switch"><input class="switch-input" type="checkbox"
+     role="switch"> + the same spans, where the checkbox carries the state.
+   The state word ("on" / "off") is a meta label that turns pine when on. */
+
+.switch {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-2);
+  cursor: pointer;
+  position: relative;
+}
+.switch-input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+.switch-track {
+  position: relative;
+  display: block;
+  flex: none;
+  width: 2rem;
+  height: 1.125rem;
+  border: 1px solid var(--color-rule-3);
+  border-radius: var(--radius-xs);
+  background: var(--color-recess);
+  transition:
+    background-color var(--dur-switch) var(--ease-out-quint),
+    border-color var(--dur-switch) var(--ease-out-quint);
+}
+.switch-thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  display: block;
+  width: 0.75rem;
+  height: 0.75rem;
+  border-radius: var(--radius-knob);
+  background: var(--color-ink-3);
+  transition:
+    transform var(--dur-switch) var(--ease-out-quint),
+    background-color var(--dur-switch) var(--ease-out-quint);
+}
+.switch-state {
+  min-width: 2.25em;
+  font-family: var(--font-mono);
+  font-size: var(--text-meta);
+  font-weight: 500;
+  line-height: 1;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--color-ink-3);
+  transition: color var(--dur-state) var(--ease-out-quint);
+}
+.switch-state::before {
+  content: "off";
+}
+.switch:hover .switch-track {
+  border-color: var(--color-ink-3);
+}
+
+.switch[aria-checked="true"] .switch-track,
+.switch-input:checked ~ .switch-track {
+  background: var(--color-pine);
+  border-color: var(--color-pine);
+}
+.switch[aria-checked="true"] .switch-thumb,
+.switch-input:checked ~ .switch-track .switch-thumb {
+  background: var(--color-sheet);
+  transform: translateX(0.875rem);
+}
+.switch[aria-checked="true"] .switch-state,
+.switch-input:checked ~ .switch-state {
+  color: var(--color-pine);
+}
+.switch[aria-checked="true"] .switch-state::before,
+.switch-input:checked ~ .switch-state::before {
+  content: "on";
+}
+
+/* The checkbox form draws its focus ring on the track. */
+.switch-input:focus-visible {
+  outline: none;
+}
+.switch-input:focus-visible ~ .switch-track {
+  outline: var(--focus-width) solid var(--color-pine-2);
+  outline-offset: var(--focus-offset);
+}
+.switch-input:disabled,
+.switch-input:disabled ~ * {
+  cursor: not-allowed;
+}
+.switch-input:disabled ~ .switch-track,
+.switch-input:disabled ~ .switch-state {
+  opacity: 0.5;
+}
+
+/* ── Rows ──────────────────────────────────────────────────────────────────
+   A group is rows, never a card: a hairline, the label, an optional line of
+   description, and the control on the right. */
+
+.rows {
+  border-top: 1px solid var(--color-rule);
+}
+.rows-closed {
+  border-bottom: 1px solid var(--color-rule);
+}
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-3) 0;
+}
+.row + .row,
+.rows > * + * {
+  border-top: 1px solid var(--color-rule);
+}
+.row-text {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+.row-label {
+  display: block;
+  font-size: var(--text-row);
+  font-weight: 500;
+  line-height: 1.35;
+  color: var(--color-ink);
+}
+.row-desc {
+  margin-top: 2px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--color-ink-2);
+}
+.row-control {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-2);
+}
+.row-stack {
+  display: block;
+}
+.row-stack > .row-control {
+  margin-top: var(--space-3);
+  flex-wrap: wrap;
+}
+
+/* A row that is a link: words left, an arrow right. */
+.row-link {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-3) 0;
+  color: var(--color-ink);
+  font-weight: 500;
+  transition: color var(--dur-state) var(--ease-out-quint);
+}
+.row-link .icon {
+  color: var(--color-ink-3);
+  transition:
+    color var(--dur-state) var(--ease-out-quint),
+    transform var(--dur-state) var(--ease-out-quint);
+}
+.row-link:hover,
+.row-link:hover .icon {
+  color: var(--color-pine-2);
+}
+.row-link:hover .icon-right {
+  transform: translateX(3px);
+}
+.row-link:hover .icon-up-right {
+  transform: translate(2px, -2px);
+}
+
+/* Figures a reader can check: label left, value right, in mono. */
+.record {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--row-y-tight) 0;
+}
+.record-value {
+  font-family: var(--font-mono);
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+  color: var(--color-ink);
+  text-align: right;
+}
+
+/* ── Sections ──────────────────────────────────────────────────────────── */
+
+/* A section head is a meta label with a brass index numeral. */
+.section-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+  font-family: var(--font-mono);
+  font-size: var(--text-meta);
+  font-weight: 500;
+  line-height: 1.35;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--color-ink-3);
+}
+.section-head .index {
+  color: var(--color-brass);
+  font-variant-numeric: tabular-nums;
+}
+
+.group-title {
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 1.35;
+  color: var(--color-ink);
+}
+.group-desc {
+  margin-top: var(--space-1);
+  max-width: var(--measure);
+  color: var(--color-ink-2);
+}
+.group-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+/* ── Fields ────────────────────────────────────────────────────────────── */
+
+.field {
+  display: grid;
+  gap: 6px;
+}
+.field-label {
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.35;
+  color: var(--color-ink);
+}
+.field-hint {
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--color-ink-2);
+}
+/* A problem is said in text under the field. Ink, not danger: danger is
+   kept for destructive actions. */
+.field-error {
+  font-size: 13px;
+  line-height: 1.45;
+  font-weight: 500;
+  color: var(--color-ink);
+}
+.field-error:empty {
+  display: none;
+}
+
+.input {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  min-height: 36px;
+  padding: 7px 11px;
+  border: 1px solid var(--color-rule-3);
+  border-radius: var(--radius-xs);
+  background: var(--color-sheet);
+  color: var(--color-ink);
+  font-size: 14px;
+  line-height: 1.4;
+  transition: border-color var(--dur-state) var(--ease-out-quint);
+}
+.input::placeholder {
+  color: var(--color-ink-3);
+  opacity: 1;
+}
+.input:hover {
+  border-color: var(--color-ink-3);
+}
+.input:focus-visible {
+  border-color: var(--color-pine-2);
+  border-radius: var(--radius-xs);
+}
+.input[aria-invalid="true"],
+.input.error {
+  border-color: var(--color-ink);
+}
+.input:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+textarea.input {
+  min-height: 7rem;
+  resize: vertical;
+  line-height: 1.5;
+}
+.input-mono {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Select: the native control without its chrome, and the down arrow drawn
+   from the icon set in the ink colour. */
+.select {
+  position: relative;
+  display: block;
+}
+.select > select {
+  -webkit-appearance: none;
+  appearance: none;
+  padding-right: 34px;
+  cursor: pointer;
+}
+.select::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  right: 12px;
+  width: 12px;
+  height: 12px;
+  margin-top: -6px;
+  background: var(--color-ink-2);
+  pointer-events: none;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M4 6l4 4 4-4' fill='none' stroke='black' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M4 6l4 4 4-4' fill='none' stroke='black' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+.select > select option {
+  background: var(--color-sheet);
+  color: var(--color-ink);
+}
+
+/* An input with its button beside it. */
+.input-row {
+  display: flex;
+  gap: var(--space-2);
+}
+.input-row > .input,
+.input-row > .select {
+  flex: 1 1 auto;
+}
+
+/* ── Domain list ───────────────────────────────────────────────────────── */
+
+.domain-list {
+  border-top: 1px solid var(--color-rule);
+}
+.domain-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--color-rule);
+}
+.domain-main {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+.domain {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-ink);
+}
+.domain-meta {
+  display: block;
+  margin-top: 2px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--color-ink-2);
+}
+.domain-empty {
+  padding: var(--space-3) 0;
+  border-bottom: 1px solid var(--color-rule);
+  color: var(--color-ink-2);
+  font-size: 13px;
+}
+
+/* ── Held ──────────────────────────────────────────────────────────────────
+   Held means blocked, on every surface: pale pine, the Held icon, and the
+   word "held" in pine. ink-3 never sits on it. */
+
+.held {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-2);
+  background: var(--color-pine-3);
+  color: var(--color-pine);
+}
+.held-word {
+  font-family: var(--font-mono);
+  font-size: var(--text-meta);
+  font-weight: 500;
+  line-height: 1.35;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+}
+
+/* ── Locked ────────────────────────────────────────────────────────────────
+   A guarded control stays visible; a sentence says what it asks for. */
+
+.locked-note {
+  display: block;
+  margin-top: 2px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--color-ink-2);
+}
+
+/* ── Notices ───────────────────────────────────────────────────────────────
+   One line of plain text. role="status" for success, role="alert" for a
+   problem. Status is a word, never a colour. */
+
+.notice {
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--color-ink-2);
+}
+.notice:empty {
+  display: none;
+}
+
+/* A page-level notice region: one message at a time, at the foot of the
+   window. */
+.notice-region {
+  position: fixed;
+  left: 50%;
+  bottom: var(--space-5);
+  z-index: var(--z-notice);
+  width: max-content;
+  max-width: min(32rem, calc(100vw - 2 * var(--space-4)));
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+.notice-region .notice-item {
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--color-rule-2);
+  border-radius: var(--radius-none);
+  background: var(--color-sheet);
+  color: var(--color-ink);
+  font-size: 14px;
+  line-height: 1.45;
+  opacity: 0;
+  transition: opacity var(--dur-state) var(--ease-out-quint);
+}
+.notice-region .notice-item.is-shown {
+  opacity: 1;
+}
+
+/* ── Dialog ────────────────────────────────────────────────────────────── */
+
+.dialog-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-dialog);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-4);
+  background: var(--color-scrim);
+}
+.dialog {
+  width: 100%;
+  max-width: 26rem;
+  max-height: calc(100vh - 2 * var(--space-4));
+  overflow-y: auto;
+  padding: var(--space-5);
+  border: 1px solid var(--color-rule-2);
+  border-radius: var(--radius-none);
+  background: var(--color-sheet);
+  color: var(--color-ink);
+}
+.dialog-title {
+  font-size: 17px;
+  font-weight: 500;
+  line-height: 1.3;
+}
+.dialog-desc {
+  margin-top: var(--space-2);
+  color: var(--color-ink-2);
+}
+.dialog-body {
+  display: grid;
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+}
+.dialog-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  margin-top: var(--space-5);
+}
+
+/* The access code: a block of characters to retype by hand. */
+.access-code-display {
+  max-height: 8.5rem;
+  overflow-y: auto;
+  padding: var(--space-3);
+  border: 1px solid var(--color-rule);
+  background: var(--color-paper);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.6;
+  letter-spacing: 0.06em;
+  word-break: break-all;
+  white-space: pre-wrap;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* ── Bands ─────────────────────────────────────────────────────────────────
+   A screen changes ground every few sections so it is never one flat field.
+   .band-sheet is the lighter ground, with the same paper tooth as the body.
+   .band-pine is the one deep ground a screen may have: headlines and values
+   in on-band, everything secondary in on-band-2, numerals and the focus
+   ring in band-signal. */
+.band-sheet {
+  background-color: var(--color-sheet);
+  background-image: var(--paper-tooth);
+}
+.band-pine {
+  background: var(--color-band);
+  color: var(--color-on-band);
+}
+.band-pine .title,
+.band-pine .row-label {
+  color: var(--color-on-band);
+}
+.band-pine .meta,
+.band-pine .row-desc,
+.band-pine .locked-note {
+  color: var(--color-on-band-2);
+}
+.band-pine .index {
+  color: var(--color-band-signal);
+}
+.band-pine :focus-visible,
+.band-pine .switch-input:focus-visible ~ .switch-track {
+  outline-color: var(--color-band-signal);
+}
+/* On the band the primary button inverts: band ink as its ground, the band
+   as its label (11.83:1), turning sage on hover (5.61:1). Links and icon
+   buttons take the band's ink and turn brass on hover. */
+.band-pine .btn-primary {
+  background: var(--color-on-band);
+  border-color: var(--color-on-band);
+  color: var(--color-band);
+}
+.band-pine .btn-primary:hover {
+  background: var(--color-on-band-2);
+  border-color: var(--color-on-band-2);
+}
+.band-pine .arrow-link,
+.band-pine .link {
+  color: var(--color-on-band);
+}
+.band-pine .arrow-link:hover,
+.band-pine .link:hover {
+  color: var(--color-band-signal);
+}
+.band-pine .icon-btn {
+  color: var(--color-on-band-2);
+}
+.band-pine .icon-btn:hover {
+  color: var(--color-on-band);
+}
+/* A switch on the band: on, the track takes the band's ink and the thumb the
+   band; off, both are drawn in on-band-2 (5.5:1). */
+.band-pine .switch-track {
+  border-color: var(--color-on-band-2);
+  background: transparent;
+}
+.band-pine .switch-thumb {
+  background: var(--color-on-band-2);
+}
+.band-pine .switch:hover .switch-track {
+  border-color: var(--color-on-band);
+}
+.band-pine .switch[aria-checked="true"] .switch-track,
+.band-pine .switch-input:checked ~ .switch-track {
+  background: var(--color-on-band);
+  border-color: var(--color-on-band);
+}
+.band-pine .switch[aria-checked="true"] .switch-thumb,
+.band-pine .switch-input:checked ~ .switch-track .switch-thumb {
+  background: var(--color-band);
+}
+.band-pine .switch-state,
+.band-pine .switch[aria-checked="true"] .switch-state,
+.band-pine .switch-input:checked ~ .switch-state {
+  color: var(--color-on-band);
+}
+
+/* ── Field ─────────────────────────────────────────────────────────────────
+   monolab.dev's one picture, as its still: marks arrive over the top, are
+   decided at a layer nobody drew, and only some get down to the page. It
+   sits behind a screen's content in hairlines, aria-hidden and never moving.
+   Its parent is positioned and isolated; the content above it is not.
+   There is a copy for each theme, and the tokens say which one shows.
+   (.field is the form field; this is .field-art.) */
+.field-art {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+}
+.field-still {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.field-still-light {
+  display: var(--show-light);
+}
+.field-still-dark {
+  display: var(--show-dark);
+}
+
+/* ── Reduced motion ────────────────────────────────────────────────────────
+   Every page is complete and still. */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    animation-delay: 0s !important;
+    transition-duration: 0.001ms !important;
+    transition-delay: 0s !important;
+    scroll-behavior: auto !important;
+  }
+}

@@ -2,7 +2,83 @@
 
 All notable project changes should be documented here going forward.
 
-## [Unreleased]
+## [1.10.0] - 2026-10-08
+
+Every page BlockNSFW shows is redrawn in monolab's design system: paper, ink
+and one evergreen, separated by 1px hairlines, in light and dark. Nothing that
+decides what is blocked has changed.
+
+### Changed
+
+- **One look on every surface.** The popup, the blocked page and its four
+  designs, Settings, setup, Statistics, the audit log, Community stories, the
+  changelog and the notices placed on web pages now share one set of tokens
+  (`ui/tokens.css`) and one set of components (`ui/components.css`): square
+  switches that say "on" and "off", hairline rows instead of cards, buttons
+  that say exactly what they do, and no emoji, gradients, shadows or pills.
+- **Light and dark, your choice.** Every page used to be dark only. Settings,
+  Customization, Appearance now has a theme: System (the default) follows
+  your system, Light and Dark keep every BlockNSFW page that way, along with
+  what it shows on websites. The choice reaches pages that are already open,
+  and a page opens in it with no flash of the other. The light theme is
+  monolab's own; the dark theme is a warm near-black, checked for contrast
+  pair by pair. `tests/ui-tokens.test.js` holds every text pair at 4.5:1 and
+  every control edge and focus ring at 3:1, in both themes.
+- **Pages have grounds again, not one flat colour.** Every page carries
+  monolab's faint paper texture. The popup opens on a deep pine band that
+  says "Protected" and holds the protection switch; when protection is off
+  the band turns plain and says "Protection is off", with when it comes back
+  on after a pause. The Classic blocked page stands in monolab's field, a
+  still hairline drawing of marks arriving and being decided, with the words
+  in its clearing (the other designs keep their own pictures). Statistics
+  sets each section on its own band, its records in two columns, and draws
+  the last seven days as bars instead of a list.
+- **The Warden banner at the top of Settings is a pine band.** It is the one
+  deep ground in Settings, with a serif headline, the cool-down dial in
+  brass, and a plain line saying the cool-down is a Pro feature that isn't on
+  sale yet. It stays about as tall as before, and folds to one pine line.
+- **The type is bundled.** Newsreader (headlines), Instrument Sans (text) and
+  JetBrains Mono (figures and labels) ship in `fonts/`, so no page loads
+  anything from the network to draw itself. The Newsreader file is the smaller
+  Latin build monolab uses (58 KB, from 132 KB) and now has a true italic.
+- **The blocked page says "This page was held."** Classic is rebuilt as one
+  calm column: the held mark, a serif headline, one line saying whether the
+  page was stopped before it loaded or closed once it was read, and Go back.
+  Calm, Verse, Motivation and Play keep everything they do, drawn in ink and
+  pine instead of vermilion, without the paper texture, and in light and dark.
+- **The popup is 360px wide.** It opens on the protection switch, shows the
+  counts as figures, and says beside each guarded control what it will ask for
+  ("Asks for your PIN.").
+- **Settings sections are numbered and set as rows.** The column is 960px,
+  centered beside the sidebar, and its sentences keep to a reading measure;
+  the full-width button still lets it run to the edge. Notices are
+  read out by screen readers, and every confirmation is a dialog that keeps
+  focus, closes with Escape and returns you to where you were. Clearing your
+  uploaded HTML and resetting trusted sites now ask to confirm first, like the
+  other destructive actions.
+- **What BlockNSFW draws on web pages lives in a closed shadow root.** The
+  held image placeholder, the search-result notice, the summary line and the
+  floating counter can no longer be restyled or read by the page they sit on,
+  follow light and dark live, and no longer load the extension's icon into the
+  page (which also exposed the extension's ID to it).
+
+### Fixed
+
+- **The blocked page showed the blocked address.** Classic printed the full
+  URL, and the words a page had matched. It now shows the site's ending only
+  (`••••••••.com`) and never the words. The audit log shows a site's name
+  instead of its full address, and names the rule that held a page instead of
+  printing the reason text, which could carry the page's title or the words it
+  matched. Its CSV export is unchanged.
+- **The audit log's "Disable Events" counted every switch, on and off.** It
+  now counts the times protection was turned off, beside a new count of the
+  times it was turned on.
+- **The popup's switches could not be reached from the keyboard.** They were
+  plain `<div>`s; they are switches now, with their state announced.
+- **An access code could show a different character from the one checked.**
+  The code was written into the dialog as HTML, so an `&` followed by letters
+  could be read as an entity. It is written as text now.
+- **Statistics wrote site names into the page as HTML.** They are set as text.
 
 ## [1.9.0] - 2026-10-07
 

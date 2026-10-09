@@ -1785,8 +1785,10 @@ async function loadSettings() {
       'pblocker_whitelist',
       'pblocker_temp_disable_until',
       'pblocker_subscriptions',
-      'pblocker_subscription_rules'
+      'pblocker_subscription_rules',
+      'pblocker_color_scheme'
     ]);
+    setHeldUiScheme(result.pblocker_color_scheme);
     loadSubscriptionRules(result.pblocker_subscriptions, result.pblocker_subscription_rules, true);
     
     const settings = result.pblocker_settings || {
@@ -3538,31 +3540,29 @@ function hideElement(element, type) {
     // per-position evidence that something was filtered *there*: a removed
     // result is indistinguishable from a result that never existed, which
     // matters in an accountability setup.
+    // No entrance animation: the row stands where the result stood, at once.
+    // Drawing is cosmetic, so a failure here must not escape into the caller —
+    // the result is already hidden and still has to be reported.
     if (searchResultTreatment === 'overlay' && element.parentNode) {
-      const replacement = createBlockedResultElement();
-      element.parentNode.insertBefore(replacement, element);
-
-      // Add subtle entrance animation
-      requestAnimationFrame(() => {
-        replacement.style.opacity = '0';
-        replacement.style.transform = 'translateY(10px)';
-        replacement.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
-
-        requestAnimationFrame(() => {
-          replacement.style.opacity = '1';
-          replacement.style.transform = 'translateY(0)';
-        });
-      });
+      try {
+        element.parentNode.insertBefore(createBlockedResultElement(), element);
+      } catch (error) {
+        log('Error drawing held search result:', error);
+      }
     }
   } else if (type === 'image' || type === 'video') {
     // In a search grid the tile is gone and a gap reads as "fewer results"; a
-    // grid of shield boxes reads as an error state. On an ordinary page the
+    // grid of held tiles reads as an error state. On an ordinary page the
     // placeholder earns its keep — it holds the layout and explains the hole in
     // the article — so it stays there.
     if (isImagesSearchContext() || getImageSearchTile(element)) return;
-    const placeholder = createBlockedImagePlaceholder(element);
-    if (element.parentNode) {
-      element.parentNode.insertBefore(placeholder, element);
+    try {
+      const placeholder = createBlockedImagePlaceholder(element, type);
+      if (element.parentNode) {
+        element.parentNode.insertBefore(placeholder, element);
+      }
+    } catch (error) {
+      log('Error drawing held media placeholder:', error);
     }
   }
 }
@@ -3693,27 +3693,26 @@ function updateBlockedResultsNotice() {
       return;
     }
 
+    // The line's parts live in a shadow root, so the host alone cannot be
+    // updated: a node with our id but no recorded parts (a page clone, say) is
+    // replaced rather than written into.
     let notice = document.getElementById(BLOCKED_SUMMARY_ID);
-    if (!notice || !notice.isConnected) {
+    let parts = notice ? heldUiParts.get(notice) : null;
+    if (!notice || !notice.isConnected || !parts) {
+      if (notice && notice.parentNode) notice.parentNode.removeChild(notice);
       notice = document.createElement('div');
       notice.id = BLOCKED_SUMMARY_ID;
-      const isDarkMode = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
-      notice.style.cssText = `
-        margin: 0 0 12px 0;
-        padding: 0;
-        font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
-        font-size: 13px;
-        line-height: 1.5;
-        color: ${isDarkMode ? '#94a3b8' : '#64748b'};
-        background: none;
-        border: none;
-      `;
+      setHeldHostStyle(notice, 'display: block; margin: 0 0 12px 0;');
+      // Placed before it is drawn, so a layout with nowhere to put the line
+      // costs a bare div and no shadow root.
       if (!insertBlockedResultsNotice(notice, engine)) return;
+      parts = buildBlockedResultsNoticeUi(notice);
     }
 
-    notice.textContent = pageBlockedCount === 1
-      ? '1 result blocked by BlockNSFW'
-      : `${pageBlockedCount} results blocked by BlockNSFW`;
+    parts.count.textContent = String(pageBlockedCount);
+    parts.rest.textContent = pageBlockedCount === 1
+      ? ' result held by BlockNSFW'
+      : ' results held by BlockNSFW';
   } catch (error) {
     // Fail-open: a missing summary must never stop results from being blocked.
     log('Error updating blocked-results summary:', error);
@@ -3731,8 +3730,9 @@ function scheduleFloatingCounterUpdate() {
 }
 
 /**
- * The in-page counter pill, for people whose toolbar icon is not pinned and who
- * therefore never see the badge. Clicking it lists the hosts that were blocked.
+ * The in-page counter, for people whose toolbar icon is not pinned and who
+ * therefore never see the badge. Pressing it lists the hosts that were blocked;
+ * Escape closes the list and puts focus back on the button.
  *
  * The listed hosts are inert text — not links, no click handler, not selectable
  * as a unit — because the point is to account for what happened, not to offer a
@@ -3741,7 +3741,7 @@ function scheduleFloatingCounterUpdate() {
  */
 function updateFloatingCounter() {
   try {
-    // A pill drawn inside every ad iframe would be absurd, and invisible
+    // A counter drawn inside every ad iframe would be absurd, and invisible
     // anyway — the count belongs to the page, so it is drawn once.
     if (!IS_TOP_FRAME) return;
     const existing = document.getElementById(FLOATING_COUNTER_ID);
@@ -3753,131 +3753,48 @@ function updateFloatingCounter() {
     }
     if (!document.body) return;
 
-    const isDarkMode = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+    // Built once per host and then patched: the button has to survive a
+    // redraw, or a keyboard user toggling it would lose focus on every press.
     let host = existing;
-    if (!host || !host.isConnected) {
+    let parts = host ? heldUiParts.get(host) : null;
+    if (!host || !host.isConnected || !parts) {
+      if (host && host.parentNode) host.parentNode.removeChild(host);
       host = document.createElement('div');
       host.id = FLOATING_COUNTER_ID;
-      // `all: initial` first, so a page with aggressive global rules cannot
-      // restyle the pill out of legibility.
-      host.style.cssText = `
-        all: initial;
-        position: fixed;
-        bottom: 16px;
-        right: 16px;
-        z-index: 2147483646;
-        font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
-        display: block;
-      `;
+      setHeldHostStyle(host, 'display: block; position: fixed; bottom: 16px; right: 16px; z-index: 2147483646;');
       document.body.appendChild(host);
+      parts = buildFloatingCounterUi(host);
     }
 
-    // Rebuilt rather than patched: the content is a count and a short list, so
-    // there is nothing worth diffing, and this keeps the two states in one place.
-    while (host.firstChild) host.removeChild(host.firstChild);
-
-    const surface = isDarkMode ? '#1e293b' : '#ffffff';
-    const borderColor = isDarkMode ? '#334155' : '#e2e8f0';
-    const primaryText = isDarkMode ? '#f1f5f9' : '#0f172a';
-    const mutedText = isDarkMode ? '#94a3b8' : '#64748b';
-
-    if (floatingCounterExpanded) {
-      const panel = document.createElement('div');
-      panel.style.cssText = `
-        box-sizing: border-box;
-        min-width: 260px;
-        max-width: 380px;
-        max-height: 420px;
-        overflow-y: auto;
-        background: ${surface};
-        border: 1px solid ${borderColor};
-        border-radius: 14px;
-        box-shadow: 0 8px 24px rgba(0, 0, 0, ${isDarkMode ? '0.5' : '0.15'});
-        padding: 18px 20px;
-        margin-bottom: 10px;
-        font-size: 16px;
-        line-height: 1.6;
-        color: ${primaryText};
-      `;
-
-      const heading = document.createElement('div');
-      heading.textContent = pageBlockedEntries.size === 1 ? 'Blocked source' : 'Blocked sources';
-      heading.style.cssText = `font-weight: 600; font-size: 14px; letter-spacing: 0.04em; text-transform: uppercase; color: ${mutedText}; margin-bottom: 12px;`;
-      panel.appendChild(heading);
-
-      if (pageBlockedEntries.size === 0) {
-        const empty = document.createElement('div');
-        empty.textContent = 'Source not available.';
-        empty.style.cssText = `color: ${mutedText};`;
-        panel.appendChild(empty);
-      } else {
-        // Busiest first: on an image grid one host usually accounts for most of
-        // the blocks, and that is the useful thing to see.
-        const sorted = Array.from(pageBlockedEntries.entries()).sort((a, b) => b[1] - a[1]);
-        for (const [entryHost, count] of sorted) {
-          const row = document.createElement('div');
-          row.style.cssText = `
-            display: flex;
-            justify-content: space-between;
-            gap: 16px;
-            padding: 6px 0;
-            cursor: default;
-            user-select: none;
-          `;
-          const name = document.createElement('span');
-          name.textContent = entryHost;
-          name.style.cssText = 'overflow: hidden; text-overflow: ellipsis; white-space: nowrap;';
-          const tally = document.createElement('span');
-          tally.textContent = String(count);
-          tally.style.cssText = `color: ${mutedText}; flex-shrink: 0; font-variant-numeric: tabular-nums;`;
-          row.appendChild(name);
-          row.appendChild(tally);
-          panel.appendChild(row);
-        }
-      }
-      host.appendChild(panel);
-    }
-
-    const pill = document.createElement('button');
-    pill.type = 'button';
-    pill.setAttribute('aria-expanded', floatingCounterExpanded ? 'true' : 'false');
-    pill.title = floatingCounterExpanded ? 'Hide blocked sources' : 'Show blocked sources';
-    pill.style.cssText = `
-      box-sizing: border-box;
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      margin-left: auto;
-      padding: 12px 18px;
-      background: ${surface};
-      border: 1px solid ${borderColor};
-      border-radius: 999px;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, ${isDarkMode ? '0.45' : '0.12'});
-      font-family: inherit;
-      font-size: 17px;
-      font-weight: 600;
-      line-height: 1.2;
-      color: ${primaryText};
-      cursor: pointer;
-    `;
-
-    const shield = document.createElement('span');
-    shield.textContent = '🛡️';
-    shield.style.cssText = 'font-size: 19px; line-height: 1;';
-    pill.appendChild(shield);
-
-    const label = document.createElement('span');
-    label.textContent = pageBlockedTotal === 1 ? '1 blocked' : `${pageBlockedTotal} blocked`;
-    pill.appendChild(label);
-
-    pill.addEventListener('click', (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      floatingCounterExpanded = !floatingCounterExpanded;
-      updateFloatingCounter();
+    const expanded = floatingCounterExpanded;
+    parts.count.textContent = String(pageBlockedTotal);
+    setHeldAttrs(parts.button, {
+      'aria-expanded': expanded ? 'true' : 'false',
+      'aria-label': `${pageBlockedTotal} held by BlockNSFW`,
+      title: expanded ? 'Hide held sources' : 'Show held sources'
     });
+    parts.panel.hidden = !expanded;
 
-    host.appendChild(pill);
+    // The list is drawn only while it is open, and dropped when it closes, so
+    // the hosts are not sitting in the page behind a closed panel.
+    while (parts.list.firstChild) parts.list.removeChild(parts.list.firstChild);
+    if (!expanded) return;
+
+    const ui = parts.ui;
+    parts.heading.textContent = pageBlockedEntries.size === 1 ? 'Held source' : 'Held sources';
+    if (pageBlockedEntries.size === 0) {
+      parts.list.appendChild(heldNode(ui, 'div', 'bn-panel-empty', 'Source not known.'));
+      return;
+    }
+    // Busiest first: on an image grid one host usually accounts for most of
+    // the blocks, and that is the useful thing to see.
+    const sorted = Array.from(pageBlockedEntries.entries()).sort((a, b) => b[1] - a[1]);
+    for (const [entryHost, count] of sorted) {
+      const row = heldNode(ui, 'div', 'bn-panel-row');
+      row.appendChild(heldNode(ui, 'span', 'bn-host-name', entryHost));
+      row.appendChild(heldNode(ui, 'span', 'bn-host-count', String(count)));
+      parts.list.appendChild(row);
+    }
   } catch (error) {
     log('Error updating floating counter:', error);
   }
@@ -3945,66 +3862,388 @@ function insertBlockedResultsNotice(notice, engine) {
   return false;
 }
 
-function createBlockedImagePlaceholder(element) {
+// --- Held UI: what BlockNSFW draws inside other people's pages -------------
+//
+// Four surfaces: the placeholder standing where a blocked image or video was,
+// the row standing where a blocked search result was (opt-in), the summary
+// line above the results, and the floating counter (opt-in). All four show
+// one state, held: pale pine ground, the Held icon, the word "held" in pine.
+//
+// Each is a light host element in the page, which keeps the class or id the
+// rest of this file finds it by, with everything visible inside a closed
+// shadow root. Closed rather than open because the counter lists the hosts
+// that were blocked, and an open root hands that list to any page script that
+// reads host.shadowRoot. Either mode keeps the page's stylesheets out and ours
+// in, and keeps the copy out of page-text scans, this file's own included.
+// The host itself is styled inline with `all: initial` and !important on
+// every declaration, so a page's global rules cannot unsize or hide it.
+//
+// Nothing here runs on the mutation path. A root is built only when something
+// is drawn: by hideElement() for an element actually being blocked, and by the
+// summary and counter on their own (debounced) updates.
+//
+// Fonts are fallback stacks only. @font-face does not apply inside a shadow
+// root in Chromium and the extension's fonts are not web-accessible, so a
+// family is used when it is installed and nothing is ever fetched.
+
+const HELD_UI_SANS = '"Instrument Sans", ui-sans-serif, system-ui, -apple-system, sans-serif';
+const HELD_UI_MONO = '"JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace';
+const HELD_UI_SVG_NS = 'http://www.w3.org/2000/svg';
+const HELD_SOURCES_PANEL_ID = 'pblocker-held-sources';
+const HELD_SOURCES_HEADING_ID = 'pblocker-held-sources-heading';
+
+// monolab Threshold / Instrument tokens: the same values as ui/tokens.css.
+const HELD_UI_PALETTES = {
+  light: {
+    paper: '#f4f1e9',
+    sheet: '#fbf9f4',
+    ink: '#1a1a16',
+    'ink-2': '#57574d',
+    'ink-3': '#6e6d63', // 11px meta labels only, and never on pine-3
+    pine: '#0d3b31',
+    'pine-2': '#1c5f4f',
+    'pine-3': '#d5e0da',
+    rule: 'rgba(26, 26, 22, 0.15)',
+    'rule-2': 'rgba(26, 26, 22, 0.27)'
+  },
+  dark: {
+    paper: '#151612',
+    sheet: '#1d1e1a',
+    ink: '#f1ede3',
+    'ink-2': '#b8b4a7',
+    'ink-3': '#949183',
+    pine: '#7fb8a4',
+    'pine-2': '#8cc5b1',
+    'pine-3': '#1f3a32',
+    rule: 'rgba(241, 237, 227, 0.14)',
+    'rule-2': 'rgba(241, 237, 227, 0.26)'
+  }
+};
+
+// One declaration list per class. The shadow stylesheet is generated from
+// this, and the light-DOM fallback applies the same lists inline with the
+// tokens resolved, so the two paths cannot drift apart. No radius on surfaces,
+// 2px on the one control, 1px hairlines, no shadows, no gradients.
+const HELD_UI_RULES = {
+  // The outermost element of every surface: resets type, carries the tokens.
+  'bn': `font-family: ${HELD_UI_SANS}; font-size: 13px; font-weight: 400; font-style: normal; line-height: 1.45; letter-spacing: normal; text-align: left; text-transform: none; color: var(--bn-ink);`,
+  'bn-icon': 'display: block; flex: none; width: 16px; height: 16px; color: var(--bn-pine);',
+  'bn-meta': `font-family: ${HELD_UI_MONO}; font-size: 11px; font-weight: 500; line-height: 1.2; letter-spacing: 0.15em; text-transform: uppercase;`,
+  'bn-word': 'color: var(--bn-pine);',
+  'bn-num': `font-family: ${HELD_UI_MONO}; font-variant-numeric: tabular-nums;`,
+
+  // Placeholder: a held tile filling a host the size of the media.
+  'bn-tile': 'flex: 1 1 auto; min-width: 0; min-height: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; padding: 8px; overflow: hidden; background: var(--bn-pine-3); color: var(--bn-pine); text-align: center;',
+  'bn-tile-line': 'max-width: 22ch; font-size: 12px; line-height: 1.35; color: var(--bn-ink);',
+
+  // Search result: a hairline row, a small held tile where the content was.
+  'bn-row': 'display: flex; align-items: center; gap: 12px; padding: 12px; background: var(--bn-sheet); border: 1px solid var(--bn-rule); border-radius: 0;',
+  'bn-mark': 'flex: none; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; width: 48px; height: 48px; background: var(--bn-pine-3); color: var(--bn-pine);',
+  'bn-text': 'flex: 1 1 auto; min-width: 0;',
+  'bn-title': 'font-size: 14px; font-weight: 500; line-height: 1.4; color: var(--bn-ink);',
+  'bn-desc': 'margin-top: 2px; font-size: 13px; line-height: 1.45; color: var(--bn-ink-2);',
+
+  // Summary line above the results.
+  'bn-summary': 'display: flex; align-items: center; gap: 8px; font-size: 13px; line-height: 1.5; color: var(--bn-ink-2);',
+  'bn-summary-text': 'min-width: 0;',
+
+  // Floating counter: the button, and the list it opens above itself.
+  'bn-fc': 'display: flex; flex-direction: column-reverse; align-items: flex-end; gap: 8px;',
+  'bn-toggle': 'display: inline-flex; align-items: center; gap: 8px; margin: 0; padding: 8px 12px; font: inherit; font-size: 13px; line-height: 1.2; color: var(--bn-ink); background: var(--bn-sheet); border: 1px solid var(--bn-rule-2); border-radius: 2px; box-shadow: none; cursor: pointer; -webkit-appearance: none; appearance: none; transition: border-color 180ms cubic-bezier(0.22, 1, 0.36, 1);',
+  'bn-count': 'font-size: 13px; font-weight: 500; color: var(--bn-ink);',
+  'bn-panel': 'min-width: 240px; max-width: min(360px, calc(100vw - 32px)); max-height: min(420px, calc(100vh - 96px)); overflow-y: auto; overscroll-behavior: contain; padding: 12px 16px 4px; background: var(--bn-sheet); color: var(--bn-ink); border: 1px solid var(--bn-rule-2); border-radius: 0;',
+  'bn-panel-head': 'margin: 0 0 8px; color: var(--bn-ink-3);',
+  'bn-panel-row': 'display: flex; justify-content: space-between; align-items: baseline; gap: 16px; padding: 8px 0; border-top: 1px solid var(--bn-rule); cursor: default; -webkit-user-select: none; user-select: none;',
+  'bn-host-name': `min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: ${HELD_UI_MONO}; font-size: 12px; font-variant-numeric: tabular-nums; color: var(--bn-ink);`,
+  'bn-host-count': `flex: none; font-family: ${HELD_UI_MONO}; font-size: 12px; font-variant-numeric: tabular-nums; color: var(--bn-ink-2);`,
+  'bn-panel-empty': 'padding: 8px 0; border-top: 1px solid var(--bn-rule); color: var(--bn-ink-2);'
+};
+
+// The Held icon on its 16 grid: a stroke stopped above a 1.5-weight bar.
+const HELD_ICON_PATHS = [
+  ['M2 10.5h12', '1.5'],
+  ['M8 2v5.5', ''],
+  ['M5.5 5.5L8 7.75 10.5 5.5', '']
+];
+
+// Parts of the summary line and the counter, keyed by host, so an update can
+// reach into a closed shadow root it has no other way to query.
+const heldUiParts = new WeakMap();
+
+let heldUiCssText = '';
+// undefined: not tried yet. null: constructable sheets do not work here.
+// Otherwise the one parsed sheet every shadow root in this frame shares.
+let heldUiSheet;
+// The theme chosen in Settings (pblocker_color_scheme): system, light or dark.
+let heldUiScheme = 'system';
+// The <style> fallbacks, held weakly so a theme change can reach them without
+// keeping removed placeholders alive. Collected entries are swept whenever the
+// list doubles, so adding one stays O(1) on average.
+const heldUiStyleRefs = [];
+let heldUiStyleSweepAt = 64;
+
+/** The shadow stylesheet for the current theme, built from HELD_UI_RULES. */
+function heldUiCss() {
+  if (heldUiCssText) return heldUiCssText;
+  const tokens = (palette) => Object.keys(palette)
+    .map((name) => `--bn-${name}: ${palette[name]};`)
+    .join(' ');
+  const rules = Object.keys(HELD_UI_RULES)
+    .map((name) => `.${name} { ${HELD_UI_RULES[name]} }`)
+    .join('\n');
+  heldUiCssText = [
+    '*, *::before, *::after { box-sizing: border-box; }',
+    '[hidden] { display: none !important; }',
+    // Kept light or dark when Settings says so. Otherwise light, with dark
+    // following the system live.
+    heldUiScheme === 'dark'
+      ? `.bn { ${tokens(HELD_UI_PALETTES.dark)} color-scheme: dark; }`
+      : `.bn { ${tokens(HELD_UI_PALETTES.light)} color-scheme: light; }`,
+    heldUiScheme === 'system'
+      ? `@media (prefers-color-scheme: dark) { .bn { ${tokens(HELD_UI_PALETTES.dark)} color-scheme: dark; } }`
+      : '',
+    rules,
+    '.bn-toggle:hover, .bn-toggle[aria-expanded="true"] { border-color: var(--bn-ink); }',
+    '.bn-toggle:focus-visible, .bn-panel:focus-visible { outline: 2px solid var(--bn-pine-2); outline-offset: 3px; }',
+    '@media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition: none !important; } }'
+  ].join('\n');
+  return heldUiCssText;
+}
+
+/**
+ * Give a shadow root the stylesheet. A constructed sheet is parsed once and
+ * shared by every root, and is not subject to the page's style-src CSP; where
+ * it cannot be adopted (an old engine, or a content-script sandbox that will
+ * not take it) a <style> carrying the same text is the fallback. Even if a
+ * strict CSP drops that <style>, the host's inline box still holds the layout
+ * and the icon's own width/height keep it at 16px.
+ */
+function adoptHeldUiStyles(root) {
+  if (heldUiSheet === undefined) {
+    heldUiSheet = null;
+    try {
+      if (typeof CSSStyleSheet === 'function' &&
+          typeof CSSStyleSheet.prototype.replaceSync === 'function' &&
+          'adoptedStyleSheets' in root) {
+        const sheet = new CSSStyleSheet();
+        sheet.replaceSync(heldUiCss());
+        heldUiSheet = sheet;
+      }
+    } catch (_) {
+      heldUiSheet = null;
+    }
+  }
+  if (heldUiSheet) {
+    try {
+      root.adoptedStyleSheets = [heldUiSheet];
+      if (root.adoptedStyleSheets && root.adoptedStyleSheets.length === 1) return;
+    } catch (_) {
+      // Fall through to the <style> path, and stop trying for later roots.
+    }
+    heldUiSheet = null;
+  }
+  const style = document.createElement('style');
+  style.textContent = heldUiCss();
+  root.appendChild(style);
+  rememberHeldUiStyle(style);
+}
+
+function rememberHeldUiStyle(style) {
+  if (typeof WeakRef !== 'function') return;
+  heldUiStyleRefs.push(new WeakRef(style));
+  if (heldUiStyleRefs.length < heldUiStyleSweepAt) return;
+  sweepHeldUiStyles(null);
+  heldUiStyleSweepAt = Math.max(64, heldUiStyleRefs.length * 2);
+}
+
+/** Drop collected entries; given cssText, also rewrite the ones still alive. */
+function sweepHeldUiStyles(cssText) {
+  let kept = 0;
+  for (let i = 0; i < heldUiStyleRefs.length; i++) {
+    const style = heldUiStyleRefs[i].deref();
+    if (!style) continue;
+    if (cssText !== null) style.textContent = cssText;
+    heldUiStyleRefs[kept++] = heldUiStyleRefs[i];
+  }
+  heldUiStyleRefs.length = kept;
+}
+
+/**
+ * Follow the theme chosen in Settings. UI already on the page changes with
+ * it: the shared sheet is rewritten in place, and so is each <style> fallback.
+ * Only the inline fallback, for engines without Shadow DOM, waits for the next
+ * placeholder.
+ */
+function setHeldUiScheme(value) {
+  const scheme = value === 'light' || value === 'dark' ? value : 'system';
+  if (scheme === heldUiScheme) return;
+  heldUiScheme = scheme;
+  heldUiCssText = '';
+  const cssText = heldUiCss();
+  if (heldUiSheet) {
+    try {
+      heldUiSheet.replaceSync(cssText);
+    } catch (_) {}
+  }
+  sweepHeldUiStyles(cssText);
+}
+
+function heldUiPrefersDark() {
+  try {
+    return !!(window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+  } catch (_) {
+    return false;
+  }
+}
+
+/**
+ * Where a surface's UI goes. With Shadow DOM: a closed root on the host, styled
+ * by the shared sheet. Without it (very old engines, and the fake DOMs the
+ * tests run this file in): the host itself, with every element styled inline
+ * and the palette read once, since inline styles cannot follow a media query.
+ */
+function openHeldUi(host) {
+  let root = null;
+  if (typeof host.attachShadow === 'function') {
+    try {
+      root = host.attachShadow({ mode: 'closed' });
+    } catch (_) {
+      root = null;
+    }
+  }
+  if (root) {
+    adoptHeldUiStyles(root);
+    return { mount: root, palette: null, scheme: '' };
+  }
+  const dark = heldUiScheme === 'dark' || (heldUiScheme === 'system' && heldUiPrefersDark());
+  return {
+    mount: host,
+    palette: dark ? HELD_UI_PALETTES.dark : HELD_UI_PALETTES.light,
+    scheme: dark ? 'dark' : 'light'
+  };
+}
+
+/**
+ * Style a host as an inline `all: initial` box. Every declaration is marked
+ * !important: an inline important declaration outranks any rule the page has,
+ * important or not, so the host keeps the box it was given.
+ */
+function setHeldHostStyle(host, declarations) {
+  if (!host || !host.style) return;
+  host.style.cssText = `all: initial; ${declarations}`
+    .split(';')
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .map((part) => `${part} !important`)
+    .join('; ') + ';';
+}
+
+function setHeldAttrs(el, attrs) {
+  if (!el || typeof el.setAttribute !== 'function') return;
+  for (const name of Object.keys(attrs)) el.setAttribute(name, attrs[name]);
+}
+
+/** HELD_UI_RULES for these classes as one inline declaration list (fallback). */
+function heldUiInlineDecls(classes, ui) {
+  let declarations = 'box-sizing: border-box;';
+  for (const name of classes.split(' ')) {
+    if (HELD_UI_RULES[name]) declarations += ' ' + HELD_UI_RULES[name];
+    if (name === 'bn') declarations += ` color-scheme: ${ui.scheme};`;
+  }
+  const palette = ui.palette;
+  return declarations.replace(/var\(--bn-([a-z0-9-]+)\)/g,
+    (match, token) => palette[token] || match);
+}
+
+function heldNode(ui, tag, classes, text) {
+  const el = document.createElement(tag);
+  if (classes) {
+    el.className = classes;
+    if (ui.palette && el.style) el.style.cssText = heldUiInlineDecls(classes, ui);
+  }
+  if (text !== undefined) el.textContent = text;
+  return el;
+}
+
+/** The Held icon, built with createElementNS: no markup is parsed in the page. */
+function heldIcon(ui) {
+  if (typeof document.createElementNS !== 'function') return null;
+  try {
+    const svg = document.createElementNS(HELD_UI_SVG_NS, 'svg');
+    setHeldAttrs(svg, {
+      viewBox: '0 0 16 16',
+      width: '16',
+      height: '16',
+      fill: 'none',
+      stroke: 'currentColor',
+      'stroke-width': '1.25',
+      'stroke-linecap': 'round',
+      'stroke-linejoin': 'round',
+      'aria-hidden': 'true',
+      focusable: 'false',
+      class: 'bn-icon'
+    });
+    if (ui.palette && svg.style) svg.style.cssText = heldUiInlineDecls('bn-icon', ui);
+    for (const [d, strokeWidth] of HELD_ICON_PATHS) {
+      const path = document.createElementNS(HELD_UI_SVG_NS, 'path');
+      setHeldAttrs(path, strokeWidth ? { d, 'stroke-width': strokeWidth } : { d });
+      svg.appendChild(path);
+    }
+    return svg;
+  } catch (_) {
+    return null;
+  }
+}
+
+/** The held mark: the icon over the word, both in pine. */
+function appendHeldMark(ui, parent) {
+  const icon = heldIcon(ui);
+  if (icon) parent.appendChild(icon);
+  parent.appendChild(heldNode(ui, 'span', 'bn-meta bn-word', 'held'));
+}
+
+function createBlockedImagePlaceholder(element, type) {
   const placeholder = document.createElement('div');
   placeholder.className = 'pblocker-blocked-image-placeholder';
-  
+
   // Try to preserve original dimensions if known
   const rect = element.getBoundingClientRect();
   // Use clientWidth/Height as fallback for hidden elements, or attributes
   const width = rect.width || element.clientWidth || parseInt(element.getAttribute('width')) || 0;
   const height = rect.height || element.clientHeight || parseInt(element.getAttribute('height')) || 0;
-  
-  const isDarkMode = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
-  
-  // Styles
-  const bg = isDarkMode ? '#1e293b' : '#f1f5f9';
-  const border = isDarkMode ? '#334155' : '#cbd5e1';
-  const color = isDarkMode ? '#94a3b8' : '#64748b';
-  
-  placeholder.style.cssText = `
+
+  // The host holds the media's box and the tile inside stretches to fill it,
+  // so the 80px floor is filled even when the height fell back to 100% of a
+  // parent that has no height of its own.
+  setHeldHostStyle(placeholder, `
     display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    background: ${bg};
-    border: 1px solid ${border};
-    border-radius: 4px;
+    box-sizing: border-box;
     width: ${width ? width + 'px' : '100%'};
     height: ${height ? height + 'px' : '100%'};
-    min-height: 80px;
     min-width: 80px;
-    color: ${color};
-    font-family: system-ui, -apple-system, sans-serif;
-    font-size: 12px;
-    text-align: center;
+    min-height: 80px;
     overflow: hidden;
-    box-sizing: border-box;
-    padding: 8px;
-    transition: opacity 0.3s ease;
-  `;
-  
-  // Icon
-  const icon = document.createElement('div');
-  icon.textContent = '🛡️';
-  icon.style.fontSize = '20px';
-  icon.style.marginBottom = '6px';
-  placeholder.appendChild(icon);
-  
-  // Text
-  const text = document.createElement('div');
-  text.textContent = 'Content Blocked by BlockNSFW';
-  text.style.fontWeight = '500';
-  text.style.lineHeight = '1.3';
-  
-  // Scale text down for very small containers
-  if (width > 0 && width < 120) {
-    text.style.fontSize = '10px';
-    text.textContent = 'Blocked';
+  `);
+
+  const kind = type === 'video' ? 'video' : (type === 'image' ? 'image' : 'media');
+  const label = `BlockNSFW held this ${kind}`;
+
+  const ui = openHeldUi(placeholder);
+  const tile = heldNode(ui, 'div', 'bn bn-tile');
+  // One name for the whole tile, whatever fits on screen: in a narrow box only
+  // the mark is drawn, and "held" alone tells a screen reader nothing.
+  setHeldAttrs(tile, { role: 'img', 'aria-label': label });
+  appendHeldMark(ui, tile);
+
+  // The sentence needs 120px across, and about 96px down for two lines under
+  // the mark; below either it would only be clipped.
+  const narrow = width > 0 && width < 120;
+  const cramped = height > 0 && height < 96;
+  if (!narrow && !cramped) {
+    tile.appendChild(heldNode(ui, 'div', 'bn-tile-line', label));
   }
-  
-  placeholder.appendChild(text);
-  
+
+  ui.mount.appendChild(tile);
   return placeholder;
 }
 
@@ -4028,266 +4267,110 @@ function restoreBlockedMediaElements() {
   });
 }
 
+/**
+ * The row that stands where a blocked search result was, for the 'overlay'
+ * treatment. It says that something was held there and why, and nothing about
+ * what: no title, no address, no favicon.
+ */
 function createBlockedResultElement() {
   const replacement = document.createElement('div');
   replacement.className = 'pblocker-blocked-result';
-  
-  // Detect dark mode preference
-  const isDarkMode = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
-  const searchEngine = getSearchEngine();
-  
-  // Apply theme-appropriate styling
-  const theme = getBlockedResultTheme(isDarkMode, searchEngine);
-  replacement.style.cssText = theme.container;
-  
-  // Add smooth hover effects
-  addHoverEffects(replacement, theme);
-  
-  // Create the content with theme using safe DOM methods
-  createBlockedResultDOM(replacement, theme);
-  
-  // Try to load the icon after the element is created
-  setTimeout(() => {
-    tryLoadExtensionIcon(replacement, theme);
-  }, 100);
-  
+  setHeldHostStyle(replacement, 'display: block; box-sizing: border-box; margin: 8px 0;');
+
+  const ui = openHeldUi(replacement);
+  const row = heldNode(ui, 'div', 'bn bn-row');
+
+  // A small held tile where the result's own content was. Hidden from
+  // assistive tech: the title beside it says the same thing in words.
+  const mark = heldNode(ui, 'div', 'bn-mark');
+  setHeldAttrs(mark, { 'aria-hidden': 'true' });
+  appendHeldMark(ui, mark);
+
+  const text = heldNode(ui, 'div', 'bn-text');
+  text.appendChild(heldNode(ui, 'div', 'bn-title', 'A search result was held'));
+  text.appendChild(heldNode(ui, 'div', 'bn-desc', 'BlockNSFW held it because it matched your filters.'));
+
+  row.appendChild(mark);
+  row.appendChild(text);
+  ui.mount.appendChild(row);
   return replacement;
 }
 
-function tryLoadExtensionIcon(container, theme) {
-  const iconContainer = container.querySelector('#pblocker-icon-container');
-  if (!iconContainer) return;
-  
-  // Try different icon loading approaches
-  const iconPaths = [
-    'icons/icon-48.png',
-    'icons/icon-128.png', 
-    'icons/icon-16.png'
-  ];
-  
-  let currentIndex = 0;
-  
-  function tryNextIcon() {
-    if (currentIndex >= iconPaths.length) {
-      // All failed, use emoji fallback
-      iconContainer.textContent = '🛡️';
-      if (debugMode) {
-        log('All icon loading attempts failed, using emoji fallback');
-      }
-      return;
-    }
-    
-    try {
-      const iconUrl = browserAPI.runtime.getURL(iconPaths[currentIndex]);
-      const img = document.createElement('img');
-      
-      img.style.cssText = `
-        width: 28px;
-        height: 28px;
-        border-radius: 50%;
-        object-fit: contain;
-      `;
-      
-      img.onload = () => {
-        while (iconContainer.firstChild) {
-          iconContainer.removeChild(iconContainer.firstChild);
-        }
-        iconContainer.appendChild(img);
-        if (debugMode) {
-          log(`Successfully loaded icon: ${iconPaths[currentIndex]}`);
-        }
-      };
-      
-      img.onerror = () => {
-        if (debugMode) {
-          log(`Failed to load icon: ${iconPaths[currentIndex]}`);
-        }
-        currentIndex++;
-        tryNextIcon();
-      };
-      
-      img.src = iconUrl;
-      img.alt = 'BlockNSFW';
-      
-    } catch (error) {
-      log('Error creating icon:', error);
-      currentIndex++;
-      tryNextIcon();
-    }
-  }
-  
-  tryNextIcon();
+/** Draw the summary line into its (already placed) host; returns its parts. */
+function buildBlockedResultsNoticeUi(host) {
+  const ui = openHeldUi(host);
+  const line = heldNode(ui, 'div', 'bn bn-summary');
+  const icon = heldIcon(ui);
+  if (icon) line.appendChild(icon);
+
+  const text = heldNode(ui, 'span', 'bn-summary-text');
+  const count = heldNode(ui, 'span', 'bn-num');
+  const rest = heldNode(ui, 'span', '');
+  text.appendChild(count);
+  text.appendChild(rest);
+  line.appendChild(text);
+  ui.mount.appendChild(line);
+
+  const parts = { count, rest };
+  heldUiParts.set(host, parts);
+  return parts;
 }
 
-function getBlockedResultTheme(isDarkMode, searchEngine) {
-  // Base theme that adapts to search engine and dark mode
-  const baseTheme = {
-    light: {
-      container: `
-        position: relative;
-        padding: 16px 20px;
-        margin: 8px 0;
-        background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
-        border: 1px solid #e2e8f0;
-        border-left: 4px solid #3b82f6;
-        border-radius: 12px;
-        color: #475569;
-        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-        font-size: 14px;
-        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-        transition: all 0.2s ease;
-        cursor: default;
-      `,
-      iconBg: 'linear-gradient(135deg, #ffffff 0%, #f8fafc 100%)',
-      iconBorder: '2px solid #3b82f6',
-      titleColor: '#1e293b',
-      textColor: '#64748b',
-      badgeBg: '#f1f5f9',
-      badgeBorder: '#cbd5e1',
-      badgeColor: '#475569'
-    },
-    dark: {
-      container: `
-        position: relative;
-        padding: 16px 20px;
-        margin: 8px 0;
-        background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
-        border: 1px solid #475569;
-        border-left: 4px solid #60a5fa;
-        border-radius: 12px;
-        color: #cbd5e1;
-        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-        font-size: 14px;
-        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
-        transition: all 0.2s ease;
-        cursor: default;
-      `,
-      iconBg: 'linear-gradient(135deg, #475569 0%, #64748b 100%)',
-      iconBorder: '2px solid #60a5fa',
-      titleColor: '#f1f5f9',
-      textColor: '#94a3b8',
-      badgeBg: '#334155',
-      badgeBorder: '#475569',
-      badgeColor: '#cbd5e1'
-    }
-  };
-  
-  return isDarkMode ? baseTheme.dark : baseTheme.light;
-}
+/**
+ * Draw the counter into its host once; updateFloatingCounter() patches the
+ * parts from then on. The button comes first in the DOM so Tab moves from it
+ * into the open list, and column-reverse draws the list above it.
+ */
+function buildFloatingCounterUi(host) {
+  const ui = openHeldUi(host);
+  const wrap = heldNode(ui, 'div', 'bn bn-fc');
 
-function addHoverEffects(element, theme) {
-  element.addEventListener('mouseenter', () => {
-    element.style.boxShadow = theme.container.includes('dark') 
-      ? '0 4px 12px rgba(0, 0, 0, 0.4)' 
-      : '0 4px 12px rgba(0, 0, 0, 0.15)';
-    element.style.transform = 'translateY(-1px)';
+  const button = heldNode(ui, 'button', 'bn-toggle');
+  button.type = 'button';
+  setHeldAttrs(button, { 'aria-controls': HELD_SOURCES_PANEL_ID, 'aria-expanded': 'false' });
+  const icon = heldIcon(ui);
+  if (icon) button.appendChild(icon);
+  const count = heldNode(ui, 'span', 'bn-num bn-count');
+  button.appendChild(count);
+  button.appendChild(heldNode(ui, 'span', 'bn-meta bn-word', 'held'));
+
+  // Focusable, so a list longer than the panel can be scrolled from the
+  // keyboard. The hosts in it stay inert text: not links, nothing to click.
+  const panel = heldNode(ui, 'div', 'bn-panel');
+  panel.id = HELD_SOURCES_PANEL_ID;
+  panel.hidden = true;
+  setHeldAttrs(panel, { role: 'region', tabindex: '0', 'aria-labelledby': HELD_SOURCES_HEADING_ID });
+  const heading = heldNode(ui, 'div', 'bn-meta bn-panel-head', 'Held sources');
+  heading.id = HELD_SOURCES_HEADING_ID;
+  const list = heldNode(ui, 'div', 'bn-panel-list');
+  panel.appendChild(heading);
+  panel.appendChild(list);
+
+  button.addEventListener('click', (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    floatingCounterExpanded = !floatingCounterExpanded;
+    updateFloatingCounter();
   });
-  
-  element.addEventListener('mouseleave', () => {
-    element.style.boxShadow = theme.container.includes('dark')
-      ? '0 1px 3px rgba(0, 0, 0, 0.3)'
-      : '0 1px 3px rgba(0, 0, 0, 0.1)';
-    element.style.transform = 'translateY(0)';
-  });
-}
 
-function createBlockedResultDOM(container, theme) {
-  // Try to get the extension logo URL
-  let logoUrl = '';
-  try {
-    logoUrl = browserAPI.runtime.getURL('icons/icon-48.png');
-    if (debugMode) {
-      log('Logo URL generated:', logoUrl);
-    }
-  } catch (error) {
-    log('Error getting logo URL:', error);
-    logoUrl = '';
-  }
-  
-  // Create wrapper
-  const wrapper = document.createElement('div');
-  wrapper.style.cssText = 'display: flex; align-items: center; gap: 12px;';
-  
-  // Create icon container
-  const iconContainer = document.createElement('div');
-  iconContainer.id = 'pblocker-icon-container';
-  iconContainer.style.cssText = `
-    width: 40px;
-    height: 40px;
-    background: ${theme.iconBg};
-    border: ${theme.iconBorder || 'none'};
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex-shrink: 0;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-    padding: 4px;
-    font-size: 18px;
-  `;
-  
-  if (logoUrl) {
-    const img = document.createElement('img');
-    img.src = logoUrl;
-    img.alt = 'BlockNSFW';
-    img.style.cssText = 'width: 28px; height: 28px; border-radius: 50%; object-fit: contain;';
-    img.onload = () => {
-      if (debugMode) log('Logo loaded successfully');
-    };
-    img.onerror = () => {
-      if (debugMode) log('Logo failed to load, using fallback');
-      img.style.display = 'none';
-      iconContainer.textContent = '🛡️';
-    };
-    iconContainer.appendChild(img);
-  } else {
-    iconContainer.textContent = '🛡️';
-  }
-  
-  // Create text container
-  const textContainer = document.createElement('div');
-  textContainer.style.cssText = 'flex: 1;';
-  
-  const title = document.createElement('div');
-  title.style.cssText = `
-    font-weight: 600;
-    color: ${theme.titleColor};
-    margin-bottom: 4px;
-    font-size: 15px;
-  `;
-  title.textContent = 'Content Filtered by BlockNSFW';
-  
-  const description = document.createElement('div');
-  description.style.cssText = `
-    color: ${theme.textColor};
-    font-size: 13px;
-    line-height: 1.4;
-  `;
-  description.textContent = 'This search result was blocked for containing inappropriate content';
-  
-  textContainer.appendChild(title);
-  textContainer.appendChild(description);
-  
-  // Create badge
-  const badge = document.createElement('div');
-  badge.style.cssText = `
-    background: ${theme.badgeBg};
-    border: 1px solid ${theme.badgeBorder};
-    border-radius: 6px;
-    padding: 4px 8px;
-    font-size: 11px;
-    color: ${theme.badgeColor};
-    font-weight: 500;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-  `;
-  badge.textContent = 'BLOCKED';
-  
-  // Assemble
-  wrapper.appendChild(iconContainer);
-  wrapper.appendChild(textContainer);
-  wrapper.appendChild(badge);
-  container.appendChild(wrapper);
+  // Escape from anywhere in the counter closes the list and returns focus to
+  // the button. Only while it is open: otherwise the key belongs to the page.
+  wrap.addEventListener('keydown', (event) => {
+    if (event.key !== 'Escape' || !floatingCounterExpanded) return;
+    event.preventDefault();
+    event.stopPropagation();
+    floatingCounterExpanded = false;
+    updateFloatingCounter();
+    try { button.focus(); } catch (_) {}
+  });
+
+  wrap.appendChild(button);
+  wrap.appendChild(panel);
+  ui.mount.appendChild(wrap);
+
+  const parts = { ui, button, count, panel, heading, list };
+  heldUiParts.set(host, parts);
+  return parts;
 }
 
 // --- Image visibility-driven classification ---
@@ -5509,6 +5592,11 @@ function setupEventListeners() {
   // Listen for storage changes
   browserAPI.storage.onChanged.addListener((changes, area) => {
     if (area !== 'local') return;
+
+    // The theme only restyles what is already drawn; nothing is reprocessed.
+    if (changes.pblocker_color_scheme) {
+      setHeldUiScheme(changes.pblocker_color_scheme.newValue);
+    }
 
     // The whitelist verdict is cached per URL, so adding or removing an entry —
     // or a temporary allowance being cleared — has to drop it, or the page keeps

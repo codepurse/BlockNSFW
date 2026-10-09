@@ -25,13 +25,21 @@ const MOTIVATIONAL_QUOTES = [
 ];
 
 const AVG_TIME_PER_BLOCK_MINUTES = 5;
+const TOP_SITES_LIMIT = 10;
+const RECENT_LIMIT = 20;
+
+const LOAD_FAILED = 'That didn’t load. Reload the page to try again.';
 
 function $(id) { return document.getElementById(id); }
 
+// Exact figures with the reader's own separators: 12,345 rather than 12.3K.
 function formatNumber(num) {
-  if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
-  if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
-  return num.toString();
+  const n = Number(num) || 0;
+  try { return n.toLocaleString(); } catch (_) { return String(n); }
+}
+
+function formatDays(days) {
+  return `${formatNumber(days)} ${days === 1 ? 'day' : 'days'}`;
 }
 
 function formatTimeSaved(minutes) {
@@ -63,7 +71,7 @@ async function getStats() {
 }
 
 async function getStreakData() {
-  const { [STREAK_START_KEY]: streakStart, [LONGEST_STREAK_KEY]: longestStreak } = 
+  const { [STREAK_START_KEY]: streakStart, [LONGEST_STREAK_KEY]: longestStreak } =
     await browserAPI.storage.local.get([STREAK_START_KEY, LONGEST_STREAK_KEY]);
   return {
     streakStart: streakStart || null,
@@ -86,49 +94,71 @@ async function getRecentActivity() {
   return blockedLog || [];
 }
 
+// The hostname of a blocked page and nothing else: never its scheme, path,
+// query or fragment, which can say what the page was.
 function extractDomain(url) {
+  let host = '';
   try {
-    const urlObj = new URL(url);
-    return urlObj.hostname.replace(/^www\./, '');
+    host = new URL(url).hostname;
   } catch (_) {
-    return url;
+    host = String(url || '').trim()
+      .replace(/^[a-z][a-z0-9+.-]*:\/\//i, '')
+      .split(/[\/?#]/)[0]
+      .replace(/^[^@]*@/, '')
+      .replace(/:\d*$/, '');
   }
+  return host.replace(/^www\./i, '');
 }
 
+// --- Building rows ------------------------------------------------------------
+//
+// Every value is set with textContent. Hostnames come from storage that pages
+// fed, so none of it is ever parsed as markup.
+
+function make(tag, className, text) {
+  const el = document.createElement(tag);
+  if (className) el.className = className;
+  if (text !== undefined && text !== null) el.textContent = text;
+  return el;
+}
+
+function timeElement(timestamp, text, className) {
+  const el = make('time', className, text);
+  try { el.setAttribute('datetime', new Date(timestamp).toISOString()); } catch (_) {}
+  return el;
+}
+
+function emptyItem(text) {
+  return make('li', 'domain-empty', text);
+}
+
+function hostRow(host, side) {
+  const row = make('li', 'domain-row');
+  const main = make('div', 'domain-main');
+  const name = make('span', 'domain', host || 'Unknown site');
+  if (host) name.title = host;
+  main.appendChild(name);
+  row.appendChild(main);
+  row.appendChild(side);
+  return row;
+}
+
+// --- Sections -----------------------------------------------------------------
+
 function renderStreak(streakData) {
-  const banner = $('streak-banner');
-  const currentStreakEl = $('current-streak');
-  const longestStreakEl = $('longest-streak');
-  const startDateEl = $('streak-start-date');
+  const section = $('protection-section');
+  if (!section) return;
 
   if (!streakData.streakStart) {
-    banner.classList.add('hidden');
+    section.hidden = true;
     return;
   }
 
-  banner.classList.remove('hidden');
+  section.hidden = false;
   const currentStreak = getDaysBetween(streakData.streakStart, Date.now());
-  currentStreakEl.textContent = currentStreak;
-  longestStreakEl.textContent = `${streakData.longestStreak || currentStreak} days`;
-  startDateEl.textContent = `Started ${formatDate(streakData.streakStart)}`;
-  renderStreakRing(currentStreak);
-}
-
-// The ring fills toward a 30-day goal. This used to be an inline <script> in
-// stats.html, which the extension's CSP (script-src 'self') refuses to run, so
-// in the installed extension the ring always stayed empty.
-const STREAK_RING_GOAL_DAYS = 30;
-const STREAK_RING_CIRCUMFERENCE = 2 * Math.PI * 30; // r="30" in stats.html; 188.5 in its CSS
-
-function renderStreakRing(currentStreak) {
-  const ring = $('streak-ring-progress');
-  if (!ring) return;
-  const progress = Math.min(Math.max(currentStreak, 0) / STREAK_RING_GOAL_DAYS, 1);
-  // The banner was display:none a moment ago, and a transition cannot start
-  // from an element that had no style. Reading the style first gives the CSS
-  // fill animation a starting point to run from.
-  getComputedStyle(ring).strokeDashoffset;
-  ring.style.strokeDashoffset = STREAK_RING_CIRCUMFERENCE * (1 - progress);
+  $('current-streak').textContent = formatNumber(currentStreak);
+  $('longest-streak').textContent = formatDays(streakData.longestStreak || currentStreak);
+  $('streak-start-date').textContent = formatDate(streakData.streakStart);
 }
 
 function renderStats(stats) {
@@ -136,124 +166,92 @@ function renderStats(stats) {
   $('websites-blocked').textContent = formatNumber(stats.websiteBlockedCount || 0);
   $('images-filtered').textContent = formatNumber(stats.imageBlockedCount || 0);
   $('search-filtered').textContent = formatNumber(stats.searchResultBlockedCount || 0);
-  
+
   const timeSavedMinutes = (stats.blockedCount || 0) * AVG_TIME_PER_BLOCK_MINUTES;
   $('time-saved').textContent = formatTimeSaved(timeSavedMinutes);
 }
 
+// The last seven days, oldest first, as seven bars on one baseline. Each day
+// is read as its name and date, then its blocks; the bar is only the picture
+// of the figure above it, so it is hidden from screen readers.
+const WEEK_BAR_MAX = 156;
+
 function renderChart(dailyHistory) {
-  const chartBars = $('chart-bars');
-  const chartLabels = $('chart-labels');
-  chartBars.innerHTML = '';
-  chartLabels.innerHTML = '';
+  const list = $('week-list');
+  if (!list) return;
 
   const today = new Date();
-  const last7Days = [];
-  const values = [];
-  let maxValue = 1;
+  const days = [];
 
   for (let i = 6; i >= 0; i--) {
     const date = new Date(today);
     date.setDate(date.getDate() - i);
     const dateKey = date.toISOString().slice(0, 10);
-    const dayName = date.toLocaleDateString('en-US', { weekday: 'short' });
-    
-    last7Days.push({ key: dateKey, label: dayName });
-    const value = dailyHistory[dateKey] || 0;
-    values.push(value);
-    if (value > maxValue) maxValue = value;
+    days.push({ date, isToday: i === 0, value: dailyHistory[dateKey] || 0 });
   }
 
-  last7Days.forEach((day, index) => {
-    const value = values[index];
-    const heightPercent = maxValue > 0 ? (value / maxValue) * 100 : 0;
-    const height = Math.max(4, heightPercent * 1.6);
+  const most = Math.max(1, ...days.map(day => day.value));
 
-    const wrapper = document.createElement('div');
-    wrapper.className = 'chart-bar-wrapper';
+  list.replaceChildren(...days.map(({ date, isToday, value }) => {
+    const item = make('li', isToday ? 'week-day is-today' : 'week-day');
 
-    const bar = document.createElement('div');
-    bar.className = 'chart-bar';
-    bar.style.height = `${height}px`;
+    const name = make('span', 'meta week-name', date.toLocaleDateString('en-US', { weekday: 'short' }));
+    name.appendChild(make('span', 'visually-hidden', `, ${formatDate(date)}: `));
 
+    const plot = make('span', 'week-plot');
+    const count = make('span', 'week-count', formatNumber(value));
+    count.appendChild(make('span', 'visually-hidden', value === 1 ? ' block' : ' blocks'));
+    plot.appendChild(count);
     if (value > 0) {
-      const tooltip = document.createElement('div');
-      tooltip.className = 'chart-bar-tooltip';
-      tooltip.textContent = value.toString();
-      bar.appendChild(tooltip);
+      const bar = make('span', 'week-bar');
+      bar.setAttribute('aria-hidden', 'true');
+      bar.style.height = `${Math.max(2, Math.round((value / most) * WEEK_BAR_MAX))}px`;
+      plot.appendChild(bar);
     }
 
-    wrapper.appendChild(bar);
-    chartBars.appendChild(wrapper);
-
-    const label = document.createElement('div');
-    label.className = 'chart-label';
-    label.textContent = day.label;
-    chartLabels.appendChild(label);
-  });
+    item.appendChild(name);
+    item.appendChild(plot);
+    return item;
+  }));
 }
 
 function renderTopDomains(topDomains) {
   const container = $('top-sites');
-  const entries = Object.entries(topDomains).sort((a, b) => b[1] - a[1]).slice(0, 10);
+  const entries = Object.entries(topDomains).sort((a, b) => b[1] - a[1]).slice(0, TOP_SITES_LIMIT);
 
   if (entries.length === 0) {
-    container.innerHTML = `
-      <div class="empty-state">
-        <div class="empty-state-icon">🎉</div>
-        <div class="empty-state-text">No sites blocked yet. Keep up the great work!</div>
-      </div>
-    `;
+    container.replaceChildren(emptyItem('Nothing has been blocked yet.'));
     return;
   }
 
-  container.innerHTML = entries.map(([domain, count], index) => `
-    <div class="top-site-item">
-      <div class="top-site-info">
-        <div class="top-site-rank">${index + 1}</div>
-        <div class="top-site-domain" title="${domain}">${domain}</div>
-      </div>
-      <div class="top-site-count">${count}x</div>
-    </div>
-  `).join('');
+  container.replaceChildren(...entries.map(([domain, count]) => {
+    const n = Number(count) || 0;
+    const tally = make('span', 'domain-count', `${formatNumber(n)} ${n === 1 ? 'block' : 'blocks'}`);
+    return hostRow(String(domain), tally);
+  }));
 }
 
 function renderRecentActivity(activity) {
   const container = $('activity-list');
+  const items = Array.isArray(activity) ? activity : [];
 
-  if (activity.length === 0) {
-    container.innerHTML = `
-      <div class="empty-state">
-        <div class="empty-state-icon">📭</div>
-        <div class="empty-state-text">No recent activity to display.</div>
-      </div>
-    `;
+  if (items.length === 0) {
+    container.replaceChildren(emptyItem('No recent blocks.'));
     return;
   }
 
-  const recentItems = activity.slice(-20).reverse();
+  const recentItems = items.slice(-RECENT_LIMIT).reverse();
 
-  container.innerHTML = recentItems.map(item => {
-    const domain = extractDomain(item.url);
-    const timeAgo = getTimeAgo(item.timestamp);
-    
-    return `
-      <div class="activity-item">
-        <div class="activity-info">
-          <div class="activity-icon blocked">🚫</div>
-          <div>
-            <div class="activity-domain" title="${domain}">${domain}</div>
-            <div class="activity-time">${timeAgo}</div>
-          </div>
-        </div>
-      </div>
-    `;
-  }).join('');
+  container.replaceChildren(...recentItems.map(item => {
+    const domain = extractDomain(item && item.url);
+    const when = timeElement(item && item.timestamp, getTimeAgo(item && item.timestamp), 'domain-count');
+    return hostRow(domain, when);
+  }));
 }
 
 function getTimeAgo(timestamp) {
   const seconds = Math.floor((Date.now() - timestamp) / 1000);
-  
+
   if (seconds < 60) return 'Just now';
   if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
   if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
@@ -263,8 +261,25 @@ function getTimeAgo(timestamp) {
 
 function renderQuote() {
   const quote = getRandomQuote();
-  $('quote-text').textContent = `"${quote.text}"`;
+  $('quote-text').textContent = quote.text;
   $('quote-author').textContent = `— ${quote.author}`;
+}
+
+// The index numerals count the sections on show, so hiding Protection never
+// leaves the page starting at 02.
+function numberSections() {
+  let n = 0;
+  document.querySelectorAll('.section').forEach((section) => {
+    if (section.hidden) return;
+    n += 1;
+    const index = section.querySelector('.index');
+    if (index) index.textContent = String(n).padStart(2, '0');
+  });
+}
+
+function showAlert(message) {
+  const el = $('stats-alert');
+  if (el) el.textContent = message || '';
 }
 
 async function init() {
@@ -283,9 +298,11 @@ async function init() {
     renderTopDomains(topDomains);
     renderRecentActivity(recentActivity);
     renderQuote();
+    numberSections();
 
   } catch (error) {
     console.error('BlockNSFW stats: Error loading data', error);
+    showAlert(LOAD_FAILED);
   }
 }
 

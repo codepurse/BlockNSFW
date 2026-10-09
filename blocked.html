@@ -3,406 +3,205 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Site Blocked - BlockNSFW</title>
+  <title>Page held · BlockNSFW</title>
+  <script src="ui/scheme.js"></script>
+  <link rel="stylesheet" href="ui/tokens.css" />
+  <link rel="stylesheet" href="ui/components.css" />
   <style>
-    :root {
-      /* ===== Clean Modern Dark — single indigo accent (matches options.html) ===== */
+    /* The held page: paper, one centred column, the first line says what
+       happened. People often arrive here at a low moment, so it is calm and
+       says nothing about them. Classic is this document as written; the other
+       designs restyle it through html[data-theme] (blocked-themes.css). */
 
-      /* Surfaces */
-      --background: #0b0c10;
-      --background-gradient: linear-gradient(180deg, #0c0d12 0%, #0a0b0e 100%);
-      --surface: #14161c;
-      --surface-2: #1a1d24;
-      --foreground: #f2f3f5;
-      --foreground-muted: #a4abb8;
-      --foreground-dim: #868e9e;
-
-      /* Card */
-      --card-bg: #14161c;
-      --card-border: rgba(255, 255, 255, 0.07);
-      --card-border-hover: rgba(255, 255, 255, 0.14);
-      --card-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
-      --card-shadow-hover: 0 18px 40px rgba(0, 0, 0, 0.45);
-
-      /* Primary accent (indigo) */
-      --primary: #6366f1;
-      --primary-hover: #818cf8;
-      --primary-glow: rgba(99, 102, 241, 0.22);
-      --primary-soft: rgba(99, 102, 241, 0.12);
-      --primary-foreground: #ffffff;
-
-      /* Secondary */
-      --secondary: #1d2027;
-      --secondary-hover: #262a33;
-      --secondary-foreground: #e6e8ec;
-
-      /* Inputs / surfaces */
-      --input-bg: #0f1116;
-      --input-border: rgba(255, 255, 255, 0.10);
-
-      /* Status */
-      --destructive: #ef4444;
-      --destructive-hover: #dc2626;
-
-      /* Typography */
-      --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-      --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-
-      /* Spacing & sizing */
-      --radius: 10px;
-      --radius-sm: 8px;
-      --radius-lg: 14px;
-      --transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-      --transition-fast: all 0.12s cubic-bezier(0.4, 0, 0.2, 1);
-    }
-
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
-
-    /* Hidden until blocked.js has applied the chosen design (blocked-themes.js),
-       so a designed page never flashes the Classic one first. The animation
-       reveals the page anyway if the script never runs: a blocked page that
-       fails to appear is far worse than one that flickers. */
+    /* Hidden until the saved design is applied, so a design never flashes in
+       over Classic. If script never runs, the page shows itself after 0.6s. */
     html.theme-pending body {
       visibility: hidden;
       animation: theme-reveal 0s linear 0.6s forwards;
     }
-    @keyframes theme-reveal { to { visibility: visible; } }
+    @keyframes theme-reveal {
+      to { visibility: visible; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      html.theme-pending body {
+        animation-delay: 0.6s !important;
+      }
+    }
 
     body {
-      font-family: var(--font-sans);
-      background: var(--background-gradient);
-      color: var(--foreground);
-      line-height: 1.6;
-      font-size: 14px;
-      -webkit-font-smoothing: antialiased;
-      -moz-osx-font-smoothing: grayscale;
-      display: grid;
-      place-items: center;
-      min-height: 100dvh;
-      padding: 1.5rem 1rem;
+      position: relative;
+      isolation: isolate;
+      min-height: 100vh;
+      padding: clamp(48px, 16vh, 160px) var(--space-4) var(--space-6);
     }
 
     .container {
       width: 100%;
-      max-width: 560px;
+      max-width: 32rem;
+      margin: 0 auto;
     }
 
-    /* Card — mirrors options.html .card with the indigo top-line accent */
-    .blocked-card {
-      background: var(--card-bg);
-      border: 1px solid var(--card-border);
-      border-radius: var(--radius-lg);
-      padding: 1.75rem;
-      box-shadow: var(--card-shadow);
-      transition: var(--transition);
-      position: relative;
-      overflow: hidden;
-      animation: fadeIn 0.4s ease-out;
+    /* Classic stands in the field, as monolab.dev's title page does: the
+       marks come down over the top of the screen, and the words sit in the
+       clearing below the layer where they are decided. The other designs
+       draw their own picture, so they leave it out. */
+    html:not([data-theme]) body {
+      padding-top: clamp(96px, 30vh, 280px);
     }
-
-    .blocked-card::before {
-      content: '';
-      position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      height: 1px;
-      background: linear-gradient(90deg, transparent, var(--primary), transparent);
-      opacity: 0.5;
-      transition: var(--transition);
+    html:not([data-theme]) .blocked-header,
+    html:not([data-theme]) .support,
+    html:not([data-theme]) .blocked-foot {
+      text-align: center;
     }
-
-    .blocked-card:hover {
-      border-color: var(--card-border-hover);
-      box-shadow: var(--card-shadow-hover);
+    html:not([data-theme]) .blocked-subtitle {
+      margin-inline: auto;
     }
-
-    .blocked-card:hover::before {
-      opacity: 1;
-    }
-
-    /* Header */
-    .blocked-header {
-      display: flex;
-      align-items: center;
-      gap: 0.875rem;
-      margin-bottom: 1.5rem;
-    }
-
-    .blocked-icon {
-      width: 46px;
-      height: 46px;
-      background: rgba(239, 68, 68, 0.12);
-      border: 1px solid rgba(239, 68, 68, 0.28);
-      border-radius: var(--radius);
-      display: flex;
-      align-items: center;
+    html:not([data-theme]) .blocked-actions {
       justify-content: center;
-      font-size: 1.45rem;
-      flex-shrink: 0;
+    }
+    html[data-theme] .field-art {
+      display: none;
     }
 
-    .blocked-title-section h1 {
-      font-size: 1.4rem;
-      font-weight: 650;
-      color: var(--foreground);
-      letter-spacing: -0.02em;
-      line-height: 1.2;
-      margin-bottom: 0.2rem;
+    /* The held mark: pale pine, the Held icon, the word in pine. It wipes
+       down once as the page appears. */
+    .held-plate {
+      gap: var(--space-2);
+      padding: 6px var(--space-3) 6px 10px;
+    }
+    html:not(.theme-pending) .held-plate {
+      animation: held-wipe var(--dur-held) var(--ease-out-quint) backwards;
+    }
+    @keyframes held-wipe {
+      from { clip-path: inset(0 0 100% 0); }
+      to { clip-path: inset(0 0 0 0); }
     }
 
+    .blocked-title {
+      margin-top: var(--space-5);
+    }
     .blocked-subtitle {
-      color: var(--foreground-muted);
-      font-size: 0.9rem;
-      font-weight: 400;
-      margin: 0;
+      margin-top: var(--space-3);
+      max-width: 28rem;
+      font-size: 16px;
+      color: var(--color-ink-2);
     }
 
-    /* Content */
-    .blocked-content {
-      margin-bottom: 1.75rem;
-    }
-
-    .blocked-message {
-      color: var(--foreground-muted);
-      font-size: 0.95rem;
-      line-height: 1.6;
-      margin-bottom: 1.5rem;
-    }
-
-    /* Muted lines (Reason / AI confidence — injected by blocked.js) */
-    .muted {
-      color: var(--foreground-dim);
-      font-size: 0.85rem;
-      margin-top: 0.5rem;
-    }
-
-    /* Section label (matches options.html section-title / stat-label) */
-    .blocked-url-label {
-      color: var(--foreground-dim);
-      font-size: 0.72rem;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.1em;
-      margin-bottom: 0.5rem;
-    }
-
-    /* URL box — input-style surface */
-    .blocked-url {
-      background: var(--input-bg);
-      border: 1px solid var(--input-border);
-      border-radius: var(--radius-sm);
-      padding: 0.75rem 0.875rem;
-      font-family: var(--font-mono);
-      font-size: 0.85rem;
-      color: var(--foreground);
-      word-break: break-all;
-      line-height: 1.45;
-      transition: var(--transition-fast);
-    }
-
-    .blocked-url:hover {
-      border-color: var(--primary);
-    }
-
-    /* Trigger-word chips — code-style (matches options.html .code) */
-    .matched-terms {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 0.5rem;
-    }
-
-    .matched-term {
-      background: var(--primary-soft);
-      border: 1px solid rgba(99, 102, 241, 0.25);
-      border-radius: var(--radius-sm);
-      padding: 0.3rem 0.6rem;
-      font-family: var(--font-mono);
-      font-size: 0.8rem;
-      font-weight: 500;
-      color: var(--primary-hover);
-      word-break: break-word;
-      line-height: 1.3;
-      transition: var(--transition-fast);
-    }
-
-    .matched-term:hover {
-      background: rgba(99, 102, 241, 0.2);
-    }
-
-    /* Actions */
     .blocked-actions {
       display: flex;
-      gap: 0.625rem;
       flex-wrap: wrap;
+      gap: var(--space-2);
+      margin-top: var(--space-6);
     }
 
-    .button {
+    /* Why, as a few hairline records. */
+    .why {
+      margin-top: var(--space-7);
+      border-top: 1px solid var(--color-rule);
+    }
+    .why > summary {
       display: inline-flex;
       align-items: center;
-      justify-content: center;
-      gap: 0.375rem;
-      padding: 0.625rem 1.125rem;
-      font-family: var(--font-sans);
-      font-size: 0.875rem;
-      font-weight: 500;
-      border-radius: var(--radius-sm);
-      border: 1px solid var(--card-border);
-      background: var(--secondary);
-      color: var(--secondary-foreground);
-      text-decoration: none;
+      gap: var(--space-2);
+      padding: var(--space-3) 0;
+      list-style: none;
       cursor: pointer;
-      transition: var(--transition-fast);
-      white-space: nowrap;
+    }
+    .why > summary::-webkit-details-marker {
+      display: none;
+    }
+    .why > summary:hover {
+      color: var(--color-ink-2);
+    }
+    .why > summary .icon {
+      transition: transform var(--dur-state) var(--ease-in-out-quart);
+    }
+    .why:not([open]) > summary .icon {
+      transform: rotate(-90deg);
+    }
+    .why-rows {
+      border-top: 1px solid var(--color-rule);
+    }
+    .why-rows .record + .record {
+      border-top: 1px solid var(--color-rule);
+    }
+    .why-rows dd {
+      margin: 0;
+    }
+    .blocked-url {
+      letter-spacing: 0.04em;
+    }
+    .why-value {
+      font-size: 14px;
+      text-align: right;
+    }
+    .blocked-message {
+      padding: var(--space-3) 0;
+      border-top: 1px solid var(--color-rule);
+      font-size: 14px;
+      color: var(--color-ink-2);
     }
 
-    .button:hover {
-      background: var(--secondary-hover);
-      border-color: var(--card-border-hover);
-    }
-
-    .button:focus-visible {
-      outline: none;
-      box-shadow: 0 0 0 3px var(--primary-glow);
-    }
-
-    .button-primary {
-      background: var(--primary);
-      color: var(--primary-foreground);
-      border-color: var(--primary);
-    }
-
-    .button-primary:hover {
-      background: var(--primary-hover);
-      border-color: var(--primary-hover);
-    }
-
-    .button-destructive {
-      background: transparent;
-      color: var(--destructive);
-      border-color: rgba(239, 68, 68, 0.4);
-    }
-
-    .button-destructive:hover {
-      background: rgba(239, 68, 68, 0.12);
-      border-color: var(--destructive);
-      color: var(--destructive);
-    }
-
-    /* Supportive community callout */
     .support {
-      margin-bottom: 1.75rem;
-      padding: 1.1rem 1.2rem;
-      background: var(--primary-soft);
-      border: 1px solid rgba(99, 102, 241, 0.25);
-      border-radius: var(--radius);
+      margin-top: var(--space-6);
+      font-size: 14px;
+      color: var(--color-ink-2);
     }
-    .support-head {
-      display: flex;
-      gap: 0.75rem;
-      align-items: flex-start;
-      margin-bottom: 0.95rem;
-    }
-    .support-icon {
-      flex-shrink: 0;
-      width: 38px;
-      height: 38px;
-      border-radius: 50%;
-      background: linear-gradient(135deg, var(--primary), var(--primary-hover));
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      color: #fff;
-      box-shadow: 0 3px 10px rgba(99, 102, 241, 0.3);
-    }
-    .support-icon svg { width: 20px; height: 20px; }
-    .support-title { font-weight: 650; font-size: 0.98rem; color: var(--foreground); margin-bottom: 0.2rem; }
-    .support-text { color: var(--foreground-muted); font-size: 0.88rem; margin: 0; }
-    .support-cta { width: 100%; }
-
-    @keyframes fadeIn {
-      from { opacity: 0; transform: translateY(16px); }
-      to { opacity: 1; transform: translateY(0); }
+    .support-title {
+      color: var(--color-ink);
+      font-weight: 500;
     }
 
-    @media (max-width: 560px) {
-      .blocked-card {
-        padding: 1.375rem;
-      }
-
-      .blocked-header {
-        gap: 0.75rem;
-      }
-
-      .blocked-title-section h1 {
-        font-size: 1.25rem;
-      }
-
-      .blocked-actions {
-        flex-direction: column;
-      }
-
-      .button {
-        width: 100%;
-      }
+    .blocked-foot {
+      margin-top: var(--space-7);
     }
   </style>
   <link rel="stylesheet" href="blocked-themes.css" />
 </head>
 <body>
+  <div class="field-art" aria-hidden="true">
+    <img class="field-still field-still-light" src="ui/field-still.svg" alt="" />
+    <img class="field-still field-still-dark" src="ui/field-still-dark.svg" alt="" />
+  </div>
   <main class="container">
     <section class="theme-hero" id="theme-hero" hidden></section>
     <div class="blocked-card">
-      <div class="blocked-header">
-        <div class="blocked-icon">🚫</div>
-        <div class="blocked-title-section">
-          <h1>Site Blocked</h1>
-          <p class="blocked-subtitle">BlockNSFW – Porn & Adult Content Filter</p>
-        </div>
+      <header class="blocked-header">
+        <p class="held held-plate">
+          <svg class="icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M2 10.5h12" stroke-width="1.5" /><path d="M8 2v5.5" /><path d="M5.5 5.5L8 7.75 10.5 5.5" /></svg>
+          <span class="held-word">held</span>
+        </p>
+        <h1 class="title title-held blocked-title">This page was held.</h1>
+        <p class="blocked-subtitle">BlockNSFW stopped it before it loaded.</p>
+      </header>
+
+      <div class="blocked-actions">
+        <button type="button" class="btn btn-primary" id="back-button">Go back</button>
+        <a class="btn btn-ghost" id="settings" href="#">Settings</a>
       </div>
 
       <details class="why" id="why" open>
-        <summary>Why was this blocked?</summary>
+        <summary class="meta">
+          <svg class="icon icon-12" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M4 6l4 4 4-4" /></svg>
+          Why this page was held
+        </summary>
         <div class="blocked-content">
-          <p class="blocked-message">
-            This site has been blocked because it matches your adult-content filters.
-            Your protection is active and working to keep your browsing experience safe.
-          </p>
-
-          <div class="blocked-url-label">Blocked URL</div>
-          <div class="blocked-url" id="target-url">(loading...)</div>
+          <dl class="why-rows" id="why-rows">
+            <div class="record">
+              <dt class="meta blocked-url-label">address</dt>
+              <dd class="record-value blocked-url" id="target-url">••••••••</dd>
+            </div>
+          </dl>
+          <p class="blocked-message">It matched your protection settings.</p>
         </div>
       </details>
 
-      <div class="support">
-        <div class="support-head">
-          <span class="support-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 1 0-7.78 7.78L12 21.23l8.84-8.84a5.5 5.5 0 0 0 0-7.78z"/></svg>
-          </span>
-          <div>
-            <div class="support-title">Struggling right now?</div>
-            <p class="support-text">You're not alone. Read how others in the community got through this — and share your own story when you're ready.</p>
-          </div>
-        </div>
-        <a class="button button-primary support-cta" href="community.html">Read community stories →</a>
-      </div>
-
-      <div class="blocked-actions">
-        <a class="button button-primary" id="settings" href="#" target="_blank" rel="noopener">
-          ⚙️ Manage Settings
-        </a>
-        <button class="button" id="back-button">
-          ← Go Back
-        </button>
-        <button class="button button-destructive" id="temporary-bypass" style="display: none;">
-          ⚠️ Temporary Bypass
-        </button>
-      </div>
+      <p class="support">
+        <span class="support-title">Having a hard moment?</span>
+        <a class="link support-cta" href="community.html">Read how others got through it</a>
+      </p>
     </div>
+    <footer class="meta blocked-foot">BlockNSFW · monolab</footer>
   </main>
 
   <script src="blocked-themes.js"></script>

@@ -15,16 +15,39 @@ const vm = require('vm');
 const ROOT = path.join(__dirname, '..');
 const AUDIT_SOURCE = fs.readFileSync(path.join(ROOT, 'audit.js'), 'utf8');
 
+// Event rows are built with createElement and filled with textContent (never
+// innerHTML), so the fake element keeps its children and attributes.
 function makeEl(id) {
   return {
     id,
     innerHTML: '',
     textContent: '',
     value: '',
+    className: '',
+    hidden: false,
     dataset: {},
+    children: [],
+    attributes: {},
     classList: { add() {}, remove() {}, toggle() {}, contains: () => false },
-    addEventListener() {}
+    addEventListener() {},
+    setAttribute(name, value) { this.attributes[name] = String(value); },
+    getAttribute(name) { return name in this.attributes ? this.attributes[name] : null; },
+    removeAttribute(name) { delete this.attributes[name]; },
+    appendChild(child) { this.children.push(child); return child; },
+    replaceChildren(...kids) { this.children = kids; },
+    focus() {}
   };
+}
+
+// The hostnames a rendered list shows: the text of every .domain element.
+function shownHosts(el) {
+  const out = [];
+  (function walk(node) {
+    if (!node) return;
+    if (String(node.className || '').split(/\s+/).includes('domain')) out.push(node.textContent);
+    (node.children || []).forEach(walk);
+  })(el);
+  return out;
 }
 
 function loadAudit({ blockedCount = 0 } = {}) {
@@ -50,6 +73,8 @@ function loadAudit({ blockedCount = 0 } = {}) {
         return els.get(id);
       },
       querySelectorAll: () => [],
+      createElement: (tag) => makeEl(tag),
+      createTextNode: (text) => ({ textContent: String(text) }),
       addEventListener: (type, fn) => {
         if (!documentListeners.has(type)) documentListeners.set(type, []);
         documentListeners.get(type).push(fn);
@@ -130,9 +155,11 @@ test('clicking a page button re-renders that page', async () => {
   clickPageButton(documentListeners, { page: 3 });
   assert.equal(activePage(els.get('all-pagination').innerHTML), 3, 'the button moved the view');
 
-  const listed = els.get('all-list').innerHTML;
-  assert.match(listed, /example40\.test/, 'page 3 shows items 41-60 (newest first)');
-  assert.doesNotMatch(listed, /example0\.test<|example5\.test\//, 'page 1 items are gone');
+  const hosts = shownHosts(els.get('all-list'));
+  assert.ok(hosts.includes('example40.test'), 'page 3 shows items 41-60 (newest first)');
+  assert.ok(!hosts.includes('example0.test') && !hosts.includes('example5.test'), 'page 1 items are gone');
+  assert.ok(hosts.length > 0 && hosts.every((h) => !/[\/?#]/.test(h)),
+    'the log shows the hostname only, never the path of a blocked page');
 });
 
 test('a disabled page button does nothing', async () => {
