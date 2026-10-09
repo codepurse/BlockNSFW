@@ -16,6 +16,7 @@ const AccessCode = self.AccessCode;
 const Pact = self.Pact || null;
 const PinHash = self.PinHash || null;
 const Boost = self.Boost || null;
+const Weekly = self.Weekly || null;
 
 // During Storm Mode or Risk Hours nothing that loosens protection can be done.
 // Resolves true, after saying so, when that is why a change is refused.
@@ -484,6 +485,17 @@ function showStormDialog() {
     };
     cancel.onclick = () => finish(null);
   });
+}
+
+// "New" beside Your week from its last evening until it's opened
+// (shared/weekly.js).
+async function markNewWeek() {
+  const mark = $('week-new');
+  if (!Weekly || !mark) return;
+  try {
+    const store = await browserAPI.storage.local.get([Weekly.SEEN_KEY, 'pblocker_first_seen']);
+    mark.hidden = !Weekly.hasNew(Date.now(), Weekly.MONDAY, store[Weekly.SEEN_KEY], Number(store.pblocker_first_seen));
+  } catch (_) {}
 }
 
 async function startStorm() {
@@ -1583,6 +1595,15 @@ document.addEventListener('DOMContentLoaded', async () => {
       browserAPI.tabs.create({ url: browserAPI.runtime.getURL('morning.html') });
       window.close();
     });
+  }
+  const weekLink = $('week-link');
+  if (weekLink) {
+    weekLink.addEventListener('click', (e) => {
+      e.preventDefault();
+      browserAPI.tabs.create({ url: browserAPI.runtime.getURL('week.html') });
+      window.close();
+    });
+    markNewWeek();
   }
 
   // Anything whose wait is over is applied as the popup opens.

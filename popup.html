@@ -165,6 +165,10 @@
     .links .row-link + .row-link {
       border-top: 1px solid var(--color-rule);
     }
+    /* A week's letter is ready and not yet read. */
+    .week-new {
+      margin-left: var(--space-2);
+    }
 
     .popup-notice {
       padding: var(--space-2) 0;
@@ -320,6 +324,10 @@
       Statistics
       <svg class="icon icon-right" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M2.5 8h11M9.5 4l4 4-4 4" /></svg>
     </a>
+    <a href="#" class="row-link" id="week-link">
+      <span>Your week <span class="meta meta-pine week-new" id="week-new" hidden>New</span></span>
+      <svg class="icon icon-right" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M2.5 8h11M9.5 4l4 4-4 4" /></svg>
+    </a>
     <a href="#" class="row-link" id="slip-link">
       After a slip
       <svg class="icon icon-right" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M2.5 8h11M9.5 4l4 4-4 4" /></svg>
@@ -467,6 +475,7 @@
   <script src="shared/pin-hash.js"></script>
   <script src="shared/pact.js"></script>
   <script src="shared/boost.js"></script>
+  <script src="shared/weekly.js"></script>
   <script src="popup.js"></script>
 </body>
 </html>

@@ -28,7 +28,17 @@ test('telHref only for something that is plainly a phone number', () => {
 
 test('kept moments count up', () => {
   const once = Moments.addKept(undefined, NOW);
-  assert.deepEqual(Moments.addKept(once, NOW + 1), { count: 2, last: NOW + 1 });
+  assert.deepEqual(Moments.addKept(once, NOW + 1), { count: 2, last: NOW + 1, times: [NOW, NOW + 1] });
+});
+
+test('kept moments remember the last five weeks of times, and the whole count', () => {
+  let kept = { count: 40, last: NOW - 60 * DAY };
+  kept = Moments.addKept(kept, NOW - 40 * DAY);
+  kept = Moments.addKept(kept, NOW - 2 * DAY);
+  kept = Moments.addKept(kept, NOW);
+  assert.equal(kept.count, 43);
+  assert.deepEqual(kept.times, [NOW - 2 * DAY, NOW], 'older than five weeks drops');
+  assert.deepEqual(Moments.normalizeKept({ count: 1, times: ['x', -1, 5, 3] }).times, [3, 5]);
 });
 
 test('a slip is recorded as one day, with only known tags', () => {

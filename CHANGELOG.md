@@ -78,6 +78,16 @@ the urge works even when you know every PIN.
   removing a site or shortening the pause waits under a pact like any
   loosening change. The slip page asks where it started and offers to make
   that a gateway, and Statistics counts the times you stopped at the door.
+- **Your week**. Every Sunday from 6 pm, a short page about the week just
+  gone, Monday to Sunday: each time you stopped at a gateway's door, waited
+  it out or slipped, drawn day by day as lines that come to the door and turn
+  back, with a brass square for each day kept. Under it, three numbers beside
+  the week before, one thing to try taken from the week itself (usually
+  starting risk hours before the hour it tends to get hard, and only ever
+  widening them), and a plain closing line. The popup marks it New until it's
+  opened, Statistics links to it, and earlier weeks are a link away. Times of
+  stops and waited-out moments are now kept for five weeks so it can be drawn.
+  Nothing leaves the device.
 - **Days kept** (Statistics). Days in the last 30 with protection on all day
   and no slip, shown beside the current run, the longest run and the moments
   waited out. A slip costs a day, not the count.

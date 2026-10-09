@@ -1,0 +1,388 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Your week · BlockNSFW</title>
+  <script src="ui/scheme.js"></script>
+  <link rel="stylesheet" href="ui/tokens.css" />
+  <link rel="stylesheet" href="ui/components.css" />
+  <style>
+    /* Your week: the threshold drawing from the page after Not tonight,
+       stretched over seven days. Each time someone stopped at a gateway is a
+       line that comes to the door and turns back; a moment waited out turns
+       back lower; a slip goes through, dotted. A brass square is a day kept.
+       Under it, three numbers beside the week before, one thing to try, and a
+       closing line.
+
+       The drawing is redrawn at the width it's shown, so a wide screen gets a
+       wider week, never bigger type. Past 100rem the page itself widens and
+       the numbers and the suggestion sit side by side. */
+    /* A tall window centres the page top to bottom; a short one starts it
+       at the top (auto margins never push it off screen). */
+    body {
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+    }
+    .week {
+      box-sizing: border-box;
+      width: 100%;
+      max-width: 70rem;
+      margin: auto;
+      padding: clamp(var(--space-6), 9vh, 104px) var(--space-7) var(--space-7);
+    }
+    @media (min-width: 100rem) {
+      .week {
+        max-width: min(130rem, 84vw);
+      }
+    }
+    /* Very wide screens: the whole page steps up in size, so a 4K window
+       isn't a small column of text in a large empty field. The width is set
+       before the zoom, so it still ends up 84% of the window. */
+    @media (min-width: 137.5rem) {
+      .week {
+        zoom: 1.25;
+        max-width: min(130rem, 67vw);
+      }
+    }
+    @media (min-width: 187.5rem) {
+      .week {
+        zoom: 1.5;
+        max-width: min(130rem, 56vw);
+      }
+    }
+    @media (max-width: 40rem) {
+      .week {
+        padding-inline: var(--space-4);
+      }
+    }
+    .back-link {
+      gap: 6px;
+      padding: var(--space-1) 0;
+    }
+    .week-eyebrow {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--space-2);
+      margin-top: var(--space-6);
+    }
+    .week-kind {
+      color: var(--color-pine);
+    }
+    .week-title {
+      max-width: 46rem;
+      margin-top: var(--space-4);
+      font-family: var(--font-display);
+      font-size: clamp(34px, 4.5vw, 52px);
+      font-weight: 400;
+      line-height: 1.08;
+      letter-spacing: -0.02em;
+      text-wrap: balance;
+    }
+    .week-title:focus {
+      outline: none;
+    }
+    .week-lede {
+      max-width: 36rem;
+      margin-top: 18px;
+      font-size: 18px;
+      color: var(--color-ink-2);
+    }
+
+    /* The drawing. Narrower than 560px it scrolls sideways in its own box
+       rather than shrinking its labels away. */
+    .week-figure {
+      margin: var(--space-7) 0 0;
+    }
+    .week-scroll {
+      overflow-x: auto;
+      overflow-y: hidden;
+    }
+    .week-drawing {
+      display: block;
+      overflow: visible;
+    }
+    .week-drawing path,
+    .week-drawing rect,
+    .week-drawing circle,
+    .week-legend path,
+    .week-legend circle {
+      fill: none;
+    }
+    .wk-door {
+      stroke: var(--color-rule-3);
+      stroke-width: 1.5;
+    }
+    .wk-sep {
+      stroke: var(--color-rule);
+      stroke-opacity: 0.55;
+    }
+    .wk-base {
+      stroke: var(--color-rule);
+    }
+    .wk-stop {
+      stroke: var(--color-pine-2);
+      stroke-width: 1.75;
+    }
+    .wk-kept {
+      stroke: var(--color-ink-2);
+      stroke-width: 1.25;
+    }
+    .wk-slip {
+      stroke: var(--color-rule-3);
+      stroke-width: 1.25;
+      stroke-dasharray: 2 4;
+    }
+    .wk-slip-end,
+    .wk-day-broken {
+      stroke: var(--color-rule-3);
+    }
+    .week-drawing .wk-day-kept,
+    .week-legend .wk-day-kept {
+      fill: var(--color-brass);
+    }
+    .wk-label,
+    .wk-time,
+    .wk-more,
+    .wk-door-label {
+      font-family: var(--font-mono);
+      fill: var(--color-ink-3);
+    }
+    .wk-label {
+      font-size: 11px;
+      letter-spacing: 0.1em;
+      fill: var(--color-ink-2);
+    }
+    .wk-label-today {
+      fill: var(--color-pine);
+    }
+    .wk-label-ahead {
+      fill: var(--color-ink-3);
+    }
+    .wk-time {
+      font-size: 9px;
+      letter-spacing: 0.06em;
+    }
+    .wk-more,
+    .wk-door-label {
+      font-size: 10px;
+      letter-spacing: 0.1em;
+    }
+    .week-legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px 28px;
+      margin-top: 20px;
+      font-size: 13px;
+      color: var(--color-ink-2);
+    }
+    .week-legend span {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--space-2);
+    }
+    .week-legend svg {
+      flex: none;
+    }
+
+    /* The numbers, and one thing to try. */
+    .week-lower {
+      display: grid;
+      gap: 40px;
+      margin-top: var(--space-7);
+    }
+    @media (min-width: 100rem) {
+      .week-lower {
+        grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+        align-items: start;
+      }
+    }
+    .week-numbers {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      border-top: 1px solid var(--color-rule-2);
+      border-bottom: 1px solid var(--color-rule);
+    }
+    .week-numbers > div {
+      padding: 20px 24px;
+      border-left: 1px solid var(--color-rule);
+    }
+    .week-numbers > div:first-child {
+      padding-left: 0;
+      border-left: 0;
+    }
+    .week-numbers dt {
+      font-size: 15px;
+      font-weight: 500;
+    }
+    .week-number {
+      margin-top: 6px;
+      font-family: var(--font-display);
+      font-size: 44px;
+      line-height: 1;
+      color: var(--color-brass);
+    }
+    .week-number-of {
+      font-size: 22px;
+      color: var(--color-ink-2);
+    }
+    .week-before {
+      margin-top: var(--space-2);
+      font-size: 13px;
+      color: var(--color-ink-2);
+    }
+    @media (max-width: 36rem) {
+      .week-numbers {
+        grid-template-columns: minmax(0, 1fr);
+      }
+      .week-numbers > div,
+      .week-numbers > div:first-child {
+        padding: 16px 0;
+        border-left: 0;
+      }
+      .week-numbers > div + div {
+        border-top: 1px solid var(--color-rule);
+      }
+    }
+
+    .week-try {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: var(--space-5) var(--space-7);
+      padding: 28px 32px;
+      border: 1px solid var(--color-rule);
+      border-radius: var(--radius-xs);
+    }
+    @media (min-width: 100rem) {
+      .week-try {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+      .week-try .week-try-body {
+        flex: none;
+      }
+    }
+    @media (max-width: 40rem) {
+      .week-try {
+        padding: var(--space-5);
+      }
+    }
+    .week-try-body {
+      flex: 1 1 26rem;
+      min-width: 0;
+    }
+    .week-try-text {
+      max-width: 38rem;
+      margin-top: 10px;
+      font-family: var(--font-display);
+      font-size: 24px;
+      line-height: 1.35;
+    }
+    .week-try-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--space-3);
+    }
+    .week-try-actions .btn {
+      min-height: 48px;
+      padding-inline: var(--space-5);
+      font-size: 15px;
+    }
+    .week-try-done {
+      font-family: var(--font-display);
+      font-size: 20px;
+      color: var(--color-pine);
+    }
+
+    .week-closing {
+      margin-top: var(--space-7);
+      font-family: var(--font-display);
+      font-style: italic;
+      font-size: 28px;
+      line-height: 1.35;
+    }
+    .week-foot {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: baseline;
+      gap: var(--space-2) 20px;
+      margin-top: var(--space-3);
+      font-size: 14px;
+      color: var(--color-ink-2);
+    }
+  </style>
+</head>
+<body>
+  <main class="week">
+    <a class="arrow-link meta back-link" href="stats.html">
+      <svg class="icon icon-12 icon-left" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M13.5 8h-11M6.5 4l-4 4 4 4" /></svg>
+      Statistics
+    </a>
+    <p class="meta week-eyebrow"><span class="week-kind" id="week-kind">Your week</span><span aria-hidden="true">·</span><span id="week-range"></span></p>
+    <h1 class="week-title" id="week-head" tabindex="-1"></h1>
+    <p class="week-lede" id="week-lede"></p>
+
+    <figure class="week-figure">
+      <div class="week-scroll" id="week-scroll">
+        <svg class="week-drawing" id="week-drawing" role="img" aria-labelledby="week-drawing-title">
+          <title id="week-drawing-title"></title>
+        </svg>
+      </div>
+      <figcaption class="week-legend">
+        <span><svg width="18" height="16" viewBox="0 0 18 16" aria-hidden="true"><path class="wk-stop" d="M2 16 V7 A7 7 0 0 1 16 7 V16" /></svg>Came to the door and turned back</span>
+        <span><svg width="18" height="16" viewBox="0 0 18 16" aria-hidden="true"><path class="wk-kept" d="M2 16 V11 A7 7 0 0 1 16 11 V16" /></svg>Waited it out</span>
+        <span><svg width="10" height="16" viewBox="0 0 10 16" aria-hidden="true"><path class="wk-slip" d="M5 16 V6" /><circle class="wk-slip-end" cx="5" cy="3" r="2.5" /></svg>Went through</span>
+        <span><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><rect class="wk-day-kept" x="1" y="1" width="8" height="8" /></svg>A day kept</span>
+      </figcaption>
+    </figure>
+
+    <div class="week-lower">
+      <dl class="week-numbers">
+        <div>
+          <dt>Stopped at the door</dt>
+          <dd class="week-number tnum" id="week-stops">0</dd>
+          <dd class="week-before" id="week-stops-before" hidden></dd>
+        </div>
+        <div>
+          <dt>Moments waited out</dt>
+          <dd class="week-number tnum" id="week-kept">0</dd>
+          <dd class="week-before" id="week-kept-before" hidden></dd>
+        </div>
+        <div>
+          <dt>Days kept</dt>
+          <dd class="week-number tnum"><span id="week-days">0</span> <span class="week-number-of" id="week-days-of"></span></dd>
+          <dd class="week-before" id="week-days-before" hidden></dd>
+        </div>
+      </dl>
+
+      <section class="week-try band-sheet" id="week-try" aria-labelledby="week-try-head" hidden>
+        <div class="week-try-body">
+          <h2 class="meta meta-brass" id="week-try-head">One thing to try</h2>
+          <p class="week-try-text" id="week-try-text"></p>
+        </div>
+        <div class="week-try-actions" id="week-try-actions">
+          <button type="button" class="btn btn-primary" id="week-try-go"></button>
+          <button type="button" class="btn btn-ghost" id="week-try-later">Not now</button>
+        </div>
+        <p class="week-try-done" id="week-try-done" role="status" hidden></p>
+      </section>
+    </div>
+
+    <p class="week-closing" id="week-closing"></p>
+    <nav class="week-foot" aria-label="Other weeks">
+      <span id="week-next-note"></span>
+      <a class="link" id="week-prev" hidden>The week before</a>
+      <a class="link" id="week-next" hidden>The week after</a>
+    </nav>
+  </main>
+
+  <script src="shared/moments.js"></script>
+  <script src="shared/gateways.js"></script>
+  <script src="shared/boost.js"></script>
+  <script src="shared/weekly.js"></script>
+  <script src="week.js"></script>
+</body>
+</html>

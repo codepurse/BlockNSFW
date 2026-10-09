@@ -54,6 +54,8 @@ $RuntimeFiles   = @(
     "morning.js",
     "gateway.html",
     "gateway.js",
+    "week.html",
+    "week.js",
     "community.html",
     "community.js",
     "appwrite-client.js",

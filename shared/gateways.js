@@ -24,9 +24,11 @@
   // meets the pause again.
   var PASS_MS = 15 * 60 * 1000;
   var MAX_CUSTOM = 50;
-  // The last few stops are kept with their time, for the drawing on the page
-  // after Not tonight: one line for each time someone turned back.
-  var RECENT_MAX = 12;
+  // Recent stops are kept with their time: the page after Not tonight draws
+  // the last few, and Your week (shared/weekly.js) draws this week's and
+  // compares them with the week before. Five weeks covers both.
+  var RECENT_MAX = 200;
+  var RECENT_MS = 35 * 24 * 60 * 60 * 1000;
 
   // Built-in gateways. Every one is off until the user turns it on.
   var BUILT_IN = [
@@ -231,7 +233,9 @@
     s.total += 1;
     s.byKey[key] = (s.byKey[key] || 0) + 1;
     s.byHour[new Date(at).getHours()] += 1;
-    s.recent = s.recent.concat([{ key: key, at: at }]).slice(-RECENT_MAX);
+    s.recent = s.recent.concat([{ key: key, at: at }]).filter(function (e) {
+      return e.at > at - RECENT_MS;
+    }).slice(-RECENT_MAX);
     return s;
   }
 

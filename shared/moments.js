@@ -95,14 +95,22 @@
 
   // --- Kept moments ------------------------------------------------------------
 
+  // `times` holds when each recent one happened (the last five weeks), for
+  // Your week (shared/weekly.js); `count` is every one since the start.
+  var KEPT_TIMES_MAX = 200;
+  var KEPT_TIMES_MS = 35 * DAY;
+
   function normalizeKept(raw) {
     var k = raw && typeof raw === 'object' ? raw : {};
-    return { count: Number(k.count) > 0 ? Math.floor(Number(k.count)) : 0, last: Number(k.last) || 0 };
+    var times = (Array.isArray(k.times) ? k.times : []).map(Number).filter(function (t) { return t > 0; })
+      .sort(function (a, b) { return a - b; }).slice(-KEPT_TIMES_MAX);
+    return { count: Number(k.count) > 0 ? Math.floor(Number(k.count)) : 0, last: Number(k.last) || 0, times: times };
   }
 
   function addKept(raw, now) {
     var k = normalizeKept(raw);
-    return { count: k.count + 1, last: now };
+    var times = k.times.concat([now]).filter(function (t) { return t > now - KEPT_TIMES_MS; }).slice(-KEPT_TIMES_MAX);
+    return { count: k.count + 1, last: now, times: times };
   }
 
   // --- Slips -------------------------------------------------------------------
