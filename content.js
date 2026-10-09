@@ -445,6 +445,9 @@ let mediaObserver = null; // Observer for videos/media
 let debugMode = false; // Verbose logging disabled by default
 let blockedTriggered = false;
 let facebookReelsEnabled = false;
+// Set during Storm Mode and Risk Hours (shared/boost.js); see
+// applySearchImageBlur.
+let searchImagesBlurred = false;
 let instagramReelsEnabled = false;
 
 // Custom blocked page settings
@@ -1778,6 +1781,48 @@ function getAiTextThresholds(level) {
 }
 
 // Settings and data loading
+// The image and video tabs of search engines, where SafeSearch leaks most and
+// a harmless query drifts.
+function isImageSearchPage(href) {
+  let url;
+  try { url = new URL(href); } catch (_) { return false; }
+  const host = url.hostname.toLowerCase();
+  const path = url.pathname;
+  const params = url.searchParams;
+  if (/(^|\.)google\.[a-z.]+$/.test(host) && path.startsWith('/search')) {
+    return params.get('tbm') === 'isch' || params.get('tbm') === 'vid' || params.get('udm') === '2' || params.get('udm') === '7';
+  }
+  if (/(^|\.)bing\.com$/.test(host)) return path.startsWith('/images') || path.startsWith('/videos');
+  if (/(^|\.)duckduckgo\.com$/.test(host)) {
+    return ['images', 'videos'].includes(params.get('ia')) || ['images', 'videos'].includes(params.get('iax'));
+  }
+  if (/(^|\.)yandex\.[a-z.]+$/.test(host)) return path.startsWith('/images') || path.startsWith('/video');
+  if (host === 'search.brave.com' || host === 'safe.search.brave.com') {
+    return path.startsWith('/images') || path.startsWith('/videos');
+  }
+  if (host.startsWith('images.search.yahoo.') || host.startsWith('video.search.yahoo.')) return true;
+  return false;
+}
+
+// During Storm Mode and Risk Hours every image on those pages is blurred
+// outright: one style element, nothing done per image, so it costs nothing on
+// any other page.
+const SEARCH_IMAGE_BLUR_ID = 'pblocker-search-image-blur';
+function applySearchImageBlur() {
+  if (!IS_TOP_FRAME) return;
+  const want = isEnabled && searchImagesBlurred && isImageSearchPage(window.location.href);
+  const existing = document.getElementById(SEARCH_IMAGE_BLUR_ID);
+  if (!want) {
+    if (existing) existing.remove();
+    return;
+  }
+  if (existing) return;
+  const style = document.createElement('style');
+  style.id = SEARCH_IMAGE_BLUR_ID;
+  style.textContent = 'img, video, canvas, picture, [style*="background-image"] { filter: blur(28px) !important; }';
+  (document.head || document.documentElement).appendChild(style);
+}
+
 async function loadSettings() {
   try {
     const result = await browserAPI.storage.local.get([
@@ -1845,6 +1890,8 @@ async function loadSettings() {
     // and scores up to 8000 chars per scan, for a feature the user never chose.
     aiTextBlocker = settings.aiTextBlocker === true;
     aiTextStrictness = settings.aiTextStrictness || 'balanced';
+    searchImagesBlurred = settings.searchImagesBlurred === true;
+    applySearchImageBlur();
     // Page-text features are a top-frame concern. Left true in a sub-frame,
     // the MutationObserver would arm a debounced scan on every element
     // insertion in every ad slot, for a scan that then declines to run — the
@@ -2821,7 +2868,10 @@ function isAdultURL(url) {
   if (!url) return false;
   
   try {
-    const urlObj = new URL(url);
+    // Links read off the page are often relative ("/images/search?q=…"). Read
+    // without a base they threw, so those links went unchecked and every one
+    // logged an error.
+    const urlObj = new URL(url, window.location.href);
     const hostname = normalizeHost(urlObj.hostname);
     // Sites the user blocked themselves count too — otherwise their custom
     // blocklist would stop navigation but still let the site's images through
@@ -4638,7 +4688,7 @@ function shouldBlockImage(img) {
         }
         
         try {
-            const linkObj = new URL(linkUrl);
+            const linkObj = new URL(linkUrl, window.location.href);
             const linkPath = buildUrlScanText(linkObj).toLowerCase();
             const highConfSource = HIGH_CONFIDENCE_PATH_KEYWORDS.test(linkPath);
             const ambigSource = AMBIGUOUS_PATH_KEYWORDS.test(linkPath);

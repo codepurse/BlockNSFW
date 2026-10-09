@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>After a slip · BlockNSFW</title>
+  <script src="ui/scheme.js"></script>
+  <link rel="stylesheet" href="ui/tokens.css" />
+  <link rel="stylesheet" href="ui/components.css" />
+  <style>
+    /* After a slip: one calm column. Three questions, a number that survives
+       the day, and one or two things that could make next time easier. No
+       judgement in the words and no alarm in the colour. */
+    .page {
+      max-width: calc(40rem + 2 * var(--space-6));
+      margin-inline: auto;
+      padding-inline: var(--space-6);
+    }
+    .page-head {
+      padding-block: var(--space-7) var(--space-5);
+    }
+    .back-link {
+      gap: 6px;
+      padding: var(--space-1) 0;
+    }
+    .page-title {
+      margin-top: var(--space-4);
+    }
+    .lede {
+      max-width: var(--measure);
+      margin-top: var(--space-3);
+      font-size: 16px;
+      line-height: 1.55;
+      color: var(--color-ink-2);
+    }
+    .step {
+      padding-block: var(--space-5);
+      border-top: 1px solid var(--color-rule);
+    }
+    .step-title {
+      font-size: 15px;
+      font-weight: 500;
+      line-height: 1.4;
+      color: var(--color-ink);
+    }
+    .step-desc {
+      margin-top: var(--space-1);
+      font-size: 14px;
+      line-height: 1.5;
+      color: var(--color-ink-2);
+    }
+    .choices {
+      margin-top: var(--space-3);
+    }
+    .when {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--space-3);
+      margin-top: var(--space-3);
+    }
+    .result {
+      padding-block: var(--space-5) var(--space-6);
+      border-top: 1px solid var(--color-rule);
+    }
+    .kept {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: baseline;
+      gap: var(--space-2) var(--space-3);
+      margin-top: var(--space-4);
+    }
+    .kept-figure {
+      font-family: var(--font-mono);
+      font-size: 32px;
+      line-height: 1.1;
+      font-variant-numeric: tabular-nums;
+      color: var(--color-ink);
+    }
+    .kept-words {
+      font-size: 15px;
+      color: var(--color-ink-2);
+    }
+    .offers {
+      margin-top: var(--space-5);
+    }
+    .offer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--space-4);
+      padding-block: var(--space-4);
+      border-top: 1px solid var(--color-rule);
+    }
+    .offer-text {
+      max-width: var(--measure);
+      font-size: 14px;
+      line-height: 1.5;
+      color: var(--color-ink);
+    }
+    .offer-done {
+      font-size: 14px;
+      color: var(--color-ink-2);
+    }
+    .page-foot {
+      padding-block: var(--space-6) var(--space-7);
+    }
+    @media (max-width: 640px) {
+      .page {
+        padding-inline: var(--space-4);
+      }
+      .page-head {
+        padding-top: var(--space-6);
+      }
+      .offer {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header class="page page-head">
+      <a class="arrow-link meta back-link" href="options.html">
+        <svg class="icon icon-12 icon-left" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M13.5 8h-11M6.5 4l-4 4 4 4" /></svg>
+        Settings
+      </a>
+      <h1 class="title title-page page-title">After a slip</h1>
+      <p class="lede">It happened. It’s one day, not the end of anything, and it doesn’t erase the days before it. Three questions, then one or two things that could make next time easier. Nothing here leaves this device.</p>
+    </header>
+
+    <form class="page" id="slip-form" novalidate>
+      <section class="step" aria-labelledby="step-what">
+        <h2 class="step-title" id="step-what">What was going on?</h2>
+        <p class="step-desc">Choose any that fit.</p>
+        <div class="segmented choices" id="tags" role="group" aria-labelledby="step-what"></div>
+      </section>
+      <section class="step" aria-labelledby="step-when">
+        <h2 class="step-title" id="step-when">About when?</h2>
+        <div class="when">
+          <span class="select"><select class="input" id="slip-day" aria-label="Day">
+            <option value="0">Today</option>
+            <option value="1">Yesterday</option>
+          </select></span>
+          <span class="select"><select class="input" id="slip-hour" aria-label="Around what time"></select></span>
+        </div>
+      </section>
+      <section class="step" aria-labelledby="step-help">
+        <h2 class="step-title" id="step-help">What would have helped?</h2>
+        <p class="step-desc">Choose any that fit, or none.</p>
+        <div class="segmented choices" id="helps" role="group" aria-labelledby="step-help"></div>
+      </section>
+      <div class="step">
+        <button type="submit" class="btn btn-primary" id="record">Record it</button>
+      </div>
+    </form>
+
+    <section class="page result" id="result" aria-labelledby="result-head" hidden>
+      <h2 class="step-title" id="result-head" tabindex="-1">Recorded, as one day.</h2>
+      <p class="kept">
+        <span class="kept-figure" id="kept-figure"></span>
+        <span class="kept-words" id="kept-words"></span>
+      </p>
+      <div class="offers" id="offers"></div>
+    </section>
+
+    <footer class="page meta page-foot">BlockNSFW · monolab</footer>
+  </main>
+
+  <script src="shared/moments.js"></script>
+  <script src="shared/boost.js"></script>
+  <script src="shared/pact.js"></script>
+  <script src="morning.js"></script>
+</body>
+</html>

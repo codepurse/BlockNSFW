@@ -50,6 +50,8 @@ $RuntimeFiles   = @(
     "audit.js",
     "stats.html",
     "stats.js",
+    "morning.html",
+    "morning.js",
     "community.html",
     "community.js",
     "appwrite-client.js",

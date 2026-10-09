@@ -108,6 +108,15 @@ html[data-theme] .blocked-card {
   border-top: 1px solid var(--color-rule);
 }
 html[data-theme] .blocked-header { display: none; }
+/* The person's own words come first in every design, above the way out. The
+   card already has its hairline, so the section needs none of its own. */
+html[data-theme] .moment {
+  order: 0;
+  align-self: stretch;
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
+}
 html[data-theme] .blocked-actions { order: 1; margin-top: 0; }
 html[data-theme] .support { order: 2; margin-top: 0; }
 html[data-theme] .why {
@@ -461,6 +470,7 @@ html[data-theme="verse"] .blocked-card {
     gap: var(--space-3) var(--space-5);
   }
   html[data-theme="verse"] .why[open] { flex-basis: 100%; }
+  html[data-theme="verse"] .moment { flex-basis: 100%; }
 }
 
 .light-verse {

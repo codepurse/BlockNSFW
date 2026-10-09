@@ -2,7 +2,7 @@
 // Opened once on fresh install (see background.js onInstalled). Writes the same
 // storage keys the rest of the extension reads:
 //   pblocker_settings  — aiImageBlocker / aiTextBlocker / aiStrictness / aiTextStrictness / dnsFilterEnabled
-//   pblocker_pin       — plaintext PIN (matches options.js semantics)
+//   pblocker_pin       — the PIN, hashed by shared/pin-hash.js (never overwrites one)
 //   pblocker_onboarding_completed — guard so the wizard never re-opens
 // CSP forbids inline scripts, so every handler is attached here via addEventListener.
 
@@ -156,7 +156,12 @@
       showPinError(els.pin2, 'The two PINs don’t match. Type the same PIN in both boxes.');
       return false;
     }
-    await setStored({ [PIN_KEY]: a });
+    // Never replace a PIN that already exists: this page asks for no PIN of
+    // its own, so overwriting one here would be a way around it.
+    const existing = (await getStored(PIN_KEY))[PIN_KEY];
+    if (existing) return true;
+    const stored = self.PinHash ? await self.PinHash.hash(a) : a;
+    await setStored({ [PIN_KEY]: stored });
     return true;
   }
 
@@ -226,6 +231,17 @@
 
   // ---- init ----------------------------------------------------------------
   async function init() {
+    // The wizard runs once. Reopened later (it is just a page inside the
+    // extension) it could switch protection layers off or set a PIN without
+    // asking for anything, so once setup is done, or a Pact is made, it sends
+    // you to Settings instead.
+    const state = await getStored([ONBOARDING_KEY, 'pblocker_pact']);
+    const pactActive = !!(state.pblocker_pact && state.pblocker_pact.active === true);
+    if (hasStorage && (state[ONBOARDING_KEY] || pactActive)) {
+      location.replace(browserAPI.runtime.getURL('options.html'));
+      return;
+    }
+
     // Pre-select the recommended defaults, seeded from any existing settings.
     const cur = (await getStored(SETTINGS_KEY))[SETTINGS_KEY] || {};
     els.aiImage.checked = cur.aiImageBlocker !== undefined ? !!cur.aiImageBlocker : true;

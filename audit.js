@@ -223,6 +223,28 @@ async function confirmClearLogs() {
   if (!button || button.getAttribute('aria-busy') === 'true') return;
   announce('');
   showError('');
+
+  // Under a Pact, clearing the log waits like any other loosening: this log
+  // is where a quiet change would show.
+  const Pact = self.Pact;
+  const pact = Pact ? await Pact.readPact(browserAPI.storage.local) : null;
+  if (Pact && Pact.isActive(pact)) {
+    setBusy(button, 'Starting the wait…');
+    const reply = await Pact.ask({
+      type: 'pact_enqueue',
+      change: { kind: 'audit-clear', label: 'clear the activity log', payload: {} }
+    });
+    clearBusy(button, 'Clear logs');
+    closeClearConfirm(true);
+    if (reply && reply.ok) {
+      const now = Date.now();
+      announce(`Clearing waits for your pact. It happens around ${Pact.formatWhen(now + (reply.remainingMs || 0), now)}. You can cancel it in Settings.`);
+    } else {
+      showError('Clearing couldn’t start. Try again.');
+    }
+    return;
+  }
+
   setBusy(button, 'Clearing…');
   const ok = await clearAllLogs();
   clearBusy(button, 'Clear logs');

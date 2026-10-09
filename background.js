@@ -17,6 +17,9 @@ try {
     self.importScripts('shared/dns-providers.js');
     self.importScripts('shared/ai-image-models.js');
     self.importScripts('shared/vit-classifier.js');
+    self.importScripts('shared/totp.js');
+    self.importScripts('shared/pact.js');
+    self.importScripts('shared/boost.js');
   }
 } catch (_) {
   // shared/hostname.js or shared/host-keywords.js could not be loaded
@@ -2934,6 +2937,39 @@ function senderUrl(message, sender) {
   return '';
 }
 
+// True for the extension's own pages (options, popup, audit). A content
+// script's sender URL is the web page it runs in.
+function isExtensionPageSender(sender) {
+  try {
+    const origin = browserAPI.runtime.getURL('');
+    return typeof sender?.url === 'string' && sender.url.startsWith(origin);
+  } catch (_) {
+    return false;
+  }
+}
+
+// Deletes a downloaded model's cached weights; the bundled model takes over.
+// Called from Settings directly, or once the Pact's wait is up.
+async function clearModelWeights(model) {
+  const descriptor = self.AiImageModels.resolveModel(model);
+  _aiModels.delete(descriptor.id);
+  let cleared = false;
+  if (offscreenAvailable()) {
+    try {
+      await ensureOffscreenDocument();
+      const res = await sendToOffscreen(
+        { op: 'clear_weights', model: descriptor.id }, 15000);
+      cleared = !!(res && res.cleared);
+    } catch (_) {}
+  }
+  if (!cleared) {
+    try {
+      cleared = await self.VitClassifier.clearCachedWeights(descriptor.id);
+    } catch (_) {}
+  }
+  return cleared;
+}
+
 browserAPI.runtime.onMessage.addListener((message, sender, sendResponse) => {
   // A message that is not an object at all reached `message.type` below and
   // threw inside the listener, which in Chrome surfaces only as a rejected
@@ -3332,24 +3368,20 @@ browserAPI.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   } else if (message.type === 'ai_clear_model_weights') {
     (async () => {
-      const descriptor = self.AiImageModels.resolveModel(message.model);
-      _aiModels.delete(descriptor.id);
-      let cleared = false;
-      if (offscreenAvailable()) {
-        try {
-          await ensureOffscreenDocument();
-          const res = await sendToOffscreen(
-            { op: 'clear_weights', model: descriptor.id }, 15000);
-          cleared = !!(res && res.cleared);
-        } catch (_) {}
-      }
-      if (!cleared) {
-        try {
-          cleared = await self.VitClassifier.clearCachedWeights(descriptor.id);
-        } catch (_) {}
-      }
+      const cleared = await clearModelWeights(message.model);
       sendResponse({ success: true, cleared });
     })();
+    return true;
+  } else if (message.type.startsWith('pact_') || message.type.startsWith('boost_')) {
+    // The Pact's queue and the boosts are changed only from the extension's
+    // own pages.
+    if (!isExtensionPageSender(sender)) {
+      sendResponse({ ok: false, error: 'not-allowed' });
+      return false;
+    }
+    const handler = message.type.startsWith('pact_') ? handlePactMessage : handleBoostMessage;
+    handler(message)
+      .then(sendResponse, (error) => sendResponse({ ok: false, error: error.message || String(error) }));
     return true;
   }
   // Nothing matched. Returning true here held the port open for a response
@@ -3932,3 +3964,480 @@ browserAPI.storage.onChanged.addListener(async (changes, area) => {
     await updateDnrRules();
   }
 });
+
+// ============================================
+// THE PACT (shared/pact.js)
+// ============================================
+// While a Pact is active, a change that weakens protection waits out the
+// delay the user chose before it applies. Pages ask for a change by message
+// (pact_enqueue); this is the only writer of the queue, and every job on it
+// runs one at a time (pactSerial), so a tick and a page never overwrite each
+// other's edits.
+//
+// Time comes from the Date header of a HEAD request to the file the update
+// check already reads, so moving the computer's clock skips nothing. Offline,
+// only time the browser was seen running counts (Pact.tick).
+
+const PACT_ALARM = 'pblocker-pact-tick';
+const PACT_PIN_KEYS = ['pblocker_pin', 'pblocker_pin_lock']; // shared/pin-hash.js
+const PACT_ACCESS_CODE_KEY = 'pblocker_access_code'; // shared/access-code.js
+let pactChain = Promise.resolve();
+
+function pactSerial(job) {
+  const run = pactChain.then(job, job);
+  pactChain = run.catch(() => {});
+  return run;
+}
+
+async function pactServerNow() {
+  const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+  const timer = controller ? setTimeout(() => controller.abort(), 4000) : null;
+  try {
+    const res = await fetch(self.Pact.SERVER_TIME_URL, {
+      method: 'HEAD',
+      cache: 'no-store',
+      credentials: 'omit',
+      signal: controller ? controller.signal : undefined
+    });
+    const parsed = Date.parse(res.headers.get('date') || '');
+    return Number.isFinite(parsed) ? parsed : null;
+  } catch (_) {
+    return null;
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
+// Asks the server for the time and records how far the local clock is from
+// it. Returns the server time, or null when offline.
+async function pactCheckServer(clock) {
+  const serverNow = await pactServerNow();
+  if (serverNow === null) return null;
+  clock.offset = serverNow - Date.now();
+  clock.offsetAt = Date.now();
+  return serverNow;
+}
+
+// The alarm runs only while something is waiting, so an idle Pact costs
+// nothing.
+async function pactSetAlarm(on) {
+  if (!browserAPI.alarms) return;
+  try {
+    if (!on) {
+      await browserAPI.alarms.clear(PACT_ALARM);
+      return;
+    }
+    const existing = await browserAPI.alarms.get(PACT_ALARM);
+    if (!existing) browserAPI.alarms.create(PACT_ALARM, { periodInMinutes: self.Pact.TICK_MINUTES });
+  } catch (error) {
+    console.warn('BlockNSFW: Pact alarm could not be set', error);
+  }
+}
+
+async function pactReadPact() {
+  const { [self.Pact.PACT_KEY]: raw } = await browserAPI.storage.local.get(self.Pact.PACT_KEY);
+  return self.Pact.normalizePact(raw);
+}
+
+async function pactWritePact(pact) {
+  if (pact) await browserAPI.storage.local.set({ [self.Pact.PACT_KEY]: pact });
+  else await browserAPI.storage.local.remove(self.Pact.PACT_KEY);
+}
+
+// Applies one change whose wait is over. Each branch does what the page would
+// have done at the time it was asked for.
+async function pactApply(entry) {
+  const P = self.Pact;
+  const payload = entry.payload || {};
+  const now = Date.now();
+  switch (entry.kind) {
+    case 'disable': {
+      const settings = await getSettings();
+      settings.enabled = false;
+      await setSettings(settings);
+      break;
+    }
+    case 'settings': {
+      await setSettings(P.applySettingsOps(await getSettings(), payload));
+      break;
+    }
+    case 'settings-replace': {
+      if (payload.settings && typeof payload.settings === 'object') await setSettings(payload.settings);
+      break;
+    }
+    case 'whitelist-add': {
+      const { [WHITELIST_KEY]: stored } = await browserAPI.storage.local.get(WHITELIST_KEY);
+      // One site, or several from an imported file (always kept for good).
+      const items = Array.isArray(payload.items)
+        ? payload.items.map(item => ({ domain: item && item.domain, path: item && item.path, type: 'permanent' }))
+        : [payload];
+      const list = items.reduce((acc, item) => P.addWhitelistEntry(acc, item, now), stored);
+      await browserAPI.storage.local.set({ [WHITELIST_KEY]: list });
+      break;
+    }
+    case 'pin-clear': {
+      await browserAPI.storage.local.remove(PACT_PIN_KEYS);
+      const pact = await pactReadPact();
+      if (pact && pact.pinSealed) await pactWritePact({ ...pact, pinSealed: false });
+      break;
+    }
+    case 'access-code': {
+      if (payload.config && typeof payload.config === 'object') {
+        await browserAPI.storage.local.set({ [PACT_ACCESS_CODE_KEY]: payload.config });
+      }
+      break;
+    }
+    case 'subscription': {
+      if (payload.action === 'remove') await removeSubscription(payload.id);
+      else await setSubscriptionEnabled(payload.id, false);
+      break;
+    }
+    case 'model-clear': {
+      await clearModelWeights(payload.model);
+      break;
+    }
+    case 'audit-clear': {
+      await browserAPI.storage.local.set({ [AUDIT_BLOCKED_KEY]: [], [AUDIT_DISABLED_KEY]: [] });
+      break;
+    }
+    case 'risk-hours': {
+      if (self.Boost && payload.risk && typeof payload.risk === 'object') {
+        await browserAPI.storage.local.set({ [self.Boost.RISK_KEY]: self.Boost.normalizeRisk(payload.risk) });
+        boostReconcile().catch(() => {});
+      }
+      break;
+    }
+    case 'pact': {
+      const pact = await pactReadPact();
+      if (!pact) break;
+      // A sealed PIN was only ever known to the witness. When the witness or
+      // the whole Pact goes, the PIN goes with it, or nobody could use it.
+      if (payload.action === 'end') {
+        await pactWritePact(null);
+        if (pact.pinSealed) await browserAPI.storage.local.remove(PACT_PIN_KEYS);
+      } else if (payload.action === 'remove-witness') {
+        await pactWritePact({ ...pact, witness: null, pinSealed: false });
+        if (pact.pinSealed) await browserAPI.storage.local.remove(PACT_PIN_KEYS);
+      } else if (payload.action === 'delay') {
+        await pactWritePact({ ...pact, delayMs: P.normalizeDelay(payload.delayMs) });
+      }
+      break;
+    }
+    default:
+      break;
+  }
+}
+
+// Credits time to everything waiting and applies whatever is due.
+function pactProcess() {
+  if (!self.Pact) return Promise.resolve();
+  return pactSerial(async () => {
+    const P = self.Pact;
+    const store = await browserAPI.storage.local.get([P.QUEUE_KEY, P.CLOCK_KEY]);
+    const waiting = P.normalizeQueue(store[P.QUEUE_KEY]);
+    if (!waiting.length) {
+      await pactSetAlarm(false);
+      return;
+    }
+    const now = Date.now();
+    const ticked = P.tick(store[P.CLOCK_KEY], waiting, now);
+    const clock = ticked.clock;
+    let queue = ticked.queue;
+
+    let serverNow = null;
+    if (P.needsServerCheck(queue, clock, now)) {
+      serverNow = await pactCheckServer(clock);
+      queue = P.backfill(queue, serverNow);
+    }
+
+    // During Storm Mode or Risk Hours nothing loosens, so a change whose wait
+    // is over is held until the boost ends (boostReconcile runs this again).
+    const boostOn = !!(await boostState());
+    const remaining = [];
+    for (const entry of queue) {
+      if (boostOn || !P.isReady(entry, serverNow)) {
+        remaining.push(entry);
+        continue;
+      }
+      try {
+        await pactApply(entry);
+      } catch (error) {
+        // Dropped rather than retried forever; the change can be asked for again.
+        console.error('BlockNSFW: a waiting change could not be applied', entry.kind, error);
+      }
+    }
+    await browserAPI.storage.local.set({ [P.QUEUE_KEY]: remaining, [P.CLOCK_KEY]: clock });
+    await pactSetAlarm(remaining.length > 0);
+  });
+}
+
+function pactEnqueue(change) {
+  return pactSerial(async () => {
+    const P = self.Pact;
+    const store = await browserAPI.storage.local.get([P.PACT_KEY, P.QUEUE_KEY, P.CLOCK_KEY]);
+    const pact = P.normalizePact(store[P.PACT_KEY]);
+    if (!P.isActive(pact)) return { ok: false, error: 'no-pact' };
+
+    const now = Date.now();
+    const ticked = P.tick(store[P.CLOCK_KEY], P.normalizeQueue(store[P.QUEUE_KEY]), now);
+    const clock = ticked.clock;
+    let queue = ticked.queue;
+
+    // Asking twice for the same change does not start a second wait.
+    const sameAs = JSON.stringify([change && change.kind, change && change.payload]);
+    const existing = queue.find(e => JSON.stringify([e.kind, e.payload]) === sameAs);
+    if (existing) {
+      return { ok: true, entry: existing, remainingMs: P.remainingMs(existing, clock, Date.now()), existing: true };
+    }
+
+    const serverNow = await pactCheckServer(clock);
+    queue = P.backfill(queue, serverNow);
+    const entry = P.makeEntry(change, pact.delayMs, now, serverNow);
+    if (!entry) return { ok: false, error: 'bad-change' };
+    queue.push(entry);
+    await browserAPI.storage.local.set({ [P.QUEUE_KEY]: queue, [P.CLOCK_KEY]: clock });
+    await pactSetAlarm(true);
+    return { ok: true, entry, remainingMs: P.remainingMs(entry, clock, Date.now()) };
+  });
+}
+
+function pactCancel(id) {
+  return pactSerial(async () => {
+    const P = self.Pact;
+    const { [P.QUEUE_KEY]: raw } = await browserAPI.storage.local.get(P.QUEUE_KEY);
+    const queue = P.normalizeQueue(raw);
+    const remaining = queue.filter(e => e.id !== id);
+    await browserAPI.storage.local.set({ [P.QUEUE_KEY]: remaining });
+    await pactSetAlarm(remaining.length > 0);
+    return { ok: true, cancelled: remaining.length !== queue.length };
+  });
+}
+
+// Checks a witness code (or a recovery code) under the lockout. On success
+// the witness record is saved, so the same code can't be used twice.
+async function pactCheckCode(code) {
+  const P = self.Pact;
+  const now = Date.now();
+  const store = await browserAPI.storage.local.get([P.PACT_KEY, P.CODE_LOCK_KEY, P.CLOCK_KEY]);
+  // Storm Mode and Risk Hours hold everything, witness codes included.
+  const boost = await boostState();
+  if (boost) return { ok: false, boost: boost.active, until: boost.until };
+  const lock = P.codeLockState(store[P.CODE_LOCK_KEY], now);
+  if (lock.locked) return { ok: false, locked: true, waitMs: lock.waitMs };
+
+  const pact = P.normalizePact(store[P.PACT_KEY]);
+  if (!pact || !pact.witness) return { ok: false, error: 'no-witness' };
+
+  // The witness's phone keeps good time; this computer may not. Accept the
+  // code against the server's clock too, when it is known.
+  const times = [now];
+  const serverNow = P.estimateServerNow(store[P.CLOCK_KEY], now);
+  if (serverNow !== null) times.push(serverNow);
+
+  const result = await P.checkWitnessCode(pact, code, times, self.Totp);
+  if (!result.ok) {
+    const nextLock = P.afterCodeFailure(store[P.CODE_LOCK_KEY], now);
+    await browserAPI.storage.local.set({ [P.CODE_LOCK_KEY]: nextLock });
+    const state = P.codeLockState(nextLock, now);
+    return { ok: false, locked: state.locked, waitMs: state.waitMs };
+  }
+  await browserAPI.storage.local.set({ [P.PACT_KEY]: { ...pact, witness: result.witness } });
+  await browserAPI.storage.local.remove(P.CODE_LOCK_KEY);
+  return { ok: true, via: result.via, recoveryLeft: P.recoveryLeft({ witness: result.witness }) };
+}
+
+// A queued change let through now by the witness.
+function pactApplyNow(id, code) {
+  return pactSerial(async () => {
+    const P = self.Pact;
+    const { [P.QUEUE_KEY]: raw } = await browserAPI.storage.local.get(P.QUEUE_KEY);
+    const queue = P.normalizeQueue(raw);
+    const entry = queue.find(e => e.id === id);
+    if (!entry) return { ok: false, error: 'not-found' };
+    const check = await pactCheckCode(code);
+    if (!check.ok) return check;
+    try {
+      await pactApply(entry);
+    } finally {
+      const remaining = queue.filter(e => e.id !== id);
+      await browserAPI.storage.local.set({ [P.QUEUE_KEY]: remaining });
+      await pactSetAlarm(remaining.length > 0);
+    }
+    return check;
+  });
+}
+
+async function handlePactMessage(message) {
+  if (!self.Pact || !self.Totp) return { ok: false, error: 'unavailable' };
+  switch (message.type) {
+    case 'pact_enqueue':
+      return pactEnqueue(message.change);
+    case 'pact_cancel':
+      return pactCancel(String(message.id || ''));
+    case 'pact_apply_now':
+      return pactApplyNow(String(message.id || ''), String(message.code || ''));
+    case 'pact_verify_code':
+      // A change not queued yet, let through by the witness on the spot.
+      return pactSerial(() => pactCheckCode(String(message.code || '')));
+    case 'pact_process':
+      await pactProcess();
+      return { ok: true };
+    default:
+      return { ok: false, error: 'unknown' };
+  }
+}
+
+// Registered at the top level so a sleeping service worker is woken for it.
+if (browserAPI.alarms && browserAPI.alarms.onAlarm) {
+  browserAPI.alarms.onAlarm.addListener((alarm) => {
+    if (alarm && alarm.name === PACT_ALARM) pactProcess().catch(e => console.warn('BlockNSFW: Pact tick failed', e));
+  });
+}
+
+// Alarms are not guaranteed to survive a browser restart, and a change may
+// have come due while the browser was closed.
+if (browserAPI.runtime.onStartup) {
+  browserAPI.runtime.onStartup.addListener(() => {
+    pactProcess().catch(e => console.warn('BlockNSFW: Pact startup check failed', e));
+  });
+}
+pactProcess().catch(e => console.warn('BlockNSFW: Pact check failed', e));
+
+// ============================================
+// STORM MODE AND RISK HOURS (shared/boost.js)
+// ============================================
+// A boost writes the strongest settings and remembers what they were; when it
+// ends they come back (Boost.overlay / Boost.restore). This is the only place
+// that starts or ends one. It runs on every wake, but writes only when a
+// boost begins or ends, and an alarm wakes it at the next edge: a storm's
+// end, or Risk Hours opening or closing.
+
+const BOOST_ALARM = 'pblocker-boost';
+const FIRST_SEEN_KEY = 'pblocker_first_seen'; // shared/moments.js
+let boostChain = Promise.resolve();
+
+function boostSerial(job) {
+  const run = boostChain.then(job, job);
+  boostChain = run.catch(() => {});
+  return run;
+}
+
+async function boostSchedule(when) {
+  if (!browserAPI.alarms) return;
+  try {
+    if (when === null) await browserAPI.alarms.clear(BOOST_ALARM);
+    else browserAPI.alarms.create(BOOST_ALARM, { when: Math.max(Date.now() + 1000, when) });
+  } catch (error) {
+    console.warn('BlockNSFW: boost alarm could not be set', error);
+  }
+}
+
+async function boostState() {
+  if (!self.Boost) return null;
+  const { [self.Boost.STATE_KEY]: raw } = await browserAPI.storage.local.get(self.Boost.STATE_KEY);
+  return self.Boost.normalizeState(raw);
+}
+
+function boostReconcile() {
+  if (!self.Boost) return Promise.resolve();
+  return boostSerial(async () => {
+    const B = self.Boost;
+    const store = await browserAPI.storage.local.get([B.STORM_KEY, B.RISK_KEY, B.STATE_KEY, SETTINGS_KEY]);
+    let storm = B.normalizeStorm(store[B.STORM_KEY]);
+    const now = Date.now();
+
+    // A storm that looks finished by the device clock is checked against the
+    // server's, so moving the clock forward ends nothing.
+    let serverNow = null;
+    if (storm && now >= B.stormEndsAt(storm)) serverNow = await pactServerNow();
+    const want = B.desired(storm, store[B.RISK_KEY], now, serverNow);
+    const state = B.normalizeState(store[B.STATE_KEY]);
+
+    if (storm && (!want || want.kind !== 'storm') && B.stormOver(storm, now, serverNow)) {
+      await browserAPI.storage.local.remove(B.STORM_KEY);
+      storm = null;
+    }
+
+    let settings = { ...DEFAULT_SETTINGS, ...(store[SETTINGS_KEY] || {}) };
+    let nextState = state;
+    let write = false;
+    if (state && (!want || want.kind !== state.active)) {
+      settings = B.restore(settings, state.snapshot, state.active);
+      nextState = null;
+      write = true;
+    }
+    if (want && !nextState) {
+      const boosted = B.overlay(settings, want.kind);
+      settings = boosted.settings;
+      nextState = { active: want.kind, until: want.until, snapshot: boosted.snapshot };
+      write = true;
+    } else if (want && nextState && nextState.until !== want.until) {
+      nextState = { ...nextState, until: want.until };
+      await browserAPI.storage.local.set({ [B.STATE_KEY]: nextState });
+    }
+    if (write) {
+      await setSettings(settings);
+      if (nextState) await browserAPI.storage.local.set({ [B.STATE_KEY]: nextState });
+      else await browserAPI.storage.local.remove(B.STATE_KEY);
+    }
+
+    // When to look again. A storm overdue on the device clock but not yet
+    // confirmed over is looked at again in five minutes.
+    const edges = [];
+    if (storm) {
+      const end = B.stormEndsAt(storm);
+      edges.push(end > now ? end : now + 5 * 60 * 1000);
+    }
+    const riskEdge = B.nextRiskChange(store[B.RISK_KEY], new Date(now));
+    if (riskEdge !== null) edges.push(riskEdge);
+    await boostSchedule(edges.length ? Math.min(...edges) : null);
+
+    // Changes that waited out a Pact during the boost can apply now.
+    if (state && !nextState) pactProcess().catch(() => {});
+  });
+}
+
+async function boostStartStorm(hours) {
+  const B = self.Boost;
+  const { [B.STORM_KEY]: existing } = await browserAPI.storage.local.get(B.STORM_KEY);
+  const serverNow = await pactServerNow();
+  const storm = B.startStorm(existing, hours, Date.now(), serverNow);
+  await browserAPI.storage.local.set({ [B.STORM_KEY]: storm });
+  await boostReconcile();
+  return { ok: true, until: B.stormEndsAt(storm) };
+}
+
+async function handleBoostMessage(message) {
+  if (!self.Boost) return { ok: false, error: 'unavailable' };
+  switch (message.type) {
+    case 'boost_storm_start':
+      return boostStartStorm(message.hours);
+    case 'boost_reconcile':
+      await boostReconcile();
+      return { ok: true };
+    default:
+      return { ok: false, error: 'unknown' };
+  }
+}
+
+// Days Kept counts from the first day BlockNSFW ran. For someone updating,
+// that is the start of their current run if one is recorded.
+async function ensureFirstSeen() {
+  const store = await browserAPI.storage.local.get([FIRST_SEEN_KEY, STREAK_START_KEY]);
+  if (typeof store[FIRST_SEEN_KEY] === 'number') return;
+  const start = typeof store[STREAK_START_KEY] === 'number' ? store[STREAK_START_KEY] : Date.now();
+  await browserAPI.storage.local.set({ [FIRST_SEEN_KEY]: Math.min(start, Date.now()) });
+}
+
+if (browserAPI.alarms && browserAPI.alarms.onAlarm) {
+  browserAPI.alarms.onAlarm.addListener((alarm) => {
+    if (alarm && alarm.name === BOOST_ALARM) boostReconcile().catch(e => console.warn('BlockNSFW: boost check failed', e));
+  });
+}
+if (browserAPI.runtime.onStartup) {
+  browserAPI.runtime.onStartup.addListener(() => {
+    boostReconcile().catch(e => console.warn('BlockNSFW: boost startup check failed', e));
+  });
+}
+boostReconcile().catch(e => console.warn('BlockNSFW: boost check failed', e));
+ensureFirstSeen().catch(() => {});

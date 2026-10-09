@@ -204,16 +204,29 @@
         <h2 class="section-head" id="protection-head"><span class="index">01</span>Protection</h2>
         <dl class="record-grid">
           <div class="record">
-            <dt class="record-label">Days of protection</dt>
-            <dd class="record-value" id="current-streak">0</dd>
+            <dt class="record-label">
+              Days kept
+              <span class="record-desc" id="days-kept-desc">Protection on all day and no slip, in the last 30 days</span>
+            </dt>
+            <dd class="record-value" id="days-kept">0 of 0</dd>
           </div>
           <div class="record">
-            <dt class="record-label">Started</dt>
-            <dd class="record-value" id="streak-start-date"></dd>
+            <dt class="record-label">
+              Current run
+              <span class="record-desc" id="streak-start-date"></span>
+            </dt>
+            <dd class="record-value" id="current-streak">0</dd>
           </div>
           <div class="record">
             <dt class="record-label">Longest run</dt>
             <dd class="record-value" id="longest-streak">0 days</dd>
+          </div>
+          <div class="record" id="kept-moments-record" hidden>
+            <dt class="record-label">
+              Moments waited out
+              <span class="record-desc">From the blocked page’s “I’m OK now”</span>
+            </dt>
+            <dd class="record-value" id="kept-moments">0</dd>
           </div>
         </dl>
       </div>
@@ -283,6 +296,7 @@
     <footer class="page meta page-foot">BlockNSFW · monolab</footer>
   </main>
 
+  <script src="shared/moments.js"></script>
   <script src="stats.js"></script>
 </body>
 </html>

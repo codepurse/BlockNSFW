@@ -43,6 +43,15 @@ const DEFAULT_SETTINGS = {
   aiTextStrictness: 'balanced',
 };
 
+// The 24 sites Reset puts back on the trusted list.
+const DEFAULT_TRUSTED_DOMAINS = [
+  'steampowered.com', 'steamstatic.com', 'steamcommunity.com', 'store.steampowered.com',
+  'epicgames.com', 'gog.com', 'origin.com', 'battle.net', 'blizzard.com', 'ubisoft.com',
+  'ea.com', 'nintendo.com', 'playstation.com', 'xbox.com', 'microsoft.com', 'amazon.com',
+  'youtube.com', 'twitch.tv', 'discord.com', 'reddit.com', 'imgur.com', 'github.com',
+  'stackoverflow.com', 'wikipedia.org'
+];
+
 // Tracks whether a plain-HTML blocked page is currently stored. Kept in sync
 // by render()/upload/clear so the toggle handler can decide synchronously
 // (within the click's user-gesture) whether to open the file picker.
@@ -346,7 +355,8 @@ function createModal(config) {
     // First focus: the first field, or Cancel when the dialog confirms
     // something destructive, or else the main button.
     setTimeout(() => {
-      const firstInput = body.querySelector('input');
+      // A choice of options opens on the one already chosen.
+      const firstInput = body.querySelector('input:checked') || body.querySelector('input');
       const destructive = footer.querySelector('.modal-button-destructive');
       const target = firstInput ||
         (destructive ? footer.querySelector('.modal-button-secondary') : null) ||
@@ -479,15 +489,71 @@ async function showSetPINModal() {
   return await modalPromise;
 }
 
-async function showVerifyPINModal(actionLabel = 'this action') {
+// Resolves true for the right PIN, 'witness' when a code from the witness's
+// app was typed instead (it vouches for the change, so callers under a Pact
+// apply it at once), or null when cancelled.
+//
+// With a witness paired, a code from their app is accepted here too. Both are
+// short numbers that come from the witness, so people type one where the
+// other was asked for; refusing a valid code because it went in the wrong box
+// helps nobody.
+async function showVerifyPINModal(actionLabel = 'this action', opts) {
   let pinInput, hintText;
-  
-  const storedPIN = await getPIN();
-  
+  let checking = false;
+  const pact = await readPact();
+  const witnessOn = !!(Pact && pact && pact.witness);
+  const sealed = opts && typeof opts.sealed === 'boolean' ? opts.sealed : !!(pact && pact.pinSealed);
+
+  const close = (value) => {
+    const overlay = pinInput && pinInput.closest('.modal-overlay');
+    if (overlay && overlay.closeModal) overlay.closeModal(value);
+  };
+
+  // The PIN is hashed, so checking it is asynchronous: the button keeps the
+  // dialog open and closes it itself once the answer is in.
+  const checkTyped = async () => {
+    if (checking || !pinInput) return;
+    const pin = pinInput.value.trim();
+    if (!pin) return;
+    checking = true;
+    const result = await checkPIN(pin);
+    let codeReply = null;
+    if (!result.ok && witnessOn && Pact.looksLikeWitnessCode(pin)) {
+      codeReply = await Pact.ask({ type: 'pact_verify_code', code: pin });
+    }
+    checking = false;
+    if (result.ok) {
+      close(true);
+      return;
+    }
+    if (codeReply && codeReply.ok) {
+      // The PIN check counted it as a wrong PIN; it wasn't one.
+      if (PinHash) await browserAPI.storage.local.remove(PinHash.LOCK_KEY);
+      if (codeReply.via === 'recovery') showToast(`Recovery code used. ${codeReply.recoveryLeft} left.`, 'info');
+      close('witness');
+      return;
+    }
+    pinInput.classList.add('error');
+    pinInput.setAttribute('aria-invalid', 'true');
+    pinInput.value = '';
+    let message = 'That PIN didn’t match. Try again.';
+    if (codeReply && codeReply.locked) {
+      message = `Too many wrong codes. Try again in ${PinHash ? PinHash.describeWait(codeReply.waitMs) : 'a while'}.`;
+    } else if (result.waitMs) {
+      message = `Too many wrong tries. Try again in ${PinHash.describeWait(result.waitMs)}.`;
+    } else if (witnessOn) {
+      message = 'That isn’t your PIN or your witness’s current code. Their code changes every 30 seconds.';
+    }
+    setHint(hintText, message, 'error');
+    setTimeout(() => pinInput.classList.remove('error'), 500);
+  };
+
   // Create modal without awaiting - this adds it to DOM immediately
   const modalPromise = createModal({
     title: 'Enter your PIN',
-    description: `Enter your PIN to ${actionLabel}.`,
+    description: sealed
+      ? `Your witness holds your PIN. Ask them for it, or for the code in their app, to ${actionLabel}.`
+      : `Enter your PIN to ${actionLabel}.`,
     bodyHTML: `
       <div class="field pin-input-group">
         <label class="field-label pin-input-label" for="modal-verify-input">PIN</label>
@@ -501,18 +567,8 @@ async function showVerifyPINModal(actionLabel = 'this action') {
         text: 'Continue',
         type: 'primary',
         onClick: () => {
-          const pin = pinInput.value.trim();
-
-          if (pin === storedPIN) {
-            return true;
-          } else {
-            pinInput.classList.add('error');
-            pinInput.setAttribute('aria-invalid', 'true');
-            pinInput.value = '';
-            setHint(hintText, 'That PIN didn’t match. Try again.', 'error');
-            setTimeout(() => pinInput.classList.remove('error'), 500);
-            return false; // Don't close modal
-          }
+          checkTyped();
+          return false; // checkTyped closes the dialog when the PIN is right
         }
       }
     ]
@@ -524,7 +580,12 @@ async function showVerifyPINModal(actionLabel = 'this action') {
   
   pinInput = document.getElementById('modal-verify-input');
   hintText = document.getElementById('modal-verify-hint');
-  
+  if (witnessOn) {
+    setHint(hintText, sealed
+      ? 'The PIN is the number they were shown when you paired. The changing code from their app works too.'
+      : 'Or type the code from your witness’s app: it works here too.');
+  }
+
   // Enter key handling
   if (pinInput) {
     pinInput.addEventListener('keypress', (e) => {
@@ -619,18 +680,62 @@ async function getStats() {
   return stats || { blockedCount: 0, lastBlocked: null };
 }
 
+// The Pact and the modules it needs (shared/pact.js, totp.js, pin-hash.js,
+// qr.js). Any of them may be missing in a stripped-down test context; the
+// gates below then behave exactly as they did before the Pact existed.
+const Pact = self.Pact || null;
+const Totp = self.Totp || null;
+const PinHash = self.PinHash || null;
+const QrCode = self.QrCode || null;
+// Storm Mode, Risk Hours, own words, slips (shared/boost.js, moments.js).
+const Boost = self.Boost || null;
+const Moments = self.Moments || null;
+
+// During Storm Mode or Risk Hours nothing that loosens protection can be done,
+// not even with a pact's wait or a witness code. Resolves true, after saying
+// so, when that is why a change is refused.
+async function refusedByBoost() {
+  if (!Boost) return false;
+  const state = await Boost.readState(browserAPI.storage.local);
+  if (!state) return false;
+  await createModal({
+    title: state.active === 'storm' ? 'Storm Mode is on' : 'Your risk hours are on',
+    description: Boost.refusal(state, Date.now()),
+    message: 'Anything that makes protection stronger still works.',
+    buttons: [{ text: 'OK', type: 'primary', value: true }]
+  });
+  return true;
+}
+
+// The stored PIN is a salted hash now (shared/pin-hash.js); a PIN saved by an
+// older version is a plain string until it is next entered.
 async function getPIN() {
   const { [PIN_KEY]: pin } = await browserAPI.storage.local.get(PIN_KEY);
   return pin || null;
 }
 
+function pinIsSet(stored) {
+  return PinHash ? PinHash.isSet(stored) : !!stored;
+}
+
 async function setPIN(pin) {
-  await browserAPI.storage.local.set({ [PIN_KEY]: pin });
+  const stored = PinHash ? await PinHash.hash(pin) : pin;
+  await browserAPI.storage.local.set({ [PIN_KEY]: stored });
+  if (PinHash) await browserAPI.storage.local.remove(PinHash.LOCK_KEY);
+}
+
+// Checks a typed PIN, under the lockout: five free tries, then a wait that
+// doubles. Resolves { ok, waitMs }. A correct PIN still stored as plain text
+// is re-saved as a hash on the way through.
+async function checkPIN(entered) {
+  if (PinHash) return await PinHash.check(browserAPI.storage.local, entered, Date.now());
+  const stored = await getPIN();
+  return { ok: !!stored && entered === stored, waitMs: 0 };
 }
 
 async function ensurePIN() {
   const current = await getPIN();
-  if (current) return true;
+  if (pinIsSet(current)) return true;
   const newPin = await showSetPINModal();
   if (!newPin) return false;
   await setPIN(newPin);
@@ -750,7 +855,7 @@ async function requirePIN(actionLabel = 'this action', opts) {
   const hasPin = await ensurePIN();
   if (!hasPin) return false;
   const verified = await showVerifyPINModal(actionLabel);
-  if (verified !== true) return false;
+  if (!verified) return false;
   return await requireAccessCodeIfEnabled(actionLabel, accessCodeTier(opts));
 }
 
@@ -759,11 +864,723 @@ async function requirePIN(actionLabel = 'this action', opts) {
 // unless the change is 'tuning', which never faces it.
 async function requirePINIfSet(actionLabel = 'this action', opts) {
   const stored = await getPIN();
-  if (stored) {
+  if (pinIsSet(stored)) {
     const verified = await showVerifyPINModal(actionLabel);
-    if (verified !== true) return false;
+    if (!verified) return false;
   }
   return await requireAccessCodeIfEnabled(actionLabel, accessCodeTier(opts));
+}
+
+// --- The Pact ----------------------------------------------------------------
+//
+// Every change that loosens protection comes through guardWeakening. Without a
+// Pact it is the PIN and access-code check it always was. With one, the
+// change waits: `change` ({ kind, payload }, see KINDS in shared/pact.js) is
+// what the background applies once the wait is over. Resolves true when the
+// caller should make the change now (no Pact and the locks passed, or the
+// witness let it through), false when it was cancelled or queued.
+
+function settingsChange(set) {
+  return { kind: 'settings', payload: { set } };
+}
+
+async function readPact() {
+  return Pact ? await Pact.readPact(browserAPI.storage.local) : null;
+}
+
+async function guardWeakening(actionLabel, opts, change) {
+  return (await guardWeakeningOutcome(actionLabel, opts, change)) === 'now';
+}
+
+// Resolves 'now' (make the change), 'queued' (the background will) or
+// 'cancelled'. For a caller that saves several things at once and must keep
+// the parts that don't wait.
+async function guardWeakeningOutcome(actionLabel, opts, change) {
+  const options = opts || {};
+  if (await refusedByBoost()) return 'cancelled';
+  const pact = await readPact();
+  // Sensitivity dials never wait: they're how someone fixes a block we got
+  // wrong, and at their loosest the filters are still on.
+  if (!Pact || !Pact.isActive(pact) || !change || accessCodeTier(options) === 'tuning') {
+    const ok = options.ensurePin
+      ? await requirePIN(actionLabel, options)
+      : await requirePINIfSet(actionLabel, options);
+    return ok ? 'now' : 'cancelled';
+  }
+
+  const choice = await showPactGate(actionLabel, pact);
+  if (choice === 'witness') return 'now';
+  if (choice !== 'wait') return 'cancelled';
+
+  // The PIN still stops anyone else from queuing changes. The access code and
+  // the commitment sentence don't apply: the wait replaces them. A sealed PIN
+  // can always be cleared by waiting, or nobody could ever get back in.
+  const sealedEscape = change.kind === 'pin-clear' && pact.pinSealed;
+  if (!sealedEscape && pinIsSet(await getPIN())) {
+    const verified = await showVerifyPINModal(actionLabel, { sealed: pact.pinSealed });
+    if (!verified) return 'cancelled';
+    // A witness code typed into the PIN box vouches for the change: no wait.
+    if (verified === 'witness') return 'now';
+  }
+
+  const reply = await Pact.ask({ type: 'pact_enqueue', change: { ...change, label: actionLabel } });
+  if (!reply || !reply.ok) {
+    showToast('That change couldn’t be queued. Try again.', 'error');
+    return 'cancelled';
+  }
+  const now = Date.now();
+  const when = Pact.formatWhen(now + (reply.remainingMs || 0), now);
+  showToast(reply.existing
+    ? `That change is already waiting. It takes effect around ${when}.`
+    : `Waiting. It takes effect around ${when}. You can cancel it under Security, The Pact.`, 'success');
+  renderPact();
+  return 'queued';
+}
+
+// For changes that were never gated before the Pact (a DNS resolver, the
+// trusted sites list): without a Pact they stay free.
+async function guardIfPact(actionLabel, change) {
+  const pact = await readPact();
+  if (!Pact || !Pact.isActive(pact)) return true;
+  return await guardWeakening(actionLabel, {}, change);
+}
+
+// Resolves 'wait', 'witness' (a code let it through) or null (cancelled).
+async function showPactGate(actionLabel, pact) {
+  const now = Date.now();
+  const delay = Pact.formatDelay(pact.delayMs);
+  // Two buttons, Cancel and Wait; the witness's code is a link in the body,
+  // so the row never wraps and waiting stays the plain choice.
+  const choicePromise = createModal({
+    title: 'This change waits',
+    description: `This will ${actionLabel} after your pact’s wait of ${delay}, around ${Pact.formatWhen(now + pact.delayMs, now)}.`,
+    bodyHTML: `
+      <p class="dialog-message">Most urges pass if you wait them out. You can cancel it any time before then.</p>
+      ${pact.witness
+        ? '<p class="dialog-message pact-code-line">Have a code from your witness? <button type="button" class="link" data-pact-code>Use it now</button></p>'
+        : '<p class="dialog-message pact-code-line">To let a change through without the wait, add a witness in Security.</p>'}
+    `,
+    buttons: [
+      { text: 'Cancel', type: 'secondary', value: null },
+      { text: `Wait ${delay}`, type: 'primary', value: 'wait' }
+    ]
+  });
+  const codeLink = [...document.querySelectorAll('.modal-overlay [data-pact-code]')].pop();
+  if (codeLink) {
+    codeLink.addEventListener('click', () => {
+      const overlay = codeLink.closest('.modal-overlay');
+      if (overlay && overlay.closeModal) overlay.closeModal('code');
+    });
+  }
+  const choice = await choicePromise;
+  if (choice !== 'code') return choice;
+  return (await showWitnessCodeModal(actionLabel)) ? 'witness' : null;
+}
+
+// Asks for the witness's code. With `entryId`, the background applies that
+// waiting change at once; without, it only checks the code and the caller
+// makes the change. Resolves true when the code was accepted.
+async function showWitnessCodeModal(actionLabel, entryId) {
+  let input, hint;
+  let busy = false;
+  const submit = async () => {
+    if (busy || !input) return;
+    const code = input.value.trim();
+    if (!code) return;
+    busy = true;
+    const reply = await Pact.ask(entryId
+      ? { type: 'pact_apply_now', id: entryId, code }
+      : { type: 'pact_verify_code', code });
+    busy = false;
+    if (reply && reply.ok) {
+      if (reply.via === 'recovery') {
+        showToast(`Recovery code used. ${reply.recoveryLeft} left.`, 'info');
+      }
+      const overlay = input.closest('.modal-overlay');
+      if (overlay && overlay.closeModal) overlay.closeModal(true);
+      return;
+    }
+    input.value = '';
+    input.setAttribute('aria-invalid', 'true');
+    setHint(hint, reply && reply.locked
+      ? `Too many wrong codes. Try again in ${PinHash ? PinHash.describeWait(reply.waitMs) : 'a while'}.`
+      : 'That code didn’t match. Codes change every 30 seconds: ask for the one showing now.', 'error');
+  };
+
+  const modalPromise = createModal({
+    title: 'Enter your witness’s code',
+    description: `Ask your witness for the six-digit code in their authenticator app to ${actionLabel} now.`,
+    bodyHTML: `
+      <div class="field">
+        <label class="field-label" for="modal-witness-code">Code from your witness</label>
+        <input type="text" class="input input-mono pin-input" id="modal-witness-code" inputmode="numeric"
+               autocomplete="one-time-code" maxlength="12" spellcheck="false" aria-describedby="modal-witness-hint">
+        <p class="field-hint pin-hint" id="modal-witness-hint" aria-live="polite">One of their recovery codes works too, once.</p>
+      </div>
+    `,
+    buttons: [
+      { text: 'Cancel', type: 'secondary', value: false },
+      { text: 'Continue', type: 'primary', onClick: () => { submit(); return false; } }
+    ]
+  });
+
+  await new Promise(resolve => setTimeout(resolve, 50));
+  input = $('modal-witness-code');
+  hint = $('modal-witness-hint');
+  if (input) {
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); submit(); }
+    });
+  }
+  return (await modalPromise) === true;
+}
+
+async function writePact(pact) {
+  if (pact) await browserAPI.storage.local.set({ [Pact.PACT_KEY]: pact });
+  else await browserAPI.storage.local.remove(Pact.PACT_KEY);
+}
+
+async function clearSealedFlag() {
+  const pact = await readPact();
+  if (pact && pact.pinSealed) await writePact({ ...pact, pinSealed: false });
+}
+
+// The same as the background's 'pact' branch (pactApply), for when the
+// witness lets a change to the Pact itself through on the spot.
+async function applyPactChangeNow(payload) {
+  const pact = await readPact();
+  if (!pact) return;
+  if (payload.action === 'end') {
+    await writePact(null);
+  } else if (payload.action === 'remove-witness') {
+    await writePact({ ...pact, witness: null, pinSealed: false });
+  } else if (payload.action === 'delay') {
+    await writePact({ ...pact, delayMs: Pact.normalizeDelay(payload.delayMs) });
+  }
+  // A sealed PIN was only ever known to the witness; it goes with them.
+  if (pact.pinSealed && payload.action !== 'delay') {
+    await browserAPI.storage.local.remove([PIN_KEY, PinHash ? PinHash.LOCK_KEY : 'pblocker_pin_lock']);
+  }
+}
+
+function delayChoicesHTML(selected) {
+  return Pact.DELAYS.map((ms) => `
+    <label class="segment">
+      <input class="segment-input" type="radio" name="pact-delay-choice" value="${ms}"${ms === selected ? ' checked' : ''}>
+      <span class="segment-label">${Pact.formatDelay(ms)}</span>
+    </label>`).join('');
+}
+
+async function showMakePactModal() {
+  const choice = await createModal({
+    title: 'Make a pact',
+    description: 'Choose how long a change that loosens protection has to wait. Choose it now, while you’re calm: it’s for the moments you won’t be.',
+    bodyHTML: `
+      <fieldset class="field pact-delay-field">
+        <legend class="field-label">How long changes wait</legend>
+        <div class="segmented pact-delay-choices">${delayChoicesHTML(Pact.DEFAULT_DELAY)}</div>
+        <p class="field-hint">Start short; you can lengthen it at any time. Shortening it later waits too.</p>
+      </fieldset>
+      <ul class="pact-terms">
+        <li>Turning protection off, whitelisting a site, switching off a layer or clearing your PIN only happens once the wait is over.</li>
+        <li>Making protection stronger never waits.</li>
+        <li>You can cancel a waiting change at any time.</li>
+        <li>The sensitivity settings still apply at once, so you can fix a mistaken block.</li>
+      </ul>
+    `,
+    buttons: [
+      { text: 'Cancel', type: 'secondary', value: null },
+      {
+        text: 'Make the pact',
+        type: 'primary',
+        onClick: () => {
+          const picked = document.querySelector('input[name="pact-delay-choice"]:checked');
+          return picked ? Number(picked.value) : Pact.DEFAULT_DELAY;
+        }
+      }
+    ]
+  });
+  return typeof choice === 'number' ? choice : null;
+}
+
+// The QR the witness scans: their authenticator app reads the key from it.
+function buildQrSvg(text) {
+  const qr = QrCode.encode(text);
+  const size = qr.size + 8; // four modules of quiet zone each side
+  const ns = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(ns, 'svg');
+  svg.setAttribute('viewBox', `0 0 ${size} ${size}`);
+  svg.setAttribute('class', 'pact-qr');
+  svg.setAttribute('role', 'img');
+  svg.setAttribute('aria-label', 'QR code for your witness to scan');
+  svg.setAttribute('shape-rendering', 'crispEdges');
+  const ground = document.createElementNS(ns, 'rect');
+  ground.setAttribute('width', String(size));
+  ground.setAttribute('height', String(size));
+  ground.setAttribute('class', 'pact-qr-ground');
+  const ink = document.createElementNS(ns, 'path');
+  ink.setAttribute('d', QrCode.toPath(qr));
+  ink.setAttribute('class', 'pact-qr-ink');
+  svg.appendChild(ground);
+  svg.appendChild(ink);
+  return svg;
+}
+
+// Pairing, in four steps: who and whether they hold the PIN; the key to
+// scan; their first code, which proves the pairing works; and the recovery
+// codes to hand them. Nothing is saved until the code checks out.
+async function pairWitnessFlow() {
+  if (!Totp || !QrCode) return;
+  const intro = await createModal({
+    title: 'Add a witness',
+    description: 'Choose someone you trust: a friend, a partner, a sponsor. They add a key to the authenticator app on their phone. When you want a change without the wait, you ask them for the code it shows. They never see your browsing.',
+    bodyHTML: `
+      <label class="pact-check">
+        <input type="checkbox" id="modal-pact-seal">
+        <span>Let them hold my PIN too. BlockNSFW makes up a new PIN and shows it only to them, so anything that asks for the PIN needs them. Clearing it yourself waits like any other change.</span>
+      </label>
+    `,
+    buttons: [
+      { text: 'Cancel', type: 'secondary', value: null },
+      {
+        text: 'Show the key',
+        type: 'primary',
+        onClick: () => ({ seal: !!(document.getElementById('modal-pact-seal') || {}).checked })
+      }
+    ]
+  });
+  if (!intro) return;
+
+  // Sealing replaces the PIN, so it takes the PIN to do it.
+  if (intro.seal && pinIsSet(await getPIN())) {
+    const ok = await showVerifyPINModal('hand your PIN to your witness');
+    if (!ok) return;
+  }
+
+  const secret = Totp.generateSecret();
+  const keyPromise = createModal({
+    title: 'Ask them to scan this',
+    description: 'In Google Authenticator, Aegis, 1Password or any authenticator app, they add an account and scan this code.',
+    bodyHTML: `
+      <div class="pact-qr-frame" id="modal-pact-qr"></div>
+      <p class="field-hint">Or they type this key: <span class="pact-key" id="modal-pact-key"></span></p>
+      <p class="dialog-message">This key is shown once. Don’t keep a copy yourself: a key you hold lets you skip your own wait.</p>
+    `,
+    buttons: [
+      { text: 'Cancel', type: 'secondary', value: null },
+      { text: 'They’ve added it', type: 'primary', value: true }
+    ]
+  });
+  await new Promise(resolve => setTimeout(resolve, 50));
+  const frame = $('modal-pact-qr');
+  if (frame) frame.appendChild(buildQrSvg(Totp.otpauthUri(secret, 'Pact')));
+  const keyEl = $('modal-pact-key');
+  if (keyEl) keyEl.textContent = Totp.formatSecret(secret);
+  if ((await keyPromise) !== true) return;
+
+  // Their first code proves the key reached their app intact.
+  let counter = null;
+  let codeInput, codeHint;
+  const checkFirst = async () => {
+    const result = await Totp.verify(secret, codeInput.value, { times: [Date.now()] });
+    if (result.ok) {
+      counter = result.counter;
+      const overlay = codeInput.closest('.modal-overlay');
+      if (overlay && overlay.closeModal) overlay.closeModal(true);
+      return;
+    }
+    codeInput.value = '';
+    codeInput.setAttribute('aria-invalid', 'true');
+    setHint(codeHint, 'That code didn’t match. Check they scanned the code just shown, then try the one showing now.', 'error');
+  };
+  const confirmPromise = createModal({
+    title: 'Ask them for the code',
+    description: 'Their app now shows a six-digit code that changes every 30 seconds. Type the one showing now.',
+    bodyHTML: `
+      <div class="field">
+        <label class="field-label" for="modal-pact-first-code">Code from their app</label>
+        <input type="text" class="input input-mono pin-input" id="modal-pact-first-code" inputmode="numeric"
+               autocomplete="one-time-code" maxlength="8" spellcheck="false" aria-describedby="modal-pact-first-hint">
+        <p class="field-hint pin-hint" id="modal-pact-first-hint" aria-live="polite"></p>
+      </div>
+    `,
+    buttons: [
+      { text: 'Cancel', type: 'secondary', value: null },
+      { text: 'Check the code', type: 'primary', onClick: () => { checkFirst(); return false; } }
+    ]
+  });
+  await new Promise(resolve => setTimeout(resolve, 50));
+  codeInput = $('modal-pact-first-code');
+  codeHint = $('modal-pact-first-hint');
+  if (codeInput) {
+    codeInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); checkFirst(); }
+    });
+  }
+  if ((await confirmPromise) !== true || counter === null) return;
+
+  const recovery = Totp.generateRecoveryCodes();
+  const sealedPin = intro.seal && PinHash ? PinHash.generatePin() : null;
+  const handoverPromise = createModal({
+    title: 'Give these to your witness',
+    description: sealedPin
+      ? 'Their PIN for you, and eight recovery codes. Each recovery code works once, if they lose their phone. Shown once.'
+      : 'Eight recovery codes. Each works once, if they lose their phone. Shown once.',
+    bodyHTML: `
+      <div class="pact-handover">
+        <div class="pact-pin" id="modal-pact-pin" hidden>
+          <span class="meta">Your PIN, for them to keep</span>
+          <span class="pact-pin-value" id="modal-pact-pin-value"></span>
+        </div>
+        <ol class="pact-recovery" id="modal-pact-recovery"></ol>
+      </div>
+    `,
+    buttons: [{ text: 'They have them', type: 'primary', value: true }]
+  });
+  await new Promise(resolve => setTimeout(resolve, 50));
+  const list = $('modal-pact-recovery');
+  if (list) {
+    recovery.forEach((code) => {
+      const item = document.createElement('li');
+      item.textContent = code;
+      list.appendChild(item);
+    });
+  }
+  if (sealedPin) {
+    const box = $('modal-pact-pin');
+    const value = $('modal-pact-pin-value');
+    if (box) box.hidden = false;
+    if (value) value.textContent = sealedPin;
+  }
+  await handoverPromise;
+
+  const hashes = await Promise.all(recovery.map(code => Totp.hashRecoveryCode(code)));
+  if (sealedPin) await setPIN(sealedPin);
+  const pact = await readPact();
+  await writePact({
+    ...pact,
+    witness: {
+      secret,
+      pairedAt: Date.now(),
+      lastCounter: counter,
+      recovery: hashes.map(hash => ({ hash, used: false }))
+    },
+    pinSealed: !!sealedPin
+  });
+  showToast(sealedPin ? 'Your witness is set, and holds your PIN.' : 'Your witness is set.', 'success');
+  await render();
+}
+
+async function renderPact() {
+  const group = $('pact-group');
+  if (!group) return;
+  if (!Pact) {
+    group.hidden = true;
+    return;
+  }
+  const { pact, queue, clock } = await Pact.readAll(browserAPI.storage.local);
+  const on = Pact.isActive(pact);
+  setStatusWord($('pact-status'), on ? 'on' : 'off', on);
+  $('pact-off').hidden = on;
+  $('pact-on').hidden = !on;
+  if (!on) return;
+
+  const delaySelect = $('pact-delay');
+  if (delaySelect) delaySelect.value = String(pact.delayMs);
+
+  const witnessDesc = $('pact-witness-desc');
+  const witnessBtn = $('pact-witness-btn');
+  if (pact.witness) {
+    const left = Pact.recoveryLeft(pact);
+    const paired = new Date(pact.witness.pairedAt).toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' });
+    witnessDesc.textContent = `Added ${paired}. ${left} recovery ${left === 1 ? 'code' : 'codes'} left.` +
+      (pact.pinSealed ? ' They also hold your PIN.' : '');
+    witnessBtn.textContent = 'Remove witness';
+    witnessBtn.className = 'btn btn-danger btn-sm';
+  } else {
+    witnessDesc.textContent = 'Someone you trust holds a code that lets a change through without the wait. They never see your browsing.';
+    witnessBtn.textContent = 'Add a witness';
+    witnessBtn.className = 'btn btn-ghost btn-sm';
+  }
+
+  const listEl = $('pact-pending-list');
+  listEl.textContent = '';
+  if (!queue.length) {
+    const empty = document.createElement('p');
+    empty.className = 'domain-empty';
+    empty.textContent = 'Nothing is waiting.';
+    listEl.appendChild(empty);
+    return;
+  }
+  const now = Date.now();
+  queue.forEach((entry) => {
+    const row = document.createElement('div');
+    row.className = 'domain-row';
+    const main = document.createElement('div');
+    main.className = 'domain-main';
+    const name = document.createElement('span');
+    name.className = 'domain pact-entry-label';
+    name.textContent = Pact.sentenceCase(entry.label);
+    const meta = document.createElement('span');
+    meta.className = 'domain-meta';
+    const left = Pact.remainingMs(entry, clock, now);
+    meta.textContent = left > 0
+      ? `In ${Pact.formatRemaining(left)}, around ${Pact.formatWhen(now + left, now)}`
+      : 'Due now';
+    main.appendChild(name);
+    main.appendChild(meta);
+    row.appendChild(main);
+
+    const actions = document.createElement('div');
+    actions.className = 'row-control';
+    if (pact.witness) {
+      const code = document.createElement('button');
+      code.type = 'button';
+      code.className = 'btn-text';
+      code.textContent = 'Use a code';
+      code.setAttribute('aria-label', `Use a witness code to ${entry.label} now`);
+      code.addEventListener('click', async () => {
+        if (await showWitnessCodeModal(entry.label, entry.id)) showToast('Done.', 'success');
+        renderPact();
+      });
+      actions.appendChild(code);
+    }
+    const cancel = document.createElement('button');
+    cancel.type = 'button';
+    cancel.className = 'btn-text';
+    cancel.textContent = 'Cancel';
+    cancel.setAttribute('aria-label', `Cancel: ${entry.label}`);
+    cancel.addEventListener('click', async () => {
+      const reply = await Pact.ask({ type: 'pact_cancel', id: entry.id });
+      showToast(reply && reply.ok ? 'Cancelled. Nothing changed.' : 'That didn’t cancel. Try again.', reply && reply.ok ? 'success' : 'error');
+      renderPact();
+    });
+    actions.appendChild(cancel);
+    row.appendChild(actions);
+    listEl.appendChild(row);
+  });
+}
+
+function initPact() {
+  if (!Pact || !$('pact-group')) return;
+
+  $('pact-start').addEventListener('click', async () => {
+    const delayMs = await showMakePactModal();
+    if (!delayMs) return;
+    await writePact(Pact.createPact(delayMs, Date.now()));
+    showToast(`Your pact is made. Changes that loosen protection now wait ${Pact.formatDelay(delayMs)}.`, 'success');
+    await render();
+  });
+
+  $('pact-delay').addEventListener('change', async (e) => {
+    const pact = await readPact();
+    if (!pact) return;
+    const next = Pact.normalizeDelay(e.target.value);
+    if (next === pact.delayMs) return;
+    if (next > pact.delayMs) {
+      // Longer is stronger, so it applies at once.
+      await writePact({ ...pact, delayMs: next });
+      showToast(`Changes now wait ${Pact.formatDelay(next)}.`, 'success');
+    } else {
+      // Pluckeye's rule: a shorter wait has to wait out the current one.
+      const payload = { action: 'delay', delayMs: next };
+      const now = await guardWeakening(`shorten the wait to ${Pact.formatDelay(next)}`, { critical: true }, { kind: 'pact', payload });
+      if (now) await applyPactChangeNow(payload);
+    }
+    await render();
+  });
+
+  $('pact-witness-btn').addEventListener('click', async () => {
+    const pact = await readPact();
+    if (!pact) return;
+    if (!pact.witness) {
+      await pairWitnessFlow();
+      return;
+    }
+    const payload = { action: 'remove-witness' };
+    const now = await guardWeakening('remove your witness', { critical: true }, { kind: 'pact', payload });
+    if (now) {
+      await applyPactChangeNow(payload);
+      showToast('Your witness is removed.', 'success');
+    }
+    await render();
+  });
+
+  $('pact-end').addEventListener('click', async () => {
+    const payload = { action: 'end' };
+    const now = await guardWeakening('end the pact', { critical: true }, { kind: 'pact', payload });
+    if (now) {
+      await applyPactChangeNow(payload);
+      showToast('The pact is ended.', 'success');
+    }
+    await render();
+  });
+
+  // Anything due is applied as the page opens, and the countdown stays true
+  // while it is open.
+  Pact.ask({ type: 'pact_process' });
+  setInterval(() => {
+    if (document.visibilityState === 'visible') renderPact();
+  }, 30000);
+  browserAPI.storage.onChanged.addListener((changes, area) => {
+    if (area === 'local' && (changes[Pact.PACT_KEY] || changes[Pact.QUEUE_KEY])) renderPact();
+  });
+}
+
+// --- Your own words, Storm Mode, Risk hours ----------------------------------
+
+function fillRiskTimes(select, selected) {
+  if (!select) return;
+  if (!select.options.length) {
+    for (let minutes = 0; minutes < 1440; minutes += 30) {
+      const option = document.createElement('option');
+      option.value = String(minutes);
+      option.textContent = Boost.formatMinutes(minutes);
+      select.appendChild(option);
+    }
+  }
+  select.value = String(selected);
+}
+
+// The minutes of the day a Risk Hours window covers.
+function riskMinutes(risk) {
+  const r = Boost.normalizeRisk(risk);
+  const covered = new Set();
+  if (!r.enabled) return covered;
+  for (let m = r.start; m !== r.end; m = (m + 1) % 1440) covered.add(m);
+  return covered;
+}
+
+// Switching Risk Hours on, or widening them, makes protection stronger and
+// applies at once. Anything that drops a minute loosens it.
+function riskTightens(prev, next) {
+  const after = riskMinutes(next);
+  for (const minute of riskMinutes(prev)) if (!after.has(minute)) return false;
+  return true;
+}
+
+async function renderHardMoments() {
+  if (!Boost || !Moments || !$('own-words-group')) return;
+  const store = await browserAPI.storage.local.get([Moments.WORDS_KEY, Boost.RISK_KEY, Boost.STATE_KEY]);
+
+  // A field someone is typing in is never overwritten by a re-render.
+  const words = Moments.normalizeWords(store[Moments.WORDS_KEY]);
+  const fill = (id, value) => {
+    const el = $(id);
+    if (el && document.activeElement !== el && el.dataset.dirty !== 'true') el.value = value;
+  };
+  fill('own-words-plan', words.plan);
+  fill('own-words-note', words.note);
+  fill('own-words-name', words.person.name);
+  fill('own-words-phone', words.person.phone);
+
+  const now = Date.now();
+  const state = Boost.normalizeState(store[Boost.STATE_KEY]);
+  const stormOn = !!(state && state.active === 'storm');
+  setStatusWord($('storm-status'), stormOn ? 'on' : 'off', stormOn);
+  const stormDesc = $('storm-on-desc');
+  if (stormDesc) {
+    stormDesc.hidden = !stormOn;
+    stormDesc.textContent = stormOn
+      ? `On until ${Boost.formatUntil(state.until, now)}. It can’t be stopped early, but it can be made longer.`
+      : '';
+  }
+
+  const risk = Boost.normalizeRisk(store[Boost.RISK_KEY]);
+  const riskNow = !!(state && state.active === 'risk');
+  setStatusWord($('risk-status'), riskNow ? 'on now' : (risk.enabled ? 'on' : 'off'), risk.enabled);
+  const toggle = $('risk-enabled');
+  if (toggle) toggle.checked = risk.enabled;
+  fillRiskTimes($('risk-start'), risk.start);
+  fillRiskTimes($('risk-end'), risk.end);
+}
+
+async function changeRiskHours() {
+  const { [Boost.RISK_KEY]: stored } = await browserAPI.storage.local.get(Boost.RISK_KEY);
+  const prev = Boost.normalizeRisk(stored);
+  const next = Boost.normalizeRisk({
+    enabled: $('risk-enabled').checked,
+    start: Number($('risk-start').value),
+    end: Number($('risk-end').value)
+  });
+  if (!riskTightens(prev, next)) {
+    const label = prev.enabled && !next.enabled ? 'turn off your risk hours' : 'shorten your risk hours';
+    const now = await guardWeakening(label, {}, { kind: 'risk-hours', payload: { risk: next } });
+    if (!now) {
+      await renderHardMoments();
+      return;
+    }
+  }
+  await browserAPI.storage.local.set({ [Boost.RISK_KEY]: next });
+  await askBackground({ type: 'boost_reconcile' });
+  showToast(next.enabled
+    ? `Risk hours set: ${Boost.formatMinutes(next.start)} to ${Boost.formatMinutes(next.end)}, every day.`
+    : 'Risk hours are off.', 'success');
+  await renderHardMoments();
+}
+
+function initHardMoments() {
+  if (!Boost || !Moments || !$('own-words-group')) return;
+
+  ['own-words-plan', 'own-words-note', 'own-words-name', 'own-words-phone'].forEach((id) => {
+    const el = $(id);
+    if (el) el.addEventListener('input', () => { el.dataset.dirty = 'true'; });
+  });
+  $('own-words-save').addEventListener('click', async () => {
+    const words = Moments.normalizeWords({
+      plan: $('own-words-plan').value,
+      note: $('own-words-note').value,
+      person: { name: $('own-words-name').value, phone: $('own-words-phone').value }
+    });
+    await browserAPI.storage.local.set({ [Moments.WORDS_KEY]: words });
+    ['own-words-plan', 'own-words-note', 'own-words-name', 'own-words-phone'].forEach((id) => {
+      const el = $(id);
+      if (el) delete el.dataset.dirty;
+    });
+    const phoneHint = $('own-words-phone-hint');
+    if (phoneHint) {
+      setHint(phoneHint, words.person.phone && !Moments.telHref(words.person.phone)
+        ? 'That doesn’t look like a phone number, so it shows as written, without a call link.'
+        : 'Optional. Where calls are possible, the blocked page links to it.');
+    }
+    showToast(Moments.hasWords(words)
+      ? 'Your words are saved. They’re the first thing on a held page.'
+      : 'Your words are cleared.', 'success');
+    await renderHardMoments();
+  });
+
+  document.querySelectorAll('[data-storm-hours]').forEach((button) => {
+    button.addEventListener('click', async () => {
+      const hours = Number(button.dataset.stormHours);
+      const now = Date.now();
+      const length = hours === 1 ? '1 hour' : `${hours} hours`;
+      const start = await createModal({
+        title: `Start Storm Mode for ${length}?`,
+        description: `Until about ${Boost.formatUntil(now + hours * 3600000, now)}, every protection is at its strongest and nothing that loosens it can be changed. It can’t be stopped early.`,
+        buttons: [
+          { text: 'Cancel', type: 'secondary', value: false },
+          { text: 'Start Storm Mode', type: 'primary', value: true }
+        ]
+      });
+      if (!start) return;
+      const reply = await askBackground({ type: 'boost_storm_start', hours });
+      if (reply && reply.ok) {
+        showToast(`Storm Mode is on until ${Boost.formatUntil(reply.until, Date.now())}.`, 'success');
+      } else {
+        showToast('Storm Mode didn’t start. Try again.', 'error');
+      }
+      await render();
+    });
+  });
+
+  $('risk-enabled').addEventListener('change', changeRiskHours);
+  $('risk-start').addEventListener('change', changeRiskHours);
+  $('risk-end').addEventListener('change', changeRiskHours);
+
+  browserAPI.storage.onChanged.addListener((changes, area) => {
+    if (area !== 'local') return;
+    if (changes[Boost.STATE_KEY] || changes[Boost.RISK_KEY] || changes[Moments.WORDS_KEY]) renderHardMoments();
+  });
 }
 
 // Streak tracking
@@ -963,6 +1780,28 @@ async function showCommitmentGate() {
     };
     document.addEventListener('keydown', handleOverlayKey);
   });
+}
+
+// Turning protection off. With a Pact the wait replaces the commitment
+// sentence; without one, the PIN, the access code and the sentence apply as
+// they always have. Resolves true when protection was turned off now.
+async function disableProtectionFlow() {
+  if (await refusedByBoost()) return false;
+  const pact = await readPact();
+  if (Pact && Pact.isActive(pact)) {
+    const now = await guardWeakening('turn protection off', { critical: true }, { kind: 'disable', payload: {} });
+    if (!now) return false;
+  } else {
+    const ok = await requirePINIfSet('disable blocking', { critical: true });
+    if (!ok) return false;
+    const committed = await showCommitmentGate();
+    if (!committed) return false;
+  }
+  const s = await getSettings();
+  s.enabled = false;
+  await setSettings(s);
+  await resetStreak();
+  return true;
 }
 
 function updateCommitmentProgress(activeStep) {
@@ -1268,6 +2107,17 @@ function hasAdditions(prev, next) {
   return [...normalizeEntries(next)].some(item => !prevSet.has(item));
 }
 
+// The entries themselves, as they were written, for a Pact change to carry.
+function removedEntries(prev, next) {
+  const nextSet = normalizeEntries(next);
+  return (Array.isArray(prev) ? prev : []).filter(item => !nextSet.has(String(item).toLowerCase()));
+}
+
+function addedEntries(prev, next) {
+  const prevSet = normalizeEntries(prev);
+  return (Array.isArray(next) ? next : []).filter(item => !prevSet.has(String(item).toLowerCase()));
+}
+
 // Ordered weakest → strongest so a dropdown change can be classified.
 const IMAGE_FILTER_RANK = { lenient: 0, moderate: 1, strict: 2 };
 const AI_STRICTNESS_RANK = { relaxed: 0, balanced: 1, strict: 2 };
@@ -1425,7 +2275,8 @@ async function renderSubscriptions() {
       // Turning a list off stops it blocking, which is a protection-weakening
       // change and gated like every other one. Turning it back on is not.
       if (subscription.enabled !== false) {
-        const allowed = await requirePINIfSet('disable this subscribed list');
+        const allowed = await guardWeakening(`turn off the list ${label}`, {},
+          { kind: 'subscription', payload: { id: subscription.id, action: 'off' } });
         if (!allowed) return;
       }
       await browserAPI.runtime.sendMessage({
@@ -1443,7 +2294,8 @@ async function renderSubscriptions() {
     remove.textContent = 'Remove';
     remove.setAttribute('aria-label', `Remove ${label}`);
     remove.addEventListener('click', async () => {
-      const allowed = await requirePINIfSet('remove this subscribed list');
+      const allowed = await guardWeakening(`remove the list ${label}`, {},
+        { kind: 'subscription', payload: { id: subscription.id, action: 'remove' } });
       if (!allowed) return;
       const confirmed = await showConfirmModal({
         title: 'Remove this list?',
@@ -1784,9 +2636,13 @@ function setStatusWord(el, word, on) {
 // Markup: data-lock="<tier>" (critical, normal or tuning), plus " set" where
 // the gate makes you create a PIN first, and data-lock-when for what triggers
 // it ("Turning it off"). With nothing to ask, the note stays hidden.
-function renderLockNotes(hasPin, accessCode) {
+function renderLockNotes(hasPin, accessCode, pact) {
   const asks = (tier) => !!accessCodeRequiredFor(accessCode, tier);
+  const waits = Pact && Pact.isActive(pact) ? Pact.formatDelay(pact.delayMs) : null;
   const predicate = (tier, mustSetPin) => {
+    // Under a Pact the wait is what stands in the way; the dials still only
+    // ask for the PIN.
+    if (waits && tier !== 'tuning') return `waits ${waits}`;
     const code = asks(tier);
     if (!hasPin && mustSetPin) return code
       ? 'asks you to set a PIN first, then for an access code'
@@ -1842,8 +2698,10 @@ async function render() {
   $('trusted-domains').value = deserializePatterns(settings.trustedImageDomains || []);
 
   $('blocked-stats').textContent = (Number(stats.blockedCount) || 0).toLocaleString();
-  setStatusWord($('pin-status'), pin ? 'set' : 'not set', !!pin);
-  renderLockNotes(!!pin, await getAccessCodeConfig());
+  setStatusWord($('pin-status'), pinIsSet(pin) ? 'set' : 'not set', pinIsSet(pin));
+  renderLockNotes(pinIsSet(pin), await getAccessCodeConfig(), await readPact());
+  await renderPact();
+  await renderHardMoments();
 
   const accessCode = await getAccessCodeConfig();
   const accessCodeToggle = $('access-code-enabled');
@@ -2231,6 +3089,8 @@ async function init() {
   await migrateCommentSyntaxOnce();
   // Before render() too, so the first list painted is already highlighted.
   setupListSyntaxHighlighting();
+  initPact();
+  initHardMoments();
   await render();
 
   // Update-available banner
@@ -2365,19 +3225,8 @@ async function init() {
   $('enabled').addEventListener('change', async (e) => {
     const s = await getSettings();
     if (s.enabled && !e.target.checked) {
-      const ok = await requirePINIfSet('disable blocking', { critical: true });
-      if (!ok) {
-        e.target.checked = true;
-        return;
-      }
-      const committed = await showCommitmentGate();
-      if (!committed) {
-        e.target.checked = true;
-        return;
-      }
-      s.enabled = false;
-      await setSettings(s);
-      await resetStreak();
+      const turnedOff = await disableProtectionFlow();
+      if (!turnedOff) e.target.checked = true;
     } else {
       s.enabled = e.target.checked;
       await setSettings(s);
@@ -2389,7 +3238,9 @@ async function init() {
 
   $('smart').addEventListener('change', async (e) => {
     const s = await getSettings();
-    const ok = await requirePINIfSet('switch modes');
+    const ok = s.useSmartBlocking && !e.target.checked
+      ? await guardWeakening('turn off smart detection', {}, settingsChange({ useSmartBlocking: false }))
+      : await requirePINIfSet('switch modes');
     if (!ok) {
       e.target.checked = !!s.useSmartBlocking;
       return;
@@ -2414,7 +3265,7 @@ async function init() {
       // sensitivity dial, not a way out, so the PIN guards it but the access
       // code never does — see TIERS in shared/access-code.js.
       if (weakensImageFilter(settings.imageFilterLevel, nextLevel)) {
-        const ok = await requirePINIfSet('lower image filtering', { tier: 'tuning' });
+        const ok = !(await refusedByBoost()) && await requirePINIfSet('lower image filtering', { tier: 'tuning' });
         if (!ok) {
           e.target.value = normalizeImageFilterLevel(settings.imageFilterLevel);
           return;
@@ -2438,7 +3289,7 @@ async function init() {
       // A dial, not a switch: at Relaxed the blocker is still on and still
       // catches clearly explicit images, so this is 'tuning' (no access code).
       if (weakensAiStrictness(settings.aiStrictness, nextStrictness)) {
-        const ok = await requirePINIfSet('lower AI image strictness', { tier: 'tuning' });
+        const ok = !(await refusedByBoost()) && await requirePINIfSet('lower AI image strictness', { tier: 'tuning' });
         if (!ok) {
           e.target.value = normalizeAiStrictness(settings.aiStrictness);
           return;
@@ -2462,7 +3313,7 @@ async function init() {
       const settings = await getSettings();
       const nextStrictness = normalizeAiStrictness(e.target.value);
       if (weakensAiStrictness(settings.aiTextStrictness, nextStrictness)) {
-        const ok = await requirePINIfSet('lower AI text strictness', { tier: 'tuning' });
+        const ok = !(await refusedByBoost()) && await requirePINIfSet('lower AI text strictness', { tier: 'tuning' });
         if (!ok) {
           e.target.value = normalizeAiStrictness(settings.aiTextStrictness);
           return;
@@ -2486,7 +3337,7 @@ async function init() {
       // Turning DNS protection off removes a blocking layer, so it's gated
       // like every other weakening toggle. Turning it on stays free.
       if (settings.dnsFilterEnabled === true && !e.target.checked) {
-        const ok = await requirePINIfSet('turn off DNS Protection');
+        const ok = await guardWeakening('turn off DNS Protection', {}, settingsChange({ dnsFilterEnabled: false }));
         if (!ok) {
           e.target.checked = true;
           return;
@@ -2511,10 +3362,19 @@ async function init() {
   // DNS resolver choice. Not PIN-gated: every resolver in the list blocks adult
   // content, so switching between them swaps who answers the query rather than
   // weakening the layer — unlike turning DNS off entirely, which is gated above.
+  // The one exception is a resolver of your own, which may not filter at all:
+  // under a Pact, switching to it waits.
   const dnsProviderSelectEl = $('dns-provider');
   if (dnsProviderSelectEl) {
     dnsProviderSelectEl.addEventListener('change', async (e) => {
       const settings = await getSettings();
+      if (e.target.value === CUSTOM_DNS_ID && settings.dnsProvider !== CUSTOM_DNS_ID) {
+        const ok = await guardIfPact('use your own DNS resolver', settingsChange({ dnsProvider: CUSTOM_DNS_ID }));
+        if (!ok) {
+          e.target.value = settings.dnsProvider;
+          return;
+        }
+      }
       settings.dnsProvider = e.target.value;
       await setSettings(settings);
       await render();
@@ -2557,6 +3417,13 @@ async function init() {
       }
 
       if (errorEl) errorEl.textContent = '';
+      if (check.url !== settings.dnsCustomUrl) {
+        const ok = await guardIfPact('change your own DNS resolver', settingsChange({ dnsCustomUrl: check.url }));
+        if (!ok) {
+          dnsCustomInputEl.value = settings.dnsCustomUrl || '';
+          return;
+        }
+      }
       settings.dnsCustomUrl = check.url;
       await setSettings(settings);
       showToast('Custom resolver saved. Press Test DNS connection to check it.', 'success');
@@ -2574,7 +3441,7 @@ async function init() {
     safeSearchToggleEl.addEventListener('change', async (e) => {
       const settings = await getSettings();
       if (settings.safeSearchEnabled === true && !e.target.checked) {
-        const ok = await requirePINIfSet('turn off Safe Search enforcement');
+        const ok = await guardWeakening('turn off Safe Search enforcement', {}, settingsChange({ safeSearchEnabled: false }));
         if (!ok) {
           e.target.checked = true;
           return;
@@ -2597,7 +3464,7 @@ async function init() {
     fbReelsEl.addEventListener('change', async (e) => {
       const settings = await getSettings();
       if (settings.facebookReelsEnabled === true && !e.target.checked) {
-        const ok = await requirePINIfSet('turn off Facebook Reels blocking');
+        const ok = await guardWeakening('turn off Facebook Reels blocking', {}, settingsChange({ facebookReelsEnabled: false }));
         if (!ok) {
           e.target.checked = true;
           return;
@@ -2620,7 +3487,7 @@ async function init() {
     igReelsEl.addEventListener('change', async (e) => {
       const settings = await getSettings();
       if (settings.instagramReelsEnabled === true && !e.target.checked) {
-        const ok = await requirePINIfSet('turn off Instagram Reels blocking');
+        const ok = await guardWeakening('turn off Instagram Reels blocking', {}, settingsChange({ instagramReelsEnabled: false }));
         if (!ok) {
           e.target.checked = true;
           return;
@@ -2643,7 +3510,7 @@ async function init() {
     aiImageBlockerEl.addEventListener('change', async (e) => {
       const settings = await getSettings();
       if (settings.aiImageBlocker !== false && !e.target.checked) {
-        const ok = await requirePINIfSet('turn off AI image blocker');
+        const ok = await guardWeakening('turn off the AI image blocker', {}, settingsChange({ aiImageBlocker: false }));
         if (!ok) {
           e.target.checked = true;
           return;
@@ -2713,7 +3580,7 @@ async function init() {
       const modelId = normalizeAiImageModel(settings.aiImageModel);
       // Removing the weights leaves the selected model unusable, so this also
       // narrows protection — gate it like the other weakening actions.
-      const ok = await requirePINIfSet('remove the downloaded detection model');
+      const ok = await guardWeakening('remove the downloaded detection model', {}, { kind: 'model-clear', payload: { model: modelId } });
       if (!ok) return;
       await askBackground({ type: 'ai_clear_model_weights', model: modelId });
       await render();
@@ -2726,7 +3593,7 @@ async function init() {
       const settings = await getSettings();
       // Turning this off narrows coverage, so gate it behind the PIN if set.
       if (settings.aiImageScanAllSites !== false && !e.target.checked) {
-        const ok = await requirePINIfSet('limit AI image scanning to third-party images');
+        const ok = await guardWeakening('limit AI image scanning to third-party images', {}, settingsChange({ aiImageScanAllSites: false }));
         if (!ok) {
           e.target.checked = true;
           return;
@@ -2743,7 +3610,7 @@ async function init() {
     aiTextBlockerEl.addEventListener('change', async (e) => {
       const settings = await getSettings();
       if (settings.aiTextBlocker !== false && !e.target.checked) {
-        const ok = await requirePINIfSet('turn off AI text blocker');
+        const ok = await guardWeakening('turn off the AI text blocker', {}, settingsChange({ aiTextBlocker: false }));
         if (!ok) {
           e.target.checked = true;
           return;
@@ -3172,12 +4039,12 @@ async function init() {
 
   $('save').addEventListener('click', async () => {
     const settings = await getSettings();
-    const nextCustomPatterns = serializePatterns($('patterns').value);
+    let nextCustomPatterns = serializePatterns($('patterns').value);
     const customKeywords = $('custom-keywords');
-    const nextKeywords = customKeywords
+    let nextKeywords = customKeywords
       ? serializePatterns(customKeywords.value)
       : (Array.isArray(settings.customKeywordList) ? settings.customKeywordList : []);
-    const nextTrusted = serializePatterns($('trusted-domains').value);
+    let nextTrusted = serializePatterns($('trusted-domains').value);
     const nextImageFilterLevel = normalizeImageFilterLevel($('image-filter-level') ? $('image-filter-level').value : settings.imageFilterLevel);
     const nextAiStrictness = normalizeAiStrictness($('ai-strictness') ? $('ai-strictness').value : settings.aiStrictness);
     const nextAiTextStrictness = normalizeAiStrictness($('ai-text-strictness') ? $('ai-text-strictness').value : settings.aiTextStrictness);
@@ -3212,14 +4079,44 @@ async function init() {
       [weakensAiStrictness(settings.aiTextStrictness, nextAiTextStrictness), 'lower AI text strictness', 'tuning']
     ].filter(([applies]) => applies);
 
-    if (weakenings.length) {
+    // Under a Pact, the real loosenings in this save (entries removed, trusted
+    // sites added) wait, and everything else in it saves now. The dials are
+    // 'tuning' and never wait, but they keep their PIN check.
+    if (weakenings.length && await refusedByBoost()) return;
+    const pact = await readPact();
+    const realLoosening = weakenings.filter(([, , t]) => t === 'normal');
+    let queued = false;
+    if (Pact && Pact.isActive(pact) && realLoosening.length) {
+      const removedPatterns = removedEntries(settings.customPatterns, nextCustomPatterns);
+      const removedKeywords = customKeywords ? removedEntries(settings.customKeywordList, nextKeywords) : [];
+      const addedTrusted = addedEntries(settings.trustedImageDomains, nextTrusted);
+      const outcome = await guardWeakeningOutcome(realLoosening[0][1], { tier: 'normal' }, {
+        kind: 'settings',
+        payload: {
+          removeFrom: { customPatterns: removedPatterns, customKeywordList: removedKeywords },
+          addTo: { trustedImageDomains: addedTrusted }
+        }
+      });
+      if (outcome === 'cancelled') return;
+      if (outcome === 'queued') {
+        queued = true;
+        nextCustomPatterns = serializePatterns(nextCustomPatterns.concat(removedPatterns).join('\n'));
+        nextKeywords = serializePatterns(nextKeywords.concat(removedKeywords).join('\n'));
+        nextTrusted = removedEntries(nextTrusted, addedTrusted);
+      }
+      const dials = weakenings.filter(([, , t]) => t === 'tuning');
+      if (dials.length && !(await requirePINIfSet(dials[0][1], { tier: 'tuning' }))) return;
+    } else if (weakenings.length) {
       const tier = weakenings.some(([, , t]) => t === 'normal') ? 'normal' : 'tuning';
       const ok = await requirePINIfSet(weakenings[0][1], { tier });
       if (!ok) return;
     }
 
-    settings.enabled = $('enabled').checked;
-    settings.useSmartBlocking = $('smart').checked;
+    // Save can switch these on but never off: turning them off goes through
+    // their own switches, which are gated. Copying the boxes straight across
+    // let a box unticked mid-dialog slip past every lock.
+    settings.enabled = settings.enabled || $('enabled').checked;
+    settings.useSmartBlocking = settings.useSmartBlocking || $('smart').checked;
     settings.debugMode = $('debug-mode').checked;
     settings.imageFilterLevel = nextImageFilterLevel;
     settings.aiStrictness = nextAiStrictness;
@@ -3233,7 +4130,7 @@ async function init() {
     $('patterns').value = deserializePatterns(nextCustomPatterns);
     if (customKeywords) customKeywords.value = deserializePatterns(nextKeywords);
     $('trusted-domains').value = deserializePatterns(nextTrusted);
-    showToast('Settings saved.', 'success');
+    if (!queued) showToast('Settings saved.', 'success');
   });
 
   $('refresh-blocklist').addEventListener('click', async () => {
@@ -3270,21 +4167,32 @@ async function init() {
       // Adding a blocked word tightens protection (free); deleting one loosens
       // it, so it needs the PIN — otherwise a blocked word is a two-second
       // bypass, which defeats the point of setting one.
+      let saving = nextKeywords;
+      let queued = false;
       if (hasRemovals(settings.customKeywordList, nextKeywords)) {
-        const ok = await requirePINIfSet('remove custom blocked words');
-        if (!ok) return;
+        // Under a Pact the removals wait; anything added saves now.
+        const removed = removedEntries(settings.customKeywordList, nextKeywords);
+        const outcome = await guardWeakeningOutcome('remove custom blocked words', {},
+          { kind: 'settings', payload: { removeFrom: { customKeywordList: removed } } });
+        if (outcome === 'cancelled') return;
+        if (outcome === 'queued') {
+          queued = true;
+          saving = serializePatterns(nextKeywords.concat(removed).join('\n'));
+        }
       }
-      settings.customKeywordList = nextKeywords;
+      settings.customKeywordList = saving;
       await setSettings(settings);
-      $('custom-keywords').value = deserializePatterns(nextKeywords);
-      showToast('Blocked words saved.', 'success');
+      $('custom-keywords').value = deserializePatterns(saving);
+      if (!queued) showToast('Blocked words saved.', 'success');
     });
   }
 
   const resetKeywords = $('reset-keywords');
   if (resetKeywords) {
     resetKeywords.addEventListener('click', async () => {
-      const ok = await requirePINIfSet('reset custom blocked words');
+      const current = (await getSettings()).customKeywordList;
+      const ok = await guardWeakening('reset custom blocked words', {},
+        { kind: 'settings', payload: { removeFrom: { customKeywordList: current } } });
       if (!ok) return;
       const confirmed = await showConfirmModal({
         title: 'Reset your blocked words?',
@@ -3303,7 +4211,9 @@ async function init() {
   const clearKeywords = $('clear-keywords');
   if (clearKeywords) {
     clearKeywords.addEventListener('click', async () => {
-      const ok = await requirePINIfSet('clear custom blocked words');
+      const current = (await getSettings()).customKeywordList;
+      const ok = await guardWeakening('clear custom blocked words', {},
+        { kind: 'settings', payload: { removeFrom: { customKeywordList: current } } });
       if (!ok) return;
       const confirmed = await showConfirmModal({
         title: 'Clear your blocked words?',
@@ -3321,13 +4231,32 @@ async function init() {
 
   $('save-trusted').addEventListener('click', async () => {
     const settings = await getSettings();
-    settings.trustedImageDomains = serializePatterns($('trusted-domains').value);
+    let nextTrusted = serializePatterns($('trusted-domains').value);
+    // A trusted site's images skip the AI check, so adding one loosens
+    // protection. It was never gated on its own; under a Pact it waits.
+    const added = addedEntries(settings.trustedImageDomains, nextTrusted);
+    let queued = false;
+    if (added.length) {
+      const pactOn = Pact && Pact.isActive(await readPact());
+      if (pactOn) {
+        const outcome = await guardWeakeningOutcome('add a trusted image domain', {},
+          { kind: 'settings', payload: { addTo: { trustedImageDomains: added } } });
+        if (outcome === 'cancelled') return;
+        if (outcome === 'queued') {
+          queued = true;
+          nextTrusted = removedEntries(nextTrusted, added);
+        }
+      }
+    }
+    settings.trustedImageDomains = nextTrusted;
     await setSettings(settings);
-    showToast('Trusted sites saved.', 'success');
+    $('trusted-domains').value = deserializePatterns(nextTrusted);
+    if (!queued) showToast('Trusted sites saved.', 'success');
   });
 
   $('reset-trusted').addEventListener('click', async () => {
-    const ok = await requirePINIfSet('reset trusted domains');
+    const ok = await guardWeakening('reset trusted sites to the default list', {},
+      settingsChange({ trustedImageDomains: DEFAULT_TRUSTED_DOMAINS.slice() }));
     if (!ok) return;
     const confirmed = await showConfirmModal({
       title: 'Reset trusted sites?',
@@ -3336,34 +4265,7 @@ async function init() {
       destructive: true
     });
     if (!confirmed) return;
-    // Get default trusted domains from background script
-    const defaultDomains = [
-      'steampowered.com',
-      'steamstatic.com',
-      'steamcommunity.com',
-      'store.steampowered.com',
-      'epicgames.com',
-      'gog.com',
-      'origin.com',
-      'battle.net',
-      'blizzard.com',
-      'ubisoft.com',
-      'ea.com',
-      'nintendo.com',
-      'playstation.com',
-      'xbox.com',
-      'microsoft.com',
-      'amazon.com',
-      'youtube.com',
-      'twitch.tv',
-      'discord.com',
-      'reddit.com',
-      'imgur.com',
-      'github.com',
-      'stackoverflow.com',
-      'wikipedia.org'
-    ];
-    
+    const defaultDomains = DEFAULT_TRUSTED_DOMAINS.slice();
     $('trusted-domains').value = deserializePatterns(defaultDomains);
     const settings = await getSettings();
     settings.trustedImageDomains = defaultDomains;
@@ -3379,7 +4281,9 @@ async function init() {
       destructive: true
     });
     if (!confirmed) return;
-    const ok = await requirePINIfSet('clear custom blocklist');
+    const current = (await getSettings()).customPatterns;
+    const ok = await guardWeakening('clear your blocklist', {},
+      { kind: 'settings', payload: { removeFrom: { customPatterns: current } } });
     if (!ok) return;
     const s = await getSettings();
     s.customPatterns = [];
@@ -3389,9 +4293,23 @@ async function init() {
 
   $('reset').addEventListener('click', async () => {
     const currentSettings = await getSettings();
-    if (currentSettings.customPatterns.length > 0 ||
+    const resetTo = {
+      enabled: true,
+      useSmartBlocking: true,
+      imageFilterLevel: 'strict',
+      customPatterns: [],
+      customKeywordList: [],
+      trustedImageDomains: [],
+      debugMode: false,
+      aiStrictness: 'balanced',
+    };
+    // A reset also switches off DNS, the AI layers and Reels blocking (their
+    // defaults are off), so under a Pact the whole reset waits.
+    const pactOn = Pact && Pact.isActive(await readPact());
+    if (pactOn || currentSettings.customPatterns.length > 0 ||
         currentSettings.customKeywordList.length > 0) {
-      const ok = await requirePINIfSet('reset settings');
+      const ok = await guardWeakening('reset settings to their defaults', {},
+        { kind: 'settings-replace', payload: { settings: resetTo } });
       if (!ok) return;
     }
     const confirmed = await showConfirmModal({
@@ -3401,16 +4319,7 @@ async function init() {
       destructive: true
     });
     if (!confirmed) return;
-    await setSettings({
-      enabled: true,
-      useSmartBlocking: true,
-      imageFilterLevel: 'strict',
-      customPatterns: [],
-      customKeywordList: [],
-      trustedImageDomains: [],
-      debugMode: false,
-      aiStrictness: 'balanced',
-    });
+    await setSettings(resetTo);
     await render();
   });
 
@@ -3446,11 +4355,14 @@ async function init() {
     // code. A bare domain unlocks the whole site — as total as switching
     // blocking off — so it counts as critical; a path-scoped entry opens one
     // section and doesn't.
-    const okPin = await requirePIN(
-      parsed.path ? 'whitelist this page' : 'whitelist this whole site',
-      { critical: !parsed.path }
+    const shown = parsed.path ? parsed.domain + parsed.path : parsed.domain;
+    const outcome = await guardWeakeningOutcome(
+      `whitelist ${shown}`,
+      { critical: !parsed.path, ensurePin: true },
+      { kind: 'whitelist-add', payload: { domain: parsed.domain, path: parsed.path || null, type: 'permanent' } }
     );
-    if (!okPin) return;
+    if (outcome === 'queued') domainInput.value = '';
+    if (outcome !== 'now') return;
 
     const newItem = {
       domain: parsed.domain,
@@ -3492,13 +4404,16 @@ async function init() {
     showToast(`Exported ${whitelist.length} whitelisted domains`, 'success');
   });
 
-  $('import-whitelist').addEventListener('click', () => {
-    // Require PIN before importing whitelist entries (only if PIN is set)
+  $('import-whitelist').addEventListener('click', async () => {
     // A whitelist file is a bulk whole-site unlock, so it faces the same bar
-    // as whitelisting a site by hand.
-    requirePINIfSet('import a whitelist file', { critical: true }).then(ok => {
+    // as whitelisting a site by hand. Without a Pact the PIN comes first, as
+    // it always has; with one, the file is read first so the waiting change
+    // carries exactly what it will add.
+    const pactOn = Pact && Pact.isActive(await readPact());
+    const ok = pactOn ? true : await requirePINIfSet('import a whitelist file', { critical: true });
+    {
       if (!ok) return;
-      
+
       const input = document.createElement('input');
       input.type = 'file';
       input.accept = '.json';
@@ -3570,7 +4485,17 @@ async function init() {
               newDomains++;
             }
           });
-          
+
+          if (pactOn && newDomains > 0) {
+            const added = merged.slice(current.length).map(item => ({ domain: item.domain, path: item.path || null }));
+            const now = await guardWeakening(
+              `whitelist ${newDomains} ${newDomains === 1 ? 'site' : 'sites'} from a file`,
+              { critical: true },
+              { kind: 'whitelist-add', payload: { items: added } }
+            );
+            if (!now) return;
+          }
+
           await setWhitelist(merged);
           await renderWhitelist();
           
@@ -3586,7 +4511,7 @@ async function init() {
         }
       };
       input.click();
-    });
+    }
   });
 
   $('clear-whitelist').addEventListener('click', async () => {
@@ -3693,7 +4618,8 @@ async function init() {
       // Turning it ON tightens protection, so it's free. Turning it OFF
       // removes a deterrent, so it has to survive the deterrent itself.
       if (config.enabled && !e.target.checked) {
-        const ok = await requirePINIfSet('turn off the access code', { critical: true });
+        const ok = await guardWeakening('turn off the access code', { critical: true },
+          { kind: 'access-code', payload: { config: { ...config, enabled: false } } });
         if (!ok) {
           e.target.checked = true;
           return;
@@ -3711,7 +4637,8 @@ async function init() {
       // Narrowing the scope means fewer moments guarded, so it's gated as a
       // critical change. Widening it is free.
       if (config.scope === 'all' && !e.target.checked) {
-        const ok = await requirePINIfSet('ask for the code less often', { critical: true });
+        const ok = await guardWeakening('ask for the access code less often', { critical: true },
+          { kind: 'access-code', payload: { config: { ...config, scope: 'critical' } } });
         if (!ok) {
           e.target.checked = true;
           return;
@@ -3735,7 +4662,8 @@ async function init() {
       // A shorter code is a weaker deterrent, so shortening is gated. Only
       // matters while the feature is on — otherwise there's nothing to weaken.
       if (config.enabled && nextLength < config.length) {
-        const ok = await requirePINIfSet('shorten the access code', { critical: true });
+        const ok = await guardWeakening('shorten the access code', { critical: true },
+          { kind: 'access-code', payload: { config: { ...config, length: nextLength } } });
         if (!ok) {
           e.target.value = String(config.length);
           return;
@@ -3748,7 +4676,15 @@ async function init() {
 
   $('set-pin').addEventListener('click', async () => {
     const stored = await getPIN();
-    if (stored) {
+    const pact = await readPact();
+    // A PIN the witness holds can't simply be swapped for one you know: it
+    // has to be cleared first, which waits like any other loosening.
+    if (pinIsSet(stored) && pact && pact.pinSealed) {
+      const ok = await guardWeakening('clear the PIN your witness holds', { critical: true }, { kind: 'pin-clear', payload: {} });
+      if (!ok) return;
+      await browserAPI.storage.local.remove(PIN_KEY);
+      await clearSealedFlag();
+    } else if (pinIsSet(stored)) {
       const ok = await showVerifyPINModal('change PIN');
       if (!ok) return;
     }
@@ -3761,8 +4697,25 @@ async function init() {
 
   $('clear-pin').addEventListener('click', async () => {
     const stored = await getPIN();
-    if (!stored) {
+    if (!pinIsSet(stored)) {
       showToast('There’s no PIN to clear.', 'info');
+      return;
+    }
+
+    // Under a Pact, clearing the PIN waits. It asks for the PIN first, unless
+    // the witness holds it: then waiting is the way back in.
+    const pact = await readPact();
+    if (Pact && Pact.isActive(pact)) {
+      const ok = await guardWeakening(
+        pact.pinSealed ? 'clear the PIN your witness holds' : 'clear your PIN',
+        { critical: true },
+        { kind: 'pin-clear', payload: {} }
+      );
+      if (!ok) return;
+      await browserAPI.storage.local.remove(PIN_KEY);
+      await clearSealedFlag();
+      showToast('Your PIN is cleared.', 'success');
+      await render();
       return;
     }
 
@@ -3796,16 +4749,7 @@ async function init() {
 
     const s = await getSettings();
     if (s.enabled) {
-      const ok = await requirePINIfSet('disable blocking', { critical: true });
-      if (!ok) return;
-
-      const committed = await showCommitmentGate();
-      if (!committed) return;
-
-      s.enabled = false;
-      await setSettings(s);
-      await resetStreak();
-      await render();
+      if (await disableProtectionFlow()) await render();
     }
   }
 }

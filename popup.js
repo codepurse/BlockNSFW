@@ -11,6 +11,21 @@ const UPDATE_INFO_KEY = 'pblocker_update_info';
 const UPDATE_DISMISSED_KEY = 'pblocker_update_dismissed';
 
 const AccessCode = self.AccessCode;
+// shared/pact.js and shared/pin-hash.js; either may be missing in a test
+// context, and the gates then work exactly as they did before the Pact.
+const Pact = self.Pact || null;
+const PinHash = self.PinHash || null;
+const Boost = self.Boost || null;
+
+// During Storm Mode or Risk Hours nothing that loosens protection can be done.
+// Resolves true, after saying so, when that is why a change is refused.
+async function refusedByBoost() {
+  if (!Boost) return false;
+  const state = await Boost.readState(browserAPI.storage.local);
+  if (!state) return false;
+  showNotice(Boost.refusal(state, Date.now()));
+  return true;
+}
 
 function $(id) { return document.getElementById(id); }
 
@@ -104,13 +119,28 @@ async function getPIN() {
   return pin || null;
 }
 
+// Stored as a salted hash (shared/pin-hash.js); a PIN from an older version
+// is a plain string until it is next entered.
+function pinIsSet(stored) {
+  return PinHash ? PinHash.isSet(stored) : !!stored;
+}
+
 async function setPIN(pin) {
-  await browserAPI.storage.local.set({ [PIN_KEY]: pin });
+  const stored = PinHash ? await PinHash.hash(pin) : pin;
+  await browserAPI.storage.local.set({ [PIN_KEY]: stored });
+  if (PinHash) await browserAPI.storage.local.remove(PinHash.LOCK_KEY);
+}
+
+// Resolves { ok, waitMs }; waitMs > 0 means locked out after too many tries.
+async function checkPIN(entered) {
+  if (PinHash) return await PinHash.check(browserAPI.storage.local, entered, Date.now());
+  const stored = await getPIN();
+  return { ok: !!stored && entered === stored, waitMs: 0 };
 }
 
 async function ensurePIN() {
   const current = await getPIN();
-  if (current) return true;
+  if (pinIsSet(current)) return true;
   const newPin = await showSetPinModal();
   if (!newPin) return false;
   await setPIN(newPin);
@@ -201,15 +231,49 @@ async function requireAccessCodeIfEnabled(actionLabel = 'this action', critical 
   return await showAccessCodeModal(actionLabel);
 }
 
+// Three tries per prompt. A wrong PIN is said in the next prompt, which is
+// also the next try (it used to open a separate prompt whose answer was
+// thrown away). The lockout spans prompts, so reopening doesn't reset it.
+//
+// Resolves true for the right PIN, 'witness' when a code from the witness's
+// app was typed instead (both are short numbers from the witness, so people
+// mix them up; under a Pact the code means the change applies at once), or
+// false.
 async function verifyPIN(actionLabel) {
-  const stored = await getPIN();
-  let attempt = 0;
-  while (attempt < 3) {
-    const entered = await showPinModal(`Enter your PIN to ${actionLabel}.`);
+  const pact = await readPact();
+  const witnessOn = !!(Pact && pact && pact.witness);
+  const hint = witnessOn
+    ? (pact.pinSealed
+      ? 'Your witness holds this PIN. The changing code from their app works here too.'
+      : 'Or type the code from your witness’s app: it works here too.')
+    : '';
+  let message = `Enter your PIN to ${actionLabel}.`;
+  let isError = false;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const entered = await showPinModal(message, isError ? { errorOnly: true, hint } : { hint });
     if (entered === null) return false; // Cancelled
-    if (entered === stored) return true;
-    attempt++;
-    await showPinModal('That PIN didn’t match. Try again.', { errorOnly: true });
+    const result = await checkPIN(entered);
+    if (result.ok) return true;
+    if (witnessOn && Pact.looksLikeWitnessCode(entered)) {
+      const reply = await Pact.ask({ type: 'pact_verify_code', code: entered });
+      if (reply && reply.ok) {
+        // The PIN check counted it as a wrong PIN; it wasn't one.
+        if (PinHash) await browserAPI.storage.local.remove(PinHash.LOCK_KEY);
+        return 'witness';
+      }
+      if (reply && reply.locked) {
+        showNotice(`Too many wrong codes. Try again in ${PinHash ? PinHash.describeWait(reply.waitMs) : 'a while'}.`);
+        return false;
+      }
+    }
+    if (result.waitMs) {
+      showNotice(`Too many wrong tries. Try your PIN again in ${PinHash.describeWait(result.waitMs)}.`);
+      return false;
+    }
+    message = witnessOn
+      ? 'That isn’t your PIN or your witness’s current code. Their code changes every 30 seconds.'
+      : 'That PIN didn’t match. Try again.';
+    isError = true;
   }
   return false;
 }
@@ -235,8 +299,289 @@ async function requirePINOnly(actionLabel = 'this action') {
 // The access code stands on its own, so it still applies when no PIN is set.
 async function requirePINIfSet(actionLabel = 'this action', opts) {
   const stored = await getPIN();
-  if (stored && !await verifyPIN(actionLabel)) return false;
+  if (pinIsSet(stored) && !await verifyPIN(actionLabel)) return false;
   return await requireAccessCodeIfEnabled(actionLabel, !!(opts && opts.critical));
+}
+
+// --- The Pact ----------------------------------------------------------------
+//
+// The same rule as Settings (options.js guardWeakeningOutcome): with a Pact,
+// a change that loosens protection waits, and `change` is what the
+// background applies once the wait is over. Resolves 'now' (make the change),
+// 'queued' or 'cancelled'.
+
+async function readPact() {
+  return Pact ? await Pact.readPact(browserAPI.storage.local) : null;
+}
+
+async function guardWeakeningOutcome(actionLabel, opts, change) {
+  const options = opts || {};
+  if (await refusedByBoost()) return 'cancelled';
+  const pact = await readPact();
+  if (!Pact || !Pact.isActive(pact) || !change) {
+    const ok = options.ensurePin
+      ? await requirePIN(actionLabel, options)
+      : await requirePINIfSet(actionLabel, options);
+    return ok ? 'now' : 'cancelled';
+  }
+  const choice = await showPactDialog(actionLabel, pact);
+  if (choice === 'witness') return 'now';
+  if (choice !== 'wait') return 'cancelled';
+  // The PIN still keeps anyone else from queuing changes; the wait replaces
+  // the access code.
+  if (pinIsSet(await getPIN())) {
+    const verified = await verifyPIN(actionLabel);
+    if (!verified) return 'cancelled';
+    // A witness code typed into the PIN box vouches for the change: no wait.
+    if (verified === 'witness') return 'now';
+  }
+  const reply = await Pact.ask({ type: 'pact_enqueue', change: { ...change, label: actionLabel } });
+  if (!reply || !reply.ok) {
+    showNotice('That change couldn’t be queued. Try again.');
+    return 'cancelled';
+  }
+  const now = Date.now();
+  showNotice(`Waiting. It takes effect around ${Pact.formatWhen(now + (reply.remainingMs || 0), now)}. You can cancel it below.`);
+  await renderPactWaiting();
+  return 'queued';
+}
+
+async function guardWeakening(actionLabel, opts, change) {
+  return (await guardWeakeningOutcome(actionLabel, opts, change)) === 'now';
+}
+
+function getPactElements() {
+  return {
+    overlay: $('pact-modal-overlay'),
+    title: $('pact-modal-title'),
+    desc: $('pact-modal-desc'),
+    note: $('pact-modal-note'),
+    codeField: $('pact-code-field'),
+    codeInput: $('pact-code-input'),
+    codeError: $('pact-code-error'),
+    codeLine: $('pact-code-line'),
+    codeBtn: $('pact-code-btn'),
+    ok: $('pact-ok'),
+    cancel: $('pact-cancel')
+  };
+}
+
+// The Pact's dialog. Asking for a change: Cancel or Wait, with the
+// witness's code as a link in the body. With `entryId`: a waiting change, let through by a code. Resolves
+// 'wait', 'witness' or null.
+async function showPactDialog(actionLabel, pact, entryId) {
+  const el = getPactElements();
+  // No dialog in the DOM: refuse rather than wave the change through.
+  if (!el.overlay) return null;
+  const now = Date.now();
+  const delay = Pact.formatDelay(pact.delayMs);
+  let codeMode = false;
+
+  const showCode = () => {
+    codeMode = true;
+    el.title.textContent = 'Enter your witness’s code';
+    el.desc.textContent = `Ask your witness for the six-digit code in their authenticator app to ${actionLabel} now.`;
+    el.note.classList.add('hidden');
+    el.codeField.classList.remove('hidden');
+    el.codeLine.classList.add('hidden');
+    el.ok.textContent = 'Continue';
+    el.codeInput.value = '';
+    setFieldError(el.codeInput, el.codeError, '');
+    el.codeInput.focus();
+  };
+
+  el.title.textContent = 'This change waits';
+  el.desc.textContent = `This will ${actionLabel} after your pact’s wait of ${delay}, around ${Pact.formatWhen(now + pact.delayMs, now)}.`;
+  el.note.textContent = pact.witness
+    ? 'Most urges pass if you wait them out. You can cancel it any time before then.'
+    : 'Most urges pass if you wait them out. You can cancel it any time before then. To let a change through without the wait, add a witness in Settings.';
+  el.note.classList.remove('hidden');
+  el.codeField.classList.add('hidden');
+  el.codeLine.classList.toggle('hidden', !pact.witness);
+  el.ok.textContent = `Wait ${delay}`;
+  openDialog(el.overlay);
+  if (entryId) showCode();
+  else el.ok.focus();
+
+  return new Promise(resolve => {
+    let busy = false;
+    const finish = (value) => {
+      el.ok.onclick = null;
+      el.cancel.onclick = null;
+      el.codeBtn.onclick = null;
+      el.codeInput.onkeydown = null;
+      closeDialog(el.overlay);
+      resolve(value);
+    };
+    const submitCode = async () => {
+      if (busy) return;
+      const code = el.codeInput.value.trim();
+      if (!code) return;
+      busy = true;
+      const reply = await Pact.ask(entryId
+        ? { type: 'pact_apply_now', id: entryId, code }
+        : { type: 'pact_verify_code', code });
+      busy = false;
+      if (reply && reply.ok) {
+        if (reply.via === 'recovery') showNotice(`Recovery code used. ${reply.recoveryLeft} left.`);
+        finish('witness');
+        return;
+      }
+      el.codeInput.value = '';
+      setFieldError(el.codeInput, el.codeError, reply && reply.locked
+        ? `Too many wrong codes. Try again in ${PinHash ? PinHash.describeWait(reply.waitMs) : 'a while'}.`
+        : 'That code didn’t match. Ask for the one showing now.');
+      el.codeInput.focus();
+    };
+    el.codeBtn.onclick = showCode;
+    el.ok.onclick = () => (codeMode ? submitCode() : finish('wait'));
+    el.cancel.onclick = () => finish(null);
+    el.codeInput.onkeydown = (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); submitCode(); }
+    };
+  });
+}
+
+// --- Storm Mode ------------------------------------------------------------------
+
+// Resolves the hours chosen, or null.
+function showStormDialog() {
+  const overlay = $('storm-modal-overlay');
+  if (!overlay) return Promise.resolve(null);
+  const chips = [...overlay.querySelectorAll('.chip')];
+  const ok = $('storm-ok');
+  const cancel = $('storm-cancel');
+  const error = $('storm-error');
+  let hours = null;
+  const pick = (chip) => {
+    hours = Number(chip.dataset.hours);
+    chips.forEach(c => {
+      const on = c === chip;
+      c.classList.toggle('selected', on);
+      c.setAttribute('aria-pressed', on ? 'true' : 'false');
+    });
+    if (error) error.textContent = '';
+  };
+  chips.forEach(c => { c.classList.remove('selected'); c.setAttribute('aria-pressed', 'false'); });
+  if (error) error.textContent = '';
+  openDialog(overlay);
+  if (chips[0]) chips[0].focus();
+  return new Promise(resolve => {
+    const finish = (value) => {
+      chips.forEach(c => { c.onclick = null; });
+      ok.onclick = null;
+      cancel.onclick = null;
+      closeDialog(overlay);
+      resolve(value);
+    };
+    chips.forEach(c => { c.onclick = () => pick(c); });
+    ok.onclick = () => {
+      if (!hours) {
+        if (error) error.textContent = 'Choose how long it lasts.';
+        return;
+      }
+      finish(hours);
+    };
+    cancel.onclick = () => finish(null);
+  });
+}
+
+async function startStorm() {
+  showNotice('');
+  const hours = await showStormDialog();
+  if (!hours) return;
+  const reply = await Pact.ask({ type: 'boost_storm_start', hours });
+  showNotice(reply && reply.ok
+    ? `Storm Mode is on until ${Boost.formatUntil(reply.until, Date.now())}.`
+    : 'Storm Mode didn’t start. Try again.');
+  await updateUI();
+}
+
+// The Storm row and the line under "Protected" while a boost is on.
+async function renderBoost(settings) {
+  if (!Boost) return;
+  const state = await Boost.readState(browserAPI.storage.local);
+  const now = Date.now();
+  const statusNote = $('status-note');
+  if (statusNote && settings.enabled) {
+    statusNote.hidden = !state;
+    statusNote.textContent = state
+      ? (state.active === 'storm' ? 'Storm Mode until ' : 'Risk hours until ') + Boost.formatUntil(state.until, now)
+      : '';
+  }
+  // While it lasts, the notes beside the guarded controls say so, instead of
+  // describing a PIN prompt that won't come.
+  if (state) {
+    const until = Boost.formatUntil(state.until, now);
+    const ends = state.active === 'storm' ? `Not until Storm Mode ends at ${until}.` : `Not until your risk hours end at ${until}.`;
+    ['unblock-note', 'safesearch-note', 'whitelist-note', 'toggle-note'].forEach((id) => {
+      const el = $(id);
+      if (el) el.textContent = ends;
+    });
+  }
+  const desc = $('storm-desc');
+  const button = $('storm-btn');
+  if (!desc || !button) return;
+  if (state && state.active === 'storm') {
+    desc.textContent = `On until ${Boost.formatUntil(state.until, now)}. It can’t be stopped early.`;
+    button.textContent = 'Longer';
+  } else {
+    desc.textContent = 'For a hard moment: everything at its strongest, and nothing can be loosened until it ends.';
+    button.textContent = 'Start';
+  }
+}
+
+// The changes waiting out the Pact, with a way to cancel each.
+async function renderPactWaiting() {
+  const section = $('pact-waiting');
+  const list = $('pact-waiting-list');
+  if (!section || !list || !Pact) return;
+  const { pact, queue, clock } = await Pact.readAll(browserAPI.storage.local);
+  section.classList.toggle('hidden', queue.length === 0);
+  list.textContent = '';
+  const now = Date.now();
+  queue.forEach((entry) => {
+    const row = document.createElement('div');
+    row.className = 'domain-row';
+    const main = document.createElement('div');
+    main.className = 'domain-main';
+    const name = document.createElement('span');
+    name.className = 'domain';
+    name.textContent = Pact.sentenceCase(entry.label);
+    name.title = name.textContent;
+    const meta = document.createElement('span');
+    meta.className = 'domain-meta';
+    const left = Pact.remainingMs(entry, clock, now);
+    meta.textContent = left > 0 ? `In ${Pact.formatRemaining(left)}` : 'Due now';
+    main.appendChild(name);
+    main.appendChild(meta);
+    row.appendChild(main);
+
+    if (pact && pact.witness) {
+      const code = document.createElement('button');
+      code.type = 'button';
+      code.className = 'btn-text';
+      code.textContent = 'Code';
+      code.setAttribute('aria-label', `Use a witness code to ${entry.label} now`);
+      code.addEventListener('click', async () => {
+        if ((await showPactDialog(entry.label, pact, entry.id)) === 'witness') showNotice('Done.');
+        await renderPactWaiting();
+      });
+      row.appendChild(code);
+    }
+    const cancel = document.createElement('button');
+    cancel.type = 'button';
+    cancel.className = 'btn-text';
+    cancel.textContent = 'Cancel';
+    cancel.setAttribute('aria-label', `Cancel: ${entry.label}`);
+    cancel.addEventListener('click', async () => {
+      const reply = await Pact.ask({ type: 'pact_cancel', id: entry.id });
+      showNotice(reply && reply.ok ? 'Cancelled. Nothing changed.' : 'That didn’t cancel. Try again.');
+      await renderPactWaiting();
+    });
+    row.appendChild(cancel);
+    list.appendChild(row);
+  });
 }
 
 // Modal UI for PIN
@@ -251,9 +596,17 @@ function getPinElements() {
     confirmInput: $('pin-input-confirm'),
     toggle: $('pin-toggle'),
     error: $('pin-error'),
+    hint: $('pin-hint'),
     ok: $('pin-ok'),
     cancel: $('pin-cancel')
   };
+}
+
+// The line under the PIN box; empty hides it.
+function setPinHint(el, text) {
+  if (!el.hint) return;
+  el.hint.textContent = text || '';
+  el.hint.hidden = !text;
 }
 
 // --- Dialog presentation ------------------------------------------------------
@@ -346,6 +699,7 @@ async function showPinModal(description, options = {}) {
     ? 'Enter your PIN to continue.'
     : (description || 'Enter your PIN to continue.');
   setFieldError(el.input, el.error, options.errorOnly ? description : '');
+  setPinHint(el, options.hint);
   el.ok.textContent = 'Continue';
   el.confirmField.classList.add('hidden');
   el.input.value = '';
@@ -386,6 +740,7 @@ async function showSetPinModal() {
   el.title.textContent = 'Set a PIN';
   el.desc.textContent = 'A PIN guards anything that loosens protection. Choose one you will remember.';
   setFieldError(el.input, el.error, '');
+  setPinHint(el, '');
   el.ok.textContent = 'Set PIN';
   el.input.value = '';
   el.confirmInput.value = '';
@@ -768,10 +1123,21 @@ function gateSentence(hasPin, accessCodeAsked) {
 
 async function updateLockNotes() {
   try {
-    const hasPin = !!(await getPIN());
+    const hasPin = pinIsSet(await getPIN());
     const config = await getAccessCodeConfig();
     const asks = (critical) => !!AccessCode.requiredFor(config, critical);
     const set = (id, text) => { const el = $(id); if (el) el.textContent = text; };
+    const pact = await readPact();
+    if (Pact && Pact.isActive(pact)) {
+      const delay = Pact.formatDelay(pact.delayMs);
+      const waits = `Waits ${delay}, under your pact.`;
+      set('unblock-note', waits);
+      set('safesearch-note', waits);
+      set('whitelist-note', waits);
+      set('toggle-note', `Turning it off waits ${delay}, under your pact.`);
+      return;
+    }
+    set('toggle-note', 'Turning it off asks you to confirm in Settings.');
     set('unblock-note', gateSentence(hasPin, asks(true)));
     set('safesearch-note', gateSentence(hasPin, asks(false)));
     set('whitelist-note', gateSentence(hasPin, asks(true)));
@@ -919,6 +1285,8 @@ async function updateUI() {
     // Update whitelist display
     await updateWhitelistDisplay();
     await updateLockNotes();
+    await renderPactWaiting();
+    await renderBoost(settings);
     
     document.body.classList.remove('loading');
   } catch (error) {
@@ -940,6 +1308,7 @@ async function toggleBlocking() {
   try {
     const settings = await getSettings();
     const turningOff = settings.enabled === true;
+    if (turningOff && await refusedByBoost()) return;
     if (turningOff) {
       // Redirect to options page for the full commitment gate flow
       const optionsUrl = browserAPI.runtime.getURL('options.html') + '?action=disable';
@@ -969,12 +1338,30 @@ async function toggleUnblockSite() {
     }
     
     const isWhitelisted = await isCurrentSiteWhitelisted();
-    
+    if (!isWhitelisted && await refusedByBoost()) return;
+
     if (isWhitelisted) {
       // Re-blocking the site: tightening, so the PIN alone (as before).
       const ok = await requirePINOnly('remove whitelist');
       if (!ok) return;
       await removeFromWhitelist(domain);
+    } else if (Pact && Pact.isActive(await readPact())) {
+      // Under a Pact the length is asked first, so the waiting change knows it.
+      // A temporary allowance starts counting once the wait is over.
+      const result = await showDurationModal({
+        title: 'Whitelist this site',
+        description: 'Choose how long it stays allowed once your pact’s wait is over, or keep it for good.'
+      });
+      if (result === null) return;
+      const minutes = result && typeof result.minutes === 'number' ? result.minutes : null;
+      const payload = minutes
+        ? { domain, path: null, type: 'temporary', durationMs: minutes * 60 * 1000 }
+        : { domain, path: null, type: 'permanent' };
+      const outcome = await guardWeakeningOutcome(`whitelist ${domain}`, { critical: true, ensurePin: true },
+        { kind: 'whitelist-add', payload });
+      if (outcome !== 'now') return;
+      if (minutes) await addToWhitelist(domain, 'temporary', payload.durationMs);
+      else await addToWhitelist(domain, 'permanent');
     } else {
       // Whole-site whitelist: it overrides blocking for every page on the
       // domain, which is as total as switching blocking off, so it faces the
@@ -1031,11 +1418,19 @@ async function handleAddWhitelist(type) {
   try {
     // A bare domain unlocks the whole site; a path-scoped entry opens one
     // section, so only the former counts as critical.
-    const ok = await requirePIN(
-      parsed.path ? 'whitelist this page' : 'whitelist this whole site',
-      { critical: !parsed.path }
+    const durationMs = type === 'temporary-15' ? 15 * 60 * 1000 : (type === 'temporary-60' ? 60 * 60 * 1000 : null);
+    const outcome = await guardWeakeningOutcome(
+      `whitelist ${parsed.path ? parsed.domain + parsed.path : parsed.domain}`,
+      { critical: !parsed.path, ensurePin: true },
+      {
+        kind: 'whitelist-add',
+        payload: durationMs
+          ? { domain: parsed.domain, path: parsed.path || null, type: 'temporary', durationMs }
+          : { domain: parsed.domain, path: parsed.path || null, type: 'permanent' }
+      }
     );
-    if (!ok) return;
+    if (outcome === 'queued') input.value = '';
+    if (outcome !== 'now') return;
     // Support temporary durations if requested via button
     if (type === 'temporary-15') {
       await addToWhitelist(parsed.domain, 'temporary', 15 * 60 * 1000, parsed.path);
@@ -1155,7 +1550,12 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (safeSearchToggle) {
     safeSearchToggle.addEventListener('click', async () => {
       try {
-        const ok = await requirePIN('switch SafeSearch mode');
+        const current = await getSettings();
+        const turningOff = current.safeSearchEnabled !== false;
+        const ok = turningOff
+          ? await guardWeakening('turn off Safe Search enforcement', { ensurePin: true },
+            { kind: 'settings', payload: { set: { safeSearchEnabled: false } } })
+          : await requirePIN('switch SafeSearch mode');
         if (!ok) return;
         const settings = await getSettings();
         settings.safeSearchEnabled = !settings.safeSearchEnabled;
@@ -1171,6 +1571,22 @@ document.addEventListener('DOMContentLoaded', async () => {
   holdFocusIn($('pin-modal-overlay'), $('pin-cancel'));
   holdFocusIn($('access-code-modal-overlay'), $('access-code-cancel'));
   holdFocusIn($('duration-modal-overlay'), $('duration-cancel'));
+  holdFocusIn($('pact-modal-overlay'), $('pact-cancel'));
+  holdFocusIn($('storm-modal-overlay'), $('storm-cancel'));
+
+  const stormBtn = $('storm-btn');
+  if (stormBtn) stormBtn.addEventListener('click', startStorm);
+  const slipLink = $('slip-link');
+  if (slipLink) {
+    slipLink.addEventListener('click', (e) => {
+      e.preventDefault();
+      browserAPI.tabs.create({ url: browserAPI.runtime.getURL('morning.html') });
+      window.close();
+    });
+  }
+
+  // Anything whose wait is over is applied as the popup opens.
+  if (Pact) Pact.ask({ type: 'pact_process' });
 
   // Update-available banner
   setVersionBadge();
@@ -1199,6 +1615,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (area === 'local' && (changes[UPDATE_INFO_KEY] || changes[UPDATE_DISMISSED_KEY])) {
       renderUpdateBanner();
     }
+    if (area === 'local' && Pact && (changes[Pact.PACT_KEY] || changes[Pact.QUEUE_KEY])) {
+      renderPactWaiting();
+      updateLockNotes();
+    }
+    if (area === 'local' && Boost && changes[Boost.STATE_KEY]) updateUI();
   });
 });
 

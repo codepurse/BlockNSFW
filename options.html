@@ -1047,6 +1047,144 @@
         height: 88px;
       }
     }
+    /* The Pact. The QR sits on the band's light-on-dark pair, the one pair
+       that stays dark modules on a light ground in both themes, which is what
+       a scanner needs. */
+    .pact-delay-field {
+      border: 0;
+      padding: 0;
+      margin: 0;
+      min-width: 0;
+    }
+    .pact-delay-field .field-label {
+      margin-bottom: var(--space-2);
+    }
+    .pact-terms {
+      margin: var(--space-4) 0 0;
+      padding-left: 1.1em;
+      list-style: disc outside;
+      color: var(--color-ink-2);
+      font-size: 13px;
+      line-height: 1.5;
+    }
+    .pact-terms li::marker {
+      color: var(--color-ink-3);
+    }
+    /* A waiting change is a sentence, not an address: set in the body face. */
+    .pact-entry-label {
+      font-family: var(--font-sans);
+      font-variant-numeric: normal;
+    }
+    .pact-terms li + li {
+      margin-top: var(--space-1);
+    }
+    .pact-check {
+      display: flex;
+      gap: var(--space-3);
+      align-items: flex-start;
+      font-size: 13px;
+      line-height: 1.5;
+      color: var(--color-ink-2);
+    }
+    .pact-check input {
+      flex: none;
+      margin-top: 3px;
+    }
+    .pact-qr-frame {
+      display: flex;
+      justify-content: center;
+      margin-bottom: var(--space-3);
+    }
+    .pact-qr {
+      display: block;
+      width: 216px;
+      height: 216px;
+      border-radius: var(--radius-xs);
+    }
+    .pact-qr-ground {
+      fill: var(--color-on-band);
+    }
+    .pact-qr-ink {
+      fill: var(--color-band);
+    }
+    .pact-key {
+      font-family: var(--font-mono);
+      letter-spacing: 0.04em;
+      color: var(--color-ink);
+      user-select: all;
+      -webkit-user-select: all;
+    }
+    .pact-handover {
+      display: grid;
+      gap: var(--space-4);
+    }
+    .pact-pin {
+      display: grid;
+      gap: var(--space-1);
+    }
+    .pact-pin[hidden] {
+      display: none;
+    }
+    .pact-pin-value {
+      font-family: var(--font-mono);
+      font-size: 24px;
+      letter-spacing: 0.12em;
+      color: var(--color-ink);
+    }
+    .pact-recovery {
+      margin: 0;
+      padding-left: 1.8em;
+      columns: 2;
+      column-gap: var(--space-6);
+      font-family: var(--font-mono);
+      font-size: 14px;
+      line-height: 1.8;
+      color: var(--color-ink);
+    }
+    #pact-pending-head {
+      margin: var(--space-5) 0 var(--space-2);
+    }
+    #pact-on .row-control {
+      gap: var(--space-3);
+    }
+
+    /* Your own words, Storm Mode, Risk hours. */
+    .words-fields {
+      display: grid;
+      gap: var(--space-4);
+      max-width: 40rem;
+      margin-top: var(--space-4);
+    }
+    .textarea-prose {
+      min-height: 4.75rem;
+      font-family: var(--font-sans);
+      font-size: 14px;
+      line-height: 1.5;
+      resize: vertical;
+    }
+    .words-person,
+    .risk-times {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      align-items: start;
+      gap: var(--space-4);
+      max-width: 40rem;
+    }
+    .row .risk-times .field,
+    .row-stack .risk-times .field + .field {
+      margin-top: 0;
+    }
+    .storm-on-desc {
+      margin-top: var(--space-3);
+      color: var(--color-ink);
+    }
+    @media (max-width: 520px) {
+      .words-person,
+      .risk-times {
+        grid-template-columns: 1fr;
+      }
+    }
+
     @media (max-width: 520px) {
       .row {
         flex-wrap: wrap;
@@ -1177,18 +1315,18 @@
         <div class="welcome-card band-pine" id="dev-message-card">
           <button type="button" class="welcome-strip" data-welcome="open">
             <span class="welcome-strip-title">Warden</span>
-            <span class="welcome-strip-meta"><span data-cooldown aria-hidden="true">23:59:41</span> · makes you wait</span>
+            <span class="welcome-strip-meta"><span data-cooldown aria-hidden="true">23:59:41</span> · the whole PC waits</span>
             <span class="welcome-strip-open">Show <svg class="icon icon-12" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M4 6l4 4 4-4" /></svg></span>
           </button>
           <div class="warden-banner">
             <div class="warden-text">
               <p class="meta warden-kicker">warden<span class="warden-beta">beta</span> · from the maker of BlockNSFW</p>
-              <h3 class="warden-title" data-welcome="heading" tabindex="-1">In a weak moment, Warden <em>makes you wait.</em></h3>
-              <p class="warden-lede">Anything that loosens protection waits out a cool-down first, across every browser and every app on your Windows PC.</p>
+              <h3 class="warden-title" data-welcome="heading" tabindex="-1">In a weak moment, Warden <em>makes the whole PC wait.</em></h3>
+              <p class="warden-lede">A pact makes changes in this browser wait. Warden makes them wait across every browser and every app on your Windows PC.</p>
               <div class="warden-actions">
                 <a class="btn btn-primary btn-sm" href="https://monolab.dev/warden#beta" target="_blank" rel="noopener noreferrer">Join the beta</a>
                 <a class="arrow-link" href="https://monolab.dev/warden" target="_blank" rel="noopener noreferrer">Learn more <svg class="icon icon-up-right" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M4.5 11.5l7-7M6 4.5h5.5V10" /></svg></a>
-                <span class="meta">the cool-down is a pro feature · not on sale yet</span>
+                <span class="meta">beta · Windows 10 and 11</span>
               </div>
             </div>
             <!-- A watch face: sixty ticks and twelve longer ones, each ring of
@@ -1592,6 +1730,35 @@
           </div>
         </div>
 
+        <div class="group" id="own-words-group">
+          <h3 class="group-title">Your own words</h3>
+          <p class="group-desc">Written now, in a calm moment, and shown first whenever a page is held: your plan, a note to yourself, and someone to reach. They stay on this device.</p>
+          <div class="words-fields">
+            <div class="field">
+              <label class="field-label" for="own-words-plan">When it’s hard, I will…</label>
+              <textarea class="textarea textarea-prose" id="own-words-plan" maxlength="400" placeholder="When I’m alone late at night and feel the pull, I’ll put the laptop in the kitchen and call Sam."></textarea>
+            </div>
+            <div class="field">
+              <label class="field-label" for="own-words-note">A note to yourself</label>
+              <textarea class="textarea textarea-prose" id="own-words-note" maxlength="600" placeholder="Why this matters to you, in your own words."></textarea>
+            </div>
+            <div class="words-person">
+              <div class="field">
+                <label class="field-label" for="own-words-name">Someone to reach</label>
+                <input type="text" class="input" id="own-words-name" maxlength="60" autocomplete="off" placeholder="A name" />
+              </div>
+              <div class="field">
+                <label class="field-label" for="own-words-phone">Their number</label>
+                <input type="tel" class="input input-mono" id="own-words-phone" maxlength="32" autocomplete="off" aria-describedby="own-words-phone-hint" />
+                <p class="field-hint" id="own-words-phone-hint">Optional. Where calls are possible, the blocked page links to it.</p>
+              </div>
+            </div>
+          </div>
+          <div class="btn-row">
+            <button type="button" class="btn btn-ghost" id="own-words-save">Save your words</button>
+          </div>
+        </div>
+
         <div class="group">
           <h3 class="group-title">Blocked search results</h3>
           <p class="group-desc">What a blocked result leaves behind on a search page.</p>
@@ -1768,6 +1935,99 @@ title/Example Domain/"></textarea>
       <section class="section" id="section-security" aria-labelledby="h-security">
         <h2 class="section-head" id="h-security"><span class="index">04</span>Security</h2>
         <p class="section-desc">Lock your settings, and choose what happens in private windows.</p>
+
+        <div class="group" id="pact-group">
+          <div class="group-head">
+            <h3 class="group-title">The Pact</h3>
+            <span class="meta status-word" id="pact-status">off</span>
+          </div>
+          <p class="group-desc">Make changes that loosen protection wait. You choose the wait now; later, turning protection off, whitelisting a site or switching off a layer only happens once it’s over. A craving rarely lasts that long. Making protection stronger never waits, and you can cancel a waiting change at any time.</p>
+          <div id="pact-off">
+            <div class="btn-row">
+              <button type="button" class="btn btn-primary" id="pact-start">Make a pact</button>
+            </div>
+          </div>
+          <div id="pact-on" hidden>
+            <div class="rows rows-closed">
+              <div class="row">
+                <div class="row-text">
+                  <label class="row-label" for="pact-delay">The wait</label>
+                  <p class="row-desc" id="pact-delay-desc">A longer wait applies at once. A shorter one has to wait out the current one first.</p>
+                </div>
+                <span class="select">
+                  <select class="input" id="pact-delay" aria-describedby="pact-delay-desc">
+                    <option value="900000">15 minutes</option>
+                    <option value="3600000">1 hour</option>
+                    <option value="86400000">24 hours</option>
+                    <option value="259200000">3 days</option>
+                  </select>
+                </span>
+              </div>
+              <div class="row">
+                <div class="row-text">
+                  <span class="row-label">Witness</span>
+                  <p class="row-desc" id="pact-witness-desc">Someone you trust holds a code that lets a change through without the wait. They never see your browsing.</p>
+                </div>
+                <div class="row-control">
+                  <button type="button" class="btn btn-ghost btn-sm" id="pact-witness-btn">Add a witness</button>
+                </div>
+              </div>
+            </div>
+            <h4 class="meta" id="pact-pending-head">Waiting</h4>
+            <div class="domain-list" id="pact-pending-list" aria-live="polite"></div>
+            <div class="btn-row danger-zone">
+              <button type="button" class="btn btn-danger" id="pact-end">End the pact</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="group" id="storm-group">
+          <div class="group-head">
+            <h3 class="group-title">Storm Mode</h3>
+            <span class="meta status-word" id="storm-status">off</span>
+          </div>
+          <p class="group-desc">For a hard moment. Every protection goes to its strongest, image searches are blurred, and nothing that loosens protection can be changed until it ends, not even with your pact or a witness. It can’t be stopped early. You can also start it from the toolbar popup.</p>
+          <div class="btn-row" id="storm-start-row">
+            <button type="button" class="btn btn-ghost" data-storm-hours="1">1 hour</button>
+            <button type="button" class="btn btn-ghost" data-storm-hours="4">4 hours</button>
+            <button type="button" class="btn btn-ghost" data-storm-hours="12">12 hours</button>
+          </div>
+          <p class="row-desc storm-on-desc" id="storm-on-desc" hidden></p>
+        </div>
+
+        <div class="group" id="risk-group">
+          <div class="group-head">
+            <h3 class="group-title">Risk hours</h3>
+            <span class="meta status-word" id="risk-status">off</span>
+          </div>
+          <p class="group-desc">The hours you know are hardest. Every day during them, strictness goes up, image searches are blurred, and nothing that loosens protection can be changed until they end.</p>
+          <div class="rows rows-closed">
+            <div class="row">
+              <div class="row-text">
+                <label class="row-label" for="risk-enabled">Risk hours</label>
+                <p class="row-desc" id="risk-enabled-desc">Turning them off, or making them shorter, counts as loosening protection.</p>
+                <span class="locked-note" data-lock="normal" data-lock-when="Turning them off" hidden></span>
+              </div>
+              <label class="switch">
+                <input type="checkbox" class="switch-input" role="switch" id="risk-enabled" aria-describedby="risk-enabled-desc" />
+                <span class="switch-track" aria-hidden="true"><span class="switch-thumb"></span></span>
+                <span class="switch-state" aria-hidden="true"></span>
+              </label>
+            </div>
+            <div class="row row-stack">
+              <div class="risk-times">
+                <div class="field">
+                  <label class="field-label" for="risk-start">From</label>
+                  <span class="select"><select class="input" id="risk-start"></select></span>
+                </div>
+                <div class="field">
+                  <label class="field-label" for="risk-end">Until</label>
+                  <span class="select"><select class="input" id="risk-end"></select></span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
 
         <div class="group">
           <div class="group-head">
@@ -2032,6 +2292,12 @@ title/Example Domain/"></textarea>
   <script src="appwrite-client.js"></script>
   <script src="shared/validate-domain.js"></script>
   <script src="shared/access-code.js"></script>
+  <script src="shared/pin-hash.js"></script>
+  <script src="shared/totp.js"></script>
+  <script src="shared/qr.js"></script>
+  <script src="shared/pact.js"></script>
+  <script src="shared/boost.js"></script>
+  <script src="shared/moments.js"></script>
   <script src="shared/keyword-pattern.js"></script>
   <script src="shared/dns-providers.js"></script>
   <script src="shared/ai-image-models.js"></script>

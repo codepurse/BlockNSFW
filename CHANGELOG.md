@@ -2,6 +2,94 @@
 
 All notable project changes should be documented here going forward.
 
+## [Unreleased]
+
+The Pact: a promise made in a clear moment, kept by time and, if you want,
+by a friend. A PIN you set yourself stops nobody, because you know it. A wait
+longer than the urge works even when you know every PIN.
+
+### Added
+
+- **The Pact** (Settings, Security). Choose a wait: 15 minutes, 1 hour, 24
+  hours or 3 days. While a pact is active, every change that loosens
+  protection waits it out before it happens. That covers turning protection
+  off, whitelisting a site, switching off a layer, removing blocked words or a
+  subscribed list, trusting an image site, weakening the access code,
+  clearing the PIN, using your own DNS resolver, resetting settings and
+  clearing the activity log. Making protection stronger never waits. A
+  waiting change can be cancelled at any time, from Settings or the popup.
+  The sensitivity dials still apply at once, so a mistaken block can always be
+  fixed. Lengthening the wait applies at once; shortening it, removing the
+  witness or ending the pact waits too.
+- **A witness.** Someone you trust scans a QR code into the authenticator app
+  they already use (Google Authenticator, Aegis, 1Password). When you want a
+  change without the wait, you ask them for the six-digit code it shows. They
+  never see your browsing, and there is no server: the code is worked out from
+  the key and the clock, on your device and in their app separately (standard
+  TOTP, RFC 6238). They also keep eight one-time recovery codes. Each code
+  works once; five wrong ones lock entry for five minutes, doubling to an hour.
+  Their code also works wherever the PIN is asked for, since the two are easy
+  to mix up, and under a pact it lets the change through at once.
+- **A PIN only your witness holds.** When pairing, you can let BlockNSFW make
+  up a PIN shown only to the witness. Clearing it yourself waits like any
+  other loosening change.
+- **Honest time.** The wait is measured against the server clock from the
+  `Date` header of the version file the extension already reads, so moving the
+  computer's clock skips nothing, and a night with the laptop shut still
+  counts. Offline, only time the browser was seen running counts.
+- **Storm Mode** (Settings, Security, and the popup). For 1, 4 or 12 hours,
+  every layer goes to its strongest: strict image and text filtering, the AI
+  models on every site, SafeSearch, Reels blocking, and image search results
+  blurred. It can be made longer but not shorter, and nothing that loosens
+  protection can be changed until it ends, not even with a witness code.
+  When it ends, each setting goes back to what it was, and protection stays
+  on. The end is checked against the server clock.
+- **Risk hours.** Name the hours you know are hardest (11 PM to 2 AM by
+  default). Every day during them, strictness goes up, image searches are
+  blurred, and loosening changes wait until they end. Turning them off or
+  making them shorter counts as loosening protection.
+- **Your own words** (Settings, Customization). Written in a calm moment: your
+  plan for when it's hard, a note to yourself, and someone to reach. A held
+  page shows them first, with their number as a call link where calls are
+  possible, and offers to wait it out with you for 10 or 20 minutes. "I'm OK
+  now" counts as a moment kept. Nothing leaves the device.
+- **After a slip** (the popup's "I slipped" link). A short, plain page: what
+  was going on, roughly when, and nothing else to fill in. It's recorded as
+  one day, never as a reset, and it offers what would help next time: risk
+  hours around that hour, a longer pact (or a first one), a call to the person
+  you named, or Storm Mode for four hours.
+- **Days kept** (Statistics). Days in the last 30 with protection on all day
+  and no slip, shown beside the current run, the longest run and the moments
+  waited out. A slip costs a day, not the count.
+
+### Changed
+
+- **The PIN is stored as a salted PBKDF2-SHA256 hash**, not as plain text. A
+  PIN saved by an older version keeps working and is re-saved as a hash the
+  next time it is entered. Five wrong tries now lock PIN entry for a minute,
+  doubling to an hour, across Settings and the popup.
+- **With a pact, the wait replaces the commitment sentence and the access
+  code.** Without one, both work exactly as before.
+- **The Warden banner** now says what Warden adds beside a pact: the wait
+  across every browser and app on the PC, not only this browser.
+
+### Fixed
+
+- **Settings' Save could switch protection and smart detection off without
+  any check**, because it copied those two switches from the page. It can now
+  only switch them on.
+- **The setup wizard could be reopened later** to switch layers off or
+  overwrite the PIN without asking for anything. Once setup is done, or a pact
+  exists, it opens Settings instead, and it never replaces an existing PIN.
+- **The popup's PIN prompt threw away every second try**: a wrong PIN opened a
+  separate prompt whose answer was ignored. The next try now happens in that
+  prompt.
+- **Trusting an image site from its own Save button had no check at all.**
+  Under a pact it waits like any other loosening change.
+- **Pages with relative links logged errors on every scan**: the adult-URL
+  check read `/path` links as bad URLs. Links are now read against the page's
+  own address.
+
 ## [1.10.0] - 2026-10-08
 
 Every page BlockNSFW shows is redrawn in monolab's design system: paper, ink

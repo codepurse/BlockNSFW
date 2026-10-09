@@ -155,6 +155,59 @@
     .blocked-foot {
       margin-top: var(--space-7);
     }
+
+    /* For this moment: the person's own words first, then one line to wait
+       it out. Set in the page's own type; no box, one hairline above. */
+    .moment {
+      margin-top: var(--space-5);
+      padding-top: var(--space-4);
+      border-top: 1px solid var(--color-rule);
+      max-width: var(--measure, 38rem);
+    }
+    .moment-words {
+      display: grid;
+      gap: var(--space-2);
+      margin-bottom: var(--space-4);
+    }
+    .moment-plan {
+      font-size: 17px;
+      line-height: 1.5;
+      color: var(--color-ink);
+      white-space: pre-line;
+    }
+    .moment-note {
+      font-size: 15px;
+      line-height: 1.55;
+      color: var(--color-ink-2);
+      white-space: pre-line;
+    }
+    .moment-person {
+      font-size: 15px;
+      color: var(--color-ink);
+    }
+    .moment-boost {
+      margin-bottom: var(--space-3);
+      font-size: 14px;
+      color: var(--color-ink);
+    }
+    .moment-line {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: baseline;
+      gap: var(--space-1) var(--space-3);
+      font-size: 14px;
+      color: var(--color-ink-2);
+    }
+    .moment-time {
+      font-family: var(--font-mono);
+      font-size: 15px;
+      color: var(--color-ink);
+    }
+    .moment-add {
+      display: inline-block;
+      margin-top: var(--space-3);
+      font-size: 14px;
+    }
   </style>
   <link rel="stylesheet" href="blocked-themes.css" />
 </head>
@@ -174,6 +227,32 @@
         <h1 class="title title-held blocked-title">This page was held.</h1>
         <p class="blocked-subtitle">BlockNSFW stopped it before it loaded.</p>
       </header>
+
+      <!-- For this moment: the user's own words, and a way to wait it out.
+           Filled by blocked.js; hidden until there is something to show. -->
+      <section class="moment" id="moment" aria-labelledby="moment-head" hidden>
+        <h2 class="visually-hidden" id="moment-head">For this moment</h2>
+        <div class="moment-words" id="moment-words" hidden>
+          <p class="moment-plan" id="moment-plan" hidden></p>
+          <p class="moment-note" id="moment-note" hidden></p>
+          <p class="moment-person" id="moment-person" hidden></p>
+        </div>
+        <p class="moment-boost" id="moment-boost" hidden></p>
+        <div class="moment-wait" id="moment-wait">
+          <p class="moment-line" id="moment-wait-idle">
+            <span>Wait it out:</span>
+            <button type="button" class="btn-text" data-wait="10">10 minutes</button>
+            <button type="button" class="btn-text" data-wait="20">20 minutes</button>
+          </p>
+          <p class="moment-line" id="moment-wait-running" hidden>
+            <span class="moment-time tnum" id="moment-wait-time" aria-live="off">10:00</span>
+            <span id="moment-wait-text">left. Most urges pass if you wait them out.</span>
+            <button type="button" class="btn-text" id="moment-ok">I’m OK now</button>
+          </p>
+          <p class="moment-line" id="moment-wait-done" role="status" hidden></p>
+        </div>
+        <a class="link moment-add" id="moment-add" href="#" hidden>Write your own words for this moment</a>
+      </section>
 
       <div class="blocked-actions">
         <button type="button" class="btn btn-primary" id="back-button">Go back</button>
@@ -205,6 +284,8 @@
   </main>
 
   <script src="blocked-themes.js"></script>
+  <script src="shared/moments.js"></script>
+  <script src="shared/boost.js"></script>
   <script src="blocked.js"></script>
 </body>
 </html>

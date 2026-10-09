@@ -5,6 +5,7 @@
   "description": "Blocks adult websites and inappropriate content using pattern matching and configurable filtering for safer browsing.",
   "permissions": [
     "storage",
+    "alarms",
     "activeTab",
     "declarativeNetRequestWithHostAccess",
     "offscreen"

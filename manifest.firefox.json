@@ -5,6 +5,7 @@
   "description": "Blocks adult websites and inappropriate content using pattern matching and configurable filtering for safer browsing.",
   "permissions": [
     "storage",
+    "alarms",
     "activeTab",
     "declarativeNetRequest"
   ],
@@ -34,6 +35,9 @@
       "shared/dns-providers.js",
       "shared/ai-image-models.js",
       "shared/vit-classifier.js",
+      "shared/totp.js",
+      "shared/pact.js",
+      "shared/boost.js",
       "background.js"
     ]
   },

@@ -356,7 +356,128 @@ const detailSettled = new Promise(done => { markDetailSettled = done; });
   } catch (error) {
     console.warn('BlockNSFW: could not render blocked-page detail', error);
   }
+  // Not in the design previews in Settings: those show the design, not you.
+  if (!previewTheme) {
+    renderMoment().catch((error) => console.warn('BlockNSFW: could not render the moment', error));
+  }
 })();
+
+// --- For this moment ------------------------------------------------------------
+//
+// The person's own words (shared/moments.js), written in a calm moment, come
+// first: their plan, their note, someone to reach. Then one line to wait the
+// urge out. Pressing "I'm OK now" counts a kept moment, on this device only.
+async function renderMoment() {
+  const Moments = globalThis.Moments;
+  const Boost = globalThis.Boost;
+  const section = document.getElementById('moment');
+  if (!Moments || !section) return;
+  const keys = [Moments.WORDS_KEY];
+  if (Boost) keys.push(Boost.STATE_KEY);
+  const store = await browserAPI.storage.local.get(keys);
+  const words = Moments.normalizeWords(store[Moments.WORDS_KEY]);
+
+  const show = (id, text) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.textContent = text || '';
+    el.hidden = !text;
+  };
+  show('moment-plan', words.plan);
+  show('moment-note', words.note);
+
+  // Someone to reach: a call link only for a plain phone number.
+  const person = document.getElementById('moment-person');
+  if (person) {
+    person.textContent = '';
+    const { name, phone } = words.person;
+    const href = Moments.telHref(phone);
+    if (href) {
+      const link = document.createElement('a');
+      link.className = 'link';
+      link.href = href;
+      link.textContent = name ? `Call ${name}` : `Call ${phone}`;
+      person.appendChild(link);
+    } else if (name || phone) {
+      person.textContent = name && phone ? `Reach out to ${name}: ${phone}` : `Reach out to ${name || phone}`;
+    }
+    person.hidden = !person.textContent;
+  }
+  const hasWords = Moments.hasWords(words);
+  document.getElementById('moment-words').hidden = !hasWords;
+
+  const add = document.getElementById('moment-add');
+  if (add) {
+    add.hidden = hasWords;
+    add.href = browserAPI.runtime.getURL('options.html#own-words-group');
+  }
+
+  const state = Boost ? Boost.normalizeState(store[Boost.STATE_KEY]) : null;
+  if (state) {
+    show('moment-boost', state.active === 'storm'
+      ? `Storm Mode is on until ${Boost.formatUntil(state.until, Date.now())}.`
+      : `Your risk hours run until ${Boost.formatUntil(state.until, Date.now())}.`);
+  }
+
+  wireWaitTimer(Moments);
+  section.hidden = false;
+}
+
+function wireWaitTimer(Moments) {
+  const idle = document.getElementById('moment-wait-idle');
+  const running = document.getElementById('moment-wait-running');
+  const done = document.getElementById('moment-wait-done');
+  const time = document.getElementById('moment-wait-time');
+  const text = document.getElementById('moment-wait-text');
+  const ok = document.getElementById('moment-ok');
+  if (!idle || !running || !done || !time || !ok) return;
+  let timer = null;
+  let endsAt = 0;
+
+  const format = (ms) => {
+    const total = Math.max(0, Math.ceil(ms / 1000));
+    return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`;
+  };
+  const tick = () => {
+    const left = endsAt - Date.now();
+    time.textContent = format(left);
+    if (left > 0) return;
+    clearInterval(timer);
+    timer = null;
+    time.textContent = '0:00';
+    if (text) text.textContent = 'The time is up. If the urge has passed, that’s one kept.';
+  };
+
+  idle.querySelectorAll('[data-wait]').forEach((button) => {
+    button.addEventListener('click', () => {
+      endsAt = Date.now() + Number(button.dataset.wait) * 60 * 1000;
+      idle.hidden = true;
+      running.hidden = false;
+      if (text) text.textContent = 'left. Most urges pass if you wait them out.';
+      tick();
+      clearInterval(timer);
+      timer = setInterval(tick, 1000);
+      ok.focus();
+    });
+  });
+
+  ok.addEventListener('click', async () => {
+    clearInterval(timer);
+    timer = null;
+    running.hidden = true;
+    done.hidden = false;
+    let count = 0;
+    try {
+      const { [Moments.KEPT_KEY]: raw } = await browserAPI.storage.local.get(Moments.KEPT_KEY);
+      const kept = Moments.addKept(raw, Date.now());
+      count = kept.count;
+      await browserAPI.storage.local.set({ [Moments.KEPT_KEY]: kept });
+    } catch (_) {}
+    done.textContent = count > 1
+      ? `That’s ${count} moments you’ve waited out. You can go back now.`
+      : 'That’s one moment waited out. You can go back now.';
+  });
+}
 
 // --- Telling the popup which site this is -----------------------------------
 //

@@ -145,20 +145,52 @@ function hostRow(host, side) {
 
 // --- Sections -----------------------------------------------------------------
 
-function renderStreak(streakData) {
+// Days kept leads (shared/moments.js): one bad night costs one day of the
+// last 30, where a streak would have gone back to zero. The current run and
+// the longest one are still there, second.
+async function getKeptData() {
+  const Moments = globalThis.Moments;
+  if (!Moments) return null;
+  const store = await browserAPI.storage.local.get([
+    Moments.SLIPS_KEY, Moments.FIRST_SEEN_KEY, Moments.KEPT_KEY, 'pblocker_audit_disabled', 'pblocker_settings'
+  ]);
+  const settings = store.pblocker_settings || {};
+  return {
+    days: Moments.daysKept({
+      now: Date.now(),
+      firstSeen: store[Moments.FIRST_SEEN_KEY],
+      slips: store[Moments.SLIPS_KEY],
+      disabledLog: store.pblocker_audit_disabled,
+      currentlyEnabled: settings.enabled !== false
+    }),
+    moments: Moments.normalizeKept(store[Moments.KEPT_KEY]).count
+  };
+}
+
+function renderStreak(streakData, kept) {
   const section = $('protection-section');
   if (!section) return;
 
-  if (!streakData.streakStart) {
+  if (!streakData.streakStart && !kept) {
     section.hidden = true;
     return;
   }
 
   section.hidden = false;
-  const currentStreak = getDaysBetween(streakData.streakStart, Date.now());
-  $('current-streak').textContent = formatNumber(currentStreak);
+  const currentStreak = streakData.streakStart ? getDaysBetween(streakData.streakStart, Date.now()) : 0;
+  $('current-streak').textContent = formatDays(currentStreak);
   $('longest-streak').textContent = formatDays(streakData.longestStreak || currentStreak);
-  $('streak-start-date').textContent = formatDate(streakData.streakStart);
+  $('streak-start-date').textContent = streakData.streakStart ? `Since ${formatDate(streakData.streakStart)}` : '';
+
+  if (kept) {
+    $('days-kept').textContent = `${formatNumber(kept.days.kept)} of ${formatNumber(kept.days.counted)}`;
+    $('days-kept-desc').textContent = kept.days.counted >= 30
+      ? 'Protection on all day and no slip, in the last 30 days'
+      : 'Protection on all day and no slip, since you started';
+    const moments = $('kept-moments-record');
+    if (moments) moments.hidden = kept.moments === 0;
+    $('kept-moments').textContent = formatNumber(kept.moments);
+  }
 }
 
 function renderStats(stats) {
@@ -284,15 +316,16 @@ function showAlert(message) {
 
 async function init() {
   try {
-    const [stats, streakData, topDomains, dailyHistory, recentActivity] = await Promise.all([
+    const [stats, streakData, topDomains, dailyHistory, recentActivity, kept] = await Promise.all([
       getStats(),
       getStreakData(),
       getTopDomains(),
       getDailyHistory(),
-      getRecentActivity()
+      getRecentActivity(),
+      getKeptData().catch(() => null)
     ]);
 
-    renderStreak(streakData);
+    renderStreak(streakData, kept);
     renderStats(stats);
     renderChart(dailyHistory);
     renderTopDomains(topDomains);

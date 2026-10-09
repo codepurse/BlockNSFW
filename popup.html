@@ -137,6 +137,28 @@
       overflow-y: auto;
     }
 
+    /* Changes waiting out the Pact. */
+    .pact-waiting {
+      padding: var(--space-4) 0 var(--space-3);
+      border-top: 1px solid var(--color-rule);
+    }
+    .pact-waiting .domain-list {
+      max-height: 136px;
+      margin-top: var(--space-2);
+      overflow-y: auto;
+    }
+    .pact-waiting .domain-row {
+      gap: var(--space-3);
+    }
+    /* A waiting change is a sentence, not an address: set in the body face. */
+    .pact-waiting .domain {
+      font-family: var(--font-sans);
+      font-variant-numeric: normal;
+    }
+    #pact-modal-overlay .dialog-actions {
+      flex-wrap: wrap;
+    }
+
     .links {
       border-top: 1px solid var(--color-rule);
     }
@@ -256,9 +278,23 @@
         <span class="switch-state" aria-hidden="true"></span>
       </button>
     </div>
+
+    <!-- For a hard moment: everything at its strongest, nothing loosened. -->
+    <div class="row" id="storm-row">
+      <div class="row-text">
+        <span class="row-label" id="storm-label">Storm Mode</span>
+        <p class="row-desc" id="storm-desc">For a hard moment: everything at its strongest, and nothing can be loosened until it ends.</p>
+      </div>
+      <button type="button" class="btn btn-ghost btn-sm" id="storm-btn" aria-describedby="storm-desc">Start</button>
+    </div>
   </div>
 
   <p class="notice popup-notice" id="popup-notice" role="alert"></p>
+
+  <section class="pact-waiting hidden" id="pact-waiting" aria-labelledby="pact-waiting-head">
+    <h2 class="meta" id="pact-waiting-head">waiting</h2>
+    <div class="domain-list" id="pact-waiting-list" aria-live="polite"></div>
+  </section>
 
   <section class="whitelist" aria-labelledby="whitelist-head">
     <h2 class="meta" id="whitelist-head">whitelist</h2>
@@ -282,6 +318,10 @@
   <nav class="links" aria-label="More">
     <a href="#" class="row-link" id="stats-btn">
       Statistics
+      <svg class="icon icon-right" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M2.5 8h11M9.5 4l4 4-4 4" /></svg>
+    </a>
+    <a href="#" class="row-link" id="slip-link">
+      After a slip
       <svg class="icon icon-right" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M2.5 8h11M9.5 4l4 4-4 4" /></svg>
     </a>
     <a href="https://github.com/codepurse/BlockNSFW" target="_blank" rel="noopener noreferrer" class="row-link" id="github-btn">
@@ -322,6 +362,7 @@
                  maxlength="8" aria-describedby="pin-error" />
         </div>
         <p class="field-error" id="pin-error" role="alert"></p>
+        <p class="field-hint" id="pin-hint" hidden></p>
       </div>
       <div class="dialog-actions">
         <button type="button" id="pin-cancel" class="btn btn-ghost">Cancel</button>
@@ -379,8 +420,53 @@
     </div>
   </div>
 
+  <!-- Pact dialog: a change that loosens protection waits, or a witness lets it through. -->
+  <div id="pact-modal-overlay" class="dialog-scrim hidden" aria-hidden="true">
+    <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="pact-modal-title" aria-describedby="pact-modal-desc">
+      <h2 class="dialog-title" id="pact-modal-title">This change waits</h2>
+      <p class="dialog-desc" id="pact-modal-desc"></p>
+      <div class="dialog-body">
+        <p class="field-hint" id="pact-modal-note">Most urges pass if you wait them out. You can cancel it any time before then.</p>
+        <p class="field-hint" id="pact-code-line">Have a code from your witness? <button type="button" id="pact-code-btn" class="link">Use it now</button></p>
+        <div class="field hidden" id="pact-code-field">
+          <label class="field-label" for="pact-code-input">Code from your witness</label>
+          <input type="text" class="input input-mono" id="pact-code-input" inputmode="numeric"
+                 autocomplete="one-time-code" maxlength="12" spellcheck="false" aria-describedby="pact-code-error" />
+          <p class="field-error" id="pact-code-error" role="alert"></p>
+        </div>
+      </div>
+      <div class="dialog-actions">
+        <button type="button" id="pact-cancel" class="btn btn-ghost">Cancel</button>
+        <button type="button" id="pact-ok" class="btn btn-primary">Wait</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Storm Mode: how long. It can't be stopped early, so it says so first. -->
+  <div id="storm-modal-overlay" class="dialog-scrim hidden" aria-hidden="true">
+    <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="storm-modal-title" aria-describedby="storm-modal-desc">
+      <h2 class="dialog-title" id="storm-modal-title">Start Storm Mode</h2>
+      <p class="dialog-desc" id="storm-modal-desc">Every protection goes to its strongest, image searches are blurred, and nothing that loosens protection can be changed until it ends, not even with your pact or a witness. It can’t be stopped early.</p>
+      <div class="dialog-body">
+        <div class="segmented" id="storm-chips" role="group" aria-label="How long">
+          <button type="button" class="chip" data-hours="1" aria-pressed="false">1 hour</button>
+          <button type="button" class="chip" data-hours="4" aria-pressed="false">4 hours</button>
+          <button type="button" class="chip" data-hours="12" aria-pressed="false">12 hours</button>
+        </div>
+        <p class="field-error" id="storm-error" role="alert"></p>
+      </div>
+      <div class="dialog-actions">
+        <button type="button" id="storm-cancel" class="btn btn-ghost">Cancel</button>
+        <button type="button" id="storm-ok" class="btn btn-primary">Start Storm Mode</button>
+      </div>
+    </div>
+  </div>
+
   <script src="shared/validate-domain.js"></script>
   <script src="shared/access-code.js"></script>
+  <script src="shared/pin-hash.js"></script>
+  <script src="shared/pact.js"></script>
+  <script src="shared/boost.js"></script>
   <script src="popup.js"></script>
 </body>
 </html>

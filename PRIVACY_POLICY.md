@@ -143,6 +143,19 @@ published version, so it can tell you when an update is available.
   is identical for every user
 - These requests are not used for advertising or behavioral profiling
 
+While a change is waiting under **The Pact** (Settings, Security), BlockNSFW
+also asks GitHub for the time, so the wait can't be skipped by changing your
+computer's clock. It sends a `HEAD` request for the same `data/version.json`
+file and reads only the server's `Date` header. This happens only while
+something is waiting: when the change is asked for, about every half hour, and
+when it comes due. Nothing about the change, your settings or your browsing is
+sent with it.
+
+The Pact's witness key and recovery codes stay in your browser. Pairing a
+witness shows the key as a QR code on your own screen for them to scan; it is
+never sent to us, to the witness, or to anyone else. Witness codes are worked
+out from that key and the clock, on your device and in their app separately.
+
 ### 4. Optional Detection Model Download
 
 If you switch the AI image blocker to the optional "Vision Transformer
