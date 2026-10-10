@@ -41,26 +41,191 @@
       margin: 0 auto;
     }
 
-    /* Classic stands in the field, as monolab.dev's title page does: the
-       marks come down over the top of the screen, and the words sit in the
-       clearing below the layer where they are decided. The other designs
-       draw their own picture, so they leave it out. */
+    /* Classic: the six doors. Six layers of protection stand between the
+       reader and an adult page; the drawing shows which one held this page,
+       so the "why" is the first thing read, not a fold-out at the bottom. The
+       headline names the door, the line under it says what it means, and the
+       person's own words sit beside what to do next. The other designs draw
+       their own picture, so the doors, the held line and the address line are
+       Classic's alone. */
     html:not([data-theme]) body {
-      padding-top: clamp(96px, 30vh, 280px);
+      padding-top: clamp(48px, 11vh, 120px);
+    }
+    html:not([data-theme]) .container {
+      max-width: 69rem;
+    }
+    html:not([data-theme]) .blocked-card {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(16rem, 20rem);
+      column-gap: 64px;
+      align-items: start;
     }
     html:not([data-theme]) .blocked-header,
-    html:not([data-theme]) .support,
-    html:not([data-theme]) .blocked-foot {
-      text-align: center;
+    html:not([data-theme]) .doors {
+      grid-column: 1 / -1;
     }
-    html:not([data-theme]) .blocked-subtitle {
-      margin-inline: auto;
+    html:not([data-theme]) .moment {
+      grid-column: 1;
+      grid-row: 3 / span 3;
+      margin-top: var(--space-6);
+      padding-top: 0;
+      border-top: 0;
     }
     html:not([data-theme]) .blocked-actions {
-      justify-content: center;
+      grid-column: 2;
+      grid-row: 3;
     }
-    html[data-theme] .field-art {
+    html:not([data-theme]) .held-address {
+      grid-column: 2;
+      grid-row: 4;
+    }
+    html:not([data-theme]) .support {
+      grid-column: 2;
+      grid-row: 5;
+      margin-top: var(--space-3);
+    }
+    html:not([data-theme]) .why {
       display: none;
+    }
+    @media (max-width: 52rem) {
+      html:not([data-theme]) .blocked-card {
+        display: block;
+      }
+      html:not([data-theme]) .moment {
+        margin-top: var(--space-6);
+      }
+    }
+    html[data-theme] .doors,
+    html[data-theme] .held-meta,
+    html[data-theme] .held-address,
+    html[data-theme] .moment-label {
+      display: none;
+    }
+
+    .held-line {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: var(--space-2) var(--space-3);
+    }
+    .held-meta {
+      display: inline-flex;
+      flex-wrap: wrap;
+      gap: var(--space-2);
+    }
+    html:not([data-theme]) .blocked-title {
+      max-width: 52rem;
+      font-size: clamp(40px, 5.2vw, 60px);
+      line-height: 1.04;
+    }
+    html:not([data-theme]) .blocked-subtitle {
+      max-width: 39rem;
+      font-size: 19px;
+      line-height: 1.5;
+    }
+
+    /* The drawing: a line arrives from the left and stops at the door that
+       held it, ending in a brass square. Doors it passed stand open; doors it
+       never reached are faint. Wide screens draw it across; narrow ones down. */
+    .doors {
+      margin: var(--space-7) 0 0;
+      padding: 28px 0 10px;
+      border-top: 1px solid var(--color-rule-2);
+      border-bottom: 1px solid var(--color-rule);
+    }
+    .doors svg {
+      display: block;
+      width: 100%;
+      height: auto;
+      overflow: visible;
+    }
+    .doors-down {
+      display: none !important;
+      max-width: 26rem;
+    }
+    @media (max-width: 40rem) {
+      .doors-across {
+        display: none !important;
+      }
+      .doors-down {
+        display: block !important;
+      }
+    }
+    .doors path,
+    .doors rect {
+      fill: none;
+    }
+    .door-passed {
+      stroke: var(--color-rule-3);
+      stroke-width: 1.5;
+    }
+    .door-ahead {
+      stroke: var(--color-rule-2);
+      stroke-width: 1.25;
+      stroke-dasharray: 3 5;
+    }
+    .door-held {
+      stroke: var(--color-ink);
+      stroke-width: 2.5;
+    }
+    .door-split {
+      stroke: var(--color-rule);
+      stroke-dasharray: 2 5;
+    }
+    .door-arrival {
+      stroke: var(--color-pine-2);
+      stroke-width: 2;
+    }
+    .doors .door-square {
+      fill: var(--color-brass);
+    }
+    .door-label,
+    .door-group {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      letter-spacing: 0.12em;
+      fill: var(--color-ink-3);
+    }
+    .door-label.is-held {
+      fill: var(--color-brass);
+      font-weight: 600;
+    }
+    .door-label.is-ahead {
+      fill: var(--color-ink-3);
+      opacity: 0.6;
+    }
+    .doors-down .door-label,
+    .doors-down .door-group {
+      font-size: 11px;
+    }
+    .doors-caption {
+      margin-top: var(--space-3);
+      font-size: 14px;
+      color: var(--color-ink-2);
+    }
+
+    .moment-label {
+      margin-bottom: var(--space-1);
+    }
+    html:not([data-theme]) .moment-plan {
+      font-family: var(--font-display);
+      font-size: 24px;
+      line-height: 1.35;
+    }
+    html:not([data-theme]) .moment-note {
+      font-family: var(--font-display);
+      font-style: italic;
+      font-size: 19px;
+    }
+    .held-address {
+      margin-top: var(--space-4);
+      font-size: 14px;
+      color: var(--color-ink-2);
+    }
+    .held-address-value {
+      font-family: var(--font-mono);
+      letter-spacing: 0.04em;
+      color: var(--color-ink);
     }
 
     /* The held mark: pale pine, the Held icon, the word in pine. It wipes
@@ -212,27 +377,34 @@
   <link rel="stylesheet" href="blocked-themes.css" />
 </head>
 <body>
-  <div class="field-art" aria-hidden="true">
-    <img class="field-still field-still-light" src="ui/field-still.svg" alt="" />
-    <img class="field-still field-still-dark" src="ui/field-still-dark.svg" alt="" />
-  </div>
   <main class="container">
     <section class="theme-hero" id="theme-hero" hidden></section>
     <div class="blocked-card">
       <header class="blocked-header">
-        <p class="held held-plate">
-          <svg class="icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M2 10.5h12" stroke-width="1.5" /><path d="M8 2v5.5" /><path d="M5.5 5.5L8 7.75 10.5 5.5" /></svg>
-          <span class="held-word">held</span>
-        </p>
-        <h1 class="title title-held blocked-title">This page was held.</h1>
+        <div class="held-line">
+          <p class="held held-plate">
+            <svg class="icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M2 10.5h12" stroke-width="1.5" /><path d="M8 2v5.5" /><path d="M5.5 5.5L8 7.75 10.5 5.5" /></svg>
+            <span class="held-word">held</span>
+          </p>
+          <p class="meta held-meta" id="held-meta" hidden><span id="held-time"></span><span aria-hidden="true">·</span><span id="held-source"></span></p>
+        </div>
+        <h1 class="title title-held blocked-title" id="blocked-title">This page was held.</h1>
         <p class="blocked-subtitle">BlockNSFW stopped it before it loaded.</p>
       </header>
+
+      <!-- Which of the six layers held it. Drawn by blocked.js; Classic only. -->
+      <figure class="doors" id="doors" hidden>
+        <svg class="doors-across" id="doors-across" viewBox="0 0 1104 220" role="img" aria-labelledby="doors-title"><title id="doors-title"></title></svg>
+        <svg class="doors-down" id="doors-down" viewBox="0 0 340 330" aria-hidden="true"></svg>
+        <figcaption class="doors-caption" id="doors-caption"></figcaption>
+      </figure>
 
       <!-- For this moment: the user's own words, and a way to wait it out.
            Filled by blocked.js; hidden until there is something to show. -->
       <section class="moment" id="moment" aria-labelledby="moment-head" hidden>
         <h2 class="visually-hidden" id="moment-head">For this moment</h2>
         <div class="moment-words" id="moment-words" hidden>
+          <p class="meta meta-brass moment-label">For this moment, in your words</p>
           <p class="moment-plan" id="moment-plan" hidden></p>
           <p class="moment-note" id="moment-note" hidden></p>
           <p class="moment-person" id="moment-person" hidden></p>
@@ -258,6 +430,8 @@
         <button type="button" class="btn btn-primary" id="back-button">Go back</button>
         <a class="btn btn-ghost" id="settings" href="#">Settings</a>
       </div>
+
+      <p class="held-address">Address: <span class="held-address-value" id="held-address">••••••••</span>. Never shown, never saved.</p>
 
       <details class="why" id="why" open>
         <summary class="meta">

@@ -1,0 +1,254 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Your good days · BlockNSFW</title>
+  <script src="ui/scheme.js"></script>
+  <link rel="stylesheet" href="ui/tokens.css" />
+  <link rel="stylesheet" href="ui/components.css" />
+  <style>
+    /* Your good days: what the evening check-ins say about calm days and
+       hard ones, in plain sentences. Each finding is one serif line and two
+       bars: how often it was true on calm days, and on hard days. Then one
+       thing to try, and a line saying these are patterns, not causes. */
+    body {
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+    }
+    .gd {
+      box-sizing: border-box;
+      width: 100%;
+      max-width: 70rem;
+      margin: 0 auto;
+      padding: clamp(var(--space-6), 9vh, 104px) var(--space-7) var(--space-7);
+    }
+    @media (max-width: 40rem) {
+      .gd {
+        padding-inline: var(--space-4);
+      }
+    }
+    .back-link {
+      gap: 6px;
+      padding: var(--space-1) 0;
+    }
+    .gd-eyebrow {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--space-2);
+      margin-top: var(--space-6);
+    }
+    .gd-kind {
+      color: var(--color-pine);
+    }
+    .gd-title {
+      max-width: 52rem;
+      margin-top: var(--space-4);
+      font-family: var(--font-display);
+      font-size: clamp(34px, 4.5vw, 52px);
+      font-weight: 400;
+      line-height: 1.08;
+      letter-spacing: -0.02em;
+      text-wrap: balance;
+    }
+    .gd-title:focus {
+      outline: none;
+    }
+    .gd-lede {
+      max-width: 39rem;
+      margin-top: 18px;
+      font-size: 18px;
+      color: var(--color-ink-2);
+    }
+
+    .gd-findings {
+      margin: var(--space-7) 0 0;
+      padding: 0;
+      list-style: none;
+      border-top: 1px solid var(--color-rule-2);
+    }
+    .gd-finding {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 20px 56px;
+      padding: 28px 0;
+      border-bottom: 1px solid var(--color-rule);
+    }
+    .gd-say {
+      display: flex;
+      flex: 1 1 22rem;
+      align-items: baseline;
+      gap: 20px;
+      min-width: 0;
+    }
+    .gd-n {
+      flex: none;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      letter-spacing: 0.12em;
+      color: var(--color-brass);
+    }
+    .gd-text {
+      font-family: var(--font-display);
+      font-size: 32px;
+      line-height: 1.2;
+      letter-spacing: -0.01em;
+    }
+    .gd-bars {
+      display: flex;
+      flex: 1 1 24rem;
+      flex-direction: column;
+      gap: 10px;
+      min-width: 0;
+    }
+    .gd-bar-row {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+    .gd-bar-label {
+      flex: none;
+      width: 82px;
+      font-size: 13px;
+      font-weight: 500;
+    }
+    .gd-bar-row.is-hard .gd-bar-label,
+    .gd-bar-row.is-hard .gd-count {
+      color: var(--color-ink-2);
+    }
+    .gd-track {
+      display: flex;
+      flex: 1 1 auto;
+      height: 10px;
+      background: var(--color-recess);
+    }
+    .gd-fill {
+      display: block;
+      height: 10px;
+      background: var(--color-pine-2);
+    }
+    .is-hard .gd-fill {
+      background: var(--color-ink-3);
+    }
+    .gd-count {
+      flex: none;
+      width: 64px;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      text-align: right;
+    }
+    .gd-same {
+      margin-top: 20px;
+      font-size: 14px;
+      color: var(--color-ink-2);
+    }
+
+    .gd-try {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: var(--space-5) var(--space-7);
+      margin-top: var(--space-7);
+      padding: 28px 32px;
+      border: 1px solid var(--color-rule);
+      border-radius: var(--radius-xs);
+    }
+    @media (max-width: 40rem) {
+      .gd-try {
+        padding: var(--space-5);
+      }
+    }
+    .gd-try-body {
+      flex: 1 1 26rem;
+      min-width: 0;
+    }
+    .gd-try-text {
+      max-width: 38rem;
+      margin-top: 10px;
+      font-family: var(--font-display);
+      font-size: 24px;
+      line-height: 1.35;
+    }
+    .gd-try .btn {
+      min-height: 48px;
+      padding-inline: var(--space-5);
+      font-size: 15px;
+    }
+    .gd-note {
+      max-width: 40rem;
+      margin-top: 40px;
+      font-size: 14px;
+      color: var(--color-ink-2);
+    }
+
+    /* Before there's enough to say: fourteen squares, one per evening. */
+    .gd-progress {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: var(--space-6);
+    }
+    .gd-progress span {
+      box-sizing: border-box;
+      width: 14px;
+      height: 14px;
+      border: 1px solid var(--color-rule-2);
+    }
+    .gd-progress .is-in {
+      border-color: var(--color-brass);
+      background: var(--color-brass);
+    }
+    .gd-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--space-3);
+      margin-top: var(--space-6);
+    }
+    .gd-actions .btn {
+      min-height: 48px;
+      padding-inline: var(--space-5);
+      font-size: 15px;
+    }
+  </style>
+</head>
+<body>
+  <main class="gd">
+    <a class="arrow-link meta back-link" href="stats.html">
+      <svg class="icon icon-12 icon-left" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M13.5 8h-11M6.5 4l-4 4 4 4" /></svg>
+      Statistics
+    </a>
+    <p class="meta gd-eyebrow"><span class="gd-kind">Your good days</span><span aria-hidden="true" id="gd-dot" hidden>·</span><span id="gd-count"></span></p>
+    <h1 class="gd-title" id="gd-title" tabindex="-1"></h1>
+    <p class="gd-lede" id="gd-lede"></p>
+
+    <div class="gd-progress" id="gd-progress" role="img" hidden></div>
+    <div class="gd-actions" id="gd-actions" hidden>
+      <a class="btn btn-primary" id="gd-action" href="options.html#supporter">See Supporter</a>
+    </div>
+
+    <div id="gd-result" hidden>
+      <ol class="gd-findings" id="gd-findings"></ol>
+      <p class="gd-same" id="gd-same" hidden></p>
+      <section class="gd-try band-sheet" id="gd-try" aria-labelledby="gd-try-head" hidden>
+        <div class="gd-try-body">
+          <h2 class="meta meta-brass" id="gd-try-head">One thing to try</h2>
+          <p class="gd-try-text" id="gd-try-text"></p>
+        </div>
+        <a class="btn btn-primary" id="gd-try-go" hidden></a>
+      </section>
+      <p class="gd-note">These are patterns in your own days, not causes. They get clearer with every evening you add. Nothing here leaves this device.</p>
+    </div>
+  </main>
+
+  <script src="shared/supporter.js"></script>
+  <script src="shared/moments.js"></script>
+  <script src="shared/gateways.js"></script>
+  <!-- Supporter extras: empty in the open-source build (extras/README.md). -->
+  <script src="extras/checkin.js"></script>
+  <script src="extras/gooddays.js"></script>
+  <script src="gooddays.js"></script>
+</body>
+</html>

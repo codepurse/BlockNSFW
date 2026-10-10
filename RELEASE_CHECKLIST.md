@@ -17,6 +17,20 @@ Use this before publishing Chrome Web Store or Firefox Add-ons update.
       behavior
 - [ ] Review `README.md` if user-visible behavior changed
 - [ ] Review `PRIVACY_POLICY.md` if privacy/network behavior changed
+- [ ] Supporter: in `shared/supporter.js`, `STORE.mode` is `'live'`,
+      `STORE.organizationId` and each plan's `url` are the live Polar ones (a
+      sandbox link must not be what ships), the prices in `PLANS` match
+      Polar's, and `OFFER` is either null or has the right end date
+- [ ] Polar (live): Organization Settings → Subscriptions → "Allow multiple
+      subscriptions" is on. The monolab organization also sells Warden, and
+      with it off, a Warden subscriber can't subscribe to BlockNSFW (Polar
+      says "You already have an active subscription")
+- [ ] The path: any day still without its `mine` lines simply leaves them
+      out in a store build; check that this is what you want, or write them
+      in `shared/path-days.js` (days 1 to 7) or
+      `extras-private/extras/path-days.js` (days 8 to 30) first
+- [ ] The private Supporter extras are checked out at `extras-private/`, up
+      to date, and `npm run test:extras` passes
 
 ## 2. Build
 
@@ -28,6 +42,8 @@ exists", which reads like the bump failed when it did not).
 
 - [ ] Run `powershell -ExecutionPolicy Bypass -File .\build-chrome.ps1 -Zip`
 - [ ] Run `powershell -ExecutionPolicy Bypass -File .\build-firefox.ps1 -Zip`
+- [ ] Both builds end with `Supporter extras: included` (`-Zip` refuses to
+      run without `extras-private/`; never add `-OpenSource` to a store build)
 - [ ] Confirm `dist\chrome\manifest.json` exists
 - [ ] Confirm `dist\firefox\manifest.json` exists
 - [ ] **Verify the version inside each zip, not the folder** — the folder can be
@@ -184,7 +200,10 @@ protected when they are not — check by hand every release.
 - [ ] Upload correct browser-specific package
 - [ ] Publish release notes (`RELEASE_NOTES_<version>.md`)
 - [ ] Tag release in git if desired
-- [ ] Upload packaged zips to GitHub Release if using GitHub Releases
+- [ ] If using GitHub Releases, upload **open-source** zips only: build them
+      with `-Zip -OpenSource` (the store zips carry the private Supporter
+      extras, and a public release would publish them). Rebuild the store
+      zips afterwards if you still need them
 
 ### After the stores accept the upload
 

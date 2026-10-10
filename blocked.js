@@ -36,79 +36,80 @@ const previewTheme = (() => {
   return (themes && id && themes.get(id)) ? id : '';
 })();
 
-// What held the page, in three forms:
-//  - `sourceLabel`: the name of the rule, for the "reason" line;
+// What held the page, in four forms:
+//  - `sourceLabel`: the name of the rule, for the held line and the records;
 //  - `detail`: the phrase a custom template's {{reason}} receives, unchanged so
 //    pages people have written keep reading the same;
-//  - `message`: one plain sentence for the "why" section.
-// `when` says whether the page was stopped before it loaded or closed after it
-// was read, so the line under the headline stays true.
+//  - `message`: one plain sentence, what held it and what that means, which
+//    says whether the page never loaded or closed as soon as it was read;
+//  - `layer`: which of the six layers held it (LAYERS, below), for Classic's
+//    drawing, or null when the reason doesn't say.
 function getReasonMeta(reasonCode) {
   switch (reasonCode) {
-    case 'dns_blocked':
-      return {
-        sourceLabel: 'DNS protection',
-        detail: 'Blocked by DNS Protection',
-        message: 'Your family-safe DNS resolver reported this site as adult before it loaded.',
-        when: 'before'
-      };
     case 'custom_blocklist':
       return {
         sourceLabel: 'Your blocklist',
         detail: 'Blocked by your custom blocklist',
-        message: 'This site matches an entry on your own blocklist.',
-        when: 'before'
+        message: 'You added this site to your own blocklist, on a calmer day. It never loaded.',
+        layer: 1
       };
     case 'default_blocklist':
     case 'instant_host_match':
       return {
         sourceLabel: 'Built-in blocklist',
         detail: 'Blocked by the built-in blocklist',
-        message: 'This site is on BlockNSFW’s built-in blocklist.',
-        when: 'before'
+        message: 'This site is on BlockNSFW’s list of adult sites. It never loaded.',
+        layer: 2
+      };
+    case 'dns_blocked':
+      return {
+        sourceLabel: 'DNS protection',
+        detail: 'Blocked by DNS Protection',
+        message: 'Your safe DNS knows this site as adult. It never loaded.',
+        layer: 3
       };
     case 'smart_filter':
     case 'instant_keyword_match':
       return {
         sourceLabel: 'Keyword filter',
         detail: 'Blocked by the smart keyword filter',
-        message: 'The address matched BlockNSFW’s keyword filter.',
-        when: 'before'
+        message: 'The address itself spelled out adult content. It never loaded.',
+        layer: 4
       };
     case 'search_query':
       return {
         sourceLabel: 'Search filter',
         detail: 'Blocked by search query filter',
-        message: 'The search matched your adult-content filters.',
-        when: 'before'
+        message: 'The search asked for adult content. The results never loaded.',
+        layer: 4
       };
     case 'reddit_nsfw':
       return {
         sourceLabel: 'NSFW community filter',
         detail: 'Blocked due to NSFW subreddit detection',
-        message: 'This page belongs to a Reddit community marked NSFW.',
-        when: 'neutral'
+        message: 'This page belongs to a Reddit community marked NSFW. It was held before it showed.',
+        layer: 4
       };
     case 'metadata_scan':
       return {
         sourceLabel: 'Page details',
         detail: 'Blocked by metadata scan',
-        message: 'The page’s title or description matched your adult-content filters.',
-        when: 'after'
+        message: 'The page’s title or description was explicit. It closed as soon as it was read.',
+        layer: 5
       };
     case 'page_text_scan':
       return {
         sourceLabel: 'Page text',
         detail: 'Blocked by page text scan',
-        message: 'The page’s text matched explicit-content words again and again.',
-        when: 'after'
+        message: 'The words on the page were explicit, again and again. It closed as soon as it was read.',
+        layer: 5
       };
     case 'ai_text_scan':
       return {
         sourceLabel: 'On-device AI',
         detail: 'Blocked by AI text scan',
-        message: 'The AI on your device read the page’s text and judged it adult.',
-        when: 'after'
+        message: 'The AI on your device read the page and judged it adult. It closed as soon as it was read, and nothing was sent anywhere.',
+        layer: 6
       };
     case 'blocked':
     case 'content':
@@ -116,24 +117,26 @@ function getReasonMeta(reasonCode) {
       return {
         sourceLabel: 'Local filter rules',
         detail: 'Blocked by local filter rules',
-        message: 'This page matched BlockNSFW’s local filter rules.',
-        when: 'neutral'
+        message: 'This page matched BlockNSFW’s local filter rules. It was held before it showed.',
+        layer: null
       };
     default:
       return {
         sourceLabel: 'Protection rules',
         detail: reasonCode ? reasonCode.replaceAll('_', ' ') : 'Blocked by protection rules',
-        message: 'This page matched your protection settings.',
-        when: 'neutral'
+        message: 'This page matched your protection settings. It was held before it showed.',
+        layer: null
       };
   }
 }
 
-const HELD_LINE = {
-  before: 'BlockNSFW stopped it before it loaded.',
-  after: 'BlockNSFW closed it as soon as it read the page.',
-  neutral: 'BlockNSFW stopped it from showing.'
-};
+// The six layers between a reader and an adult page, in the order they meet
+// it: four look at the address before anything loads, two read the page once
+// it opens.
+const LAYERS = ['your list', 'built-in list', 'DNS', 'address & search', 'page text', 'on-device AI'];
+const BEFORE_LOAD = 4;
+const ORDINALS = ['first', 'second', 'third', 'fourth', 'fifth', 'sixth'];
+const NUMBER_WORDS = ['no', 'one', 'two', 'three', 'four', 'five'];
 
 // The address is never shown, on this page or any other: eight bullets and the
 // top-level domain, the same length whatever the site, so nothing about it can
@@ -170,10 +173,15 @@ function addRecord(list, label, value, valueClass) {
 // and the AI's confidence, which is a number, not the page's content.
 function renderDetail() {
   const reasonMeta = getReasonMeta(reason);
+  const shown = redactedHost(url);
 
   const urlEl = document.getElementById('target-url');
   if (urlEl) {
-    urlEl.textContent = redactedHost(url);
+    urlEl.textContent = shown;
+  }
+  const addressEl = document.getElementById('held-address');
+  if (addressEl) {
+    addressEl.textContent = shown;
   }
 
   const messageEl = document.querySelector('.blocked-message');
@@ -183,19 +191,139 @@ function renderDetail() {
 
   const subtitleEl = document.querySelector('.blocked-subtitle');
   if (subtitleEl) {
-    subtitleEl.textContent = HELD_LINE[reasonMeta.when] || HELD_LINE.neutral;
+    subtitleEl.textContent = reasonMeta.message;
   }
+
+  // The AI text scan reports a confidence score in [0,1]; show it as a percent.
+  const scorePct = score ? Math.round(parseFloat(score) * 100) : NaN;
+  const sure = Number.isNaN(scorePct) ? '' : `${scorePct}%`;
 
   if (reason) {
     const rows = document.getElementById('why-rows');
     addRecord(rows, 'reason', reasonMeta.sourceLabel);
-
-    // The AI text scan reports a confidence score in [0,1]; show it as a percent.
-    const scorePct = score ? Math.round(parseFloat(score) * 100) : NaN;
-    if (!Number.isNaN(scorePct)) {
-      addRecord(rows, 'ai confidence', `${scorePct}%`, 'record-value tnum');
-    }
+    if (sure) addRecord(rows, 'ai confidence', sure, 'record-value tnum');
   }
+
+  // Classic names the door and draws it; a design draws its own picture.
+  if (document.documentElement.dataset.theme) return;
+  const meta = document.getElementById('held-meta');
+  const time = document.getElementById('held-time');
+  const source = document.getElementById('held-source');
+  if (meta && time && source) {
+    try {
+      time.textContent = new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    } catch (_) {
+      time.textContent = '';
+    }
+    source.textContent = sure ? `${reasonMeta.sourceLabel} · ${sure} sure` : reasonMeta.sourceLabel;
+    meta.hidden = !time.textContent && !source.textContent;
+  }
+  if (!reasonMeta.layer) return;
+  const title = document.getElementById('blocked-title');
+  if (title) title.textContent = `Held at the ${ORDINALS[reasonMeta.layer - 1]} door.`;
+  drawDoors(reasonMeta.layer, reasonMeta.sourceLabel);
+}
+
+// --- The six doors (Classic) ---------------------------------------------------
+//
+// A line comes in and stops at the door that held the page, ending in a brass
+// square. The doors it passed stand open (a gap where it went through); the
+// doors it never reached are faint. Two drawings of the same thing: across on
+// wide screens, down on narrow ones. Built as SVG nodes, no markup strings.
+
+const SVG_NS = 'http://www.w3.org/2000/svg';
+
+function svgNode(tag, attrs, text) {
+  const node = document.createElementNS(SVG_NS, tag);
+  Object.keys(attrs).forEach((k) => node.setAttribute(k, String(attrs[k])));
+  if (text !== undefined) node.textContent = text;
+  return node;
+}
+
+// Paths for the doors passed, ahead and the one that held, given each door's
+// line as two half-segments either side of where the arrival crosses it.
+function doorPaths(held, doorAt) {
+  let passed = '';
+  let ahead = '';
+  for (let n = 1; n <= LAYERS.length; n++) {
+    const d = doorAt(n);
+    if (n < held) passed += `${d.open} `;
+    else if (n > held) ahead += `${d.whole} `;
+  }
+  return { passed, ahead, held: doorAt(held).held };
+}
+
+function drawAcross(svg, held) {
+  const xs = [140, 290, 440, 590, 840, 990];
+  const at = (n) => {
+    const x = xs[n - 1];
+    return { open: `M${x} 40V96M${x} 126V182`, whole: `M${x} 40V182`, held: `M${x} 32V190` };
+  };
+  const p = doorPaths(held, at);
+  const sx = xs[held - 1];
+  svg.appendChild(svgNode('text', { class: 'door-group', x: 110, y: 16 }, 'BEFORE THE PAGE LOADS'));
+  svg.appendChild(svgNode('text', { class: 'door-group', x: 800, y: 16 }, 'AFTER IT OPENS'));
+  svg.appendChild(svgNode('path', { class: 'door-split', d: 'M715 28V196' }));
+  if (p.ahead) svg.appendChild(svgNode('path', { class: 'door-ahead', d: p.ahead }));
+  if (p.passed) svg.appendChild(svgNode('path', { class: 'door-passed', d: p.passed }));
+  svg.appendChild(svgNode('path', { class: 'door-arrival', d: `M0 111H${sx - 10}` }));
+  svg.appendChild(svgNode('path', { class: 'door-held', d: p.held }));
+  svg.appendChild(svgNode('rect', { class: 'door-square', x: sx - 12, y: 106, width: 10, height: 10 }));
+  xs.forEach((x, i) => {
+    const n = i + 1;
+    const state = n === held ? ' is-held' : (n > held ? ' is-ahead' : '');
+    svg.appendChild(svgNode('text', { class: `door-label${state}`, x, y: 210, 'text-anchor': 'middle' }, LAYERS[i].toUpperCase()));
+  });
+}
+
+function drawDown(svg, held) {
+  const ys = [42, 84, 126, 168, 248, 290];
+  const at = (n) => {
+    const y = ys[n - 1];
+    return { open: `M24 ${y}H66M94 ${y}H136`, whole: `M24 ${y}H136`, held: `M16 ${y}H144` };
+  };
+  const p = doorPaths(held, at);
+  const sy = ys[held - 1];
+  svg.appendChild(svgNode('text', { class: 'door-group', x: 152, y: 14 }, 'BEFORE THE PAGE LOADS'));
+  svg.appendChild(svgNode('text', { class: 'door-group', x: 152, y: 220 }, 'AFTER IT OPENS'));
+  svg.appendChild(svgNode('path', { class: 'door-split', d: 'M8 204H336' }));
+  if (p.ahead) svg.appendChild(svgNode('path', { class: 'door-ahead', d: p.ahead }));
+  if (p.passed) svg.appendChild(svgNode('path', { class: 'door-passed', d: p.passed }));
+  svg.appendChild(svgNode('path', { class: 'door-arrival', d: `M80 0V${sy - 10}` }));
+  svg.appendChild(svgNode('path', { class: 'door-held', d: p.held }));
+  svg.appendChild(svgNode('rect', { class: 'door-square', x: 75, y: sy - 12, width: 10, height: 10 }));
+  ys.forEach((y, i) => {
+    const n = i + 1;
+    const state = n === held ? ' is-held' : (n > held ? ' is-ahead' : '');
+    svg.appendChild(svgNode('text', { class: `door-label${state}`, x: 152, y: y + 4 }, LAYERS[i].toUpperCase()));
+  });
+}
+
+function doorsCaption(held) {
+  const ord = ORDINALS[held - 1];
+  if (held > BEFORE_LOAD) {
+    return `Six layers stand between you and an adult page. The first four check the address before it loads; this page got past them, and the ${ord} closed it as soon as it was read.`;
+  }
+  const rest = LAYERS.length - held;
+  return `Six layers stand between you and an adult page. This one was held at the ${ord}, before anything loaded, so the other ${NUMBER_WORDS[rest]} weren’t needed.`;
+}
+
+function drawDoors(held, label) {
+  const figure = document.getElementById('doors');
+  const across = document.getElementById('doors-across');
+  const down = document.getElementById('doors-down');
+  const caption = document.getElementById('doors-caption');
+  const title = document.getElementById('doors-title');
+  if (!figure || !across || !down) return;
+  drawAcross(across, held);
+  drawDown(down, held);
+  if (title) {
+    title.textContent = held === 1
+      ? `Six layers of protection. This page was held at the first: ${label}.`
+      : `Six layers of protection. This page passed ${NUMBER_WORDS[held - 1]} and was held at the ${ORDINALS[held - 1]}: ${label}.`;
+  }
+  if (caption) caption.textContent = doorsCaption(held);
+  figure.hidden = false;
 }
 
 /**

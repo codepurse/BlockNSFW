@@ -9,6 +9,8 @@ Pact** makes every change that loosens protection wait, and lets a friend you
 trust hold the key. **Storm Mode** and **risk hours** raise everything to its
 strongest when it's hardest. The blocked page shows **your own words** first.
 And every page is redrawn in monolab's design system, in light and dark.
+**Supporter**, optional, adds a 30-day path and an evening check-in for going
+further; protection stays the same for everyone.
 
 A PIN you set yourself stops nobody, because you know it. A wait longer than
 the urge works even when you know every PIN.
@@ -88,9 +90,67 @@ the urge works even when you know every PIN.
   opened, Statistics links to it, and earlier weeks are a link away. Times of
   stops and waited-out moments are now kept for five weeks so it can be drawn.
   Nothing leaves the device.
+- **The 2.0 page**. Updating from 1.x opens one page, once: "Built for the
+  hard moment", the six things that are new and where each one lives in
+  Settings. Fresh installs get onboarding instead, and later 2.x updates stay
+  quiet. Settings › What's new links back to it.
 - **Days kept** (Statistics). Days in the last 30 with protection on all day
   and no slip, shown beside the current run, the longest run and the moments
   waited out. A slip costs a day, not the count.
+- **Supporter** (Settings › Supporter), optional, for this browser extension.
+  Protection is the same for everyone: paying never makes blocking stronger
+  or weaker, and nothing that's free today will ever move behind it. Support
+  pays for what comes next, and adds three things for going further:
+  - **The path.** Thirty short pages, one a day, each with one small thing to
+    do: a step to take, a line to write, or a page to open. Four weeks:
+    seeing it, changing the setting, the inside work, and the life after. A
+    new page opens each morning (from 4 am), and a missed day waits for you
+    instead of being lost. The lines you write are kept as your own book,
+    shown on day 30, and the path can be walked again without losing them.
+    Days 1 to 7 are free for everyone.
+  - **The evening check-in** (the popup's "How was today?"). Five taps, about
+    ten seconds: last night's sleep, stress, time alone, mood, and whether you
+    moved your body.
+  - **Your good days.** Read beside the hard moments the extension already
+    records (a stop at a gateway's door, a moment waited out, a slip), the
+    check-ins show what your calm days have in common, in plain sentences,
+    with one thing to try. It needs 14 evenings, at least three hard and five
+    calm, and says how many more until then. These are patterns in one
+    person's days, never causes, and the page says so.
+
+  Pay monthly, yearly or once for life; yearly is chosen first. Payment goes
+  through Polar, whose receipt links to your purchases, where the code is
+  shown; paste it into Settings › Supporter. The extension checks the code
+  with Polar when you unlock it, then about once a day when you open the
+  extension, sending only the code and our store's ID, without cookies.
+  Offline changes nothing. A cancelled plan runs to the end of the time paid
+  for, then the extras close; your check-ins and your book stay. Every
+  blocked-page design stays free. Settings shows what's free and what Supporter
+  adds side by side, links to manage or cancel a plan, and refunds a purchase
+  made by mistake. The sidebar's Supporter row says thank you once you are
+  one. BlockNSFW for Android has its own Supporter, in the app. Everything the
+  extras write stays on the device.
+
+- **A choice of design for the blocked page.** Settings > Blocked Page now
+  offers four designs beside Classic, each with a thumbnail and a Preview
+  button. Each one is built around getting through the moment rather than
+  only reporting the block:
+  - **Calm**: an ensō, the Zen circle, drawn one breath at a time. Hold to
+    breathe in and the brush starts the circle; let go to breathe out and it
+    closes. A red seal signs the page after the fifth breath.
+  - **Verse**: a King James verse under a cross of light cut through a
+    concrete wall. The cross is placed from where the words fall, so it never
+    crosses the text, from a 320px phone to a 4K screen.
+  - **Motivation**: "don't break the chain". A wall calendar of the last five
+    weeks with a red X on every day protection stayed on, and today's square
+    left open to mark. The next milestone (7, 30, 90 days) is counted down.
+  - **Play**: a six-by-six board of channel tiles to turn until the ink runs
+    from the spring to the sea. Every river is solvable and never dealt
+    solved. No clock, no score, nothing saved.
+
+  All five are free. The choice is presentation only, so it is not behind the PIN. A custom
+  blocked-page URL or your own HTML still takes over from any design. Every
+  design fits from a small phone to a 4K screen, and follows light and dark.
 
 ### Changed
 
@@ -118,9 +178,7 @@ the urge works even when you know every PIN.
   monolab's faint paper texture. The popup opens on a deep pine band that
   says "Protected" and holds the protection switch; when protection is off
   the band turns plain and says "Protection is off", with when it comes back
-  on after a pause. The Classic blocked page stands in monolab's field, a
-  still hairline drawing of marks arriving and being decided, with the words
-  in its clearing (the other designs keep their own pictures). Statistics
+  on after a pause. Statistics
   sets each section on its own band, its records in two columns, and draws
   the last seven days as bars instead of a list.
 - **The Warden banner at the top of Settings is a pine band.** It is the one
@@ -131,11 +189,16 @@ the urge works even when you know every PIN.
   JetBrains Mono (figures and labels) ship in `fonts/`, so no page loads
   anything from the network to draw itself. The Newsreader file is the smaller
   Latin build monolab uses (58 KB, from 132 KB) and now has a true italic.
-- **The blocked page says "This page was held."** Classic is rebuilt as one
-  calm column: the held mark, a serif headline, one line saying whether the
-  page was stopped before it loaded or closed once it was read, and Go back.
-  Calm, Verse, Motivation and Play keep everything they do, drawn in ink and
-  pine instead of vermilion, without the paper texture, and in light and dark.
+- **The blocked page says why, first: "Held at the second door."** Classic
+  draws the six layers between you and an adult page (your list, the
+  built-in list, DNS, the address and search, the page's text, the on-device
+  AI) as six doors, and shows which one held this page. Under the headline,
+  one plain sentence says what that means ("This site is on BlockNSFW's list
+  of adult sites. It never loaded."). Your own words, the wait timer and Go
+  back sit below; the address stays hidden. The reason used to sit in a
+  fold-out at the bottom. Calm, Verse, Motivation and Play keep everything
+  they do, drawn in ink and pine instead of vermilion, without the paper
+  texture, and in light and dark, with the same plainer reasons.
 - **The popup is 360px wide.** It opens on the protection switch, shows the
   counts as figures, and says beside each guarded control what it will ask for
   ("Asks for your PIN.").
@@ -171,6 +234,80 @@ the urge works even when you know every PIN.
   follow light and dark live, and no longer load the extension's icon into the
   page (which also exposed the extension's ID to it).
 
+- **Settings uses the whole window on wide screens.** Suggested by a supporter
+  on a wide monitor. The page was one centred 1160px block, which left the
+  sidebar floating between two large empty gutters. The sidebar is now a
+  full-height rail pinned to the left edge, and the content is centred in the
+  rest, capped at 960px so text stays a readable line length.
+  - **A full-width toggle** sits beside the name at the top of the sidebar. It
+    lets the content run to the right edge, and is remembered on that device.
+    It only appears where it makes a difference, from 1304px wide.
+
+- **What's New and the Message from the Dev no longer take over the top of
+  Settings.** Users said the two cards took up the top of the page, about
+  690px before the first setting at a typical width; it is now about 400px.
+  - **The Message from the Dev is a short Warden banner**, in Warden's own
+    type and colours: "In a weak moment, Warden makes you wait", one
+    sentence, and links to join the beta list and to learn more. A watch-face
+    dial on the right counts down a cool-down, as an illustration of
+    Warden's delay; it stands still for anyone who prefers reduced motion.
+    Folded, its line keeps the countdown.
+  - **What's New lists headlines.** Each change is one row; its explanation
+    opens under it with a click. The card is about 270px instead of 475px.
+  - **"Got it" folds What's New to one line** until the next version, when it
+    opens in full again by itself. Opening it from its line is for that visit
+    only.
+  - **The banner opens on every visit.** Its × folds it to one line for that
+    visit only.
+
+- **The AI Text Blocker has a new model, and text alone can block a page
+  again.** Since 1.7.4 a temporary catch in `content.js` downgraded every
+  text-only block to "allow", because the v3 model could not be trusted on its
+  own. v4 replaces the model and the catch is gone.
+
+  v3 had three defects, and no threshold could fix any of them:
+  - **Its vocabulary was inverted.** It was trained on 217 hand-written adult
+    phrases averaging 1.7 words against benign sentences averaging 8, so
+    generic words absorbed the adult signal: "videos" outweighed "nude",
+    "naked" and "xxx" combined. That is what blocked `m.youtube.com`.
+  - **Its score grew with page length.** It summed weights over the whole
+    page, so every real page scored exactly 0 or 1. The three strictness
+    levels were unreachable and "AI confidence: 100%" was always 100%.
+  - **Ordinary text drowned out explicit text.** One explicit sentence inside
+    700 ordinary words scored 0, so it could only catch pages that were adult
+    from top to bottom, which the blocklist already catches.
+
+  v4 is trained on real page text from Common Crawl's public archive (about
+  2,900 pages from 817 sites, in the shape `content.js` reads a live page),
+  labelled by the blocklist and a curated list weighted toward sites that
+  share vocabulary with adult content but must never be blocked: porn-addiction
+  recovery, sex education, sexual health, lingerie, dating, LGBTQ, art,
+  parenting, video sites. It scores ~200-character windows, and a small second
+  model turns those into one calibrated page probability. The thresholds for
+  Relaxed, Balanced and Strict now live in the model file, chosen on held-out
+  pages for a target false-positive rate.
+
+  Measured on sites the model never saw (`tools/text_corpus/EVAL.md`):
+  - **At Balanced, 0 of 297 ordinary pages and 0 of 130 trap pages blocked.**
+  - **63% of adult pages caught at Balanced (76% of English ones).** The
+    detector is a second line behind the blocklist, not a replacement for it.
+  - **An explicit passage inside a long ordinary page is found 76% of the
+    time**, against 0% for v3.
+  - **Pages that simply talk about videos stay well clear of every block
+    bar** (cooking, cat, workout and stock-footage videos, YouTube's own
+    pages). An early v4 blocked those at 0.99, the same failure as v3's
+    YouTube block; see *For contributors* for how it was fixed.
+
+  It stays labelled **Beta**. It reads English and most European languages
+  well, but Japanese, Chinese and Russian adult pages mostly get past it: the
+  archive held too few of those sites to learn from. Settings now says so.
+
+- **Settings describes what the text blocker actually does.** It no longer
+  says text alone cannot block, and the strictness levels describe blocking
+  rather than "agreeing" with the image filter.
+- **The text model file is smaller and loads faster**: 223 KB to 157 KB, with
+  weights stored as packed binary instead of a JSON array of pairs.
+
 ### Fixed
 
 - **Settings' Save could switch protection and smart detection off without
@@ -202,37 +339,6 @@ the urge works even when you know every PIN.
   The code was written into the dialog as HTML, so an `&` followed by letters
   could be read as an entity. It is written as text now.
 - **Statistics wrote site names into the page as HTML.** They are set as text.
-
-## [1.9.0] - 2026-10-07
-
-The blocked page becomes something to do while the urge passes, the AI text
-blocker gets a model that can be trusted to block on its own, and large
-community lists such as OISD's work at last.
-
-### Added
-
-- **A choice of design for the blocked page.** Settings > Blocked Page now
-  offers four designs beside Classic, each with a thumbnail and a Preview
-  button. Each one is built around getting through the moment rather than
-  only reporting the block:
-  - **Calm**: an ensō, the Zen circle, drawn one breath at a time. Hold to
-    breathe in and the brush starts the circle; let go to breathe out and it
-    closes. A red seal signs the page after the fifth breath.
-  - **Verse**: a King James verse under a cross of light cut through a
-    concrete wall. The cross is placed from where the words fall, so it never
-    crosses the text, from a 320px phone to a 4K screen.
-  - **Motivation**: "don't break the chain". A wall calendar of the last five
-    weeks with a red X on every day protection stayed on, and today's square
-    left open to mark. The next milestone (7, 30, 90 days) is counted down.
-  - **Play**: a six-by-six board of channel tiles to turn until the ink runs
-    from the spring to the sea. Every river is solvable and never dealt
-    solved. No clock, no score, nothing saved.
-
-  The choice is presentation only, so it is not behind the PIN. A custom
-  blocked-page URL or your own HTML still takes over from any design. Every
-  design fits from a small phone to a 4K screen, and follows light and dark.
-
-### Fixed
 
 - **The Settings sidebar never showed which section you were on.** Its
   highlight and smooth scrolling were an inline `<script>` in `options.html`,
@@ -339,84 +445,29 @@ community lists such as OISD's work at last.
   the order they were written in. A list with no notes sorts exactly as before.
   Applies to the blocklist, custom blocked words and trusted image domains.
 
-### Changed
-
-- **Settings uses the whole window on wide screens.** Suggested by a supporter
-  on a wide monitor. The page was one centred 1160px block, which left the
-  sidebar floating between two large empty gutters. The sidebar is now a
-  full-height rail pinned to the left edge, and the content is centred in the
-  rest, capped at 960px so text stays a readable line length.
-  - **A full-width toggle** sits beside the name at the top of the sidebar. It
-    lets the content run to the right edge, and is remembered on that device.
-    It only appears where it makes a difference, from 1304px wide.
-
-- **What's New and the Message from the Dev no longer take over the top of
-  Settings.** Users said the two cards took up the top of the page, about
-  690px before the first setting at a typical width; it is now about 400px.
-  - **The Message from the Dev is a short Warden banner**, in Warden's own
-    type and colours: "In a weak moment, Warden makes you wait", one
-    sentence, and links to join the beta list and to learn more. A watch-face
-    dial on the right counts down a cool-down, as an illustration of
-    Warden's delay; it stands still for anyone who prefers reduced motion.
-    Folded, its line keeps the countdown.
-  - **What's New lists headlines.** Each change is one row; its explanation
-    opens under it with a click. The card is about 270px instead of 475px.
-  - **"Got it" folds What's New to one line** until the next version, when it
-    opens in full again by itself. Opening it from its line is for that visit
-    only.
-  - **The banner opens on every visit.** Its × folds it to one line for that
-    visit only.
-
-- **The AI Text Blocker has a new model, and text alone can block a page
-  again.** Since 1.7.4 a temporary catch in `content.js` downgraded every
-  text-only block to "allow", because the v3 model could not be trusted on its
-  own. v4 replaces the model and the catch is gone.
-
-  v3 had three defects, and no threshold could fix any of them:
-  - **Its vocabulary was inverted.** It was trained on 217 hand-written adult
-    phrases averaging 1.7 words against benign sentences averaging 8, so
-    generic words absorbed the adult signal: "videos" outweighed "nude",
-    "naked" and "xxx" combined. That is what blocked `m.youtube.com`.
-  - **Its score grew with page length.** It summed weights over the whole
-    page, so every real page scored exactly 0 or 1. The three strictness
-    levels were unreachable and "AI confidence: 100%" was always 100%.
-  - **Ordinary text drowned out explicit text.** One explicit sentence inside
-    700 ordinary words scored 0, so it could only catch pages that were adult
-    from top to bottom, which the blocklist already catches.
-
-  v4 is trained on real page text from Common Crawl's public archive (about
-  2,900 pages from 817 sites, in the shape `content.js` reads a live page),
-  labelled by the blocklist and a curated list weighted toward sites that
-  share vocabulary with adult content but must never be blocked: porn-addiction
-  recovery, sex education, sexual health, lingerie, dating, LGBTQ, art,
-  parenting, video sites. It scores ~200-character windows, and a small second
-  model turns those into one calibrated page probability. The thresholds for
-  Relaxed, Balanced and Strict now live in the model file, chosen on held-out
-  pages for a target false-positive rate.
-
-  Measured on sites the model never saw (`tools/text_corpus/EVAL.md`):
-  - **At Balanced, 0 of 297 ordinary pages and 0 of 130 trap pages blocked.**
-  - **63% of adult pages caught at Balanced (76% of English ones).** The
-    detector is a second line behind the blocklist, not a replacement for it.
-  - **An explicit passage inside a long ordinary page is found 76% of the
-    time**, against 0% for v3.
-  - **Pages that simply talk about videos stay well clear of every block
-    bar** (cooking, cat, workout and stock-footage videos, YouTube's own
-    pages). An early v4 blocked those at 0.99, the same failure as v3's
-    YouTube block; see *For contributors* for how it was fixed.
-
-  It stays labelled **Beta**. It reads English and most European languages
-  well, but Japanese, Chinese and Russian adult pages mostly get past it: the
-  archive held too few of those sites to learn from. Settings now says so.
-
-- **Settings describes what the text blocker actually does.** It no longer
-  says text alone cannot block, and the strictness levels describe blocking
-  rather than "agreeing" with the image filter.
-- **The text model file is smaller and loads faster**: 223 KB to 157 KB, with
-  weights stored as packed binary instead of a JSON array of pairs.
-
 ### For contributors
 
+- `shared/supporter.js` holds the plans, the store settings (`STORE.mode`,
+  `'sandbox'` or `'live'`) and both kinds of code. Polar license keys are
+  checked at `/v1/customer-portal/license-keys/validate`, which needs no
+  secret, and asked about again after `RECHECK_MS` (24 hours);
+  `status(storage, { local: true })` answers from storage and never asks.
+  Signed `BN1-` codes (ECDSA P-256) are checked on the device; the signing
+  key lives outside both repositories.
+- **The Supporter extras are not open source.** Days 8 to 30 of the path, the
+  check-in and Your good days live in a private repository, checked out at
+  `extras-private/` (ignored here), and the build scripts copy them over the
+  empty stand-ins in `extras/` (`extras/README.md`). `-Zip` refuses to package without them; `-OpenSource`
+  builds without them on purpose. Everything that protects stays MIT and in
+  this repository. `shared/path-days.js` keeps days 1 to 7 and the titles of
+  the rest, and `add()`s the rest from the extra. The blocked page loads no
+  extra: all five designs stay free and open source.
+  `tests/extras-standins.test.js` fails if a stand-in stops being empty or if
+  anything under `extras-private/` is tracked; `tests/supporter.test.js`
+  fails if anything that blocks or shows the blocked page (background,
+  content, blocked.js and its designs, gateway, offscreen, the AI image
+  blocker) reads the supporter state. `RELEASE_CHECKLIST.md` lists
+  what to switch for the live store.
 - `blocked-themes.js` is the one registry of blocked-page designs, read by both
   `blocked.html` and the Settings picker, so the two cannot disagree. The verse
   is set in Newsreader (SIL OFL), shipped in `fonts/` with its licence.

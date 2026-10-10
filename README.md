@@ -148,6 +148,11 @@ powershell -ExecutionPolicy Bypass -File .\build-firefox.ps1
 powershell -ExecutionPolicy Bypass -File .\build-firefox.ps1 -Zip
 ```
 
+A build from this repository alone is the open-source build: every
+protection, without the Supporter extras (see "Open source, and the Supporter
+extras" below). `-Zip` makes a store package and needs the extras; add
+`-OpenSource` to package without them.
+
 Build output:
 
 - `dist\chrome\`
@@ -203,6 +208,23 @@ Near-term priorities:
 ## License
 
 MIT. See `LICENSE`.
+
+### Open source, and the Supporter extras
+
+Everything that protects is open source and in this repository: the
+blocklists, the AI image and text filters, SafeSearch and DNS, Gateways, the
+Pact, Storm Mode and risk hours, your own words, all five blocked-page
+designs, the first week of the path, statistics, and the Supporter page and
+its code check. A build from here blocks exactly what the store version
+blocks.
+
+The **Supporter extras** are not open source: days 8 to 30 of the path, the
+evening check-in and Your good days. They live in a private repository and
+ship only in the
+versions on the Chrome Web Store, Microsoft Edge Add-ons and Firefox Add-ons.
+`extras/` holds empty stand-ins for them (`extras/README.md`), so a build
+from here says plainly where an extra would be. The extras never decide what
+is blocked and make no network requests.
 
 ## Notes Before Public Launch
 

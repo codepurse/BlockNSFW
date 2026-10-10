@@ -39,7 +39,7 @@
   // section. An address that names something inside a section
   // (#own-words-group) opens on Welcome for a moment, until the page exists
   // and the section holding it can be found.
-  var SECTIONS = ['welcome', 'protection', 'customization', 'security', 'community', 'about'];
+  var SECTIONS = ['welcome', 'protection', 'customization', 'security', 'community', 'supporter', 'about'];
   function sectionFromHash(hash) {
     var name = String(hash || '').replace(/^#/, '').replace(/^section-/, '');
     return SECTIONS.indexOf(name) >= 0 ? name : null;
@@ -48,7 +48,8 @@
     root.setAttribute('data-section', sectionFromHash(location.hash) || 'welcome');
   } catch (_) {}
 
-  // The two cards at the top of Settings. What's New remembers the version it
+  // The cards at the top of Settings. The 2.0 band shows for 2.0.x only and
+  // stays folded once its × is pressed. What's New remembers the version it
   // was showing when "Got it" was pressed, and opens in full again by itself on
   // the next one. The developer's banner remembers nothing: it opens on every
   // visit, and its × folds it for that visit only.
@@ -62,6 +63,16 @@
   }
 
   var WELCOME_CARDS = [
+    // 2.0, said on the welcome screen while a 2.0.x is installed. Its × folds
+    // it for good; from 2.1 on it isn't shown at all.
+    {
+      card: 'release-card',
+      attr: 'data-release-read',
+      key: 'pblocker_release_card_read',
+      shows: '2.0',
+      only: /^2\.0(\.|$)/,
+      gone: 'data-release-gone'
+    },
     // No key, so nothing is kept.
     { card: 'dev-message-card', attr: 'data-dev-message-read' },
     {
@@ -73,6 +84,7 @@
   ];
 
   WELCOME_CARDS.forEach(function (w) {
+    if (w.only && !w.only.test(manifestVersion())) root.setAttribute(w.gone, '');
     try {
       if (w.key && w.shows && localStorage.getItem(w.key) === w.shows) root.setAttribute(w.attr, '');
     } catch (_) {}

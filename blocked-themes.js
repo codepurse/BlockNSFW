@@ -1121,7 +1121,7 @@
     {
       id: CLASSIC,
       name: 'Classic',
-      blurb: 'What was blocked and why, plainly.'
+      blurb: 'The six doors: which layer held the page, and why, in plain words.'
     },
     {
       id: 'calm',

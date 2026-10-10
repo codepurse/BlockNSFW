@@ -17,6 +17,15 @@ const Pact = self.Pact || null;
 const PinHash = self.PinHash || null;
 const Boost = self.Boost || null;
 const Weekly = self.Weekly || null;
+// The path, the evening check-in and Supporter (shared/path.js,
+// extras/checkin.js, shared/supporter.js). Nothing here touches blocking.
+// The check-in is a Supporter extra: the open-source build has none, and its
+// row stays hidden there.
+const Supporter = self.Supporter || null;
+const Path = self.Path || null;
+const PathDays = self.PathDays || null;
+const Checkin = self.Checkin || null;
+let isSupporter = false;
 
 // During Storm Mode or Risk Hours nothing that loosens protection can be done.
 // Resolves true, after saying so, when that is why a change is refused.
@@ -496,6 +505,131 @@ async function markNewWeek() {
     const store = await browserAPI.storage.local.get([Weekly.SEEN_KEY, 'pblocker_first_seen']);
     mark.hidden = !Weekly.hasNew(Date.now(), Weekly.MONDAY, store[Weekly.SEEN_KEY], Number(store.pblocker_first_seen));
   } catch (_) {}
+}
+
+// --- The path and the evening check-in ------------------------------------------
+
+function openPage(file) {
+  browserAPI.tabs.create({ url: browserAPI.runtime.getURL(file) });
+  window.close();
+}
+
+async function readSupporter() {
+  if (!Supporter) return false;
+  try {
+    return (await Supporter.status(browserAPI.storage.local)).supporter;
+  } catch (_) {
+    return false;
+  }
+}
+
+// "Day 4 · Hungry, angry, lonely, tired." under The path.
+async function renderPathRow() {
+  const sub = $('path-sub');
+  if (!sub || !Path || !PathDays) return;
+  try {
+    const store = await browserAPI.storage.local.get(Path.KEY);
+    const s = Path.summary(store[Path.KEY], Date.now(), isSupporter, PathDays.DAYS);
+    sub.textContent = s.finished ? 'All thirty read. Start again any time.' : `Day ${s.day} · ${s.title}`;
+    $('path-tag').hidden = !s.locked;
+  } catch (_) {}
+}
+
+async function renderCheckinRow() {
+  const sub = $('checkin-sub');
+  if (!sub) return;
+  $('checkin-link').hidden = !Checkin;
+  if (!Checkin) return;
+  $('checkin-tag').hidden = isSupporter;
+  if (!isSupporter) {
+    sub.textContent = 'Ten seconds each evening.';
+    return;
+  }
+  try {
+    const store = await browserAPI.storage.local.get(Checkin.KEY);
+    const list = Checkin.normalize(store[Checkin.KEY]);
+    const evenings = `${list.length} ${list.length === 1 ? 'evening' : 'evenings'}`;
+    if (Checkin.today(list, Date.now())) sub.textContent = `Kept for today · ${evenings}`;
+    else sub.textContent = list.length ? `Ten seconds · ${evenings} so far` : 'Ten seconds. It stays on this device.';
+  } catch (_) {}
+}
+
+// Five rows of three buttons. A second press on a chosen answer clears it.
+function buildCheckinRows(answers) {
+  const box = $('checkin-rows');
+  box.textContent = '';
+  Checkin.QUESTIONS.forEach((q) => {
+    const row = document.createElement('div');
+    row.className = 'checkin-row';
+    row.setAttribute('role', 'group');
+    const label = document.createElement('span');
+    label.className = 'checkin-label';
+    label.id = `checkin-q-${q.id}`;
+    label.textContent = q.label;
+    row.setAttribute('aria-labelledby', label.id);
+    const choices = document.createElement('div');
+    choices.className = 'segmented';
+    q.options.forEach((opt) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.textContent = opt.label;
+      const sync = () => {
+        const on = answers[q.id] === opt.hard;
+        b.classList.toggle('selected', on);
+        b.setAttribute('aria-pressed', on ? 'true' : 'false');
+      };
+      b.addEventListener('click', () => {
+        answers[q.id] = answers[q.id] === opt.hard ? null : opt.hard;
+        choices.querySelectorAll('button').forEach((x) => x._sync());
+        $('checkin-error').textContent = '';
+      });
+      b._sync = sync;
+      sync();
+      choices.appendChild(b);
+    });
+    row.appendChild(label);
+    row.appendChild(choices);
+    box.appendChild(row);
+  });
+}
+
+async function openCheckin() {
+  if (!Checkin) return;
+  if (!isSupporter) {
+    openPage('options.html#supporter');
+    return;
+  }
+  const overlay = $('checkin-modal-overlay');
+  const store = await browserAPI.storage.local.get(Checkin.KEY);
+  const today = Checkin.today(store[Checkin.KEY], Date.now());
+  const answers = Checkin.normalizeAnswers(today ? today.a : null);
+  buildCheckinRows(answers);
+  $('checkin-error').textContent = '';
+  openDialog(overlay);
+  const first = overlay.querySelector('.segmented button');
+  if (first) first.focus();
+
+  const finish = () => {
+    $('checkin-ok').onclick = null;
+    $('checkin-cancel').onclick = null;
+    closeDialog(overlay);
+  };
+  $('checkin-cancel').onclick = finish;
+  $('checkin-ok').onclick = async () => {
+    if (!Checkin.QUESTIONS.some((q) => answers[q.id] !== null)) {
+      $('checkin-error').textContent = 'Answer at least one, or cancel.';
+      return;
+    }
+    try {
+      const { [Checkin.KEY]: raw } = await browserAPI.storage.local.get(Checkin.KEY);
+      await browserAPI.storage.local.set({ [Checkin.KEY]: Checkin.add(raw, answers, Date.now()) });
+      finish();
+      showNotice(`Kept for today. “${Checkin.sentence(answers)}”`);
+      renderCheckinRow();
+    } catch (_) {
+      $('checkin-error').textContent = 'That didn’t save. Try again.';
+    }
+  };
 }
 
 async function startStorm() {
@@ -1605,6 +1739,24 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
     markNewWeek();
   }
+  const pathLink = $('path-link');
+  if (pathLink) {
+    pathLink.addEventListener('click', (e) => {
+      e.preventDefault();
+      openPage('path.html');
+    });
+  }
+  const checkinLink = $('checkin-link');
+  if (checkinLink) {
+    checkinLink.addEventListener('click', (e) => {
+      e.preventDefault();
+      openCheckin();
+    });
+    holdFocusIn($('checkin-modal-overlay'), $('checkin-cancel'));
+  }
+  isSupporter = await readSupporter();
+  renderPathRow();
+  renderCheckinRow();
 
   // Anything whose wait is over is applied as the popup opens.
   if (Pact) Pact.ask({ type: 'pact_process' });

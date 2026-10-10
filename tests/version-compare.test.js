@@ -50,3 +50,12 @@ test('isOutdated: true only when current is strictly older', () => {
   assert.equal(VC.isOutdated('1.6.1', ''), false);
   assert.equal(VC.isOutdated('1.6.1', 'latest'), false);
 });
+
+test('crossed: an update says 2.0 once, coming from 1.x, and never again', () => {
+  assert.equal(VC.crossed('1.9.0', '2.0.0', '2.0.0'), true);
+  assert.equal(VC.crossed('1.10.3', '2.1.0', '2.0.0'), true, 'a 1.x that skipped 2.0.0 still hears it');
+  assert.equal(VC.crossed('2.0.0', '2.0.1', '2.0.0'), false, 'later 2.x updates stay quiet');
+  assert.equal(VC.crossed('1.9.0', '1.9.1', '2.0.0'), false);
+  assert.equal(VC.crossed(undefined, '2.0.0', '2.0.0'), false, 'no previous version: not an update from 1.x');
+  assert.equal(VC.crossed('', '2.0.0', '2.0.0'), false);
+});

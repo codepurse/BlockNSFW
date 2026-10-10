@@ -27,7 +27,8 @@ const NETWORK_SOURCES = [
   'background.js', 'content.js', 'offscreen.js', 'appwrite-client.js',
   'community.js', 'options.js',
   path.join('shared', 'dns-providers.js'),
-  path.join('shared', 'vit-classifier.js')
+  path.join('shared', 'vit-classifier.js'),
+  path.join('shared', 'supporter.js')
 ];
 
 function remoteHosts() {

@@ -102,6 +102,57 @@
       color: var(--color-brass);
     }
 
+    /* Supporter: the sidebar's one filled row, on the band's pine, so the
+       page that pays for what comes next is easy to find. Its second line
+       says what support opens; a supporter sees a thank-you and a brass
+       square instead. options-supporter.js writes both. */
+    .nav-link-supporter {
+      margin: var(--space-2) calc(-1 * var(--space-2));
+      padding: 10px var(--space-2) 11px;
+      border-bottom: 0;
+      border-radius: var(--radius-xs);
+      background: var(--color-band);
+      color: var(--color-on-band);
+    }
+    .nav-link-supporter .nav-index {
+      color: var(--color-band-signal);
+    }
+    .nav-supporter-text {
+      flex: 1 1 auto;
+      min-width: 0;
+    }
+    .nav-supporter-title {
+      font-weight: 500;
+      transition: color var(--dur-state) var(--ease-out-quint);
+    }
+    .nav-link-supporter:hover {
+      color: var(--color-on-band);
+    }
+    .nav-link-supporter:hover .nav-supporter-title {
+      color: var(--color-band-signal);
+    }
+    .nav-link-supporter.active {
+      color: var(--color-on-band);
+      box-shadow: inset 0 0 0 1px var(--color-band-signal);
+    }
+    .nav-supporter-sub {
+      display: block;
+      margin-top: 2px;
+      font-size: 12px;
+      line-height: 1.4;
+      color: var(--color-on-band-2);
+    }
+    .nav-supporter-mark {
+      flex: none;
+      align-self: center;
+      width: 7px;
+      height: 7px;
+      background: var(--color-band-signal);
+    }
+    .nav-supporter-mark[hidden] {
+      display: none;
+    }
+
     .sidebar-footer {
       display: grid;
       gap: var(--space-5);
@@ -231,8 +282,240 @@
     html[data-section="customization"] #section-customization,
     html[data-section="security"] #section-security,
     html[data-section="community"] #section-community,
+    html[data-section="supporter"] #section-supporter,
     html[data-section="about"] #section-about {
       display: block;
+    }
+
+    /* Supporter: a note from the author and the price on the one pine band,
+       then what it opens, the code, and what stays free. */
+    .supporter-band {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      gap: 28px 56px;
+      margin-top: var(--space-6);
+      padding: 32px 36px;
+      border-radius: var(--radius-xs);
+    }
+    @media (max-width: 40rem) {
+      .supporter-band {
+        padding: var(--space-5);
+      }
+    }
+    .supporter-note {
+      flex: 1 1 22rem;
+      min-width: 0;
+    }
+    .supporter-note-head {
+      font-family: var(--font-display);
+      font-size: 28px;
+      font-weight: 400;
+      line-height: 1.25;
+      color: var(--color-on-band);
+    }
+    .supporter-note-text {
+      max-width: 32rem;
+      margin-top: 14px;
+      color: var(--color-on-band-2);
+    }
+    .supporter-note-sign {
+      margin-top: 14px;
+      font-family: var(--font-display);
+      font-style: italic;
+      font-size: 17px;
+      color: var(--color-on-band);
+    }
+    .supporter-buy {
+      display: flex;
+      flex: 1 1 18rem;
+      flex-direction: column;
+      gap: var(--space-3);
+      max-width: 24rem;
+    }
+    /* Three plans as radio rows on the band; yearly is chosen to begin with. */
+    .supporter-plans {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-2);
+      margin: 0;
+      padding: 0;
+      border: 0;
+    }
+    .supporter-plans-legend {
+      margin-bottom: var(--space-2);
+      padding: 0;
+      color: var(--color-on-band-2);
+    }
+    .supporter-plan {
+      position: relative;
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: var(--space-3);
+      padding: 12px 14px;
+      border: 1px solid var(--color-band-rule);
+      border-radius: var(--radius-xs);
+      color: var(--color-on-band);
+      cursor: pointer;
+      transition: border-color var(--dur-state) var(--ease-out-quint);
+    }
+    .supporter-plan:hover {
+      border-color: var(--color-on-band-2);
+    }
+    .supporter-plan:has(input:checked) {
+      border-color: var(--color-on-band);
+      box-shadow: inset 0 0 0 1px var(--color-on-band);
+    }
+    .supporter-plan input {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      opacity: 0;
+      cursor: pointer;
+    }
+    .supporter-plan:has(input:focus-visible) {
+      outline: var(--focus-width) solid var(--color-band-signal);
+      outline-offset: var(--focus-offset);
+    }
+    .supporter-plan-name {
+      font-weight: 500;
+    }
+    .supporter-plan-note {
+      margin-left: var(--space-2);
+      font-family: var(--font-mono);
+      font-size: var(--text-meta);
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: var(--color-band-signal);
+    }
+    .supporter-plan-price {
+      flex: none;
+      font-family: var(--font-display);
+      font-size: 20px;
+    }
+    .supporter-plan-per {
+      margin-left: 4px;
+      font-family: var(--font-sans);
+      font-size: 13px;
+      color: var(--color-on-band-2);
+    }
+    .supporter-offer {
+      font-size: 14px;
+      color: var(--color-band-signal);
+    }
+    .supporter-buy .btn {
+      min-height: 48px;
+      font-size: 15px;
+    }
+    .supporter-buy-hint {
+      font-size: 13px;
+      color: var(--color-on-band-2);
+    }
+    .supporter-code-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--space-2);
+    }
+    .supporter-code-row .input {
+      flex: 1 1 18rem;
+      min-width: 0;
+    }
+    .supporter-thanks {
+      font-family: var(--font-display);
+      font-size: 20px;
+      color: var(--color-pine);
+    }
+    /* Free and Supporter, side by side: protection is the same in both
+       columns; only the last rows differ. */
+    .compare {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 15px;
+    }
+    .compare thead th {
+      padding: 0 0 10px;
+      border-bottom: 1px solid var(--color-rule-2);
+      font-family: var(--font-mono);
+      font-size: var(--text-meta);
+      font-weight: 500;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      text-align: left;
+      color: var(--color-ink-3);
+    }
+    .compare thead .compare-col {
+      width: 6.5rem;
+      text-align: center;
+    }
+    .compare thead .compare-col-supporter {
+      color: var(--color-brass);
+    }
+    .compare tbody th[scope="row"],
+    .compare tbody td {
+      padding: 10px 0;
+      border-bottom: 1px solid var(--color-rule);
+      vertical-align: middle;
+    }
+    .compare tbody th[scope="row"] {
+      padding-right: var(--space-4);
+      font-weight: 400;
+      text-align: left;
+    }
+    .compare tbody td {
+      text-align: center;
+    }
+    .compare-group th {
+      padding: 22px 0 8px;
+      border-bottom: 1px solid var(--color-rule-2);
+      font-family: var(--font-mono);
+      font-size: var(--text-meta);
+      font-weight: 500;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      text-align: left;
+      color: var(--color-ink-3);
+    }
+    .compare-extra th[scope="row"] {
+      font-weight: 500;
+    }
+    .compare-extra a {
+      color: var(--color-pine-2);
+      text-decoration: underline;
+      text-underline-offset: 0.2em;
+    }
+    .compare-desc {
+      display: block;
+      margin-top: 2px;
+      font-size: 13px;
+      font-weight: 400;
+      color: var(--color-ink-2);
+    }
+    .compare-check {
+      display: inline-block;
+      width: 16px;
+      height: 16px;
+      vertical-align: middle;
+      fill: none;
+      stroke: var(--color-pine-2);
+      stroke-width: 1.75;
+    }
+    .compare-extra td:last-child .compare-check {
+      stroke: var(--color-brass);
+    }
+    .compare-none {
+      color: var(--color-ink-3);
+    }
+    @media (max-width: 40rem) {
+      .compare thead .compare-col {
+        width: 4.5rem;
+      }
+    }
+    .supporter-portal-row {
+      margin-top: var(--space-2);
+      font-size: 14px;
     }
     /* Each section is its own page now, with its own heading; the sidebar
        already says "Settings". */
@@ -251,36 +534,37 @@
     /* Each section opens on a header of its own: a numbered label, the serif
        title, one line on what the section is for, and an ink rule that
        closes the header off from the groups below. */
+    /* Compact: the words on the left, and the mark beside them at the size of
+       a line of type, so the header is only as tall as what it says. */
     .section-header {
-      position: relative;
-      min-height: 200px;
-      padding-bottom: var(--space-6);
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      column-gap: var(--space-5);
+      align-items: end;
+      padding-bottom: 18px;
       border-bottom: 1px solid var(--color-ink);
     }
     .section-header > :not(.section-threshold) {
-      position: relative;
+      grid-column: 1;
     }
-    /* Behind every section's header, the mark's idea at the scale of the
-       header: things arrive from the right and stop at one line; one is let
-       through. Hairlines and one brass square, nothing else. */
-    /* The words stop short of where the let-through line begins (38% into
-       the drawing), however wide the column is. */
     .section-header > .section-desc,
     .section-header > .section-lock {
-      max-width: min(var(--measure), calc(100% - 0.62 * min(560px, 58%) - var(--space-4)));
+      max-width: var(--measure);
     }
+    /* The mark's idea, small: things arrive from the right and stop at one
+       line; one is let through, held in brass. */
     .section-threshold {
-      position: absolute;
-      top: -8px;
-      right: 0;
-      width: min(560px, 58%);
-      height: auto;
+      grid-column: 2;
+      grid-row: 1 / span 4;
+      align-self: end;
+      width: 176px;
+      height: 52px;
       overflow: visible;
       pointer-events: none;
     }
     .section-threshold path {
       fill: none;
-      stroke-width: 1;
+      stroke-width: 1.25;
       vector-effect: non-scaling-stroke;
     }
     .threshold-arrivals {
@@ -295,30 +579,10 @@
     .threshold-held {
       fill: var(--color-brass);
     }
-    /* Too narrow to sit beside the words: it steps aside rather than run
-       behind them. */
-    @media (max-width: 70rem) {
-      html:not([data-layout="full"]) .section-threshold {
-        display: none;
-      }
-      html:not([data-layout="full"]) .section-header {
-        min-height: 0;
-      }
-      html:not([data-layout="full"]) .section-header > .section-desc,
-      html:not([data-layout="full"]) .section-header > .section-lock {
-        max-width: var(--measure);
-      }
-    }
-    @media (max-width: 52rem) {
+    /* Too narrow for the mark beside the words: it steps aside. */
+    @media (max-width: 40rem) {
       .section-threshold {
         display: none;
-      }
-      .section-header {
-        min-height: 0;
-      }
-      .section-header > .section-desc,
-      .section-header > .section-lock {
-        max-width: var(--measure);
       }
     }
     .section-eyebrow {
@@ -344,9 +608,9 @@
     }
     .section-header .section-head {
       display: block;
-      margin-top: var(--space-3);
+      margin-top: var(--space-2);
       font-family: var(--font-display);
-      font-size: 40px;
+      font-size: 36px;
       font-weight: 400;
       line-height: 1.1;
       letter-spacing: -0.01em;
@@ -357,13 +621,13 @@
       outline: none;
     }
     .section-desc {
-      margin-top: var(--space-3);
-      font-size: 16px;
+      margin-top: 6px;
+      font-size: 15px;
       line-height: 1.5;
       color: var(--color-ink-2);
     }
     .section-header + * {
-      margin-top: var(--space-7);
+      margin-top: var(--space-6);
     }
     /* The header's rule already sits above a list that opens the section. */
     .section-header + .group > .rows:first-child {
@@ -753,17 +1017,167 @@
       text-underline-offset: 0.2em;
     }
     /* Folded: the card is one line, set by options-layout.js. */
+    html[data-release-read] #release-card,
     html[data-dev-message-read] #dev-message-card,
     html[data-whats-new-read] #whats-new-card {
       padding: var(--space-3) 0;
     }
+    html[data-release-read] #release-card > :not(.welcome-strip),
     html[data-dev-message-read] #dev-message-card > :not(.welcome-strip),
     html[data-whats-new-read] #whats-new-card > :not(.welcome-strip) {
       display: none;
     }
+    html[data-release-read] #release-card > .welcome-strip,
     html[data-dev-message-read] #dev-message-card > .welcome-strip,
     html[data-whats-new-read] #whats-new-card > .welcome-strip {
       display: flex;
+    }
+    html[data-release-gone] #release-card {
+      display: none;
+    }
+
+    /* The 2.0 band: the release page's numeral, oversized and cut off by the
+       band's edge, beside one line on what 2.0 is. It takes the band's
+       components (buttons, links, focus) but not its pine, which stays the
+       Warden banner's alone: near-black ink here, and a raised dark ground in
+       the dark theme, where ink turns light. */
+    #release-card {
+      padding: 24px 32px 26px;
+      border-top: 0;
+      background: var(--color-ink);
+      overflow: hidden;
+      container-type: inline-size;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-scheme="light"]) #release-card {
+        background: var(--color-recess-2);
+      }
+    }
+    :root[data-scheme="dark"] #release-card {
+      background: var(--color-recess-2);
+    }
+    #release-card::before {
+      content: "";
+      position: absolute;
+      inset: 0 0 auto;
+      height: 3px;
+      background: var(--color-band-signal);
+    }
+    html[data-release-read] #release-card {
+      padding: 14px var(--space-5);
+    }
+    html[data-release-read] #release-card::before {
+      display: none;
+    }
+    #release-card + #dev-message-card {
+      margin-top: var(--space-4);
+    }
+    #release-card .welcome-strip {
+      color: var(--color-on-band);
+    }
+    #release-card .welcome-strip-title {
+      font-family: var(--font-display);
+      font-size: 18px;
+      font-weight: 400;
+      letter-spacing: -0.01em;
+    }
+    #release-card .welcome-strip-meta {
+      color: var(--color-on-band-2);
+    }
+    #release-card .welcome-strip-open {
+      color: var(--color-on-band);
+    }
+    .release-band {
+      position: relative;
+      min-height: 0;
+    }
+    .release-text {
+      position: relative;
+      z-index: 1;
+      max-width: 32rem;
+    }
+    .release-version {
+      color: var(--color-band-signal);
+    }
+    .release-title {
+      margin-top: var(--space-2);
+      font-family: var(--font-display);
+      font-size: 30px;
+      font-weight: 400;
+      line-height: 1.06;
+      letter-spacing: -0.02em;
+      color: var(--color-on-band);
+      text-wrap: balance;
+    }
+    .release-title:focus {
+      outline: none;
+    }
+    .release-lede {
+      margin-top: 8px;
+      font-size: 14px;
+      color: var(--color-on-band-2);
+    }
+    .release-actions {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: var(--space-3) 20px;
+      margin-top: 16px;
+    }
+    .release-actions .btn {
+      min-height: 40px;
+      padding-inline: var(--space-4);
+      font-size: 14px;
+    }
+    .release-actions .link {
+      font-size: 14px;
+    }
+    .release-numeral {
+      position: absolute;
+      right: -10px;
+      bottom: -58px;
+      display: flex;
+      align-items: baseline;
+      font-family: var(--font-display);
+      font-size: 190px;
+      font-weight: 200;
+      line-height: 0.82;
+      letter-spacing: -0.05em;
+      color: var(--color-on-band);
+      pointer-events: none;
+      user-select: none;
+    }
+    .release-point {
+      display: inline-block;
+      width: 0.09em;
+      height: 0.09em;
+      margin: 0 0.05em 0 0.03em;
+      background: var(--color-band-signal);
+    }
+    .release-dismiss {
+      position: absolute;
+      top: var(--space-2);
+      right: var(--space-2);
+      z-index: 2;
+    }
+    /* Too narrow for the numeral beside the words: it sits above them, whole. */
+    @container (max-width: 46rem) {
+      .release-band {
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+      }
+      .release-numeral {
+        position: static;
+        order: -1;
+        margin-bottom: var(--space-4);
+        font-size: 84px;
+      }
+    }
+    @media (max-width: 640px) {
+      #release-card {
+        padding: var(--space-5);
+      }
     }
 
     /* The Warden banner is the one pine band in Settings. It keeps close to
@@ -954,6 +1368,11 @@
       letter-spacing: 0.15em;
       text-transform: lowercase;
       color: var(--color-pine);
+    }
+    .wn-release {
+      margin-top: var(--space-2);
+      font-size: 14px;
+      color: var(--color-ink-2);
     }
     .welcome-foot {
       display: flex;
@@ -1290,6 +1709,15 @@
         grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr));
         column-gap: var(--space-4);
       }
+      /* In the grid the plate keeps its cell's height and drops its line,
+         as the promos do. */
+      .nav-link-supporter {
+        margin: 0;
+        padding: var(--space-2);
+      }
+      .nav-supporter-sub {
+        display: none;
+      }
       /* Every link stays; the promos keep their names and drop their lines. */
       .sidebar-footer {
         grid-template-columns: repeat(auto-fill, minmax(12rem, 1fr));
@@ -1492,7 +1920,8 @@
         <a class="nav-link" href="#section-customization" data-target="section-customization"><span class="nav-index">03</span><span>Customization</span></a>
         <a class="nav-link" href="#section-security" data-target="section-security"><span class="nav-index">04</span><span>Security</span></a>
         <a class="nav-link" href="#section-community" data-target="section-community"><span class="nav-index">05</span><span>Community</span></a>
-        <a class="nav-link" href="#section-about" data-target="section-about"><span class="nav-index">06</span><span>About</span></a>
+        <a class="nav-link nav-link-supporter" href="#section-supporter" data-target="section-supporter"><span class="nav-index">06</span><span class="nav-supporter-text"><span class="nav-supporter-title">Supporter</span><span class="nav-supporter-sub" id="nav-supporter-sub">The path and your good days</span></span><span class="nav-supporter-mark" id="nav-supporter-mark" aria-hidden="true" hidden></span></a>
+        <a class="nav-link" href="#section-about" data-target="section-about"><span class="nav-index">07</span><span>About</span></a>
       </nav>
 
       <div class="sidebar-footer">
@@ -1584,16 +2013,41 @@
            every visit. -->
       <section class="section" id="section-welcome" aria-labelledby="h-welcome">
         <header class="section-header">
-          <svg class="section-threshold" viewBox="0 0 560 220" aria-hidden="true" focusable="false">
-            <path class="threshold-arrivals" d="M548 20H330M470 36H330M484 36H524M520 52H330M534 52H558M432 68H330M446 68H506M560 84H330M496 100H330M510 100H542M452 148H330M466 148H514M540 164H330M488 180H330M502 180H530M516 196H330M530 196H550" />
-            <path class="threshold-line" d="M330 4V200" />
-            <path class="threshold-through" d="M560 124H220" />
-            <rect class="threshold-held" x="212" y="120" width="8" height="8" />
+          <svg class="section-threshold" viewBox="0 0 176 52" aria-hidden="true" focusable="false">
+            <path class="threshold-arrivals" d="M176 6H112M164 14H112M176 38H112M150 46H112" />
+            <path class="threshold-line" d="M104 0V52" />
+            <path class="threshold-through" d="M176 26H14" />
+            <rect class="threshold-held" x="2" y="20" width="12" height="12" />
           </svg>
           <p class="section-eyebrow" aria-hidden="true"><span class="index">01</span><span>Settings</span></p>
           <h2 class="section-head" id="h-welcome">Welcome</h2>
           <p class="section-desc">What’s new in this version, and where to start.</p>
         </header>
+
+        <!-- 2.0, while a 2.0.x is installed (options-layout.js). Its × folds
+             it to one line for good; the release page has the whole story. -->
+        <div class="welcome-card band-pine" id="release-card">
+          <button type="button" class="welcome-strip" data-welcome="open">
+            <span class="welcome-strip-title">BlockNSFW 2.0</span>
+            <span class="welcome-strip-meta">built for the hard moment</span>
+            <span class="welcome-strip-open">Show <svg class="icon icon-12" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M4 6l4 4 4-4" /></svg></span>
+          </button>
+          <div class="release-band">
+            <div class="release-text">
+              <p class="meta release-kicker"><span class="release-version">Version 2.0</span> · October 2026</p>
+              <h3 class="release-title" data-welcome="heading" tabindex="-1">Built for the hard moment.</h3>
+              <p class="release-lede">The biggest update since BlockNSFW began: a pause before the sites where it starts, a wait you choose, a friend who holds the key, and your week, every Sunday.</p>
+              <div class="release-actions">
+                <a class="btn btn-primary btn-sm" href="release.html" target="_blank" rel="noopener">See what’s new in 2.0</a>
+                <a class="link" href="changelog.html" target="_blank" rel="noopener">Full changelog</a>
+              </div>
+            </div>
+            <p class="release-numeral" aria-hidden="true"><span>2</span><span class="release-point"></span><span>0</span></p>
+          </div>
+          <button type="button" class="icon-btn release-dismiss" data-welcome="ack" aria-label="Hide this message">
+            <svg class="icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M3.5 3.5l9 9M12.5 3.5l-9 9" /></svg>
+          </button>
+        </div>
 
         <div class="welcome-card band-pine" id="dev-message-card">
           <button type="button" class="welcome-strip" data-welcome="open">
@@ -1640,6 +2094,7 @@
             <h3 class="group-title" data-welcome="heading" tabindex="-1">What’s new<span id="whats-new-version" class="whats-new-version"></span></h3>
             <a class="arrow-link small" href="changelog.html" target="_blank" rel="noopener">Full changelog <svg class="icon icon-right" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M2.5 8h11M9.5 4l4 4-4 4" /></svg></a>
           </div>
+          <p class="wn-release">The biggest update since BlockNSFW began. <a class="link" href="release.html" target="_blank" rel="noopener">Read about 2.0</a></p>
           <!-- One change per <li>: <details class="wn-item"><summary>Headline</summary><p>Text</p></details>.
                The headline is the row; the text opens under it. -->
           <ul class="wn-list">
@@ -1650,17 +2105,18 @@
           </ul>
           <div class="welcome-foot">
             <details class="wn-details">
-              <summary aria-label="Show the rest of this release&rsquo;s changes"><span class="wn-toggle-closed">Show 13 more</span><span class="wn-toggle-open">Show less</span> <svg class="icon icon-12" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M4 6l4 4 4-4" /></svg></summary>
+              <summary aria-label="Show the rest of this release&rsquo;s changes"><span class="wn-toggle-closed">Show 14 more</span><span class="wn-toggle-open">Show less</span> <svg class="icon icon-12" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M4 6l4 4 4-4" /></svg></summary>
               <ul class="wn-list">
                 <li><details class="wn-item"><summary>A friend can hold the key <span class="badge-new">New</span></summary><p>Someone you trust scans a code into the authenticator app on their phone. When you need a change without the wait, you ask them for the six-digit code it shows. They never see your browsing, and nothing goes through a server.</p></details></li>
                 <li><details class="wn-item"><summary>Your own words on the blocked page <span class="badge-new">New</span></summary><p>Write your plan, a note to yourself and someone to reach, in a calm moment. A blocked page shows them first, and offers to wait out the next ten or twenty minutes with you.</p></details></li>
                 <li><details class="wn-item"><summary>After a slip <span class="badge-new">New</span></summary><p>The popup&rsquo;s &ldquo;I slipped&rdquo; link opens a short, plain page. It counts as one day, never a reset, and offers what would help next time.</p></details></li>
                 <li><details class="wn-item"><summary>Your week <span class="badge-new">New</span></summary><p>Every Sunday evening, a short page about your week: each time you stopped at the door or waited it out, drawn day by day, three numbers beside the week before, and one thing to try next. The popup says when it&rsquo;s ready.</p></details></li>
                 <li><details class="wn-item"><summary>Days kept</summary><p>Statistics counts the days in the last 30 with protection on all day and no slip, beside your runs and the moments you waited out.</p></details></li>
+                <li><details class="wn-item"><summary>Supporter, for going further <span class="badge-new">New</span></summary><p>Optional, and protection stays the same for everyone. It adds the rest of a 30-day path, an evening check-in and your good days. The Supporter page shows whatfour more blocked-page designs. Supporter compares what&rsquo;s free and what it adds, side by side.</p>rsquo;s free and what it adds, side by side.</p></details></li>
                 <li><details class="wn-item"><summary>Your PIN is stored safely</summary><p>It is kept as a salted hash instead of plain text, and five wrong tries lock PIN entry for a while. A PIN from an older version keeps working.</p></details></li>
                 <li><details class="wn-item"><summary>The popup says whether you&rsquo;re protected</summary><p>It opens on a deep green band that says &ldquo;Protected&rdquo; and holds the protection switch. When protection is off the band turns plain and says so.</p></details></li>
                 <li><details class="wn-item"><summary>The blocked page no longer shows the blocked address</summary><p>It shows the site&rsquo;s ending only now, and never the words a page matched. The audit log shows a site&rsquo;s name instead of its full address.</p></details></li>
-                <li><details class="wn-item"><summary>&ldquo;This page was held.&rdquo;</summary><p>The Classic blocked page is one calm column on a still drawing of the web arriving and being sorted: what happened, how, and a way back. The other designs keep everything they do, in the new colours.</p></details></li>
+                <li><details class="wn-item"><summary>&ldquo;Held at the second door.&rdquo;</summary><p>The Classic blocked page says why first: it draws the six layers of protection as six doors and shows which one held the page, with one plain sentence on what that means. The other designs keep everything they do, in the new colours.</p></details></li>
                 <li><details class="wn-item"><summary>Switches work from the keyboard</summary><p>The popup&rsquo;s switches could not be reached with Tab. They are real switches now, and screen readers say whether each is on or off.</p></details></li>
                 <li><details class="wn-item"><summary>What BlockNSFW shows on websites stays its own</summary><p>The held-image placeholder, the search-result notice and the counter sit in a sealed part of the page, so a website can no longer restyle or read them.</p></details></li>
                 <li><details class="wn-item"><summary>The audit log counts turning protection off correctly</summary><p>Its count of times protection was turned off included every time it was turned on. It counts each separately now.</p></details></li>
@@ -1674,11 +2130,11 @@
 
       <section class="section" id="section-protection" aria-labelledby="h-protection">
         <header class="section-header">
-          <svg class="section-threshold" viewBox="0 0 560 220" aria-hidden="true" focusable="false">
-            <path class="threshold-arrivals" d="M548 20H330M470 36H330M484 36H524M520 52H330M534 52H558M432 68H330M446 68H506M560 84H330M496 100H330M510 100H542M452 148H330M466 148H514M540 164H330M488 180H330M502 180H530M516 196H330M530 196H550" />
-            <path class="threshold-line" d="M330 4V200" />
-            <path class="threshold-through" d="M560 124H220" />
-            <rect class="threshold-held" x="212" y="120" width="8" height="8" />
+          <svg class="section-threshold" viewBox="0 0 176 52" aria-hidden="true" focusable="false">
+            <path class="threshold-arrivals" d="M176 6H112M164 14H112M176 38H112M150 46H112" />
+            <path class="threshold-line" d="M104 0V52" />
+            <path class="threshold-through" d="M176 26H14" />
+            <rect class="threshold-held" x="2" y="20" width="12" height="12" />
           </svg>
           <p class="section-eyebrow" aria-hidden="true"><span class="index">02</span><span>Settings</span></p>
           <h2 class="section-head" id="h-protection">Protection</h2>
@@ -2010,11 +2466,11 @@
 
       <section class="section" id="section-customization" aria-labelledby="h-customization">
         <header class="section-header">
-          <svg class="section-threshold" viewBox="0 0 560 220" aria-hidden="true" focusable="false">
-            <path class="threshold-arrivals" d="M548 20H330M470 36H330M484 36H524M520 52H330M534 52H558M432 68H330M446 68H506M560 84H330M496 100H330M510 100H542M452 148H330M466 148H514M540 164H330M488 180H330M502 180H530M516 196H330M530 196H550" />
-            <path class="threshold-line" d="M330 4V200" />
-            <path class="threshold-through" d="M560 124H220" />
-            <rect class="threshold-held" x="212" y="120" width="8" height="8" />
+          <svg class="section-threshold" viewBox="0 0 176 52" aria-hidden="true" focusable="false">
+            <path class="threshold-arrivals" d="M176 6H112M164 14H112M176 38H112M150 46H112" />
+            <path class="threshold-line" d="M104 0V52" />
+            <path class="threshold-through" d="M176 26H14" />
+            <rect class="threshold-held" x="2" y="20" width="12" height="12" />
           </svg>
           <p class="section-eyebrow" aria-hidden="true"><span class="index">03</span><span>Settings</span></p>
           <h2 class="section-head" id="h-customization">Customization</h2>
@@ -2343,11 +2799,11 @@ title/Example Domain/"></textarea>
 
       <section class="section" id="section-security" aria-labelledby="h-security">
         <header class="section-header">
-          <svg class="section-threshold" viewBox="0 0 560 220" aria-hidden="true" focusable="false">
-            <path class="threshold-arrivals" d="M548 20H330M470 36H330M484 36H524M520 52H330M534 52H558M432 68H330M446 68H506M560 84H330M496 100H330M510 100H542M452 148H330M466 148H514M540 164H330M488 180H330M502 180H530M516 196H330M530 196H550" />
-            <path class="threshold-line" d="M330 4V200" />
-            <path class="threshold-through" d="M560 124H220" />
-            <rect class="threshold-held" x="212" y="120" width="8" height="8" />
+          <svg class="section-threshold" viewBox="0 0 176 52" aria-hidden="true" focusable="false">
+            <path class="threshold-arrivals" d="M176 6H112M164 14H112M176 38H112M150 46H112" />
+            <path class="threshold-line" d="M104 0V52" />
+            <path class="threshold-through" d="M176 26H14" />
+            <rect class="threshold-held" x="2" y="20" width="12" height="12" />
           </svg>
           <p class="section-eyebrow" aria-hidden="true"><span class="index">04</span><span>Settings</span></p>
           <h2 class="section-head" id="h-security">Security</h2>
@@ -2588,11 +3044,11 @@ title/Example Domain/"></textarea>
 
       <section class="section" id="section-community" aria-labelledby="h-community">
         <header class="section-header">
-          <svg class="section-threshold" viewBox="0 0 560 220" aria-hidden="true" focusable="false">
-            <path class="threshold-arrivals" d="M548 20H330M470 36H330M484 36H524M520 52H330M534 52H558M432 68H330M446 68H506M560 84H330M496 100H330M510 100H542M452 148H330M466 148H514M540 164H330M488 180H330M502 180H530M516 196H330M530 196H550" />
-            <path class="threshold-line" d="M330 4V200" />
-            <path class="threshold-through" d="M560 124H220" />
-            <rect class="threshold-held" x="212" y="120" width="8" height="8" />
+          <svg class="section-threshold" viewBox="0 0 176 52" aria-hidden="true" focusable="false">
+            <path class="threshold-arrivals" d="M176 6H112M164 14H112M176 38H112M150 46H112" />
+            <path class="threshold-line" d="M104 0V52" />
+            <path class="threshold-through" d="M176 26H14" />
+            <rect class="threshold-held" x="2" y="20" width="12" height="12" />
           </svg>
           <p class="section-eyebrow" aria-hidden="true"><span class="index">05</span><span>Settings</span></p>
           <h2 class="section-head" id="h-community">Community</h2>
@@ -2653,15 +3109,119 @@ title/Example Domain/"></textarea>
         </div>
       </section>
 
-      <section class="section" id="section-about" aria-labelledby="h-about">
+      <section class="section" id="section-supporter" aria-labelledby="h-supporter">
         <header class="section-header">
-          <svg class="section-threshold" viewBox="0 0 560 220" aria-hidden="true" focusable="false">
-            <path class="threshold-arrivals" d="M548 20H330M470 36H330M484 36H524M520 52H330M534 52H558M432 68H330M446 68H506M560 84H330M496 100H330M510 100H542M452 148H330M466 148H514M540 164H330M488 180H330M502 180H530M516 196H330M530 196H550" />
-            <path class="threshold-line" d="M330 4V200" />
-            <path class="threshold-through" d="M560 124H220" />
-            <rect class="threshold-held" x="212" y="120" width="8" height="8" />
+          <svg class="section-threshold" viewBox="0 0 176 52" aria-hidden="true" focusable="false">
+            <path class="threshold-arrivals" d="M176 6H112M164 14H112M176 38H112M150 46H112" />
+            <path class="threshold-line" d="M104 0V52" />
+            <path class="threshold-through" d="M176 26H14" />
+            <rect class="threshold-held" x="2" y="20" width="12" height="12" />
           </svg>
           <p class="section-eyebrow" aria-hidden="true"><span class="index">06</span><span>Settings</span></p>
+          <h2 class="section-head" id="h-supporter">Supporter</h2>
+          <p class="section-desc">Extras that help you go further, and keep this project going. Blocking is the same for everyone: paying never makes it stronger or weaker.</p>
+          <p class="section-desc supporter-open-build" id="supporter-open-build" hidden>This is the open-source build of BlockNSFW. It has every protection and the path&rsquo;s first week, but not the Supporter extras: they come with BlockNSFW from the Chrome Web Store, Microsoft Edge Add-ons and Firefox Add-ons.</p>
+        </header>
+
+        <div class="supporter-band band-pine" id="supporter-band">
+          <div class="supporter-note">
+            <h3 class="supporter-note-head" id="supporter-note-head">Protection was never for sale.</h3>
+            <p class="supporter-note-text" id="supporter-note-text">BlockNSFW was built by one person who needed it first. Supporting it doesn’t make you more protected, and not supporting it doesn’t make you less: everyone gets the same. What your support pays for is what comes next: the time to keep improving it, and the real costs of new features.</p>
+            <p class="supporter-note-sign" id="supporter-note-sign">— Monolab</p>
+          </div>
+          <div class="supporter-buy" id="supporter-buy">
+            <fieldset class="supporter-plans" id="supporter-plans">
+              <legend class="meta supporter-plans-legend">Choose a plan</legend>
+            </fieldset>
+            <a class="btn btn-primary" id="supporter-buy-btn" target="_blank" rel="noopener noreferrer" hidden>Become a supporter</a>
+            <p class="supporter-offer" id="supporter-offer" hidden></p>
+            <p class="supporter-buy-hint" id="supporter-buy-hint"></p>
+            <p class="supporter-buy-hint">For this browser extension. BlockNSFW for Android has its own Supporter, in the app. Cancel any time, and if you bought it by mistake, we’ll refund it.</p>
+          </div>
+        </div>
+
+        <div class="group group-split" id="supporter-compare">
+          <div class="group-aside">
+            <h3 class="group-title">Free and Supporter</h3>
+            <p class="group-desc">Every protection is in both columns. Supporter only adds the extras at the bottom, and nothing that’s free today will ever move there.</p>
+          </div>
+          <div class="group-body">
+            <table class="compare">
+              <caption class="visually-hidden">What’s free, and what Supporter adds</caption>
+              <thead>
+                <tr>
+                  <th scope="col"><span class="visually-hidden">Feature</span></th>
+                  <th scope="col" class="compare-col">Free</th>
+                  <th scope="col" class="compare-col compare-col-supporter">Supporter</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr class="compare-group"><th scope="rowgroup" colspan="3">Protection</th></tr>
+                <tr><th scope="row">Blocks adult sites before they load</th><td data-yes></td><td data-yes></td></tr>
+                <tr><th scope="row">AI image and text filters</th><td data-yes></td><td data-yes></td></tr>
+                <tr><th scope="row">SafeSearch and DNS protection</th><td data-yes></td><td data-yes></td></tr>
+                <tr><th scope="row">Your blocklist, blocked words and lists you follow</th><td data-yes></td><td data-yes></td></tr>
+                <tr><th scope="row">PIN, the Pact and a witness</th><td data-yes></td><td data-yes></td></tr>
+                <tr><th scope="row">Storm Mode and risk hours</th><td data-yes></td><td data-yes></td></tr>
+                <tr><th scope="row">Gateways</th><td data-yes></td><td data-yes></td></tr>
+              </tbody>
+              <tbody>
+                <tr class="compare-group"><th scope="rowgroup" colspan="3">For the hard moment</th></tr>
+                <tr><th scope="row">Five blocked-page designs<span class="compare-desc">Classic&rsquo;s six doors, Calm, Verse, Motivation and Play.</span></th><td data-yes></td><td data-yes></td></tr>
+                <tr><th scope="row">Your own words on the blocked page</th><td data-yes></td><td data-yes></td></tr>
+                <tr><th scope="row">After a slip</th><td data-yes></td><td data-yes></td></tr>
+                <tr><th scope="row">Your week, days kept and Statistics</th><td data-yes></td><td data-yes></td></tr>
+              </tbody>
+              <tbody>
+                <tr class="compare-group"><th scope="rowgroup" colspan="3">Going further</th></tr>
+                <tr><th scope="row">The path, days 1 to 7</th><td data-yes></td><td data-yes></td></tr>
+                <tr class="compare-extra"><th scope="row"><a href="path.html">The path, days 8 to 30</a><span class="compare-desc">A short page a day, and one small thing to do.</span></th><td data-no></td><td data-yes></td></tr>
+                <tr class="compare-extra"><th scope="row">Evening check-in<span class="compare-desc">Ten seconds a night, from the popup.</span></th><td data-no></td><td data-yes></td></tr>
+                <tr class="compare-extra"><th scope="row"><a href="gooddays.html">Your good days</a><span class="compare-desc">After two weeks, what your calm days have in common.</span></th><td data-no></td><td data-yes></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="group group-split" id="supporter-code-group">
+          <div class="group-aside">
+            <h3 class="group-title" id="supporter-code-title">Already a supporter?</h3>
+            <p class="group-desc" id="supporter-code-desc">Your code comes by email after you pay.</p>
+          </div>
+          <div class="group-body">
+            <div class="rows rows-closed">
+              <div class="row row-stack" id="supporter-code-form">
+                <div class="field">
+                  <label class="field-label" for="supporter-code">Your code</label>
+                  <div class="supporter-code-row">
+                    <input type="text" class="input input-mono" id="supporter-code" autocomplete="off" spellcheck="false" aria-describedby="supporter-code-error supporter-code-hint" />
+                    <button type="button" class="btn btn-ghost" id="supporter-unlock">Unlock</button>
+                  </div>
+                  <p class="field-error" id="supporter-code-error" role="alert"></p>
+                  <p class="supporter-portal-row"><a class="arrow-link" id="supporter-portal" target="_blank" rel="noopener noreferrer">Can’t find your code? Open your purchases <svg class="icon icon-12 icon-up-right" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M4.5 11.5l7-7M6 4.5h5.5V10" /></svg></a></p>
+                  <p class="field-hint" id="supporter-code-hint">Your code is on your purchases page; Polar’s receipt email links to it as “Access my purchase”. It’s checked with the store when you enter it, then about once a day, so a plan that ends can close. Only the code is ever sent, never anything about your browsing.</p>
+                </div>
+              </div>
+              <p class="supporter-thanks" id="supporter-thanks" role="status" hidden></p>
+              <p class="supporter-portal-row" id="supporter-manage-row" hidden><a class="arrow-link" id="supporter-manage" target="_blank" rel="noopener noreferrer">Manage or cancel your plan <svg class="icon icon-12 icon-up-right" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M4.5 11.5l7-7M6 4.5h5.5V10" /></svg></a></p>
+              <p class="field-hint" id="supporter-manage-hint" hidden>A cancelled plan runs to the end of the time you paid for, then closes.</p>
+              <!-- Development installs only: ask the store now instead of waiting a day. -->
+              <p class="supporter-portal-row" id="supporter-recheck-row" hidden><button type="button" class="btn-text" id="supporter-recheck">Check with the store now (test copy only)</button> <span class="field-hint" id="supporter-recheck-result" role="status"></span></p>
+            </div>
+          </div>
+        </div>
+
+      </section>
+
+      <section class="section" id="section-about" aria-labelledby="h-about">
+        <header class="section-header">
+          <svg class="section-threshold" viewBox="0 0 176 52" aria-hidden="true" focusable="false">
+            <path class="threshold-arrivals" d="M176 6H112M164 14H112M176 38H112M150 46H112" />
+            <path class="threshold-line" d="M104 0V52" />
+            <path class="threshold-through" d="M176 26H14" />
+            <rect class="threshold-held" x="2" y="20" width="12" height="12" />
+          </svg>
+          <p class="section-eyebrow" aria-hidden="true"><span class="index">07</span><span>Settings</span></p>
           <h2 class="section-head" id="h-about">About</h2>
           <p class="section-desc">The version you’re running, what changed, and the source code.</p>
         </header>
@@ -2679,7 +3239,7 @@ title/Example Domain/"></textarea>
 
       <footer class="footer">
         <p>BlockNSFW runs on your device. What you browse never leaves it.</p>
-        <p>Open source and free, always.</p>
+        <p>Protection is free and open source, always.</p>
         <p class="meta">BlockNSFW · monolab</p>
       </footer>
     </main>
@@ -2774,6 +3334,10 @@ title/Example Domain/"></textarea>
   <!-- Loaded for its design registry only, so the design picker and the
        blocked page itself can never drift out of sync. -->
   <script src="blocked-themes.js"></script>
+  <!-- Which Supporter extras this build carries: none in the open-source build (extras/README.md). -->
+  <script src="extras/extras.js"></script>
   <script src="options.js"></script>
+  <script src="shared/supporter.js"></script>
+  <script src="options-supporter.js"></script>
 </body>
 </html>

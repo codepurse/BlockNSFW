@@ -3,10 +3,16 @@
 # Usage:
 #   powershell -ExecutionPolicy Bypass -File .\build-firefox.ps1
 #   powershell -ExecutionPolicy Bypass -File .\build-firefox.ps1 -Zip
+#   powershell -ExecutionPolicy Bypass -File .\build-firefox.ps1 -OpenSource
+#
+# The Supporter extras come from a private repository checked out at
+# extras-private\ (see extras\README.md). A store package (-Zip) must carry
+# them; -OpenSource builds with the empty stand-ins in extras\ instead.
 
 [CmdletBinding()]
 param(
-    [switch]$Zip
+    [switch]$Zip,
+    [switch]$OpenSource
 )
 
 $ErrorActionPreference = "Stop"
@@ -24,6 +30,7 @@ $RuntimeFolders = @(
     "vendor",
     "fonts",
     "ui",
+    "extras",
     "nsfwjs",
     "models"
 )
@@ -54,6 +61,12 @@ $RuntimeFiles   = @(
     "gateway.js",
     "week.html",
     "week.js",
+    "path.html",
+    "path-page.js",
+    "gooddays.html",
+    "gooddays.js",
+    "options-supporter.js",
+    "release.html",
     "community.html",
     "community.js",
     "appwrite-client.js",
@@ -92,6 +105,26 @@ foreach ($file in $RuntimeFiles) {
     if (Test-Path $src) {
         Copy-Item -Path $src -Destination (Join-Path $OutDir $file) -Force
     }
+}
+
+# Supporter extras: each empty stand-in in extras\ is replaced by its file
+# from the private repository. Only those names, so nothing else in that
+# repository (its tests, its tools) can reach a package.
+$ExtrasSrc = Join-Path $SrcDir "extras-private\extras"
+$ExtrasOut = Join-Path $OutDir "extras"
+Get-ChildItem -Path $ExtrasOut -Filter "*.md" | Remove-Item -Force
+$WithExtras = (Test-Path $ExtrasSrc) -and -not $OpenSource
+if ($WithExtras) {
+    Write-Host "==> Copying the Supporter extras from extras-private" -ForegroundColor Cyan
+    foreach ($stub in Get-ChildItem -Path $ExtrasOut -File) {
+        $real = Join-Path $ExtrasSrc $stub.Name
+        if (-not (Test-Path $real)) { throw "extras-private\extras is missing $($stub.Name)" }
+        Copy-Item -Path $real -Destination $stub.FullName -Force
+    }
+} elseif ($Zip -and -not $OpenSource) {
+    throw "A store package needs the Supporter extras. Check out the private repository at extras-private\, or pass -OpenSource to package without them."
+} else {
+    Write-Host "==> Open-source build: the Supporter extras stay empty stand-ins" -ForegroundColor Yellow
 }
 
 Write-Host "==> Copying data files" -ForegroundColor Cyan
@@ -153,4 +186,6 @@ if ($Zip) {
 }
 
 Write-Host "==> Firefox build complete: $OutDir" -ForegroundColor Green
+if ($WithExtras) { Write-Host "==> Supporter extras: included" -ForegroundColor Green }
+else { Write-Host "==> Supporter extras: not included (open-source build)" -ForegroundColor Yellow }
 if ($Zip) { Write-Host "==> Zip: $ZipPath" -ForegroundColor Green }

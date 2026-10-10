@@ -3895,6 +3895,23 @@ function initializeBackground() {
   return backgroundInitializationPromise;
 }
 
+// The one exception to "updates don't open tabs": 2.0 is the biggest change
+// BlockNSFW has had, so someone updating from 1.x gets release.html once. The
+// flag is written before the tab opens, so two install events can't open two.
+// A fresh install gets onboarding instead, and later 2.x updates stay quiet.
+const RELEASE_ANNOUNCED_KEY = 'pblocker_release_2_announced';
+
+async function announceRelease(details) {
+  if (!details || details.reason !== 'update' || typeof VersionCompare === 'undefined') return false;
+  const current = browserAPI.runtime.getManifest().version;
+  if (!VersionCompare.crossed(details.previousVersion, current, '2.0.0')) return false;
+  const store = await browserAPI.storage.local.get(RELEASE_ANNOUNCED_KEY);
+  if (store[RELEASE_ANNOUNCED_KEY]) return false;
+  await browserAPI.storage.local.set({ [RELEASE_ANNOUNCED_KEY]: Date.now() });
+  await browserAPI.tabs.create({ url: browserAPI.runtime.getURL('release.html') });
+  return true;
+}
+
 browserAPI.runtime.onInstalled.addListener(async (details) => {
   try {
     await initializeBackground();
@@ -3907,6 +3924,9 @@ browserAPI.runtime.onInstalled.addListener(async (details) => {
         'pblocker_announcement_dismissed'
       ]);
     } catch (_) {}
+
+    // 2.0, said once to someone updating from 1.x (announceRelease).
+    announceRelease(details).catch(e => console.warn('BlockNSFW: 2.0 page open failed', e));
 
     // Fresh install only: open the first-run onboarding wizard once. Updates
     // keep using the in-page "What's New" card, so we don't nag on every bump.

@@ -746,6 +746,73 @@ test('blocked.js: the held address is never written out, only its ending', async
   }
 });
 
+// --- Classic: the six doors ------------------------------------------------------
+
+function classicFor(reason, extra = '') {
+  return openBlockedPage({
+    query: '?url=' + encodeURIComponent('https://www.explicit-site.test/a/b') + '&reason=' + reason + extra +
+      '&matched=' + encodeURIComponent('termone, termtwo'),
+    settings: { blockedPageType: 'default', blockedPageTheme: 'classic' }
+  });
+}
+
+test('classic: the headline names the door that held it, and the drawing shows it', async () => {
+  for (const [reason, door, ord] of [
+    ['custom_blocklist', 1, 'first'], ['default_blocklist', 2, 'second'], ['dns_blocked', 3, 'third'],
+    ['search_query', 4, 'fourth'], ['page_text_scan', 5, 'fifth'], ['ai_text_scan', 6, 'sixth']
+  ]) {
+    const { doc } = classicFor(reason);
+    await flush();
+    assert.equal(doc.getElementById('blocked-title').textContent, `Held at the ${ord} door.`, reason);
+    assert.equal(doc.getElementById('doors').hidden, false, reason);
+    const across = doc.getElementById('doors-across');
+    const labels = across.all().filter((c) => c.classList.contains('door-label'));
+    assert.equal(labels.length, 6);
+    assert.equal(labels.findIndex((l) => l.classList.contains('is-held')), door - 1, reason);
+    assert.ok(across.all().some((c) => c.classList.contains('door-square')), 'the brass square marks where it stopped');
+    assert.ok(doc.getElementById('doors-down').all().some((c) => c.classList.contains('door-held')), 'the narrow drawing too');
+  }
+});
+
+test('classic: the caption says before it loaded, or as soon as it was read', async () => {
+  let { doc } = classicFor('default_blocklist');
+  await flush();
+  assert.equal(doc.getElementById('doors-caption').textContent,
+    'Six layers stand between you and an adult page. This one was held at the second, before anything loaded, so the other four weren’t needed.');
+  ({ doc } = classicFor('ai_text_scan', '&score=0.94'));
+  await flush();
+  assert.match(doc.getElementById('doors-caption').textContent, /got past them, and the sixth closed it as soon as it was read\.$/);
+  assert.equal(doc.getElementById('held-source').textContent, 'On-device AI · 94% sure');
+});
+
+test('classic: a reason that names no layer keeps the plain headline and draws nothing', async () => {
+  const { doc } = classicFor('local_filter');
+  await flush();
+  assert.equal(doc.getElementById('doors-across').children.length, 0, 'nothing drawn');
+  assert.equal(doc.getElementById('blocked-title').textContent, '', 'the headline is left as written');
+  assert.equal(doc.getElementById('held-source').textContent, 'Local filter rules');
+});
+
+test('classic: the held page never writes the address, the path or what it matched', async () => {
+  const { doc } = classicFor('page_text_scan');
+  await flush();
+  assert.equal(doc.getElementById('held-address').textContent, '••••••••.test');
+  const everything = JSON.stringify(['doors-across', 'doors-down', 'doors-caption', 'doors-title', 'held-meta', 'held-source', 'blocked-title']
+    .map((id) => { const el = doc.getElementById(id); return [el.textContent, el.all().map((c) => c.textContent)]; }));
+  assert.doesNotMatch(everything, /termone|termtwo|explicit-site|a\/b/);
+});
+
+test('classic: under a design, the doors stay out and the title is left as written', async () => {
+  const { doc } = openBlockedPage({
+    query: '?url=' + encodeURIComponent('https://x.test/') + '&reason=default_blocklist',
+    settings: { blockedPageType: 'default', blockedPageTheme: 'calm' }
+  });
+  await flush();
+  assert.equal(doc.getElementById('doors-across').children.length, 0);
+  assert.equal(doc.getElementById('blocked-title').textContent, '');
+  assert.equal(doc.getElementById('held-source').textContent, '');
+});
+
 test('blocked.js: ?preview= with an unknown design is ignored', async () => {
   const { doc } = openBlockedPage({
     query: '?preview=' + encodeURIComponent('<img src=x>'),

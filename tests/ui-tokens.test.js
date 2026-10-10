@@ -51,6 +51,7 @@ test('ui tokens (dark): the system dark and the kept dark carry the same values'
   assert.match(TOKENS, /:root\[data-scheme="dark"\]\s*\{\s*color-scheme: dark;/);
 });
 
+
 test('blocked-themes.css: Verse keeps the same dark wall whether it follows the system or is kept dark', () => {
   const css = fs.readFileSync(path.join(ROOT, 'blocked-themes.css'), 'utf8');
   const system = css.match(/@media \(prefers-color-scheme: dark\)\s*\{\s*html\[data-theme="verse"\]:not\(\[data-scheme="light"\]\)\s*\{([\s\S]*?)\}\s*\}/);
@@ -189,16 +190,14 @@ test('ui tokens: the four bundled fonts exist and no stylesheet reaches the netw
   }
 });
 
-test('ui: the field drawing ships in both themes, inert, and the blocked page draws it from the package', () => {
+test('ui: the field drawing ships in both themes, inert', () => {
+  // Classic's held page drew it until the six doors replaced it (2.0); the
+  // files stay as monolab's field drawing, pictures only.
   for (const file of ['field-still.svg', 'field-still-dark.svg']) {
     const svg = fs.readFileSync(path.join(ROOT, 'ui', file), 'utf8');
     assert.match(svg, /^<svg xmlns="http:\/\/www\.w3\.org\/2000\/svg"/, `${file} is an SVG`);
     assert.doesNotMatch(svg, /<script|<foreignObject|\son[a-z]+=|href=/i, `${file} must be pictures only`);
   }
-  const blocked = fs.readFileSync(path.join(ROOT, 'blocked.html'), 'utf8');
-  assert.match(blocked, /<div class="field-art" aria-hidden="true">/);
-  assert.match(blocked, /src="ui\/field-still\.svg"/);
-  assert.match(blocked, /src="ui\/field-still-dark\.svg"/);
   // Each theme shows its own copy, through the tokens' show switches.
   assert.equal(lightTokens()['--show-light'], 'block');
   assert.equal(darkTokens()['--show-light'], 'none');

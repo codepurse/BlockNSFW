@@ -36,3 +36,7 @@ artifacts/
 
 # Text-model corpus (Common Crawl extracts: adult text + third-party content, never commit)
 tools/text_corpus/cache/
+
+# Supporter extras: a separate private repository, checked out here and copied
+# into store builds by build-*.ps1. Never part of this repository.
+/extras-private/

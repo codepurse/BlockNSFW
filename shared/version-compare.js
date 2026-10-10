@@ -56,7 +56,16 @@
     return compareVersions(current, latest) < 0;
   }
 
+  // True when an update from `previous` to `current` passes `milestone`:
+  // previous is before it and current is at or after it. Used to say 2.0
+  // once, to people coming from 1.x, and never again on later updates.
+  function crossed(previous, current, milestone) {
+    if (parseVersion(previous).length === 0 || parseVersion(current).length === 0) return false;
+    return compareVersions(previous, milestone) < 0 && compareVersions(current, milestone) >= 0;
+  }
+
   var exported = {
+    crossed: crossed,
     parseVersion: parseVersion,
     compareVersions: compareVersions,
     isOutdated: isOutdated

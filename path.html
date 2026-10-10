@@ -1,0 +1,469 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>The path · BlockNSFW</title>
+  <script src="ui/scheme.js"></script>
+  <link rel="stylesheet" href="ui/tokens.css" />
+  <link rel="stylesheet" href="ui/components.css" />
+  <style>
+    /* The path: one short page a day, set as a letter. A row of thirty
+       squares says where you are (brass for done, a ring for today), then the
+       day's reading in the serif, the author's own lines where the brackets
+       are, and today's one thing below it: done with a button, written as one
+       line for the book, or a place in Settings to go.
+
+       The overview (#all) lists all thirty in their four weeks. */
+    body {
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+    }
+    .path {
+      box-sizing: border-box;
+      width: 100%;
+      max-width: 49rem;
+      margin: 0 auto;
+      padding: clamp(var(--space-6), 8vh, 88px) var(--space-6) var(--space-7);
+    }
+    .path[data-view="all"] {
+      max-width: 78rem;
+    }
+    @media (max-width: 40rem) {
+      .path {
+        padding-inline: var(--space-4);
+      }
+    }
+    .back-link {
+      gap: 6px;
+      padding: var(--space-1) 0;
+    }
+    .path-eyebrow {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--space-2);
+      margin-top: var(--space-6);
+    }
+    .path-kind {
+      color: var(--color-pine);
+    }
+
+    /* Thirty squares, a little gap between the weeks. */
+    .path-squares {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 6px;
+      margin-top: var(--space-4);
+    }
+    .path-square {
+      box-sizing: border-box;
+      width: 10px;
+      height: 10px;
+      border: 1px solid var(--color-rule-2);
+    }
+    .path-square.is-week {
+      margin-left: 10px;
+    }
+    .path-square.is-done {
+      border-color: var(--color-brass);
+      background: var(--color-brass);
+    }
+    .path-square.is-today {
+      border: 2px solid var(--color-pine);
+    }
+
+    .path-title {
+      margin-top: 28px;
+      font-family: var(--font-display);
+      font-size: clamp(36px, 5vw, 52px);
+      font-weight: 400;
+      line-height: 1.08;
+      letter-spacing: -0.02em;
+      text-wrap: balance;
+    }
+    .path-title:focus {
+      outline: none;
+    }
+    .path-body {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      max-width: 39rem;
+      margin-top: var(--space-6);
+      font-family: var(--font-display);
+      font-size: 20px;
+      line-height: 1.6;
+    }
+    .path-body p {
+      margin: 0;
+    }
+    .path-story {
+      font-style: italic;
+      color: var(--color-ink-3);
+    }
+    .path-sign {
+      font-style: italic;
+      color: var(--color-ink-2);
+    }
+
+    /* Today's one thing. */
+    .path-one {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      margin-top: var(--space-7);
+      padding: 28px 32px;
+      border: 1px solid var(--color-rule);
+      border-radius: var(--radius-xs);
+    }
+    @media (max-width: 40rem) {
+      .path-one {
+        padding: var(--space-5);
+      }
+    }
+    .path-one-text {
+      max-width: 35rem;
+      margin-top: 10px;
+      font-family: var(--font-display);
+      font-size: 24px;
+      line-height: 1.35;
+    }
+    .path-one-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--space-3);
+    }
+    .path-one-actions .btn {
+      min-height: 48px;
+      padding-inline: var(--space-5);
+      font-size: 15px;
+    }
+    .path-line-label {
+      display: block;
+      font-family: var(--font-display);
+      font-size: 24px;
+      line-height: 1.35;
+    }
+    /* One line, on ruled paper. */
+    .path-line {
+      box-sizing: border-box;
+      width: 100%;
+      margin-top: var(--space-4);
+      padding: 0 2px;
+      border: 0;
+      border-radius: 0;
+      resize: none;
+      background-color: transparent;
+      background-image: repeating-linear-gradient(to bottom, transparent 0, transparent 39px, var(--color-rule-2) 39px, var(--color-rule-2) 40px);
+      background-attachment: local;
+      color: var(--color-ink);
+      font-family: var(--font-display);
+      font-style: italic;
+      font-size: 21px;
+      line-height: 40px;
+    }
+    .path-line:focus-visible {
+      outline: var(--focus-width) solid var(--color-pine-2);
+      outline-offset: var(--focus-offset);
+    }
+    .path-line-note {
+      font-size: 13px;
+      color: var(--color-ink-3);
+    }
+    .path-done {
+      display: flex;
+      align-items: center;
+      gap: var(--space-3);
+      font-family: var(--font-display);
+      font-size: 20px;
+      color: var(--color-pine);
+    }
+    .path-done::before {
+      content: "";
+      flex: none;
+      width: 10px;
+      height: 10px;
+      background: var(--color-brass);
+    }
+    .path-kept-line {
+      font-family: var(--font-display);
+      font-style: italic;
+      font-size: 21px;
+      line-height: 1.45;
+    }
+
+    .path-foot {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: var(--space-3) var(--space-5);
+      margin-top: var(--space-7);
+      padding-top: 20px;
+      border-top: 1px solid var(--color-rule);
+      font-size: 14px;
+      color: var(--color-ink-2);
+    }
+    .path-next-title {
+      font-family: var(--font-display);
+      font-size: 18px;
+      color: var(--color-ink);
+    }
+
+    /* The book: the lines written along the way. */
+    .path-book {
+      margin-top: var(--space-7);
+      padding-top: var(--space-5);
+      border-top: 1px solid var(--color-rule-2);
+    }
+    .path-book-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin: 14px 0 0;
+      padding: 0;
+      list-style: none;
+    }
+    .path-book-list li {
+      display: flex;
+      align-items: baseline;
+      gap: var(--space-4);
+    }
+    .path-book-n {
+      flex: none;
+      width: 22px;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--color-brass);
+    }
+    .path-book-line {
+      font-family: var(--font-display);
+      font-style: italic;
+      font-size: 19px;
+      line-height: 1.45;
+    }
+
+    /* A day that comes with Supporter. */
+    .path-locked {
+      margin-top: var(--space-6);
+      max-width: 36rem;
+      font-size: 18px;
+      color: var(--color-ink-2);
+    }
+    .path-locked-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--space-3);
+      margin-top: var(--space-5);
+    }
+    .path-locked-actions .btn {
+      min-height: 48px;
+      padding-inline: var(--space-5);
+      font-size: 15px;
+    }
+
+    /* All thirty. */
+    .path-lede {
+      max-width: 38rem;
+      margin-top: 18px;
+      font-size: 18px;
+      color: var(--color-ink-2);
+    }
+    .path-weeks {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 40px 32px;
+      margin-top: var(--space-7);
+      padding-top: 28px;
+      border-top: 1px solid var(--color-rule-2);
+    }
+    .path-week {
+      flex: 1 1 15rem;
+      min-width: 0;
+    }
+    .path-week-meta {
+      display: flex;
+      justify-content: space-between;
+      gap: var(--space-2);
+    }
+    .path-week-tag {
+      color: var(--color-brass);
+    }
+    .path-week-tag.is-free {
+      color: var(--color-pine);
+    }
+    .path-week-name {
+      margin-top: var(--space-2);
+      font-family: var(--font-display);
+      font-size: 24px;
+      font-weight: 400;
+      line-height: 1.2;
+    }
+    .path-days {
+      display: flex;
+      flex-direction: column;
+      margin: 18px 0 0;
+      padding: 0;
+      list-style: none;
+    }
+    .path-days li {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      min-height: 40px;
+      border-top: 1px solid var(--color-rule);
+    }
+    .path-day-n {
+      flex: none;
+      width: 22px;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--color-brass);
+    }
+    .path-day-title {
+      flex: 1 1 auto;
+      min-width: 0;
+      padding: 9px 0;
+      font-size: 15px;
+      line-height: 1.35;
+      color: var(--color-ink);
+    }
+    a.path-day-title {
+      color: var(--color-ink);
+      text-decoration: none;
+    }
+    a.path-day-title:hover {
+      color: var(--color-pine-2);
+      text-decoration: underline;
+      text-underline-offset: 0.2em;
+    }
+    .path-days .is-done .path-day-title {
+      color: var(--color-ink-2);
+    }
+    .path-days .is-today .path-day-title {
+      color: var(--color-pine);
+      font-weight: 600;
+    }
+    .path-day-mark {
+      flex: none;
+      box-sizing: border-box;
+      width: 10px;
+      height: 10px;
+    }
+    .is-done .path-day-mark,
+    .path-day-mark.is-done-mark {
+      background: var(--color-brass);
+    }
+    .is-today .path-day-mark,
+    .path-day-mark.is-today-mark {
+      border: 2px solid var(--color-pine);
+    }
+    .path-legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--space-2) 28px;
+      margin-top: 40px;
+      font-size: 13px;
+      color: var(--color-ink-2);
+    }
+    .path-legend span {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--space-2);
+    }
+    .path-legend .path-day-mark {
+      display: inline-block;
+    }
+    .path-again {
+      margin-top: var(--space-5);
+    }
+  </style>
+</head>
+<body>
+  <main class="path" id="path" data-view="day">
+    <a class="arrow-link meta back-link" id="back-link" href="#all">
+      <svg class="icon icon-12 icon-left" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M13.5 8h-11M6.5 4l-4 4 4 4" /></svg>
+      <span id="back-text">All 30 days</span>
+    </a>
+
+    <!-- One day. -->
+    <article id="day-view">
+      <p class="meta path-eyebrow"><span class="path-kind">The path</span><span aria-hidden="true">·</span><span id="day-of"></span></p>
+      <div class="path-squares" id="squares" role="img"></div>
+      <h1 class="path-title" id="day-title" tabindex="-1"></h1>
+      <div class="path-body" id="day-body"></div>
+
+      <section class="path-one" id="one" aria-labelledby="one-head">
+        <div>
+          <h2 class="meta meta-brass" id="one-head">Today’s one thing</h2>
+          <p class="path-one-text" id="one-text"></p>
+        </div>
+        <!-- Kind: line -->
+        <div id="one-line" hidden>
+          <label class="path-line-label" for="line-input" id="line-label"></label>
+          <textarea class="path-line" id="line-input" rows="2" maxlength="200" spellcheck="true"></textarea>
+          <p class="path-line-note">One line is enough. Only you see it, and on day 30 your lines become one page.</p>
+        </div>
+        <div class="path-one-actions" id="one-actions">
+          <a class="btn btn-primary" id="one-link" hidden></a>
+          <button type="button" class="btn btn-primary" id="one-keep" hidden>Keep this line</button>
+          <button type="button" class="btn btn-primary" id="one-done">Mark it done</button>
+        </div>
+        <div id="one-finished" hidden>
+          <p class="path-kept-line" id="one-kept-line" hidden></p>
+          <p class="path-done" role="status" id="one-done-text"></p>
+          <button type="button" class="btn-text" id="one-change" hidden>Change it</button>
+        </div>
+      </section>
+
+      <section class="path-book" id="book" aria-labelledby="book-head" hidden>
+        <h2 class="meta" id="book-head">Your book</h2>
+        <ol class="path-book-list" id="book-list"></ol>
+        <button type="button" class="btn btn-ghost path-again" id="again">Start the path again</button>
+      </section>
+
+      <nav class="path-foot" aria-label="Next day">
+        <span id="next-line"></span>
+        <span id="next-note">A new page opens each morning.</span>
+      </nav>
+    </article>
+
+    <!-- A day that comes with Supporter. -->
+    <article id="locked-view" hidden>
+      <p class="meta path-eyebrow"><span class="path-kind">The path</span><span aria-hidden="true">·</span><span id="locked-of"></span></p>
+      <h1 class="path-title" id="locked-title" tabindex="-1"></h1>
+      <p class="path-locked" id="locked-text">Days 8 to 30 come with Supporter. The first week is free for everyone, and blocking is the same whether you support or not.</p>
+      <div class="path-locked-actions">
+        <a class="btn btn-primary" id="locked-see" href="options.html#supporter">See Supporter</a>
+        <a class="btn btn-ghost" href="#all">All 30 days</a>
+      </div>
+    </article>
+
+    <!-- All thirty. -->
+    <section id="all-view" aria-labelledby="all-title" hidden>
+      <p class="meta path-eyebrow"><span class="path-kind">The path</span></p>
+      <h1 class="path-title" id="all-title" tabindex="-1">Thirty days, a few minutes each.</h1>
+      <p class="path-lede" id="all-lede">One short page a day from someone who has been where you are, and one small thing to do. Days 1 to 7 are free. Days 8 to 30 come with Supporter.</p>
+      <div class="path-weeks" id="weeks"></div>
+      <p class="path-legend">
+        <span><span class="path-day-mark is-done-mark" aria-hidden="true"></span>Done</span>
+        <span><span class="path-day-mark is-today-mark" aria-hidden="true"></span>Today</span>
+        <span>A new page opens each morning. Missing a day is fine: it waits for you.</span>
+      </p>
+      <section class="path-book" id="all-book" aria-labelledby="all-book-head" hidden>
+        <h2 class="meta" id="all-book-head">Your book so far</h2>
+        <ol class="path-book-list" id="all-book-list"></ol>
+      </section>
+    </section>
+  </main>
+
+  <script src="shared/supporter.js"></script>
+  <script src="shared/path.js"></script>
+  <script src="shared/path-days.js"></script>
+  <!-- Days 8 to 30: empty in the open-source build (extras/README.md). -->
+  <script src="extras/path-days.js"></script>
+  <script src="path-page.js"></script>
+</body>
+</html>

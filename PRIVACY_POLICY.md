@@ -74,6 +74,11 @@ BlockNSFW stores data locally in your browser extension storage on your device. 
 - Manual report and community story cooldown data, daily limits, report keys,
   a cached copy of the community stories you have viewed, which stories you
   have liked, and a locally generated device identifier
+- Your progress on the path (which days you have read and finished), and the
+  one-line answers you write there
+- Your evening check-ins (how you slept, your stress, time alone, mood and
+  whether you moved), and whether each day had a hard moment
+- Your supporter code, if you enter one
 
 This locally stored information remains on your device unless you remove it, reset extension data, or uninstall the extension, except for entries that are automatically trimmed or expire as described below.
 
@@ -234,6 +239,34 @@ browser cache.
 Two settings send a request to an address you typed in yourself: testing that
 a custom blocked-page address is reachable, and testing that a DNS resolver
 answers. These only happen when you press the button.
+
+### 10. Checking a Supporter Code
+
+Supporter is optional, and blocking is the same with or without it. If you
+buy it, the payment page is run by Polar (polar.sh), our payment provider, and
+what you give there is covered by Polar's own privacy policy. BlockNSFW never
+sees your payment details.
+
+- When: when you enter a code from the store in Settings › Supporter and
+  press Unlock, and then at most about once a day, when you open the
+  extension, so that a monthly or yearly plan that has ended closes the extras
+- Where: `api.polar.sh` (or `sandbox-api.polar.sh` while we test with Polar's
+  test store)
+- Data involved: the code and our store's identifier, sent without cookies.
+  Nothing about your browsing, your check-ins or your path is sent
+- The code is kept on your device. If the check can't reach the store, the
+  extras simply stay as they were
+- The "Open your purchases" and "Manage or cancel your plan" links open
+  Polar's purchases page (`polar.sh`, or `sandbox.polar.sh` while testing) in
+  a new tab, only when you click them
+- A code the developer makes by hand (one that starts with `BN1-`) is checked
+  on your device and is never sent anywhere
+
+The Supporter extras themselves (days 8 to 30 of the path, the evening
+check-in and Your good days) are not open source, unlike the rest of
+BlockNSFW. They ship inside the
+extension like everything else, never decide what is blocked, make no network
+requests, and keep what they store on your device, as described above.
 
 ## How We Use Data
 

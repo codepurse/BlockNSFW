@@ -43,7 +43,7 @@ function load({ version = '1.8.0', stored = {} } = {}) {
     hasAttribute: (n) => n in attrs
   };
   const store = Object.assign({}, stored);
-  const cards = { 'dev-message-card': card(), 'whats-new-card': card() };
+  const cards = { 'release-card': card(), 'dev-message-card': card(), 'whats-new-card': card() };
   const meta = element();
   // Attributes as they stood once the <head> script had run, before any
   // listener: what the first paint sees.
@@ -144,4 +144,23 @@ test('every change in What’s New is a headline row', () => {
   const hidden = card.slice(card.indexOf('class="wn-details"')).match(/<li>/g) || [];
   assert.ok(more, 'expected a "Show N more" toggle');
   assert.equal(Number(more[1]), hidden.length);
+});
+
+test('on 2.0.x the 2.0 band shows in full, and its × folds it for good', () => {
+  const first = load({ version: '2.0.0' });
+  assert.ok(!('data-release-read' in first.atFirstPaint));
+  assert.ok(!('data-release-gone' in first.atFirstPaint));
+  first.cards['release-card'].parts['[data-welcome="ack"]'].click();
+  assert.ok('data-release-read' in first.attrs);
+  assert.equal(first.store.pblocker_release_card_read, '2.0');
+  assert.ok(first.cards['release-card'].parts['[data-welcome="open"]'].focused);
+  const later = load({ version: '2.0.3', stored: first.store });
+  assert.ok('data-release-read' in later.atFirstPaint, 'still folded on a 2.0.x patch');
+});
+
+test('the 2.0 band is gone on 1.x and from 2.1 on', () => {
+  assert.ok('data-release-gone' in load({ version: '1.9.0' }).atFirstPaint);
+  assert.ok('data-release-gone' in load({ version: '2.1.0' }).atFirstPaint);
+  assert.ok('data-release-gone' in load({ version: '2.10.0' }).atFirstPaint);
+  assert.ok(!('data-release-gone' in load({ version: '2.0.1' }).atFirstPaint));
 });

@@ -1,0 +1,321 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>BlockNSFW 2.0</title>
+  <script src="ui/scheme.js"></script>
+  <link rel="stylesheet" href="ui/tokens.css" />
+  <link rel="stylesheet" href="ui/components.css" />
+  <style>
+    /* 2.0, said once. The background opens this page a single time, for
+       someone updating from 1.x (background.js, announceRelease); after that
+       it's a link in Settings › What's new.
+
+       The numeral's point is the brass square from every drawing in the
+       extension, the thing held at the door, and under it the same threshold
+       drawing as the section headers in Settings. Then the six things that
+       are new, each with where to find it. Fixed type; past 100rem the page
+       widens, and past 2200px it steps up in size as a whole. */
+    body {
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+    }
+    .release {
+      box-sizing: border-box;
+      width: 100%;
+      max-width: 70rem;
+      margin: auto;
+      padding: var(--space-6) var(--space-7) var(--space-7);
+    }
+    @media (min-width: 100rem) {
+      .release {
+        max-width: min(120rem, 80vw);
+      }
+    }
+    @media (min-width: 137.5rem) {
+      .release {
+        zoom: 1.25;
+        max-width: min(120rem, 64vw);
+      }
+    }
+    @media (min-width: 187.5rem) {
+      .release {
+        zoom: 1.5;
+        max-width: min(120rem, 53vw);
+      }
+    }
+    @media (max-width: 40rem) {
+      .release {
+        padding-inline: var(--space-4);
+      }
+    }
+
+    .release-top {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: var(--space-2) var(--space-4);
+      padding-bottom: var(--space-4);
+      border-bottom: 1px solid var(--color-rule-2);
+    }
+    .release-name {
+      font-family: var(--font-display);
+      font-size: 22px;
+      letter-spacing: -0.01em;
+    }
+
+    .release-cover {
+      display: grid;
+      gap: var(--space-7);
+      align-items: center;
+      padding-block: 72px 64px;
+    }
+    @media (min-width: 60rem) {
+      .release-cover {
+        grid-template-columns: minmax(0, 34rem) minmax(0, 1fr);
+        column-gap: 64px;
+      }
+    }
+    .release-kicker {
+      color: var(--color-brass);
+    }
+    .release-title {
+      margin-top: var(--space-4);
+      font-family: var(--font-display);
+      font-size: clamp(40px, 5vw, 60px);
+      font-weight: 400;
+      line-height: 1.04;
+      letter-spacing: -0.025em;
+      text-wrap: balance;
+    }
+    .release-title:focus {
+      outline: none;
+    }
+    .release-lede {
+      margin-top: 22px;
+      font-size: 19px;
+      color: var(--color-ink-2);
+    }
+    .release-actions {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: var(--space-3) 20px;
+      margin-top: var(--space-6);
+    }
+    .release-actions .btn {
+      min-height: 48px;
+      padding-inline: var(--space-5);
+      font-size: 15px;
+    }
+    .release-actions .link {
+      font-size: 15px;
+    }
+
+    /* The numeral and its drawing stay one size together; on a wide screen
+       they sit in the middle of their column rather than the drawing
+       stretching across it. */
+    .release-mark {
+      width: 100%;
+      max-width: 30rem;
+      margin: 0;
+      justify-self: center;
+    }
+    .release-numeral {
+      display: flex;
+      align-items: baseline;
+      font-family: var(--font-display);
+      font-size: clamp(150px, 19vw, 280px);
+      font-weight: 300;
+      line-height: 0.82;
+      letter-spacing: -0.04em;
+    }
+    .release-point {
+      display: inline-block;
+      width: 0.09em;
+      height: 0.09em;
+      margin: 0 0.05em 0 0.03em;
+      background: var(--color-brass);
+    }
+    .release-drawing {
+      display: block;
+      width: 100%;
+      height: auto;
+      margin-top: 28px;
+      overflow: visible;
+    }
+    .release-drawing path {
+      fill: none;
+    }
+    .release-drawing .arrivals {
+      stroke: var(--color-rule-2);
+    }
+    .release-drawing .door {
+      stroke: var(--color-rule-3);
+      stroke-width: 1.5;
+    }
+    .release-drawing .through {
+      stroke: var(--color-pine-2);
+      stroke-width: 1.5;
+    }
+    .release-drawing .held {
+      fill: var(--color-brass);
+    }
+    .release-caption {
+      margin-top: 14px;
+    }
+
+    .release-new {
+      padding-top: 28px;
+      border-top: 1px solid var(--color-rule-2);
+    }
+    .release-list {
+      display: grid;
+      gap: 0 40px;
+      margin-top: var(--space-5);
+    }
+    @media (min-width: 40rem) {
+      .release-list {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+    @media (min-width: 60rem) {
+      .release-list {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+    }
+    .release-item {
+      padding: var(--space-5) 0 28px;
+      border-bottom: 1px solid var(--color-rule);
+    }
+    .release-item .index {
+      color: var(--color-brass);
+    }
+    .release-item h3 {
+      margin-top: var(--space-2);
+      font-family: var(--font-display);
+      font-size: 26px;
+      font-weight: 400;
+      line-height: 1.2;
+    }
+    .release-item p {
+      margin-top: var(--space-2);
+      color: var(--color-ink-2);
+    }
+    .release-where {
+      display: inline-block;
+      margin-top: var(--space-3);
+      font-size: 14px;
+    }
+    .release-where-text {
+      color: var(--color-ink-2);
+    }
+    .release-also {
+      max-width: 46rem;
+      margin-top: var(--space-5);
+      color: var(--color-ink-2);
+    }
+
+    .release-foot {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: var(--space-3) var(--space-5);
+      margin-top: 56px;
+      padding-top: 20px;
+      border-top: 1px solid var(--color-rule);
+    }
+    .release-thanks {
+      font-family: var(--font-display);
+      font-style: italic;
+      font-size: 22px;
+    }
+    .release-note {
+      font-size: 13px;
+      color: var(--color-ink-2);
+    }
+  </style>
+</head>
+<body>
+  <main class="release">
+    <header class="release-top">
+      <p class="release-name">BlockNSFW</p>
+      <p class="meta">Version 2.0 · October 2026</p>
+    </header>
+
+    <section class="release-cover" aria-labelledby="release-head">
+      <div>
+        <p class="meta release-kicker">The biggest update since BlockNSFW began</p>
+        <h1 class="release-title" id="release-head" tabindex="-1">Built for the hard moment.</h1>
+        <p class="release-lede">Until now, BlockNSFW closed the door. 2.0 is about the moment before it: the pull, the pause, and the choice you make. Here is what’s new, and where to find it.</p>
+        <div class="release-actions">
+          <a class="btn btn-primary" href="options.html#gateways-group">Start with Gateways</a>
+          <a class="link" href="changelog.html">Read every change</a>
+        </div>
+      </div>
+      <figure class="release-mark">
+        <p class="release-numeral" role="img" aria-label="2.0"><span aria-hidden="true">2</span><span class="release-point" aria-hidden="true"></span><span aria-hidden="true">0</span></p>
+        <svg class="release-drawing" viewBox="0 0 460 84" aria-hidden="true" focusable="false">
+          <path class="arrivals" d="M460 12H262M460 30H262M460 66H262M460 84H262" />
+          <path class="door" d="M250 0V84" />
+          <path class="through" d="M460 48H40" />
+          <rect class="held" x="24" y="41" width="14" height="14" />
+        </svg>
+        <figcaption class="meta release-caption">Everything arrives at the door. What matters is held.</figcaption>
+      </figure>
+    </section>
+
+    <section class="release-new" aria-labelledby="new-head">
+      <h2 class="meta" id="new-head">What’s new in 2.0</h2>
+      <ol class="release-list">
+        <li class="release-item">
+          <span class="meta index">01</span>
+          <h3>Gateways</h3>
+          <p>A ten-second pause in front of the sites where it tends to start, like Instagram Explore or Reddit. Closed in your hard hours.</p>
+          <a class="link release-where" href="options.html#gateways-group">Protection › Gateways</a>
+        </li>
+        <li class="release-item">
+          <span class="meta index">02</span>
+          <h3>The Pact</h3>
+          <p>Choose a wait, from 15 minutes to 3 days. Every change that loosens protection waits it out, even with your PIN.</p>
+          <a class="link release-where" href="options.html#pact-group">Security › The Pact</a>
+        </li>
+        <li class="release-item">
+          <span class="meta index">03</span>
+          <h3>A friend holds the key</h3>
+          <p>Someone you trust keeps a code on their phone. Only that code lets a change through before the wait is over.</p>
+          <a class="link release-where" href="options.html#pact-group">Security › The Pact</a>
+        </li>
+        <li class="release-item">
+          <span class="meta index">04</span>
+          <h3>Storm Mode and risk hours</h3>
+          <p>For a hard few hours, or the same hours every night, every layer goes to its strongest and nothing can be loosened.</p>
+          <a class="link release-where" href="options.html#storm-group">Security › Storm Mode</a>
+        </li>
+        <li class="release-item">
+          <span class="meta index">05</span>
+          <h3>Your own words</h3>
+          <p>Your plan, a note to yourself and someone to call, written on a good day and shown first on a bad one.</p>
+          <a class="link release-where" href="options.html#own-words-group">Customization › Your own words</a>
+        </li>
+        <li class="release-item">
+          <span class="meta index">06</span>
+          <h3>Your week</h3>
+          <p>Every Sunday evening, the week read back: each time you turned back at the door, drawn day by day.</p>
+          <a class="link release-where" href="week.html">Open Your week</a>
+        </li>
+      </ol>
+      <p class="release-also">And: a page for the morning after a slip, days kept in Statistics, your PIN stored safely, and every page redrawn, in light and dark.</p>
+    </section>
+
+    <footer class="release-foot">
+      <p class="release-thanks">Thank you for using BlockNSFW.</p>
+      <p class="release-note">This page opens once, after the update. It’s always in Settings › What’s new.</p>
+    </footer>
+  </main>
+</body>
+</html>

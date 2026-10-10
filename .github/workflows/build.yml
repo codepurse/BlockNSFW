@@ -18,12 +18,12 @@ jobs:
       - name: Build Chrome bundle
         shell: pwsh
         run: |
-          powershell -ExecutionPolicy Bypass -File .\build-chrome.ps1
+          powershell -ExecutionPolicy Bypass -File .\build-chrome.ps1 -OpenSource
 
       - name: Build Firefox bundle
         shell: pwsh
         run: |
-          powershell -ExecutionPolicy Bypass -File .\build-firefox.ps1
+          powershell -ExecutionPolicy Bypass -File .\build-firefox.ps1 -OpenSource
 
       - name: Install npm dependencies
         shell: pwsh
