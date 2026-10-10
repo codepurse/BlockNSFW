@@ -20,6 +20,9 @@ try {
     self.importScripts('shared/totp.js');
     self.importScripts('shared/pact.js');
     self.importScripts('shared/boost.js');
+    self.importScripts('shared/moments.js');
+    self.importScripts('shared/gateways.js');
+    self.importScripts('shared/ledger.js');
   }
 } catch (_) {
   // shared/hostname.js or shared/host-keywords.js could not be loaded
@@ -4464,3 +4467,34 @@ if (browserAPI.runtime.onStartup) {
 }
 boostReconcile().catch(e => console.warn('BlockNSFW: boost check failed', e));
 ensureFirstSeen().catch(() => {});
+
+// --- The long record (shared/ledger.js) ---------------------------------------
+//
+// The hard moments are kept in detail for about a month. Once a day the
+// settled days are written down as plain counts, so Your month and Your year
+// can tell a whole month or year after the detail is gone. It reads only what
+// is already kept on the device and writes nothing but those counts.
+const LEDGER_ALARM = 'pblocker-ledger';
+
+async function ledgerRollup() {
+  const { Ledger, Moments, Gateways } = self;
+  if (!Ledger || !Moments || !Gateways) return;
+  const now = Date.now();
+  const sources = await Ledger.readSources((keys) => browserAPI.storage.local.get(keys), Moments, Gateways, now);
+  const stored = await browserAPI.storage.local.get(Ledger.KEY);
+  const { ledger, changed } = Ledger.rollup(stored[Ledger.KEY], sources, now);
+  if (changed) await browserAPI.storage.local.set({ [Ledger.KEY]: ledger });
+}
+
+async function ensureLedgerAlarm() {
+  if (!browserAPI.alarms) return;
+  const existing = await browserAPI.alarms.get(LEDGER_ALARM);
+  if (!existing) browserAPI.alarms.create(LEDGER_ALARM, { delayInMinutes: 1, periodInMinutes: 12 * 60 });
+}
+
+if (browserAPI.alarms && browserAPI.alarms.onAlarm) {
+  browserAPI.alarms.onAlarm.addListener((alarm) => {
+    if (alarm && alarm.name === LEDGER_ALARM) ledgerRollup().catch(e => console.warn('BlockNSFW: long record failed', e));
+  });
+}
+ensureLedgerAlarm().catch(() => {});

@@ -78,6 +78,13 @@ BlockNSFW stores data locally in your browser extension storage on your device. 
   one-line answers you write there
 - Your evening check-ins (how you slept, your stress, time alone, mood and
   whether you moved), and whether each day had a hard moment
+- A long record of the last 400 days, one line per day: whether the day was
+  kept, how many times you turned back at a gateway, waited a moment out or
+  slipped, how many pages were held, and the hours the hard moments came.
+  It holds counts and hours only, never a site or a page
+- A photo you choose for the hard moment, if you choose one, shrunk on your
+  device
+- The colours of a Supporter look, if you choose one
 - Your supporter code, if you enter one
 
 This locally stored information remains on your device unless you remove it, reset extension data, or uninstall the extension, except for entries that are automatically trimmed or expire as described below.
@@ -263,8 +270,9 @@ sees your payment details.
   on your device and is never sent anywhere
 
 The Supporter extras themselves (days 8 to 30 of the path, the evening
-check-in and Your good days) are not open source, unlike the rest of
-BlockNSFW. They ship inside the
+check-in, Your good days, When it's hardest, Your month and Your year, the
+photo for the hard moment and Supporter looks) are not open source, unlike
+the rest of BlockNSFW. They ship inside the
 extension like everything else, never decide what is blocked, make no network
 requests, and keep what they store on your device, as described above.
 

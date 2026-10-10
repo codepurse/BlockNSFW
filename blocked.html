@@ -334,6 +334,16 @@
       gap: var(--space-2);
       margin-bottom: var(--space-4);
     }
+    /* A photo chosen for this moment, above the words: as it is, never
+       cropped, and no taller than a few lines of them. */
+    .moment-photo {
+      display: block;
+      width: auto;
+      max-width: 100%;
+      max-height: 15rem;
+      margin-bottom: var(--space-4);
+      border-radius: var(--radius-xs);
+    }
     .moment-plan {
       font-size: 17px;
       line-height: 1.5;
@@ -403,6 +413,7 @@
            Filled by blocked.js; hidden until there is something to show. -->
       <section class="moment" id="moment" aria-labelledby="moment-head" hidden>
         <h2 class="visually-hidden" id="moment-head">For this moment</h2>
+        <img class="moment-photo" id="moment-photo" alt="A photo you chose for this moment" hidden />
         <div class="moment-words" id="moment-words" hidden>
           <p class="meta meta-brass moment-label">For this moment, in your words</p>
           <p class="moment-plan" id="moment-plan" hidden></p>

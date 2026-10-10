@@ -86,7 +86,7 @@
     const since = s.supporter && s.since ? formatShort(s.since) : '';
     sub.textContent = s.supporter
       ? (since ? `Thank you · since ${since}` : 'Thank you')
-      : 'The path and your good days';
+      : 'The path, your month and more';
     mark.hidden = !s.supporter;
   }
 
@@ -140,8 +140,18 @@
 
   async function renderStatus(opts) {
     let s = { supporter: false };
-    try { s = await Supporter.status(browserAPI.storage.local, opts); } catch (_) {}
+    let answered = false;
+    try {
+      s = await Supporter.status(browserAPI.storage.local, opts);
+      answered = true;
+    } catch (_) {}
+    // A Supporter look (ui/scheme.js) ends with the plan; only on a clear answer.
+    const scheme = self.UiScheme;
+    if (answered && !s.supporter && scheme && scheme.getLook()) scheme.setLook(null).catch(() => {});
     renderNav(s);
+    // The extras with a place in Settings (extras/looks.js, extras/photo.js)
+    // follow the answer.
+    document.dispatchEvent(new CustomEvent('supporter-status', { detail: { supporter: s.supporter === true } }));
     $('supporter-recheck-row').hidden = !((await isDev()) && s.kind === 'store');
     $('supporter-manage-hint').hidden = !(s.supporter && s.kind === 'store');
     $('supporter-code-form').hidden = s.supporter;

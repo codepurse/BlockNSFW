@@ -1,0 +1,332 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>When it’s hardest · BlockNSFW</title>
+  <script src="ui/scheme.js"></script>
+  <link rel="stylesheet" href="ui/tokens.css" />
+  <link rel="stylesheet" href="ui/components.css" />
+  <style>
+    /* When it's hardest: a Supporter extra (extras/hardest.js). This page is
+       its frame: the hard moments of the last year as seven weekdays by 24
+       hours, darker where more of them came, the two hardest hours ringed in
+       brass, three numbers, and risk hours to match. */
+    body {
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+    }
+    .hardest {
+      box-sizing: border-box;
+      width: 100%;
+      max-width: 70rem;
+      margin: auto;
+      padding: clamp(var(--space-6), 9vh, 104px) var(--space-7) var(--space-7);
+    }
+    @media (max-width: 40rem) {
+      .hardest {
+        padding-inline: var(--space-4);
+      }
+    }
+    .back-link {
+      gap: 6px;
+      padding: var(--space-1) 0;
+    }
+    .hardest-eyebrow {
+      margin-top: var(--space-6);
+      color: var(--color-pine);
+    }
+    .hardest-title {
+      max-width: 46rem;
+      margin-top: var(--space-4);
+      font-family: var(--font-display);
+      font-size: clamp(34px, 4.5vw, 52px);
+      font-weight: 400;
+      line-height: 1.08;
+      letter-spacing: -0.02em;
+      text-wrap: balance;
+    }
+    .hardest-title:focus {
+      outline: none;
+    }
+    .hardest-lede {
+      max-width: 38rem;
+      margin-top: 18px;
+      font-size: 18px;
+      color: var(--color-ink-2);
+    }
+
+    /* The map: a weekday to a row, an hour to a column. */
+    .hardest-figure {
+      margin: var(--space-7) 0 0;
+    }
+    .heat-grid {
+      display: grid;
+      grid-template-columns: 2.75rem repeat(24, minmax(0, 1fr));
+      gap: 3px;
+      max-width: 60rem;
+    }
+    .heat-hour,
+    .heat-day {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      letter-spacing: 0.06em;
+      color: var(--color-ink-3);
+      white-space: nowrap;
+    }
+    .heat-hour {
+      overflow: visible;
+      padding-bottom: 2px;
+    }
+    .heat-day {
+      align-self: center;
+      font-size: 11px;
+      text-transform: uppercase;
+      color: var(--color-ink-2);
+    }
+    .heat-cell {
+      position: relative;
+      aspect-ratio: 1;
+      border: 1px solid var(--color-rule);
+      border-radius: 1px;
+    }
+    .heat-cell::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: var(--color-pine);
+      opacity: 0;
+    }
+    .heat-cell.l1::before { opacity: 0.22; }
+    .heat-cell.l2::before { opacity: 0.45; }
+    .heat-cell.l3::before { opacity: 0.7; }
+    .heat-cell.l4::before { opacity: 1; }
+    .heat-cell.l1,
+    .heat-cell.l2,
+    .heat-cell.l3,
+    .heat-cell.l4 {
+      border-color: transparent;
+    }
+    .heat-cell.is-hard {
+      border-color: var(--color-brass);
+    }
+    @media (max-width: 30rem) {
+      .heat-grid {
+        grid-template-columns: 2rem repeat(24, minmax(0, 1fr));
+        gap: 2px;
+      }
+      .heat-hour {
+        font-size: 9px;
+      }
+    }
+    .hardest-legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px 28px;
+      margin-top: 20px;
+      font-size: 13px;
+      color: var(--color-ink-2);
+    }
+    .hardest-legend span {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--space-2);
+    }
+    .legend-scale {
+      display: inline-flex;
+      gap: 2px;
+    }
+    .legend-scale i {
+      position: relative;
+      width: 10px;
+      height: 10px;
+      border: 1px solid var(--color-rule);
+    }
+    .legend-scale i::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: var(--color-pine);
+    }
+    .legend-scale i:nth-child(1)::before { opacity: 0.22; }
+    .legend-scale i:nth-child(2)::before { opacity: 0.45; }
+    .legend-scale i:nth-child(3)::before { opacity: 0.7; }
+    .legend-scale i:nth-child(4)::before { opacity: 1; }
+    .legend-hard {
+      width: 10px;
+      height: 10px;
+      border: 1px solid var(--color-brass);
+    }
+
+    .hardest-numbers {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+      margin-top: var(--space-7);
+      border-top: 1px solid var(--color-rule-2);
+      border-bottom: 1px solid var(--color-rule);
+    }
+    .hardest-numbers > div {
+      padding: 20px 24px;
+      border-left: 1px solid var(--color-rule);
+    }
+    .hardest-numbers > div:first-child {
+      padding-left: 0;
+      border-left: 0;
+    }
+    .hardest-numbers dt {
+      font-size: 15px;
+      font-weight: 500;
+    }
+    .hardest-number {
+      margin-top: 6px;
+      font-family: var(--font-display);
+      font-size: 44px;
+      line-height: 1;
+      color: var(--color-brass);
+    }
+    .hardest-since {
+      margin-top: 6px;
+      font-family: var(--font-display);
+      font-size: 24px;
+      line-height: 1.2;
+    }
+    @media (max-width: 36rem) {
+      .hardest-numbers {
+        grid-template-columns: minmax(0, 1fr);
+      }
+      .hardest-numbers > div,
+      .hardest-numbers > div:first-child {
+        padding: 16px 0;
+        border-left: 0;
+      }
+      .hardest-numbers > div + div {
+        border-top: 1px solid var(--color-rule);
+      }
+    }
+    .hardest-try {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: var(--space-5) var(--space-7);
+      margin-top: 40px;
+      padding: 28px 32px;
+      border: 1px solid var(--color-rule);
+      border-radius: var(--radius-xs);
+    }
+    @media (max-width: 40rem) {
+      .hardest-try {
+        padding: var(--space-5);
+      }
+    }
+    .hardest-try-body {
+      flex: 1 1 26rem;
+      min-width: 0;
+    }
+    .hardest-try-text {
+      max-width: 38rem;
+      margin-top: 10px;
+      font-family: var(--font-display);
+      font-size: 24px;
+      line-height: 1.35;
+    }
+    .hardest-try-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--space-3);
+    }
+    .hardest-try-actions .btn {
+      min-height: 48px;
+      padding-inline: var(--space-5);
+      font-size: 15px;
+    }
+    .hardest-try-done {
+      font-family: var(--font-display);
+      font-size: 20px;
+      color: var(--color-pine);
+    }
+    .hardest-note {
+      max-width: 40rem;
+      margin-top: 40px;
+      font-size: 14px;
+      color: var(--color-ink-2);
+    }
+    .hardest-locked-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--space-3);
+      margin-top: var(--space-6);
+    }
+    .hardest-locked-actions .btn {
+      min-height: 48px;
+      padding-inline: var(--space-5);
+      font-size: 15px;
+    }
+  </style>
+</head>
+<body>
+  <main class="hardest">
+    <a class="arrow-link meta back-link" href="stats.html">
+      <svg class="icon icon-12 icon-left" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M13.5 8h-11M6.5 4l-4 4 4 4" /></svg>
+      Statistics
+    </a>
+    <p class="meta hardest-eyebrow">When it’s hardest</p>
+    <h1 class="hardest-title" id="h-head" tabindex="-1"></h1>
+    <p class="hardest-lede" id="h-lede"></p>
+
+    <div id="h-body" hidden>
+      <figure class="hardest-figure">
+        <div class="heat-grid" id="h-grid" role="img"></div>
+        <figcaption class="hardest-legend">
+          <span><span class="legend-scale" aria-hidden="true"><i></i><i></i><i></i><i></i></span>Fewer to more hard moments</span>
+          <span><span class="legend-hard" aria-hidden="true"></span>The two hardest hours</span>
+        </figcaption>
+      </figure>
+
+      <dl class="hardest-numbers">
+        <div>
+          <dt>Hard moments</dt>
+          <dd class="hardest-number tnum" id="h-total">0</dd>
+        </div>
+        <div>
+          <dt>In the two hardest hours</dt>
+          <dd class="hardest-number tnum" id="h-in">0</dd>
+        </div>
+        <div>
+          <dt>Counted since</dt>
+          <dd class="hardest-since" id="h-since"></dd>
+        </div>
+      </dl>
+
+      <section class="hardest-try" id="h-try" aria-labelledby="h-try-head" hidden>
+        <div class="hardest-try-body">
+          <h2 class="meta meta-brass" id="h-try-head">One thing to try</h2>
+          <p class="hardest-try-text" id="h-try-text"></p>
+        </div>
+        <div class="hardest-try-actions" id="h-try-actions">
+          <button type="button" class="btn btn-primary" id="h-try-go" hidden></button>
+          <a class="btn btn-primary" id="h-try-settings" href="options.html#risk-group" hidden>Open risk hours</a>
+        </div>
+        <p class="hardest-try-done" id="h-try-done" role="status" hidden></p>
+      </section>
+
+      <p class="hardest-note">A hard moment is a time you stopped at a gateway’s door, waited one out, or slipped. These are patterns in your own days, not causes, and they get clearer with time. Nothing here leaves this device.</p>
+    </div>
+
+    <div class="hardest-locked-actions" id="h-locked" hidden>
+      <a class="btn btn-primary" href="options.html#supporter">See Supporter</a>
+    </div>
+  </main>
+
+  <script src="shared/supporter.js"></script>
+  <script src="shared/moments.js"></script>
+  <script src="shared/gateways.js"></script>
+  <script src="shared/boost.js"></script>
+  <script src="shared/weekly.js"></script>
+  <script src="shared/ledger.js"></script>
+  <!-- When it's hardest: empty in the open-source build (extras/README.md). -->
+  <script src="extras/hardest.js"></script>
+  <script src="hardest.js"></script>
+</body>
+</html>

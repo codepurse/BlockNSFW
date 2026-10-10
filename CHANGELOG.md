@@ -9,8 +9,9 @@ Pact** makes every change that loosens protection wait, and lets a friend you
 trust hold the key. **Storm Mode** and **risk hours** raise everything to its
 strongest when it's hardest. The blocked page shows **your own words** first.
 And every page is redrawn in monolab's design system, in light and dark.
-**Supporter**, optional, adds a 30-day path and an evening check-in for going
-further; protection stays the same for everyone.
+**Supporter**, optional, adds a 30-day path, an evening check-in, a letter
+every month and more for going further; protection stays the same for
+everyone.
 
 A PIN you set yourself stops nobody, because you know it. A wait longer than
 the urge works even when you know every PIN.
@@ -100,7 +101,7 @@ the urge works even when you know every PIN.
 - **Supporter** (Settings › Supporter), optional, for this browser extension.
   Protection is the same for everyone: paying never makes blocking stronger
   or weaker, and nothing that's free today will ever move behind it. Support
-  pays for what comes next, and adds three things for going further:
+  pays for what comes next, and adds seven things for going further:
   - **The path.** Thirty short pages, one a day, each with one small thing to
     do: a step to take, a line to write, or a page to open. Four weeks:
     seeing it, changing the setting, the inside work, and the life after. A
@@ -117,6 +118,24 @@ the urge works even when you know every PIN.
     with one thing to try. It needs 14 evenings, at least three hard and five
     calm, and says how many more until then. These are patterns in one
     person's days, never causes, and the page says so.
+  - **When it's hardest.** Every hard moment of the last year laid out as
+    seven weekdays by 24 hours, darker where more of them came: the two hours
+    it tends to get hard, ringed in brass, the weekday that stands out, and
+    risk hours to match in one tap (only ever widening the ones set now).
+  - **Your month and your year.** A letter on the morning after each month
+    ends, like Your week: how many days were kept, the times you turned back,
+    the moments waited out, set on the month's calendar beside the month
+    before, with one thing to try. The popup marks it New until it's read.
+    Your year puts every day of a year on one calendar, a month to a row,
+    with the longest run.
+  - **A photo for the hard moment** (Settings › Your own words). Someone or
+    something worth staying for, shown on the blocked page above your words.
+    It is shrunk on the device and never leaves it; it stays after a plan
+    ends, and removing it never needs Supporter.
+  - **Supporter looks** (Settings › Appearance). True black for dark, and an
+    accent (Pine, Ink, Plum or Graphite) on every BlockNSFW page. Every
+    accent keeps text at 4.5:1 or better, light and dark. Looks go back to
+    plain when a plan ends.
 
   Pay monthly, yearly or once for life; yearly is chosen first. Payment goes
   through Polar, whose receipt links to your purchases, where the code is
@@ -455,10 +474,16 @@ the urge works even when you know every PIN.
   Signed `BN1-` codes (ECDSA P-256) are checked on the device; the signing
   key lives outside both repositories.
 - **The Supporter extras are not open source.** Days 8 to 30 of the path, the
-  check-in and Your good days live in a private repository, checked out at
+  check-in, Your good days, When it's hardest, Your month and Your year, the
+  photo picker and the looks live in a private repository, checked out at
   `extras-private/` (ignored here), and the build scripts copy them over the
-  empty stand-ins in `extras/` (`extras/README.md`). `-Zip` refuses to package without them; `-OpenSource`
-  builds without them on purpose. Everything that protects stays MIT and in
+  empty stand-ins in `extras/` (`extras/README.md`). `-Zip` refuses to
+  package without them; `-OpenSource` builds without them on purpose.
+  What they draw on stays open: `shared/ledger.js` is the long record (one
+  line of counts per day, rolled up once a day by `background.js`, 400 days
+  kept), `ui/scheme.js` lays a kept look over the tokens (colour tokens with
+  plain colour values only), and `blocked.js` shows a kept photo
+  (`Moments.photoSrc` takes plain JPEG, PNG or WebP only). Everything that protects stays MIT and in
   this repository. `shared/path-days.js` keeps days 1 to 7 and the titles of
   the rest, and `add()`s the rest from the extra. The blocked page loads no
   extra: all five designs stay free and open source.

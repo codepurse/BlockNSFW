@@ -26,6 +26,11 @@
   var SLIPS_KEY = 'pblocker_slips';
   var KEPT_KEY = 'pblocker_kept_moments';
   var FIRST_SEEN_KEY = 'pblocker_first_seen';
+  // A photo for the hard moment, shown above the words on the blocked page.
+  // Chosen in Settings (a Supporter extra), shrunk there, and kept here as a
+  // data: URL: { src, at }. It stays on the device.
+  var PHOTO_KEY = 'pblocker_moment_photo';
+  var PHOTO_MAX = 1500000;
   var DAY = 24 * 60 * 60 * 1000;
   var WINDOW_DAYS = 30;
   var LIMITS = { plan: 400, note: 600, name: 60, phone: 32 };
@@ -82,6 +87,12 @@
   function hasWords(words) {
     var w = normalizeWords(words);
     return !!(w.plan || w.note || w.person.name || w.person.phone);
+  }
+
+  // The photo's src, or '' when there is none or it isn't a plain image.
+  function photoSrc(raw) {
+    var src = raw && typeof raw === 'object' && typeof raw.src === 'string' ? raw.src : '';
+    return src.length <= PHOTO_MAX && /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+\/]+=*$/.test(src) ? src : '';
   }
 
   // A tel: link only for something that is plainly a phone number.
@@ -235,6 +246,9 @@
 
   var exported = {
     WORDS_KEY: WORDS_KEY,
+    PHOTO_KEY: PHOTO_KEY,
+    PHOTO_MAX: PHOTO_MAX,
+    photoSrc: photoSrc,
     SLIPS_KEY: SLIPS_KEY,
     KEPT_KEY: KEPT_KEY,
     FIRST_SEEN_KEY: FIRST_SEEN_KEY,

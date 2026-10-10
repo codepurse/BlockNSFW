@@ -1,0 +1,456 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Your month · BlockNSFW</title>
+  <script src="ui/scheme.js"></script>
+  <link rel="stylesheet" href="ui/tokens.css" />
+  <link rel="stylesheet" href="ui/components.css" />
+  <style>
+    /* Your month and Your year: a Supporter extra (extras/month.js). This
+       page is its frame, set like Your week: a headline that says how it
+       went, the month on one calendar (a brass square for a day kept), three
+       numbers beside the month before, one thing to try, a closing line.
+       Your year puts every day of a year on one calendar, a month to a row. */
+    body {
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+    }
+    .month {
+      box-sizing: border-box;
+      width: 100%;
+      max-width: 70rem;
+      margin: auto;
+      padding: clamp(var(--space-6), 9vh, 104px) var(--space-7) var(--space-7);
+    }
+    @media (max-width: 40rem) {
+      .month {
+        padding-inline: var(--space-4);
+      }
+    }
+    .back-link {
+      gap: 6px;
+      padding: var(--space-1) 0;
+    }
+    .month-eyebrow {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--space-2);
+      margin-top: var(--space-6);
+    }
+    .month-kind {
+      color: var(--color-pine);
+    }
+    .month-title {
+      max-width: 46rem;
+      margin-top: var(--space-4);
+      font-family: var(--font-display);
+      font-size: clamp(34px, 4.5vw, 52px);
+      font-weight: 400;
+      line-height: 1.08;
+      letter-spacing: -0.02em;
+      text-wrap: balance;
+    }
+    .month-title:focus {
+      outline: none;
+    }
+    .month-lede {
+      max-width: 38rem;
+      margin-top: 18px;
+      font-size: 18px;
+      color: var(--color-ink-2);
+    }
+
+    /* The month: a week to a row. */
+    .month-figure {
+      margin: var(--space-7) 0 0;
+    }
+    .cal-grid {
+      display: grid;
+      grid-template-columns: repeat(7, minmax(0, 1fr));
+      gap: 6px;
+      max-width: 36rem;
+    }
+    .cal-head {
+      padding-bottom: var(--space-1);
+      font-family: var(--font-mono);
+      font-size: 11px;
+      letter-spacing: 0.1em;
+      text-align: center;
+      color: var(--color-ink-3);
+    }
+    .cal-cell {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      aspect-ratio: 1;
+      padding: 6px;
+      border: 1px solid var(--color-rule);
+      border-radius: var(--radius-xs);
+    }
+    .cal-cell.is-blank {
+      border-color: transparent;
+    }
+    .cal-date {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: var(--color-ink-2);
+    }
+    .cal-mark {
+      align-self: flex-end;
+      width: 10px;
+      height: 10px;
+    }
+    .cal-cell.is-kept .cal-mark {
+      background: var(--color-brass);
+    }
+    .cal-cell.is-broken .cal-mark {
+      border: 1px solid var(--color-rule-3);
+    }
+    .cal-cell.is-ahead,
+    .cal-cell.is-before,
+    .cal-cell.is-unknown {
+      border-style: dashed;
+    }
+    .cal-cell.is-ahead .cal-date,
+    .cal-cell.is-before .cal-date,
+    .cal-cell.is-unknown .cal-date {
+      color: var(--color-ink-3);
+    }
+    .cal-turns {
+      position: absolute;
+      left: 6px;
+      bottom: 5px;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--color-pine);
+    }
+    @media (max-width: 30rem) {
+      .cal-grid {
+        gap: 3px;
+      }
+      .cal-cell {
+        padding: 3px 4px;
+      }
+      .cal-mark {
+        width: 7px;
+        height: 7px;
+      }
+      .cal-turns {
+        left: 4px;
+        bottom: 2px;
+      }
+    }
+
+    /* The year: a month to a row, a day to a square, and each month's count. */
+    .year-grid {
+      display: grid;
+      gap: 6px;
+      max-width: 52rem;
+    }
+    .year-row {
+      display: grid;
+      grid-template-columns: 2.75rem minmax(0, 1fr) 2rem;
+      align-items: center;
+      gap: var(--space-3);
+    }
+    .year-label {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--color-ink-2);
+    }
+    .year-cells {
+      display: grid;
+      grid-template-columns: repeat(31, minmax(0, 1fr));
+      gap: 3px;
+    }
+    .year-cell {
+      aspect-ratio: 1;
+      border: 1px solid var(--color-rule);
+      border-radius: 1px;
+    }
+    .year-cell.is-kept {
+      border-color: var(--color-brass);
+      background: var(--color-brass);
+    }
+    .year-cell.is-broken {
+      border-color: var(--color-rule-3);
+    }
+    .year-cell.is-ahead,
+    .year-cell.is-before,
+    .year-cell.is-unknown {
+      border-style: dotted;
+    }
+    .year-count {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      text-align: right;
+      color: var(--color-brass);
+    }
+    @media (max-width: 30rem) {
+      .year-row {
+        grid-template-columns: 2.25rem minmax(0, 1fr) 1.5rem;
+        gap: var(--space-2);
+      }
+      .year-cells {
+        gap: 2px;
+      }
+    }
+
+    .month-legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px 28px;
+      margin-top: 20px;
+      font-size: 13px;
+      color: var(--color-ink-2);
+    }
+    .month-legend span {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--space-2);
+    }
+    .legend-kept,
+    .legend-broken {
+      display: inline-block;
+      width: 10px;
+      height: 10px;
+    }
+    .legend-kept {
+      background: var(--color-brass);
+    }
+    .legend-broken {
+      border: 1px solid var(--color-rule-3);
+    }
+    .legend-turns {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--color-pine);
+    }
+
+    /* The numbers, and one thing to try: as on Your week. */
+    .month-numbers {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+      margin-top: var(--space-7);
+      border-top: 1px solid var(--color-rule-2);
+      border-bottom: 1px solid var(--color-rule);
+    }
+    .month-numbers > div {
+      padding: 20px 24px;
+      border-left: 1px solid var(--color-rule);
+    }
+    .month-numbers > div:first-child {
+      padding-left: 0;
+      border-left: 0;
+    }
+    .month-numbers dt {
+      font-size: 15px;
+      font-weight: 500;
+    }
+    .month-number {
+      margin-top: 6px;
+      font-family: var(--font-display);
+      font-size: 44px;
+      line-height: 1;
+      color: var(--color-brass);
+    }
+    .month-number-of {
+      font-size: 22px;
+      color: var(--color-ink-2);
+    }
+    .month-before {
+      margin-top: var(--space-2);
+      font-size: 13px;
+      color: var(--color-ink-2);
+    }
+    @media (max-width: 36rem) {
+      .month-numbers {
+        grid-template-columns: minmax(0, 1fr);
+      }
+      .month-numbers > div,
+      .month-numbers > div:first-child {
+        padding: 16px 0;
+        border-left: 0;
+      }
+      .month-numbers > div + div {
+        border-top: 1px solid var(--color-rule);
+      }
+    }
+    .month-try {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: var(--space-5) var(--space-7);
+      margin-top: 40px;
+      padding: 28px 32px;
+      border: 1px solid var(--color-rule);
+      border-radius: var(--radius-xs);
+    }
+    @media (max-width: 40rem) {
+      .month-try {
+        padding: var(--space-5);
+      }
+    }
+    .month-try-body {
+      flex: 1 1 26rem;
+      min-width: 0;
+    }
+    .month-try-text {
+      max-width: 38rem;
+      margin-top: 10px;
+      font-family: var(--font-display);
+      font-size: 24px;
+      line-height: 1.35;
+    }
+    .month-try-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--space-3);
+    }
+    .month-try-actions .btn {
+      min-height: 48px;
+      padding-inline: var(--space-5);
+      font-size: 15px;
+    }
+    .month-try-done {
+      font-family: var(--font-display);
+      font-size: 20px;
+      color: var(--color-pine);
+    }
+    .month-closing {
+      margin-top: var(--space-7);
+      font-family: var(--font-display);
+      font-style: italic;
+      font-size: 28px;
+      line-height: 1.35;
+    }
+    .month-closing:empty {
+      display: none;
+    }
+    .month-note {
+      max-width: 40rem;
+      margin-top: var(--space-4);
+      font-size: 14px;
+      color: var(--color-ink-2);
+    }
+    .month-foot {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: baseline;
+      gap: var(--space-2) 20px;
+      margin-top: var(--space-4);
+      font-size: 14px;
+      color: var(--color-ink-2);
+    }
+    .month-locked-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--space-3);
+      margin-top: var(--space-6);
+    }
+    .month-locked-actions .btn {
+      min-height: 48px;
+      padding-inline: var(--space-5);
+      font-size: 15px;
+    }
+  </style>
+</head>
+<body>
+  <main class="month">
+    <a class="arrow-link meta back-link" href="stats.html">
+      <svg class="icon icon-12 icon-left" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M13.5 8h-11M6.5 4l-4 4 4 4" /></svg>
+      Statistics
+    </a>
+    <p class="meta month-eyebrow"><span class="month-kind" id="m-kind">Your month</span><span aria-hidden="true" id="m-dot">·</span><span id="m-range"></span></p>
+    <h1 class="month-title" id="m-head" tabindex="-1"></h1>
+    <p class="month-lede" id="m-lede"></p>
+
+    <div id="m-month" hidden>
+      <figure class="month-figure">
+        <div class="cal-grid" id="m-grid" role="img"></div>
+        <figcaption class="month-legend">
+          <span><span class="legend-kept" aria-hidden="true"></span>A day kept</span>
+          <span><span class="legend-broken" aria-hidden="true"></span>A hard day</span>
+          <span><span class="legend-turns" aria-hidden="true">2</span>Times you turned back or waited it out</span>
+        </figcaption>
+      </figure>
+    </div>
+
+    <div id="m-year" hidden>
+      <figure class="month-figure">
+        <div class="year-grid" id="y-grid" role="img"></div>
+        <figcaption class="month-legend">
+          <span><span class="legend-kept" aria-hidden="true"></span>A day kept</span>
+          <span><span class="legend-broken" aria-hidden="true"></span>A hard day</span>
+          <span>The number is each month’s days kept</span>
+        </figcaption>
+      </figure>
+    </div>
+
+    <div id="m-body" hidden>
+      <dl class="month-numbers">
+        <div>
+          <dt>Days kept</dt>
+          <dd class="month-number tnum"><span id="m-days">0</span> <span class="month-number-of" id="m-days-of"></span></dd>
+          <dd class="month-before" id="m-days-before" hidden></dd>
+        </div>
+        <div id="y-best-cell" hidden>
+          <dt>Longest run</dt>
+          <dd class="month-number tnum" id="y-best">0</dd>
+        </div>
+        <div>
+          <dt>Turned back at the door</dt>
+          <dd class="month-number tnum" id="m-stops">0</dd>
+          <dd class="month-before" id="m-stops-before" hidden></dd>
+        </div>
+        <div>
+          <dt>Moments waited out</dt>
+          <dd class="month-number tnum" id="m-waited">0</dd>
+          <dd class="month-before" id="m-waited-before" hidden></dd>
+        </div>
+      </dl>
+
+      <section class="month-try" id="m-try" aria-labelledby="m-try-head" hidden>
+        <div class="month-try-body">
+          <h2 class="meta meta-brass" id="m-try-head">One thing to try</h2>
+          <p class="month-try-text" id="m-try-text"></p>
+        </div>
+        <div class="month-try-actions" id="m-try-actions">
+          <button type="button" class="btn btn-primary" id="m-try-go"></button>
+          <button type="button" class="btn btn-ghost" id="m-try-later">Not now</button>
+        </div>
+        <p class="month-try-done" id="m-try-done" role="status" hidden></p>
+      </section>
+    </div>
+
+    <p class="month-closing" id="m-closing"></p>
+    <p class="month-note" id="m-note" hidden></p>
+    <nav class="month-foot" aria-label="Other months">
+      <a class="link" id="m-prev" hidden></a>
+      <a class="link" id="m-next" hidden></a>
+      <a class="link" id="m-other" hidden></a>
+    </nav>
+
+    <div class="month-locked-actions" id="m-locked" hidden>
+      <a class="btn btn-primary" href="options.html#supporter">See Supporter</a>
+    </div>
+  </main>
+
+  <script src="shared/supporter.js"></script>
+  <script src="shared/moments.js"></script>
+  <script src="shared/gateways.js"></script>
+  <script src="shared/boost.js"></script>
+  <script src="shared/weekly.js"></script>
+  <script src="shared/ledger.js"></script>
+  <!-- Your month and Your year: empty in the open-source build (extras/README.md). -->
+  <script src="extras/month.js"></script>
+  <script src="month.js"></script>
+</body>
+</html>

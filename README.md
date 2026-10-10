@@ -221,8 +221,9 @@ its code check. A build from here blocks exactly what the store version
 blocks.
 
 The **Supporter extras** are not open source: days 8 to 30 of the path, the
-evening check-in and Your good days. They live in a private repository and
-ship only in the
+evening check-in, Your good days, When it's hardest, Your month and Your
+year, the photo for the hard moment, and Supporter looks. They live in a
+private repository and ship only in the
 versions on the Chrome Web Store, Microsoft Edge Add-ons and Firefox Add-ons.
 `extras/` holds empty stand-ins for them (`extras/README.md`), so a build
 from here says plainly where an extra would be. The extras never decide what

@@ -25,6 +25,7 @@ const Supporter = self.Supporter || null;
 const Path = self.Path || null;
 const PathDays = self.PathDays || null;
 const Checkin = self.Checkin || null;
+const Ledger = self.Ledger || null;
 let isSupporter = false;
 
 // During Storm Mode or Risk Hours nothing that loosens protection can be done.
@@ -507,6 +508,22 @@ async function markNewWeek() {
   } catch (_) {}
 }
 
+// Your month: a letter ready and not yet read, for a supporter whose build
+// carries it (extras/extras.js). Nobody else sees the row.
+async function renderMonthRow() {
+  const link = $('month-link');
+  if (!link) return;
+  const extras = self.SupporterExtras;
+  let show = false;
+  if (isSupporter && Ledger && extras && extras.month) {
+    try {
+      const store = await browserAPI.storage.local.get([Ledger.MONTH_SEEN_KEY, 'pblocker_first_seen']);
+      show = Ledger.hasNewMonth(Date.now(), Number(store.pblocker_first_seen), store[Ledger.MONTH_SEEN_KEY]);
+    } catch (_) {}
+  }
+  link.hidden = !show;
+}
+
 // --- The path and the evening check-in ------------------------------------------
 
 function openPage(file) {
@@ -517,10 +534,18 @@ function openPage(file) {
 async function readSupporter() {
   if (!Supporter) return false;
   try {
-    return (await Supporter.status(browserAPI.storage.local)).supporter;
+    const s = await Supporter.status(browserAPI.storage.local);
+    if (!s.supporter) endLook();
+    return s.supporter;
   } catch (_) {
     return false;
   }
+}
+
+// A Supporter look (ui/scheme.js) ends with the plan; only on a clear answer.
+function endLook() {
+  const scheme = self.UiScheme;
+  if (scheme && scheme.getLook()) scheme.setLook(null).catch(() => {});
 }
 
 // "Day 4 · Hungry, angry, lonely, tired." under The path.
@@ -1739,6 +1764,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
     markNewWeek();
   }
+  const monthLink = $('month-link');
+  if (monthLink) {
+    monthLink.addEventListener('click', (e) => {
+      e.preventDefault();
+      openPage('month.html');
+    });
+  }
   const pathLink = $('path-link');
   if (pathLink) {
     pathLink.addEventListener('click', (e) => {
@@ -1757,6 +1789,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   isSupporter = await readSupporter();
   renderPathRow();
   renderCheckinRow();
+  renderMonthRow();
 
   // Anything whose wait is over is applied as the popup opens.
   if (Pact) Pact.ask({ type: 'pact_process' });

@@ -500,10 +500,19 @@ async function renderMoment() {
   const Boost = globalThis.Boost;
   const section = document.getElementById('moment');
   if (!Moments || !section) return;
-  const keys = [Moments.WORDS_KEY];
+  const keys = [Moments.WORDS_KEY, Moments.PHOTO_KEY];
   if (Boost) keys.push(Boost.STATE_KEY);
   const store = await browserAPI.storage.local.get(keys);
   const words = Moments.normalizeWords(store[Moments.WORDS_KEY]);
+
+  // A photo chosen for this moment, above the words: kept on the device as a
+  // plain image (Moments.photoSrc turns away anything else).
+  const photo = document.getElementById('moment-photo');
+  const src = Moments.photoSrc(store[Moments.PHOTO_KEY]);
+  if (photo) {
+    if (src) photo.src = src;
+    photo.hidden = !src;
+  }
 
   const show = (id, text) => {
     const el = document.getElementById(id);

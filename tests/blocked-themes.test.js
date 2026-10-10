@@ -14,6 +14,7 @@ const vm = require('node:vm');
 const ROOT = path.join(__dirname, '..');
 const THEMES_SRC = fs.readFileSync(path.join(ROOT, 'blocked-themes.js'), 'utf8');
 const BLOCKED_SRC = fs.readFileSync(path.join(ROOT, 'blocked.js'), 'utf8');
+const MOMENTS_SRC = fs.readFileSync(path.join(ROOT, 'shared', 'moments.js'), 'utf8');
 
 // --- a small fake DOM --------------------------------------------------------
 
@@ -122,10 +123,12 @@ function loadThemes({ random, globals = {} } = {}) {
 }
 
 // Run blocked-themes.js, then blocked.js, against a fake page.
-function openBlockedPage({ query = '', settings = null, streakStart = null, reducedMotion = true } = {}) {
+// `stored` adds storage keys; `moments` loads shared/moments.js, so the
+// moment (own words, the photo) is drawn too.
+function openBlockedPage({ query = '', settings = null, streakStart = null, reducedMotion = true, stored = {}, moments = false } = {}) {
   const doc = fakeDocument();
   const timers = fakeTimers();
-  const store = { pblocker_settings: settings, pblocker_streak_start: streakStart };
+  const store = { pblocker_settings: settings, pblocker_streak_start: streakStart, ...stored };
   const sandbox = {
     console, URL, URLSearchParams, Promise, Math, Date, String, ...timers,
     location: { href: `chrome-extension://abc/blocked.html${query}`, replace() {} },
@@ -136,12 +139,13 @@ function openBlockedPage({ query = '', settings = null, streakStart = null, redu
     browser: undefined,
     chrome: {
       runtime: { id: 'abc', getURL: (p) => p, onMessage: { addListener() {} } },
-      storage: { local: { get: (key) => Promise.resolve({ [key]: store[key] }) } }
+      storage: { local: { get: (keys) => Promise.resolve(Object.fromEntries([].concat(keys).map((k) => [k, store[k]]))) } }
     }
   };
   sandbox.globalThis = sandbox;
   vm.createContext(sandbox);
   vm.runInContext(THEMES_SRC, sandbox);
+  if (moments) vm.runInContext(MOMENTS_SRC, sandbox);
   vm.runInContext(BLOCKED_SRC, sandbox);
   return { doc, timers };
 }
@@ -832,4 +836,42 @@ test('blocked.js: the Motivation streak comes from the saved streak start', asyn
   await flush();
   const hero = doc.getElementById('theme-hero');
   assert.equal(hero.find('chain-count').textContent, '12');
+});
+
+// --- The photo for the hard moment ------------------------------------------------
+//
+// Chosen in Settings (a Supporter extra) and kept on the device; the blocked
+// page shows it above the words, and only ever as a plain image.
+
+const PHOTO = 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQ==';
+
+test('blocked.js: a kept photo shows above the words', async () => {
+  const { doc } = openBlockedPage({
+    moments: true,
+    stored: { pblocker_moment_photo: { src: PHOTO, at: 1 }, pblocker_own_words: { plan: 'Call Sam.' } }
+  });
+  await flush();
+  await flush();
+  const photo = doc.getElementById('moment-photo');
+  assert.equal(photo.hidden, false);
+  assert.equal(photo.src, PHOTO);
+  assert.equal(doc.getElementById('moment-plan').textContent, 'Call Sam.');
+});
+
+test('blocked.js: anything but a plain JPEG, PNG or WebP is never shown', async () => {
+  for (const src of ['data:image/svg+xml;base64,PHN2Zz4=', 'javascript:alert(1)', 'https://example.com/a.jpg', 'data:image/jpeg;base64,<script>', '']) {
+    const { doc } = openBlockedPage({ moments: true, stored: { pblocker_moment_photo: { src } } });
+    await flush();
+    await flush();
+    const photo = doc.getElementById('moment-photo');
+    assert.equal(photo.hidden, true, src);
+    assert.notEqual(photo.src, src || 'x', src);
+  }
+});
+
+test('blocked.js: no photo kept, none shown', async () => {
+  const { doc } = openBlockedPage({ moments: true });
+  await flush();
+  await flush();
+  assert.equal(doc.getElementById('moment-photo').hidden, true);
 });

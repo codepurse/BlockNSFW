@@ -38,6 +38,9 @@
       "shared/totp.js",
       "shared/pact.js",
       "shared/boost.js",
+      "shared/moments.js",
+      "shared/gateways.js",
+      "shared/ledger.js",
       "background.js"
     ]
   },

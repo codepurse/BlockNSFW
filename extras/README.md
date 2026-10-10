@@ -8,6 +8,10 @@ extras**:
 | `path-days.js` | Days 8 to 30 of the path (days 1 to 7 are free, in `shared/path-days.js`) |
 | `checkin.js` | The evening check-in |
 | `gooddays.js` | Your good days |
+| `month.js` | Your month and Your year |
+| `hardest.js` | When it's hardest |
+| `photo.js` | Choosing a photo for the hard moment, in Settings |
+| `looks.js` | Supporter looks (true black, an accent), in Settings |
 | `extras.js` | Which extras a build carries (here: none) |
 
 The extras themselves are not open source. They live in a separate, private

@@ -16,11 +16,18 @@ const ROOT = path.join(__dirname, '..');
 const SCHEME_SOURCE = fs.readFileSync(path.join(ROOT, 'ui', 'scheme.js'), 'utf8');
 const CONTENT_SOURCE = fs.readFileSync(path.join(ROOT, 'content.js'), 'utf8');
 const KEY = 'pblocker_color_scheme';
+const LOOK_KEY = 'pblocker_look';
 
 function fakeRoot() {
   const attrs = {};
+  const props = {};
   return {
     attrs,
+    props,
+    style: {
+      setProperty: (name, value) => { props[name] = value; },
+      removeProperty: (name) => { delete props[name]; }
+    },
     getAttribute: (name) => (name in attrs ? attrs[name] : null),
     setAttribute: (name, value) => { attrs[name] = String(value); },
     removeAttribute: (name) => { delete attrs[name]; }
@@ -32,7 +39,8 @@ function fakeLocalStorage(initial, { broken = false } = {}) {
   return {
     data,
     getItem: (k) => { if (broken) throw new Error('blocked'); return k in data ? data[k] : null; },
-    setItem: (k, v) => { if (broken) throw new Error('blocked'); data[k] = String(v); }
+    setItem: (k, v) => { if (broken) throw new Error('blocked'); data[k] = String(v); },
+    removeItem: (k) => { if (broken) throw new Error('blocked'); delete data[k]; }
   };
 }
 
@@ -50,9 +58,16 @@ function fakeStorage(initial) {
     },
     storage: {
       local: {
-        get: (key) => new Promise((resolve) => pending.push(() => resolve({ [key]: data[key] }))),
+        // One key or several, as the real storage takes them.
+        get: (keys) => new Promise((resolve) => pending.push(() => resolve(Object.fromEntries(
+          [].concat(keys).map((k) => [k, data[k]])
+        )))),
         set: (items) => {
           Object.assign(data, items);
+          return Promise.resolve();
+        },
+        remove: (key) => {
+          delete data[key];
           return Promise.resolve();
         }
       },
@@ -61,20 +76,27 @@ function fakeStorage(initial) {
   };
 }
 
-function loadScheme({ cached, stored, brokenLocalStorage = false } = {}) {
+function loadScheme({ cached, stored, brokenLocalStorage = false, cachedLook, storedLook, systemDark = false } = {}) {
   const root = fakeRoot();
-  const local = fakeLocalStorage(cached === undefined ? {} : { [KEY]: cached }, { broken: brokenLocalStorage });
-  const store = fakeStorage(stored === undefined ? {} : { [KEY]: stored });
+  const kept = cached === undefined ? {} : { [KEY]: cached };
+  if (cachedLook !== undefined) kept[LOOK_KEY] = JSON.stringify(cachedLook);
+  const local = fakeLocalStorage(kept, { broken: brokenLocalStorage });
+  const record = stored === undefined ? {} : { [KEY]: stored };
+  if (storedLook !== undefined) record[LOOK_KEY] = storedLook;
+  const store = fakeStorage(record);
+  const media = { matches: systemDark, listeners: [], addEventListener(type, fn) { this.listeners.push(fn); } };
   const sandbox = {
     document: { documentElement: root },
     localStorage: local,
     chrome: { storage: store.storage },
+    matchMedia: () => media,
     Promise,
-    setTimeout
+    setTimeout,
+    JSON
   };
   sandbox.window = sandbox;
   vm.runInNewContext(SCHEME_SOURCE, sandbox);
-  return { root, local, store, UiScheme: sandbox.UiScheme };
+  return { root, local, store, media, UiScheme: sandbox.UiScheme };
 }
 
 test('scheme: the kept copy is on <html> before storage answers', () => {
@@ -136,6 +158,81 @@ test('scheme: without localStorage the page still follows storage', async () => 
   assert.equal('data-scheme' in root.attrs, false);
   await store.answer();
   assert.equal(root.attrs['data-scheme'], 'dark');
+});
+
+// ── A Supporter look ───────────────────────────────────────────────────────
+//
+// The looks themselves are a Supporter extra (extras/looks.js); scheme.js
+// only lays what is kept over the tokens, light or dark as the page is.
+
+const LOOK = {
+  choice: { accent: 'ink', black: true },
+  light: { '--color-pine': '#224466' },
+  dark: { '--color-pine': '#88aacc', '--color-paper': '#000000' }
+};
+
+test('look: the kept copy is painted before storage answers, the light set in light', () => {
+  const { root } = loadScheme({ cached: 'light', cachedLook: LOOK });
+  assert.deepEqual({ ...root.props }, { '--color-pine': '#224466' });
+});
+
+test('look: dark gets the dark set, and following the system follows it', () => {
+  const { root } = loadScheme({ cached: 'dark', cachedLook: LOOK });
+  assert.deepEqual({ ...root.props }, { '--color-pine': '#88aacc', '--color-paper': '#000000' });
+  const sys = loadScheme({ cachedLook: LOOK, systemDark: false });
+  assert.equal(sys.root.props['--color-pine'], '#224466');
+  sys.media.matches = true;
+  sys.media.listeners.forEach((fn) => fn());
+  assert.equal(sys.root.props['--color-paper'], '#000000', 'the system turning dark repaints it');
+});
+
+test('look: switching the scheme repaints, leaving nothing of the other set behind', async () => {
+  const { root, store, UiScheme } = loadScheme({ cached: 'dark', cachedLook: LOOK, stored: 'dark', storedLook: LOOK });
+  await store.answer();
+  await UiScheme.set('light');
+  assert.deepEqual({ ...root.props }, { '--color-pine': '#224466' });
+});
+
+test('look: kept in storage and the copy, and the plain look clears both', async () => {
+  const { root, local, store, UiScheme } = loadScheme({ cached: 'light' });
+  await store.answer();
+  await UiScheme.setLook(LOOK);
+  assert.equal(store.data[LOOK_KEY].choice.accent, 'ink');
+  assert.ok(local.data[LOOK_KEY].includes('#224466'));
+  assert.equal(root.props['--color-pine'], '#224466');
+  await UiScheme.setLook(null);
+  assert.ok(!(LOOK_KEY in store.data));
+  assert.ok(!(LOOK_KEY in local.data));
+  assert.deepEqual({ ...root.props }, {});
+  assert.equal(UiScheme.getLook(), null);
+});
+
+test('look: only colour tokens with plain colour values are ever set', () => {
+  const look = {
+    choice: { accent: 'Ink<script>', black: 'yes' },
+    light: {
+      '--color-pine': 'red',
+      '--color-ink': 'url(javascript:alert(1))',
+      '--space-4': '#ffffff',
+      color: '#ffffff',
+      '--color-band': '#123456',
+      '--color-rule': 'rgba(26, 26, 22, 0.15)',
+      '--color-paper': '#12345; background: url(x)'
+    }
+  };
+  const { root, UiScheme } = loadScheme({ cached: 'light', cachedLook: look });
+  assert.deepEqual({ ...root.props }, { '--color-band': '#123456', '--color-rule': 'rgba(26, 26, 22, 0.15)' });
+  assert.deepEqual({ ...UiScheme.getLook().choice }, {}, 'nor a choice that is not one');
+  assert.equal(UiScheme.normalizeLook({ light: { '--color-pine': 'blue' } }), null, 'nothing valid: the plain look');
+});
+
+test('look: a change made on another page reaches this one', async () => {
+  const { root, store } = loadScheme({ cached: 'light' });
+  await store.answer();
+  for (const fn of store.listeners) fn({ [LOOK_KEY]: { newValue: LOOK } }, 'local');
+  assert.equal(root.props['--color-pine'], '#224466');
+  for (const fn of store.listeners) fn({ [LOOK_KEY]: { oldValue: LOOK } }, 'local');
+  assert.deepEqual({ ...root.props }, {}, 'removed: the plain look');
 });
 
 // ── content.js ─────────────────────────────────────────────────────────────

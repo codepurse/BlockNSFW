@@ -1886,6 +1886,70 @@
       }
     }
 
+    /* Supporter looks and the photo for this moment. Hidden until
+       extras/looks.js and extras/photo.js show them; the open-source build
+       doesn't carry those, so they stay hidden there. */
+    .row-tag {
+      margin-left: var(--space-2);
+    }
+    .look-swatches {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--space-2);
+    }
+    .look-swatch {
+      position: relative;
+      display: inline-flex;
+      cursor: pointer;
+    }
+    .look-swatch input {
+      position: absolute;
+      opacity: 0;
+      pointer-events: none;
+    }
+    .look-swatch-fill {
+      display: block;
+      width: 28px;
+      height: 28px;
+      border: 1px solid var(--color-rule-2);
+      border-radius: var(--radius-xs);
+    }
+    .look-swatch input:checked + .look-swatch-fill {
+      outline: 2px solid var(--color-ink);
+      outline-offset: 2px;
+    }
+    .look-swatch input:focus-visible + .look-swatch-fill {
+      outline: var(--focus-width) solid var(--color-pine-2);
+      outline-offset: var(--focus-offset);
+    }
+    .own-photo-row {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: var(--space-4);
+      margin-top: var(--space-2);
+    }
+    .own-photo-preview {
+      width: 96px;
+      height: 96px;
+      object-fit: cover;
+      border: 1px solid var(--color-rule);
+      border-radius: var(--radius-xs);
+    }
+    .own-photo-actions {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: var(--space-3);
+    }
+    .own-photo-choose {
+      cursor: pointer;
+    }
+    .own-photo-choose:focus-within {
+      outline: var(--focus-width) solid var(--color-pine-2);
+      outline-offset: var(--focus-offset);
+    }
+
     @media (max-width: 520px) {
       .row {
         flex-wrap: wrap;
@@ -1920,7 +1984,7 @@
         <a class="nav-link" href="#section-customization" data-target="section-customization"><span class="nav-index">03</span><span>Customization</span></a>
         <a class="nav-link" href="#section-security" data-target="section-security"><span class="nav-index">04</span><span>Security</span></a>
         <a class="nav-link" href="#section-community" data-target="section-community"><span class="nav-index">05</span><span>Community</span></a>
-        <a class="nav-link nav-link-supporter" href="#section-supporter" data-target="section-supporter"><span class="nav-index">06</span><span class="nav-supporter-text"><span class="nav-supporter-title">Supporter</span><span class="nav-supporter-sub" id="nav-supporter-sub">The path and your good days</span></span><span class="nav-supporter-mark" id="nav-supporter-mark" aria-hidden="true" hidden></span></a>
+        <a class="nav-link nav-link-supporter" href="#section-supporter" data-target="section-supporter"><span class="nav-index">06</span><span class="nav-supporter-text"><span class="nav-supporter-title">Supporter</span><span class="nav-supporter-sub" id="nav-supporter-sub">The path, your month and more</span></span><span class="nav-supporter-mark" id="nav-supporter-mark" aria-hidden="true" hidden></span></a>
         <a class="nav-link" href="#section-about" data-target="section-about"><span class="nav-index">07</span><span>About</span></a>
       </nav>
 
@@ -2112,7 +2176,7 @@
                 <li><details class="wn-item"><summary>After a slip <span class="badge-new">New</span></summary><p>The popup&rsquo;s &ldquo;I slipped&rdquo; link opens a short, plain page. It counts as one day, never a reset, and offers what would help next time.</p></details></li>
                 <li><details class="wn-item"><summary>Your week <span class="badge-new">New</span></summary><p>Every Sunday evening, a short page about your week: each time you stopped at the door or waited it out, drawn day by day, three numbers beside the week before, and one thing to try next. The popup says when it&rsquo;s ready.</p></details></li>
                 <li><details class="wn-item"><summary>Days kept</summary><p>Statistics counts the days in the last 30 with protection on all day and no slip, beside your runs and the moments you waited out.</p></details></li>
-                <li><details class="wn-item"><summary>Supporter, for going further <span class="badge-new">New</span></summary><p>Optional, and protection stays the same for everyone. It adds the rest of a 30-day path, an evening check-in and your good days. The Supporter page shows whatfour more blocked-page designs. Supporter compares what&rsquo;s free and what it adds, side by side.</p>rsquo;s free and what it adds, side by side.</p></details></li>
+                <li><details class="wn-item"><summary>Supporter, for going further <span class="badge-new">New</span></summary><p>Optional, and protection stays the same for everyone. It adds the rest of a 30-day path, an evening check-in, your good days, when it&rsquo;s hardest, a letter every month, a photo for the hard moment and Supporter looks. The Supporter page shows whatfour more blocked-page designs. Supporter compares what&rsquo;s free and what it adds, side by side.</p>rsquo;s free and what it adds, side by side.</p></details></li>
                 <li><details class="wn-item"><summary>Your PIN is stored safely</summary><p>It is kept as a salted hash instead of plain text, and five wrong tries lock PIN entry for a while. A PIN from an older version keeps working.</p></details></li>
                 <li><details class="wn-item"><summary>The popup says whether you&rsquo;re protected</summary><p>It opens on a deep green band that says &ldquo;Protected&rdquo; and holds the protection switch. When protection is off the band turns plain and says so.</p></details></li>
                 <li><details class="wn-item"><summary>The blocked page no longer shows the blocked address</summary><p>It shows the site&rsquo;s ending only now, and never the words a page matched. The audit log shows a site&rsquo;s name instead of its full address.</p></details></li>
@@ -2496,6 +2560,28 @@
                 </div>
               </div>
             </div>
+            <!-- Supporter looks: shown and run by extras/looks.js, which the
+                 open-source build doesn't carry (extras/README.md). -->
+            <div class="row" id="look-black-row" hidden>
+              <div class="row-text">
+                <label class="row-label" for="look-black">True black <span class="meta meta-brass row-tag" data-look-tag hidden>Supporter</span></label>
+                <p class="row-desc" id="look-black-desc">In dark, the background is pure black: easier on the eyes at night, and on OLED screens.</p>
+              </div>
+              <label class="switch" data-look-control>
+                <input type="checkbox" class="switch-input" role="switch" id="look-black" aria-describedby="look-black-desc" />
+                <span class="switch-track" aria-hidden="true"><span class="switch-thumb"></span></span>
+                <span class="switch-state" aria-hidden="true"></span>
+              </label>
+              <a class="arrow-link small" href="#supporter" data-look-upsell hidden>See Supporter</a>
+            </div>
+            <div class="row" id="look-accent-row" hidden>
+              <div class="row-text">
+                <span class="row-label" id="look-accent-label">Accent <span class="meta meta-brass row-tag" data-look-tag hidden>Supporter</span></span>
+                <p class="row-desc" id="look-accent-desc">The colour of buttons, links and bands on every BlockNSFW page.</p>
+              </div>
+              <div class="look-swatches" id="look-accent" role="radiogroup" aria-labelledby="look-accent-label" aria-describedby="look-accent-desc" data-look-control></div>
+              <a class="arrow-link small" href="#supporter" data-look-upsell hidden>See Supporter</a>
+            </div>
           </div>
           </div>
         </div>
@@ -2592,6 +2678,24 @@
                 <input type="tel" class="input input-mono" id="own-words-phone" maxlength="32" autocomplete="off" aria-describedby="own-words-phone-hint" />
                 <p class="field-hint" id="own-words-phone-hint">Optional. Where calls are possible, the blocked page links to it.</p>
               </div>
+            </div>
+            <!-- A photo for the hard moment: shown and run by extras/photo.js,
+                 which the open-source build doesn't carry (extras/README.md). -->
+            <div class="field own-photo" id="own-photo" hidden>
+              <span class="field-label" id="own-photo-label">A photo for this moment <span class="meta meta-brass row-tag" id="own-photo-tag" hidden>Supporter</span></span>
+              <div class="own-photo-row">
+                <img class="own-photo-preview" id="own-photo-preview" alt="Your photo for this moment" hidden />
+                <div class="own-photo-actions" id="own-photo-actions" hidden>
+                  <label class="btn btn-ghost own-photo-choose">
+                    <input type="file" class="visually-hidden" id="own-photo-input" accept="image/jpeg,image/png,image/webp" aria-describedby="own-photo-hint" />
+                    <span id="own-photo-choose-text">Choose a photo</span>
+                  </label>
+                  <button type="button" class="btn-text" id="own-photo-remove" hidden>Remove</button>
+                </div>
+                <a class="arrow-link small" href="#supporter" id="own-photo-upsell" hidden>See Supporter</a>
+              </div>
+              <p class="field-hint" id="own-photo-hint">Someone or something worth staying for. It shows on the blocked page above your words, and stays on this device.</p>
+              <p class="field-error" id="own-photo-error" role="alert"></p>
             </div>
           </div>
           <div class="btn-row">
@@ -3178,6 +3282,10 @@ title/Example Domain/"></textarea>
                 <tr class="compare-extra"><th scope="row"><a href="path.html">The path, days 8 to 30</a><span class="compare-desc">A short page a day, and one small thing to do.</span></th><td data-no></td><td data-yes></td></tr>
                 <tr class="compare-extra"><th scope="row">Evening check-in<span class="compare-desc">Ten seconds a night, from the popup.</span></th><td data-no></td><td data-yes></td></tr>
                 <tr class="compare-extra"><th scope="row"><a href="gooddays.html">Your good days</a><span class="compare-desc">After two weeks, what your calm days have in common.</span></th><td data-no></td><td data-yes></td></tr>
+                <tr class="compare-extra"><th scope="row"><a href="hardest.html">When it&rsquo;s hardest</a><span class="compare-desc">Your hard moments by weekday and hour, and risk hours to match.</span></th><td data-no></td><td data-yes></td></tr>
+                <tr class="compare-extra"><th scope="row"><a href="month.html">Your month and your year</a><span class="compare-desc">A letter at the start of every month, and every day of the year on one calendar.</span></th><td data-no></td><td data-yes></td></tr>
+                <tr class="compare-extra"><th scope="row"><a href="#own-photo">A photo for the hard moment</a><span class="compare-desc">Someone or something worth staying for, above your words on the blocked page.</span></th><td data-no></td><td data-yes></td></tr>
+                <tr class="compare-extra"><th scope="row"><a href="#look-accent-row">Supporter looks</a><span class="compare-desc">True black for dark, and an accent colour for every page.</span></th><td data-no></td><td data-yes></td></tr>
               </tbody>
             </table>
           </div>
@@ -3338,6 +3446,9 @@ title/Example Domain/"></textarea>
   <script src="extras/extras.js"></script>
   <script src="options.js"></script>
   <script src="shared/supporter.js"></script>
+  <!-- Supporter looks and the photo for this moment: empty in the open-source build (extras/README.md). -->
+  <script src="extras/looks.js"></script>
+  <script src="extras/photo.js"></script>
   <script src="options-supporter.js"></script>
 </body>
 </html>
