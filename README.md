@@ -151,7 +151,9 @@ powershell -ExecutionPolicy Bypass -File .\build-firefox.ps1 -Zip
 A build from this repository alone is the open-source build: every
 protection, without the Supporter extras (see "Open source, and the Supporter
 extras" below). `-Zip` makes a store package and needs the extras; add
-`-OpenSource` to package without them.
+`-OpenSource` to package without them. A store package also refuses to
+build while Supporter is still in Polar's sandbox (`RELEASE_CHECKLIST.md`,
+section 0); `-Zip -Sandbox` makes a test package, never for a store.
 
 Build output:
 

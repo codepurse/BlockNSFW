@@ -4,18 +4,33 @@
 #   powershell -ExecutionPolicy Bypass -File .\build-firefox.ps1
 #   powershell -ExecutionPolicy Bypass -File .\build-firefox.ps1 -Zip
 #   powershell -ExecutionPolicy Bypass -File .\build-firefox.ps1 -OpenSource
+#   powershell -ExecutionPolicy Bypass -File .\build-firefox.ps1 -Zip -Sandbox
 #
 # The Supporter extras come from a private repository checked out at
 # extras-private\ (see extras\README.md). A store package (-Zip) must carry
 # them; -OpenSource builds with the empty stand-ins in extras\ instead.
+#
+# A store package must also sell through Polar's live store: -Zip refuses
+# while shared\supporter.js is still in sandbox mode (RELEASE_CHECKLIST.md,
+# section 0). -Sandbox makes a test package on purpose; never upload one.
 
 [CmdletBinding()]
 param(
     [switch]$Zip,
-    [switch]$OpenSource
+    [switch]$OpenSource,
+    [switch]$Sandbox
 )
 
 $ErrorActionPreference = "Stop"
+
+# Checked before anything is cleaned, so a refused package leaves dist\ as it was.
+if ($Zip -and -not $OpenSource -and -not $Sandbox) {
+    Write-Host "==> Checking that Supporter sells through the live store" -ForegroundColor Cyan
+    node (Join-Path (Split-Path -Parent $MyInvocation.MyCommand.Path) "scripts\check-store-mode.js")
+    if ($LASTEXITCODE -ne 0) {
+        throw "Not packaging for a store while Supporter is in Polar's sandbox (RELEASE_CHECKLIST.md, section 0). Pass -Sandbox for a test package."
+    }
+}
 
 $ScriptDir   = Split-Path -Parent $MyInvocation.MyCommand.Path
 $SrcDir      = $ScriptDir
@@ -188,4 +203,5 @@ if ($Zip) {
 Write-Host "==> Firefox build complete: $OutDir" -ForegroundColor Green
 if ($WithExtras) { Write-Host "==> Supporter extras: included" -ForegroundColor Green }
 else { Write-Host "==> Supporter extras: not included (open-source build)" -ForegroundColor Yellow }
+if ($Zip -and $Sandbox) { Write-Host "==> TEST PACKAGE: Supporter uses Polar's sandbox. Never upload it to a store." -ForegroundColor Yellow }
 if ($Zip) { Write-Host "==> Zip: $ZipPath" -ForegroundColor Green }

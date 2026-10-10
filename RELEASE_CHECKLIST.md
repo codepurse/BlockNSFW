@@ -2,6 +2,52 @@
 
 Use this before publishing Chrome Web Store or Firefox Add-ons update.
 
+## 0. Do first: Supporter goes live
+
+**Stop here until every box is ticked.** Until then `shared/supporter.js` is in
+Polar's sandbox (test) mode: "Become a supporter" opens a test checkout that
+takes no real money, and Lifetime is hidden. A zip built in sandbox mode is for
+testing on your own browser only. **Never upload one to a store.** (The zips
+built on 2026-10-10 are sandbox builds.)
+
+The build backs this up: `-Zip` refuses to make a store package while
+anything below in `shared/supporter.js` is left, and lists what
+(`node scripts/check-store-mode.js` gives the same list at any time). A test
+package needs `-Zip -Sandbox`, and says "TEST PACKAGE" when it's done.
+
+In Polar, live organization (polar.sh, not sandbox.polar.sh):
+
+- [ ] Three products exist, each with the **License key** benefit: Monthly
+      $2.99, Yearly $24.99, Lifetime $49.99. Open each checkout link and check
+      it shows the BlockNSFW product and price (the first sandbox Lifetime
+      link opened "Warden Pro Lifetime" instead)
+- [ ] Organization Settings → Subscriptions → "Allow multiple subscriptions"
+      is on. The monolab organization also sells Warden, and with it off, a
+      Warden subscriber can't subscribe to BlockNSFW (Polar says "You already
+      have an active subscription")
+- [ ] Each checkout link's Success URL is the thank-you page
+
+In `shared/supporter.js`:
+
+- [ ] `STORE.mode` is `'live'`
+- [ ] `STORE.organizationId` is the live organization's ID
+- [ ] Each plan's `url` is its live checkout link, and Lifetime's `url` is
+      filled in (a plan without a link stays hidden)
+- [ ] The prices in `PLANS` match Polar's, and `OFFER` is null or has the
+      right end date
+- [ ] `grep -n "sandbox" shared/supporter.js` shows only three lines: the
+      comment about `mode`, and the `api:` and `portal:` lines. Any `mode:`
+      or `url:` line in the result means a sandbox setting is still there
+
+Then:
+
+- [ ] `npm test` passes
+- [ ] The private Supporter extras are checked out at `extras-private/`, up
+      to date (`git -C extras-private pull`), and `npm run test:extras` passes
+- [ ] Recommended: buy the cheapest plan once with your own card in the live
+      store, unlock it in a build from this release, then refund it in Polar
+- [ ] Only now build the store zips (section 2)
+
 ## 1. Prepare
 
 - [ ] Confirm target version number
@@ -17,20 +63,11 @@ Use this before publishing Chrome Web Store or Firefox Add-ons update.
       behavior
 - [ ] Review `README.md` if user-visible behavior changed
 - [ ] Review `PRIVACY_POLICY.md` if privacy/network behavior changed
-- [ ] Supporter: in `shared/supporter.js`, `STORE.mode` is `'live'`,
-      `STORE.organizationId` and each plan's `url` are the live Polar ones (a
-      sandbox link must not be what ships), the prices in `PLANS` match
-      Polar's, and `OFFER` is either null or has the right end date
-- [ ] Polar (live): Organization Settings → Subscriptions → "Allow multiple
-      subscriptions" is on. The monolab organization also sells Warden, and
-      with it off, a Warden subscriber can't subscribe to BlockNSFW (Polar
-      says "You already have an active subscription")
+- [ ] Supporter is live: every box in section 0 is ticked
 - [ ] The path: any day still without its `mine` lines simply leaves them
       out in a store build; check that this is what you want, or write them
       in `shared/path-days.js` (days 1 to 7) or
       `extras-private/extras/path-days.js` (days 8 to 30) first
-- [ ] The private Supporter extras are checked out at `extras-private/`, up
-      to date, and `npm run test:extras` passes
 
 ## 2. Build
 
@@ -42,8 +79,9 @@ exists", which reads like the bump failed when it did not).
 
 - [ ] Run `powershell -ExecutionPolicy Bypass -File .\build-chrome.ps1 -Zip`
 - [ ] Run `powershell -ExecutionPolicy Bypass -File .\build-firefox.ps1 -Zip`
-- [ ] Both builds end with `Supporter extras: included` (`-Zip` refuses to
-      run without `extras-private/`; never add `-OpenSource` to a store build)
+- [ ] Both builds end with `Supporter extras: included` and no "TEST
+      PACKAGE" line (`-Zip` refuses to run without `extras-private/` or in
+      sandbox mode; never add `-OpenSource` or `-Sandbox` to a store build)
 - [ ] Confirm `dist\chrome\manifest.json` exists
 - [ ] Confirm `dist\firefox\manifest.json` exists
 - [ ] **Verify the version inside each zip, not the folder** — the folder can be
