@@ -154,6 +154,9 @@ extras" below). `-Zip` makes a store package and needs the extras; add
 `-OpenSource` to package without them. A store package also refuses to
 build while Supporter is still in Polar's sandbox (`RELEASE_CHECKLIST.md`,
 section 0); `-Zip -Sandbox` makes a test package, never for a store.
+Every zip is read back by `scripts/check-package.js` before the build calls
+it done, and gets a build note (`dist\blocknsfw-*.build.txt`) with its
+SHA-256 and the commits it was built from.
 
 Build output:
 

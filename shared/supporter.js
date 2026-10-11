@@ -10,15 +10,23 @@
 // A store code comes from Polar, the payment site, by email after someone
 // pays, for a monthly, yearly or lifetime plan. The extension asks Polar
 // whether it is a real, paid code when it is entered, then about once a day,
-// so a plan that has ended closes the extras. Only the code and the store's
-// organization id are sent, never anything about browsing. Offline, the
-// answer it has stands.
+// so a plan that has ended closes the extras. Offline, the answer it has
+// stands.
+//
+// A plan works on a few browsers at once: Polar's activation limit on the
+// license key, set in Polar (RELEASE_CHECKLIST.md, section 0). Entering the
+// code takes one of its places, named for the browser ("BlockNSFW · Chrome on
+// Windows"); Settings › Supporter gives it back, so the plan can move. With
+// no limit set in Polar, a code simply works wherever it's entered. Only the
+// code, the store's organization id and that name are sent, never anything
+// about browsing.
 //
 // A signed code ("BN1-…") is one the author makes by hand with
 // tools/supporter-codes.mjs: for Android supporters, gifts, and anyone who
 // can't afford it. It is a short note (a version, a number, the day it was
 // made) signed with the author's key, checked against PUBLIC_KEY on the
-// device, and never sent anywhere.
+// device, and never sent anywhere. One that turns up shared is closed by
+// adding its number to REVOKED.
 //
 // (The source is open, so anyone can change this file. That's fine: a code
 // is a thank-you, not a lock.)
@@ -33,7 +41,7 @@
 (function (root) {
   'use strict';
 
-  var KEY = 'pblocker_supporter';   // storage.local: { kind, code, number?, since }
+  var KEY = 'pblocker_supporter';   // storage.local: { kind, code, number?, since, checkedAt?, activationId?, limit?, ended?, removed? }
   var PREFIX = 'BN1-';
   var VERSION = 1;
   var PAYLOAD_BYTES = 7;
@@ -76,12 +84,24 @@
   // close within this long after. Offline, it stays as it was.
   var RECHECK_MS = 24 * 60 * 60 * 1000;
 
+  // Offline, the last answer stands, but not for ever: a store code the store
+  // hasn't confirmed for this long pauses the extras until it can (they come
+  // back with the next answer, nothing lost). Otherwise a code no store ever
+  // sold would stay open for as long as the store stayed out of reach.
+  var OFFLINE_GRACE_MS = 14 * DAY;
+
   var PUBLIC_KEY = {
     kty: 'EC',
     crv: 'P-256',
     x: '-pyWnALMjKN7eHj2hWwdByIUcPf0tghRe15h3vdIghQ',
     y: 'zyIAVRNawSvJasHxfBqXLMdQR8zXeT_wqt6YjPGOhNE'
   };
+
+  // Signed codes that turned up shared, by number (the note kept with
+  // tools/supporter-codes.mjs says whose each was). A number added here
+  // closes that code on every copy that takes the update; make the person a
+  // new one.   e.g. [1042, 1077]
+  var REVOKED = [];
 
   // --- Bytes -------------------------------------------------------------------
 
@@ -167,9 +187,10 @@
         return subtle.verify({ name: 'ECDSA', hash: 'SHA-256' }, key, parsed.sig, parsed.payload);
       })
       .then(function (good) {
-        return good
-          ? { ok: true, number: parsed.number, issued: parsed.issued }
-          : { ok: false, reason: 'that code doesn’t match' };
+        if (!good) return { ok: false, reason: 'that code doesn’t match' };
+        var revoked = (opts && opts.revoked) || REVOKED;
+        if (revoked.indexOf(parsed.number) !== -1) return { ok: false, reason: 'that code has been turned off', revoked: true };
+        return { ok: true, number: parsed.number, issued: parsed.issued };
       }, function () {
         return { ok: false, reason: 'that code doesn’t match' };
       });
@@ -190,33 +211,84 @@
     return { base: store.api[store.mode] || store.api.live, organizationId: store.organizationId };
   }
 
-  // Asks the store whether this is a real, paid code. One request to Polar,
-  // carrying the code and the store's organization id.
-  //   { ok: true, id } or { ok: false, reason, offline?, definite? }
-  // `definite` means the store said no (unknown, turned off, run out), as
-  // opposed to not answering or not being asked.
-  function verifyStore(code, opts, now) {
-    var key = String(code == null ? '' : code).replace(/\s+/g, '');
-    var api = storeApi(opts);
-    if (!api.organizationId) return Promise.resolve({ ok: false, reason: 'codes from the store aren’t switched on yet' });
+  // One request to the store. Resolves to { status, body } (body null when
+  // there's none to read, `garbled` when there was one but it wasn't JSON),
+  // or { offline, reason? } when the request never got an answer.
+  function storeCall(path, payload, opts) {
     var doFetch = (opts && opts.fetch) || (typeof fetch === 'function' ? fetch.bind(root) : null);
-    if (!doFetch) return Promise.resolve({ ok: false, reason: 'this browser can’t check it', offline: true });
-    return doFetch(api.base + '/v1/customer-portal/license-keys/validate', {
+    if (!doFetch) return Promise.resolve({ offline: true, reason: 'this browser can’t check it' });
+    return doFetch(storeApi(opts).base + path, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'omit',
-      body: JSON.stringify({ key: key, organization_id: api.organizationId })
+      body: JSON.stringify(payload)
     }).then(function (res) {
-      if (res.status === 404) return { ok: false, reason: 'that code doesn’t match', definite: true };
-      if (res.status === 422) return { ok: false, reason: 'that code doesn’t match' };
-      if (!res.ok) return { ok: false, reason: 'the store didn’t answer. Try again in a minute', offline: true };
-      return res.json().then(function (body) {
-        if (!body || body.status !== 'granted') return { ok: false, reason: 'that code has been turned off', definite: true };
-        if (body.expires_at && Date.parse(body.expires_at) < now) return { ok: false, reason: 'that code has run out', definite: true };
-        return { ok: true, id: String(body.id || '') };
+      if (!res.ok || res.status === 204) return { status: res.status, body: null };
+      return Promise.resolve(res.json()).then(function (body) {
+        return { status: res.status, body: body };
+      }, function () {
+        return { status: res.status, body: null, garbled: true };
       });
     }, function () {
-      return { ok: false, reason: 'couldn’t reach the store. Check your connection and try again', offline: true };
+      return { offline: true };
+    });
+  }
+
+  function unanswered(r) {
+    return { ok: false, reason: r.reason || 'couldn’t reach the store. Check your connection and try again', offline: true };
+  }
+
+  // Asks the store whether this is a real, paid code. One request to Polar,
+  // carrying the code, the store's organization id, and this browser's place
+  // on the plan when it has one.
+  //   { ok: true, id, limit } or { ok: false, reason, offline?, definite? }
+  // `limit` is how many browsers the plan works on at once (0: no limit).
+  // `definite` means the store said no (unknown, turned off, run out, or not
+  // this browser's place), as opposed to not answering or not being asked.
+  function verifyStore(code, opts, now, activationId) {
+    var key = String(code == null ? '' : code).replace(/\s+/g, '');
+    var api = storeApi(opts);
+    if (!api.organizationId) return Promise.resolve({ ok: false, reason: 'codes from the store aren’t switched on yet' });
+    var payload = { key: key, organization_id: api.organizationId };
+    if (activationId) payload.activation_id = activationId;
+    return storeCall('/v1/customer-portal/license-keys/validate', payload, opts).then(function (r) {
+      if (r.offline) return unanswered(r);
+      if (r.status === 404) return { ok: false, reason: 'that code doesn’t match', definite: true };
+      if (r.status === 422) return { ok: false, reason: 'that code doesn’t match' };
+      if (r.status < 200 || r.status >= 300 || r.garbled) return { ok: false, reason: 'the store didn’t answer. Try again in a minute', offline: true };
+      var body = r.body;
+      if (!body || body.status !== 'granted') return { ok: false, reason: 'that code has been turned off', definite: true };
+      if (body.expires_at && Date.parse(body.expires_at) < now) return { ok: false, reason: 'that code has run out', definite: true };
+      return { ok: true, id: String(body.id || ''), limit: Math.max(0, Math.floor(Number(body.limit_activations) || 0)) };
+    });
+  }
+
+  // What this browser is called on the purchases page, so a buyer can tell
+  // their places apart: "BlockNSFW · Chrome on Windows". Nothing more.
+  function deviceLabel(opts) {
+    if (opts && opts.label) return opts.label;
+    var ua = typeof navigator !== 'undefined' && navigator && navigator.userAgent ? navigator.userAgent : '';
+    var browser = /Edg\//.test(ua) ? 'Edge' : /Firefox\//.test(ua) ? 'Firefox' : /OPR\//.test(ua) ? 'Opera' : 'Chrome';
+    var os = /Android/.test(ua) ? 'Android' : /Windows/.test(ua) ? 'Windows' : /CrOS/.test(ua) ? 'ChromeOS'
+      : /Mac OS X|Macintosh/.test(ua) ? 'Mac' : /Linux/.test(ua) ? 'Linux' : '';
+    return 'BlockNSFW · ' + browser + (os ? ' on ' + os : '');
+  }
+
+  // Takes one of the plan's places for this browser.
+  //   { ok: true, activationId } or { ok: false, reason, full?, definite?, offline? }
+  // `full` means every place is taken.
+  function activateStore(code, opts, limit) {
+    var api = storeApi(opts);
+    var payload = { key: code, organization_id: api.organizationId, label: deviceLabel(opts) };
+    return storeCall('/v1/customer-portal/license-keys/activate', payload, opts).then(function (r) {
+      if (r.offline) return unanswered(r);
+      if (r.status === 403) {
+        var where = limit === 1 ? 'one browser' : (limit || 'as many') + ' browsers';
+        return { ok: false, full: true, reason: 'that code is already on ' + where + ', as many as a plan allows. Remove it from one of them first: in Settings › Supporter there, or on your purchases page' };
+      }
+      if (r.status === 404) return { ok: false, reason: 'that code doesn’t match', definite: true };
+      if (r.status < 200 || r.status >= 300 || !r.body || !r.body.id) return { ok: false, reason: 'the store didn’t answer. Try again in a minute', offline: true };
+      return { ok: true, activationId: String(r.body.id) };
     });
   }
 
@@ -228,11 +300,21 @@
     return Promise.resolve(storage.set(write));
   }
 
-  // { supporter, kind?, number?, since?, ended? }. `storage` is a
-  // storage.local area. A signed code is checked again here, on the device.
-  // A store code is asked about again once RECHECK_MS has passed since the
-  // last answer (or at once with opts.force): still paid keeps it, a definite
-  // no closes the extras (and says when), and no answer leaves it as it was.
+  function forget(storage) {
+    return Promise.resolve(typeof storage.remove === 'function' ? storage.remove(KEY) : keep(storage, null));
+  }
+
+  // { supporter, kind?, number?, since?, limit?, ended?, removed?, unchecked? }.
+  // `storage` is a storage.local area. A signed code is checked again here,
+  // on the device. A store code is asked about again once RECHECK_MS has
+  // passed since the last answer (or at once with opts.force): still paid
+  // keeps it, a definite no closes the extras (and says when), and no answer
+  // leaves it as it was for up to OFFLINE_GRACE_MS since the last answer;
+  // after that, `unchecked` until the store answers. `removed` says this
+  // browser lost its place on the plan (taken
+  // back on the purchases page, or every place taken by the time Polar's
+  // limit came in) while the plan itself goes on: the code entered again
+  // takes a place back if there's one free.
   function status(storage, opts) {
     var now = (opts && opts.now) || Date.now();
     return Promise.resolve(storage.get(KEY)).then(function (got) {
@@ -241,18 +323,54 @@
       var since = Number(rec.since) || 0;
       if (rec.kind === 'store') {
         if (kindOf(rec.code) !== 'store') return { supporter: false };
+        if (Number(rec.removed) > 0) return { supporter: false, kind: 'store', removed: Number(rec.removed) };
         if (Number(rec.ended) > 0) return { supporter: false, kind: 'store', ended: Number(rec.ended) };
-        var yes = { supporter: true, kind: 'store', since: since };
+        var held = typeof rec.activationId === 'string' ? rec.activationId : '';
+        var yes = function (limit) {
+          var s = { supporter: true, kind: 'store', since: since };
+          if (limit) s.limit = limit;
+          return s;
+        };
+        var save = function (more) { return keep(storage, Object.assign({}, rec, more)); };
+        var ended = function () {
+          return save({ ended: now }).then(function () { return { supporter: false, kind: 'store', ended: now }; });
+        };
+        var removed = function () {
+          return save({ removed: now }).then(function () { return { supporter: false, kind: 'store', removed: now }; });
+        };
         var checked = Number(rec.checkedAt) || since;
-        if (!(opts && opts.force) && now - checked < RECHECK_MS) return yes;
-        return verifyStore(rec.code, opts, now).then(function (r) {
-          if (r.ok) return keep(storage, Object.assign({}, rec, { checkedAt: now })).then(function () { return yes; });
-          if (r.definite) {
-            return keep(storage, Object.assign({}, rec, { ended: now })).then(function () {
-              return { supporter: false, kind: 'store', ended: now };
+        // A check dated later than now is no check at all: ask now.
+        var age = checked <= now ? now - checked : Infinity;
+        // No answer: the last one stands, within the grace.
+        var unanswered = function () {
+          return age < OFFLINE_GRACE_MS ? yes(Number(rec.limit) || 0) : { supporter: false, kind: 'store', unchecked: true };
+        };
+        if (!(opts && opts.force) && age < RECHECK_MS) return yes(Number(rec.limit) || 0);
+        return verifyStore(rec.code, opts, now, held).then(function (r) {
+          if (r.ok && r.limit && !held) {
+            // Polar's limit came in after this code was entered here.
+            return activateStore(rec.code, opts, r.limit).then(function (a) {
+              if (a.ok) return save({ checkedAt: now, activationId: a.activationId, limit: r.limit }).then(function () { return yes(r.limit); });
+              if (a.full) return removed();
+              if (a.definite) return ended();
+              return unanswered();
             });
           }
-          return yes;
+          if (r.ok) {
+            var more = { checkedAt: now };
+            if (r.limit) more.limit = r.limit;
+            return save(more).then(function () { return yes(r.limit); });
+          }
+          if (r.definite && held) {
+            // Either the plan is over, or this browser's place was taken back.
+            return verifyStore(rec.code, opts, now).then(function (plain) {
+              if (plain.ok) return removed();
+              if (plain.definite) return ended();
+              return unanswered();
+            });
+          }
+          if (r.definite) return ended();
+          return unanswered();
         });
       }
       return verify(rec.code, opts).then(function (r) {
@@ -263,17 +381,59 @@
     }, function () { return { supporter: false }; });
   }
 
+  // A store code: asked about, then given one of the plan's places when the
+  // plan has a limit. The same code entered again here keeps its place.
+  function unlockStore(storage, code, now, opts) {
+    var key = String(code).replace(/\s+/g, '');
+    var save = function (r, activationId) {
+      var rec = { kind: 'store', code: key, since: now, checkedAt: now };
+      if (activationId) rec.activationId = activationId;
+      if (r.limit) rec.limit = r.limit;
+      return keep(storage, rec).then(function () { return r; });
+    };
+    var old = Promise.resolve(storage.get(KEY)).then(function (got) { return got && got[KEY]; }, function () { return null; });
+    return old.then(function (rec) {
+      var held = rec && rec.kind === 'store' && rec.code === key && !rec.removed && typeof rec.activationId === 'string' ? rec.activationId : '';
+      return (held ? verifyStore(key, opts, now, held) : Promise.resolve(null)).then(function (h) {
+        if (h && h.ok) return save(h, held);
+        return verifyStore(key, opts, now).then(function (r) {
+          if (!r.ok) return r;
+          if (!r.limit) return save(r, '');
+          return activateStore(key, opts, r.limit).then(function (a) {
+            return a.ok ? save(r, a.activationId) : a;
+          });
+        });
+      });
+    });
+  }
+
   // Checks a code of either kind and keeps it. Resolves to { ok, reason? }.
   function unlock(storage, code, now, opts) {
     var kind = kindOf(code);
     if (!kind) return Promise.resolve({ ok: false, reason: 'that isn’t a whole supporter code' });
-    var check = kind === 'signed' ? verify(code, opts) : verifyStore(code, opts, now);
-    return check.then(function (r) {
+    if (kind === 'store') return unlockStore(storage, code, now, opts);
+    return verify(code, opts).then(function (r) {
       if (!r.ok) return r;
-      var rec = kind === 'signed'
-        ? { kind: 'signed', code: PREFIX + clean(code), number: r.number, since: now }
-        : { kind: 'store', code: String(code).replace(/\s+/g, ''), since: now, checkedAt: now };
-      return keep(storage, rec).then(function () { return r; });
+      return keep(storage, { kind: 'signed', code: PREFIX + clean(code), number: r.number, since: now }).then(function () { return r; });
+    });
+  }
+
+  // Gives this browser's place on the plan back to the store, then forgets
+  // the code here, so the plan can move to another browser. Resolves to
+  // { ok, reason? }. Offline, nothing changes: forgetting the code without
+  // telling the store would leave the place taken.
+  function release(storage, opts) {
+    return Promise.resolve(storage.get(KEY)).then(function (got) {
+      var rec = got && got[KEY];
+      var held = rec && rec.kind === 'store' && !rec.removed && !rec.ended && typeof rec.activationId === 'string' ? rec.activationId : '';
+      var done = function () { return forget(storage).then(function () { return { ok: true }; }); };
+      if (!held) return done();
+      var payload = { key: rec.code, organization_id: storeApi(opts).organizationId, activation_id: held };
+      return storeCall('/v1/customer-portal/license-keys/deactivate', payload, opts).then(function (r) {
+        // 404: the store has no such place any more, which is what was asked.
+        if (!r.offline && ((r.status >= 200 && r.status < 300) || r.status === 404)) return done();
+        return { ok: false, reason: 'couldn’t reach the store, so this browser still holds its place. Try again when you’re online' };
+      });
     });
   }
 
@@ -314,13 +474,16 @@
     STORE: STORE,
     PLANS: PLANS,
     RECHECK_MS: RECHECK_MS,
+    OFFLINE_GRACE_MS: OFFLINE_GRACE_MS,
     PUBLIC_KEY: PUBLIC_KEY,
     buyable: buyable,
     offered: offered,
     portalUrl: portalUrl,
     offerFor: offerFor,
     kindOf: kindOf,
+    REVOKED: REVOKED,
     verifyStore: verifyStore,
+    deviceLabel: deviceLabel,
     dayNumber: dayNumber,
     payloadFor: payloadFor,
     encode: encode,
@@ -328,7 +491,8 @@
     parse: parse,
     verify: verify,
     status: status,
-    unlock: unlock
+    unlock: unlock,
+    release: release
   };
 
   if (typeof module !== 'undefined' && module.exports) {

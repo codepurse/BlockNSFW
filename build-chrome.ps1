@@ -30,6 +30,11 @@ if ($Zip -and -not $OpenSource -and -not $Sandbox) {
     if ($LASTEXITCODE -ne 0) {
         throw "Not packaging for a store while Supporter is in Polar's sandbox (RELEASE_CHECKLIST.md, section 0). Pass -Sandbox for a test package."
     }
+    Write-Host "==> Checking that everything that ships is committed" -ForegroundColor Cyan
+    node (Join-Path (Split-Path -Parent $MyInvocation.MyCommand.Path) "scripts\check-package.js") tree
+    if ($LASTEXITCODE -ne 0) {
+        throw "Not packaging for a store from code that isn't committed: the build note couldn't say what the release carries."
+    }
 }
 
 $ScriptDir   = Split-Path -Parent $MyInvocation.MyCommand.Path
@@ -140,6 +145,8 @@ if ($WithExtras) {
     foreach ($stub in Get-ChildItem -Path $ExtrasOut -File) {
         $real = Join-Path $ExtrasSrc $stub.Name
         if (-not (Test-Path $real)) { throw "extras-private\extras is missing $($stub.Name)" }
+        if ((Get-Item $real).Length -eq 0) { throw "extras-private\extras\$($stub.Name) is empty" }
+        if ((Get-FileHash $real).Hash -eq (Get-FileHash $stub.FullName).Hash) { throw "extras-private\extras\$($stub.Name) is only the stand-in" }
         Copy-Item -Path $real -Destination $stub.FullName -Force
     }
 } elseif ($Zip -and -not $OpenSource) {
@@ -208,10 +215,23 @@ if ($Zip) {
     } finally {
         $ZipStream.Dispose()
     }
+
+    # Read the package back: the extras right for its kind, nothing that
+    # mustn't ship, and a build note of the commits it came from.
+    $PackageKind = if ($OpenSource) { "open-source" } elseif ($Sandbox) { "test" } else { "store" }
+    Write-Host "==> Checking the package ($PackageKind)" -ForegroundColor Cyan
+    node (Join-Path $ScriptDir "scripts\check-package.js") zip $ZipPath chrome $PackageKind
+    if ($LASTEXITCODE -ne 0) {
+        Remove-Item $ZipPath -Force
+        throw "The package failed its check and was removed. See the list above."
+    }
 }
 
 Write-Host "==> Chrome build complete: $OutDir" -ForegroundColor Green
 if ($WithExtras) { Write-Host "==> Supporter extras: included" -ForegroundColor Green }
 else { Write-Host "==> Supporter extras: not included (open-source build)" -ForegroundColor Yellow }
 if ($Zip -and $Sandbox) { Write-Host "==> TEST PACKAGE: Supporter uses Polar's sandbox. Never upload it to a store." -ForegroundColor Yellow }
-if ($Zip) { Write-Host "==> Zip: $ZipPath" -ForegroundColor Green }
+if ($Zip) {
+    Write-Host "==> Zip: $ZipPath" -ForegroundColor Green
+    Write-Host "==> Build note: $($ZipPath -replace '\.zip$', '.build.txt') (keep it with the release)" -ForegroundColor Green
+}

@@ -3240,7 +3240,7 @@ title/Example Domain/"></textarea>
             <a class="btn btn-primary" id="supporter-buy-btn" target="_blank" rel="noopener noreferrer" hidden>Become a supporter</a>
             <p class="supporter-offer" id="supporter-offer" hidden></p>
             <p class="supporter-buy-hint" id="supporter-buy-hint"></p>
-            <p class="supporter-buy-hint">For this browser extension. BlockNSFW for Android has its own Supporter, in the app. Cancel any time, and if you bought it by mistake, we’ll refund it.</p>
+            <p class="supporter-buy-hint">For this browser extension, on up to three of your browsers at once. BlockNSFW for Android has its own Supporter, in the app. Cancel any time, and if you bought it by mistake, we’ll refund it.</p>
           </div>
         </div>
 
@@ -3307,12 +3307,15 @@ title/Example Domain/"></textarea>
                   </div>
                   <p class="field-error" id="supporter-code-error" role="alert"></p>
                   <p class="supporter-portal-row"><a class="arrow-link" id="supporter-portal" target="_blank" rel="noopener noreferrer">Can’t find your code? Open your purchases <svg class="icon icon-12 icon-up-right" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M4.5 11.5l7-7M6 4.5h5.5V10" /></svg></a></p>
-                  <p class="field-hint" id="supporter-code-hint">Your code is on your purchases page; Polar’s receipt email links to it as “Access my purchase”. It’s checked with the store when you enter it, then about once a day, so a plan that ends can close. Only the code is ever sent, never anything about your browsing.</p>
+                  <p class="field-hint" id="supporter-code-hint">Your code is on your purchases page; Polar’s receipt email links to it as “Access my purchase”. It’s checked with the store when you enter it, then about once a day, so a plan that ends can close. Only the code is sent, with this browser’s name (such as “Chrome on Windows”) so your plan can count its browsers. Never anything about your browsing.</p>
                 </div>
               </div>
               <p class="supporter-thanks" id="supporter-thanks" role="status" hidden></p>
               <p class="supporter-portal-row" id="supporter-manage-row" hidden><a class="arrow-link" id="supporter-manage" target="_blank" rel="noopener noreferrer">Manage or cancel your plan <svg class="icon icon-12 icon-up-right" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M4.5 11.5l7-7M6 4.5h5.5V10" /></svg></a></p>
               <p class="field-hint" id="supporter-manage-hint" hidden>A cancelled plan runs to the end of the time you paid for, then closes.</p>
+              <!-- A plan with Polar's limit: give this browser's place back, so the plan can move. -->
+              <p class="supporter-portal-row" id="supporter-release-row" hidden><button type="button" class="btn-text" id="supporter-release">Remove it from this browser</button> <span class="field-hint" id="supporter-release-result" role="status"></span></p>
+              <p class="field-hint" id="supporter-release-hint" hidden></p>
               <!-- Development installs only: ask the store now instead of waiting a day. -->
               <p class="supporter-portal-row" id="supporter-recheck-row" hidden><button type="button" class="btn-text" id="supporter-recheck">Check with the store now (test copy only)</button> <span class="field-hint" id="supporter-recheck-result" role="status"></span></p>
             </div>

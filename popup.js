@@ -535,7 +535,9 @@ async function readSupporter() {
   if (!Supporter) return false;
   try {
     const s = await Supporter.status(browserAPI.storage.local);
-    if (!s.supporter) endLook();
+    // Not on a pause for want of an answer (shared/supporter.js `unchecked`):
+    // the look comes back with the plan.
+    if (!s.supporter && !s.unchecked) endLook();
     return s.supporter;
   } catch (_) {
     return false;

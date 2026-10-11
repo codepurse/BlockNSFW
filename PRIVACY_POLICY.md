@@ -1,6 +1,6 @@
 # Privacy Policy for BlockNSFW
 
-**Last Updated:** September 10, 2026
+**Last Updated:** October 11, 2026
 
 ## Overview
 
@@ -255,14 +255,20 @@ what you give there is covered by Polar's own privacy policy. BlockNSFW never
 sees your payment details.
 
 - When: when you enter a code from the store in Settings › Supporter and
-  press Unlock, and then at most about once a day, when you open the
-  extension, so that a monthly or yearly plan that has ended closes the extras
+  press Unlock, then at most about once a day, when you open the
+  extension, so that a monthly or yearly plan that has ended closes the
+  extras, and when you press "Remove it from this browser"
 - Where: `api.polar.sh` (or `sandbox-api.polar.sh` while we test with Polar's
   test store)
 - Data involved: the code and our store's identifier, sent without cookies.
+  A plan works on a limited number of browsers at once, so entering the code
+  also sends a name for this browser, made from its kind and system (for
+  example "BlockNSFW · Chrome on Windows"), and Polar returns a number for
+  this browser's place on the plan, which later checks send back. That name
+  shows on your Polar purchases page, so you can tell your browsers apart.
   Nothing about your browsing, your check-ins or your path is sent
-- The code is kept on your device. If the check can't reach the store, the
-  extras simply stay as they were
+- The code and that number are kept on your device. If the check can't reach
+  the store, the extras simply stay as they were
 - The "Open your purchases" and "Manage or cancel your plan" links open
   Polar's purchases page (`polar.sh`, or `sandbox.polar.sh` while testing) in
   a new tab, only when you click them

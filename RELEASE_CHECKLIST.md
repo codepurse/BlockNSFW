@@ -26,6 +26,15 @@ In Polar, live organization (polar.sh, not sandbox.polar.sh):
       Warden subscriber can't subscribe to BlockNSFW (Polar says "You already
       have an active subscription")
 - [ ] Each checkout link's Success URL is the thank-you page
+- [ ] Each product's **License key** benefit has **Activation limit: 3**, and
+      lets customers deactivate their own activations. One code then works on
+      three browsers at once, and a code posted online stops at the third.
+      Settings › Supporter tells buyers "up to three", so if you choose
+      another number, change that line in `options.html` too. (The extension
+      reads the limit from Polar; with none set, a code works everywhere)
+- [ ] Do the same on the sandbox products, then test it with a sandbox
+      purchase: unlock on three browser profiles, see the fourth refused,
+      "Remove it from this browser" on one, and the fourth then unlocks
 
 In `shared/supporter.js`:
 
@@ -44,6 +53,12 @@ Then:
 - [ ] `npm test` passes
 - [ ] The private Supporter extras are checked out at `extras-private/`, up
       to date (`git -C extras-private pull`), and `npm run test:extras` passes
+- [ ] Both repositories have everything that ships committed: a store `-Zip`
+      refuses otherwise and lists the files (`node scripts/check-package.js
+      tree` gives the same list at any time)
+- [ ] A gift code (`BN1-`) seen shared online: add its number to `REVOKED`
+      in `shared/supporter.js` (your note of who got which number says whose
+      it was), and make that person a new one
 - [ ] Recommended: buy the cheapest plan once with your own card in the live
       store, unlock it in a build from this release, then refund it in Polar
 - [ ] Only now build the store zips (section 2)
@@ -82,6 +97,16 @@ exists", which reads like the bump failed when it did not).
 - [ ] Both builds end with `Supporter extras: included` and no "TEST
       PACKAGE" line (`-Zip` refuses to run without `extras-private/` or in
       sandbox mode; never add `-OpenSource` or `-Sandbox` to a store build)
+- [ ] Both builds say `Package checked`. Every zip is read back by
+      `scripts/check-package.js`: each extra whole and exactly as in
+      `extras-private/`, no tests, tools, notes, keys or `_metadata`, and live
+      Supporter settings. A zip that fails is deleted, so a store never gets it
+- [ ] Keep `dist\blocknsfw-chrome.build.txt` and `dist\blocknsfw-firefox.build.txt`
+      with the release (in its GitHub release notes, or a folder of your own).
+      Each says the version, the zip's SHA-256 and the commit of both
+      repositories, so you can always tell which code a store version carries.
+      Neither may say `NOT COMMITTED` or `not pushed yet`: push both
+      repositories first
 - [ ] Confirm `dist\chrome\manifest.json` exists
 - [ ] Confirm `dist\firefox\manifest.json` exists
 - [ ] **Verify the version inside each zip, not the folder** — the folder can be

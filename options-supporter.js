@@ -147,7 +147,7 @@
     } catch (_) {}
     // A Supporter look (ui/scheme.js) ends with the plan; only on a clear answer.
     const scheme = self.UiScheme;
-    if (answered && !s.supporter && scheme && scheme.getLook()) scheme.setLook(null).catch(() => {});
+    if (answered && !s.supporter && !s.unchecked && scheme && scheme.getLook()) scheme.setLook(null).catch(() => {});
     renderNav(s);
     // The extras with a place in Settings (extras/looks.js, extras/photo.js)
     // follow the answer.
@@ -164,10 +164,27 @@
     // A plan bought through the store is managed (and cancelled) there; a
     // code given by hand has nothing to manage.
     $('supporter-manage-row').hidden = !(s.supporter && s.kind === 'store');
+    // With Polar's limit, a plan holds a place on each browser it's on; this
+    // gives the place here back, so the plan can move.
+    const places = s.supporter && s.kind === 'store' && s.limit;
+    $('supporter-release-row').hidden = !places;
+    $('supporter-release-hint').hidden = !places;
+    if (places) {
+      $('supporter-release-hint').textContent = `Your plan works on ${s.limit === 1 ? 'one browser' : `up to ${s.limit} browsers`} at once. To move it, remove it here first, then enter your code on the other one.`;
+    }
+    releaseArmed = 0;
+    $('supporter-release').textContent = 'Remove it from this browser';
+    $('supporter-release-result').textContent = '';
     if (s.supporter) {
       $('supporter-code-title').textContent = 'You’re a supporter';
       $('supporter-code-desc').textContent = 'Thank you. It keeps this going.';
       $('supporter-thanks').textContent = s.since ? `Thank you. Supporter since ${formatDay(s.since)}.` : 'Thank you.';
+    } else if (s.unchecked) {
+      $('supporter-code-title').textContent = 'Your plan is waiting for a check';
+      $('supporter-code-desc').textContent = 'BlockNSFW hasn’t been able to reach the store for two weeks, so the extras are paused. They come back as soon as it can check, with nothing lost.';
+    } else if (s.removed) {
+      $('supporter-code-title').textContent = 'This browser was removed from your plan';
+      $('supporter-code-desc').textContent = 'Your plan goes on, on your other browsers. Enter your code to add this one back, if the plan has a free place.';
     } else if (s.ended) {
       $('supporter-code-title').textContent = 'Your plan has ended';
       $('supporter-code-desc').textContent = `It ended on ${formatDay(s.ended)}. Your check-ins and your book are still here. Renew any time, or enter a new code.`;
@@ -175,6 +192,37 @@
       $('supporter-code-title').textContent = 'Already a supporter?';
       $('supporter-code-desc').textContent = 'Your code comes by email after you pay.';
     }
+  }
+
+  // Asks once, then removes: the code is needed to add it back.
+  let releaseArmed = 0;
+  async function releaseHere() {
+    const button = $('supporter-release');
+    const result = $('supporter-release-result');
+    if (Date.now() - releaseArmed > 10000) {
+      releaseArmed = Date.now();
+      button.textContent = 'Yes, remove it';
+      result.textContent = 'You’ll need your code to add it back.';
+      return;
+    }
+    releaseArmed = 0;
+    button.disabled = true;
+    result.textContent = 'Asking the store…';
+    let r;
+    try {
+      r = await Supporter.release(browserAPI.storage.local);
+    } catch (_) {
+      r = { ok: false, reason: 'something went wrong. Try again' };
+    }
+    button.disabled = false;
+    button.textContent = 'Remove it from this browser';
+    if (!r.ok) {
+      const reason = r.reason || 'something went wrong. Try again';
+      result.textContent = reason.charAt(0).toUpperCase() + reason.slice(1) + '.';
+      return;
+    }
+    await renderStatus();
+    $('supporter-code-desc').textContent = 'Removed from this browser. Your plan has a free place for another one.';
   }
 
   async function unlock() {
@@ -227,6 +275,7 @@
       const s = await renderStatus({ force: true }).then(() => Supporter.status(browserAPI.storage.local));
       $('supporter-recheck-result').textContent = s.supporter ? 'Still active.' : 'The plan has ended.';
     });
+    $('supporter-release').addEventListener('click', releaseHere);
     $('supporter-unlock').addEventListener('click', unlock);
     $('supporter-code').addEventListener('keydown', (e) => {
       if (e.key === 'Enter') unlock();
