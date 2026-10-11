@@ -69,7 +69,8 @@
       url: 'https://sandbox-api.polar.sh/v1/checkout-links/polar_cl_zrWeqAon4KrGFiby4Mx0o898RAWPqz4tE8wxm3K3ceT/redirect' },
     { id: 'yearly', name: 'Yearly', price: '$24.99', per: 'a year', note: 'Save 30%', best: true,
       url: 'https://sandbox-api.polar.sh/v1/checkout-links/polar_cl_dEz1SAPFLH4HN3QthpFeMuu4Dcrq96vDQbroo1ucr83/redirect' },
-    { id: 'lifetime', name: 'Lifetime', price: '$49.99', per: 'once', note: '', url: '' }
+    { id: 'lifetime', name: 'Lifetime', price: '$89.99', per: 'once', note: '',
+      url: 'https://sandbox-api.polar.sh/v1/checkout-links/polar_cl_gckx8j6KhDgVy4k0CvN3MDFiX3gHIo6Po8e3E2szYnp/redirect' }
   ];
 
   // An offer with an end, such as a founding price for the first month: a

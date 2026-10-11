@@ -18,7 +18,7 @@ package needs `-Zip -Sandbox`, and says "TEST PACKAGE" when it's done.
 In Polar, live organization (polar.sh, not sandbox.polar.sh):
 
 - [ ] Three products exist, each with the **License key** benefit: Monthly
-      $2.99, Yearly $24.99, Lifetime $49.99. Open each checkout link and check
+      $2.99, Yearly $24.99, Lifetime $89.99. Open each checkout link and check
       it shows the BlockNSFW product and price (the first sandbox Lifetime
       link opened "Warden Pro Lifetime" instead)
 - [ ] Organization Settings → Subscriptions → "Allow multiple subscriptions"
