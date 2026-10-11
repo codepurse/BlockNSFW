@@ -53,8 +53,8 @@
   // 'live' for real purchases; a code from one doesn't open the other.
   // Until organizationId is set, store codes say they aren't switched on yet.
   var STORE = {
-    mode: 'sandbox',
-    organizationId: '35c82b93-77a2-4b87-8478-39fc5dd4e666',
+    mode: 'live',
+    organizationId: '354a2f6c-8ea7-46a7-87c5-f97645c12e29',
     api: { sandbox: 'https://sandbox-api.polar.sh', live: 'https://api.polar.sh' },
     // Where buyers find their code and manage or cancel a plan.
     portal: { sandbox: 'https://sandbox.polar.sh/monolab/portal', live: 'https://polar.sh/monolab/portal' }
@@ -65,12 +65,12 @@
   // isn't offered; with none at all, Settings shows the prices and says
   // Supporter opens soon instead of showing a button.
   var PLANS = [
-    { id: 'monthly', name: 'Monthly', price: '$2.99', per: 'a month', note: '',
-      url: 'https://sandbox-api.polar.sh/v1/checkout-links/polar_cl_zrWeqAon4KrGFiby4Mx0o898RAWPqz4tE8wxm3K3ceT/redirect' },
-    { id: 'yearly', name: 'Yearly', price: '$24.99', per: 'a year', note: 'Save 30%', best: true,
-      url: 'https://sandbox-api.polar.sh/v1/checkout-links/polar_cl_dEz1SAPFLH4HN3QthpFeMuu4Dcrq96vDQbroo1ucr83/redirect' },
+    { id: 'monthly', name: 'Monthly', price: '$4.99', per: 'a month', note: '',
+      url: 'https://api.polar.sh/v1/checkout-links/polar_cl_3HoAfQuBk8UGkoMsCqXyFIgq2Gfh0uivZJOzf2U3TFG/redirect' },
+    { id: 'yearly', name: 'Yearly', price: '$29.99', per: 'a year', note: '$2.50 a month', best: true,
+      url: 'https://api.polar.sh/v1/checkout-links/polar_cl_K2iTFH90BwoBLA1Qrl8OrtvZs2i44EzVL23Hr0egjKt/redirect' },
     { id: 'lifetime', name: 'Lifetime', price: '$89.99', per: 'once', note: '',
-      url: 'https://sandbox-api.polar.sh/v1/checkout-links/polar_cl_gckx8j6KhDgVy4k0CvN3MDFiX3gHIo6Po8e3E2szYnp/redirect' }
+      url: 'https://api.polar.sh/v1/checkout-links/polar_cl_31MDhvtZNNC3FmBUQ9b7ZTSc0dsMcrGypA4652KTs9F/redirect' }
   ];
 
   // An offer with an end, such as a founding price for the first month: a

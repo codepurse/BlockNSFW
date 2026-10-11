@@ -2,7 +2,7 @@
 
 All notable project changes should be documented here going forward.
 
-## [2.0.0] - 2026-10-09
+## [2.0.0] - 2026-10-12
 
 BlockNSFW 2.0 is built for the hard moment, not only the blocking. **The
 Pact** makes every change that loosens protection wait, and lets a friend you

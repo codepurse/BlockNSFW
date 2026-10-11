@@ -20,7 +20,7 @@ Blocks porn and adult sites before they load, and helps in the hard moment. Ever
 ```
 Most paid blockers charge $9 to $18 a month to block. BlockNSFW blocks for free.
 
-Every protection below costs nothing, needs no account, and will never move behind a payment. Supporter is optional: it adds extras for going further, from $2.99 a month.
+Every protection below costs nothing, needs no account, and will never move behind a payment. Supporter is optional: it adds extras for going further, from $4.99 a month or $29.99 a year.
 
 WHAT IT BLOCKS
 Six layers stand between you and an adult page:
@@ -59,7 +59,7 @@ Blocking is the same for everyone: paying never makes it stronger or weaker. Sup
 • A photo and a message in your own voice for the hard moment
 • Your progress on every computer, through the browser's own sync
 • Supporter looks, and four more blocked-page designs
-$2.99 a month, $24.99 a year or $89.99 once, on up to three of your browsers. Payment through Polar. Cancel any time.
+$4.99 a month, $29.99 a year or $89.99 once, on up to three of your browsers. Payment through Polar. Cancel any time.
 
 HELP
 Problems and ideas: support@monolab.dev
