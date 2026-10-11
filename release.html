@@ -14,8 +14,9 @@
 
        The numeral's point is the brass square from every drawing in the
        extension, the thing held at the door, and under it the same threshold
-       drawing as the section headers in Settings. Then the six things that
-       are new, each with where to find it. Fixed type; past 100rem the page
+       drawing as the section headers in Settings. Then the nine things that
+       are new, each with where to find it, and Supporter on the page's one
+       pine band, said plainly as optional. Fixed type; past 100rem the page
        widens, and past 2200px it steps up in size as a whole. */
     body {
       display: flex;
@@ -219,6 +220,50 @@
       color: var(--color-ink-2);
     }
 
+    /* Supporter: the one pine band. Optional, and says so before it says
+       anything else. */
+    .release-supporter {
+      display: grid;
+      gap: var(--space-5) 64px;
+      align-items: end;
+      margin-top: 56px;
+      padding: 44px 48px 48px;
+    }
+    @media (min-width: 60rem) {
+      .release-supporter {
+        grid-template-columns: minmax(0, 1fr) auto;
+      }
+    }
+    @media (max-width: 40rem) {
+      .release-supporter {
+        padding: 32px var(--space-4) 36px;
+      }
+    }
+    .release-supporter h2 {
+      margin-top: var(--space-3);
+      font-family: var(--font-display);
+      font-size: 34px;
+      font-weight: 400;
+      line-height: 1.12;
+      letter-spacing: -0.015em;
+      color: var(--color-on-band);
+      text-wrap: balance;
+    }
+    .release-supporter p {
+      max-width: 46rem;
+      margin-top: var(--space-3);
+      color: var(--color-on-band-2);
+    }
+    .release-supporter .release-free {
+      color: var(--color-on-band);
+    }
+    .release-supporter .btn {
+      min-height: 48px;
+      padding-inline: var(--space-5);
+      font-size: 15px;
+      white-space: nowrap;
+    }
+
     .release-foot {
       display: flex;
       flex-wrap: wrap;
@@ -308,8 +353,35 @@
           <p>Every Sunday evening, the week read back: each time you turned back at the door, drawn day by day.</p>
           <a class="link release-where" href="week.html">Open Your week</a>
         </li>
+        <li class="release-item">
+          <span class="meta index">07</span>
+          <h3>“Held at the second door.”</h3>
+          <p>The blocked page says why first. Six layers stand between you and an adult page; it draws them as doors and shows which one held it.</p>
+          <a class="link release-where" href="options.html#blocked-design-picker">Customization › Blocked page</a>
+        </li>
+        <li class="release-item">
+          <span class="meta index">08</span>
+          <h3>Back up, and restore</h3>
+          <p>Everything in one file, to keep or to bring to a new computer. Your PIN, the Pact and your Supporter code are never in it.</p>
+          <a class="link release-where" href="options.html#data-group">About › Your data</a>
+        </li>
+        <li class="release-item">
+          <span class="meta index">09</span>
+          <h3>Light or dark</h3>
+          <p>Every page is redrawn, on paper and in ink. Follow your computer, or keep BlockNSFW light or dark.</p>
+          <a class="link release-where" href="options.html#color-scheme-picker">Customization › Appearance</a>
+        </li>
       </ol>
-      <p class="release-also">And: a page for the morning after a slip, days kept in Statistics, your PIN stored safely, and every page redrawn, in light and dark.</p>
+      <p class="release-also">And: a page for the morning after a slip, days kept in Statistics, your PIN stored safely, a new icon, and help by email at support@monolab.dev instead of GitHub.</p>
+    </section>
+
+    <section class="release-supporter band-pine" aria-labelledby="supporter-head">
+      <div>
+        <p class="meta">Optional</p>
+        <h2 id="supporter-head">Supporter, if you want to go further.</h2>
+        <p><span class="release-free">Every protection on this page is free, and stays free.</span> Supporter adds the rest of a 30-day path, an evening check-in, your good days, a letter every month, a photo and a message in your own voice for the hard moment, your progress on every computer, and four more blocked-page designs. From $2.99 a month, on up to three of your browsers.</p>
+      </div>
+      <a class="btn btn-primary" href="options.html#section-supporter">See Supporter</a>
     </section>
 
     <footer class="release-foot">

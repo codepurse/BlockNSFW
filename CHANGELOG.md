@@ -162,7 +162,10 @@ the urge works even when you know every PIN.
   shown; paste it into Settings › Supporter. The extension checks the code
   with Polar when you unlock it, then about once a day when you open the
   extension, sending only the code and our store's ID, without cookies.
-  Offline changes nothing. A cancelled plan runs to the end of the time paid
+  Offline, the last check stands for two weeks; after that the extras pause
+  until a check gets through, and nothing is lost. A plan works on up to
+  three of your browsers at once (Polar's activation limit), and Settings ›
+  Supporter can remove it from one so it can move to another. A cancelled plan runs to the end of the time paid
   for, then the extras close; your check-ins and your book stay. Settings
   shows what's free and what Supporter
   adds side by side, links to manage or cancel a plan, and refunds a purchase
@@ -242,6 +245,16 @@ the urge works even when you know every PIN.
   JetBrains Mono (figures and labels) ship in `fonts/`, so no page loads
   anything from the network to draw itself. The Newsreader file is the smaller
   Latin build monolab uses (58 KB, from 132 KB) and now has a true italic.
+- **A new icon.** A pine shield with the eye struck through in brass, on the
+  toolbar and on the stores. The 16px toolbar icon is drawn to the pixel;
+  32px and up share one drawing, and the manifests list 32 and 64 as well.
+  The count of blocks on the toolbar icon is pine instead of indigo.
+  `store-assets/` holds the new store images and the scripts that make them.
+
+- **Problems and ideas go to support@monolab.dev.** Settings › About shows
+  the address with a Copy button, in place of the links to GitHub. Sites that
+  should or shouldn't be blocked are still reported from Community.
+
 - **The blocked page says why, first: "Held at the second door."** Classic
   draws the six layers between you and an adult page (your list, the
   built-in list, DNS, the address and search, the page's text, the on-device
