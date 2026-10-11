@@ -3052,6 +3052,47 @@ title/Example Domain/"></textarea>
           </div>
         </div>
 
+        <!-- Extension Guard, a separate Windows app (codepurse/extension-guard),
+             installs BlockNSFW by browser policy so it can't be removed or
+             turned off. The status word reads management.getSelf (options.js,
+             renderGuardStatus). -->
+        <div class="group group-split" id="guard-group">
+          <div class="group-aside">
+          <div class="group-head">
+            <h3 class="group-title">Hard to remove</h3>
+            <span class="meta status-word" id="guard-status">checking</span>
+          </div>
+          <p class="group-desc">Anyone can remove or turn off an extension in two clicks, and on a hard night, you might. Extension Guard, a free app for Windows, locks BlockNSFW into every browser on the computer.</p>
+          </div>
+          <div class="group-body">
+          <p class="row-desc" id="guard-status-desc"></p>
+          <ul class="rows rows-closed">
+            <li class="row">
+              <div class="row-text">
+                <span class="row-label">Remove and Turn off are greyed out</span>
+                <p class="row-desc">In Chrome, Edge, Brave and Firefox, for every profile on the computer.</p>
+              </div>
+            </li>
+            <li class="row">
+              <div class="row-text">
+                <span class="row-label">It repairs itself</span>
+                <p class="row-desc">A background service puts the lock back if anything undoes it, and closes private windows as a way round.</p>
+              </div>
+            </li>
+            <li class="row">
+              <div class="row-text">
+                <span class="row-label">Uninstalling it needs a password</span>
+                <p class="row-desc">Best held by a parent or an accountability partner, not you.</p>
+              </div>
+            </li>
+          </ul>
+          <div class="btn-row">
+            <a class="btn btn-ghost" id="guard-get" href="https://github.com/codepurse/extension-guard/releases/latest" target="_blank" rel="noopener noreferrer">Get Extension Guard <svg class="icon icon-up-right" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M4.5 11.5l7-7M6 4.5h5.5V10" /></svg></a>
+          </div>
+          <p class="field-hint">Free and open source, for Windows. It isn’t signed yet, so Windows may say it’s from an unknown publisher: choose More info, then Run anyway.</p>
+          </div>
+        </div>
+
         <div class="group group-split" id="storm-group">
           <div class="group-aside">
           <div class="group-head">

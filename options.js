@@ -2672,6 +2672,32 @@ function setStatusWord(el, word, on) {
   el.removeAttribute('style');
 }
 
+// Security › Hard to remove. Extension Guard (a separate Windows app)
+// installs BlockNSFW by browser policy, and the browser then reports the
+// install type as "admin": Remove and Turn off are greyed out. getSelf needs
+// no permission, in Chrome or Firefox.
+async function renderGuardStatus() {
+  const badge = $('guard-status');
+  if (!badge) return;
+  let type = '';
+  try {
+    if (browserAPI && browserAPI.management && typeof browserAPI.management.getSelf === 'function') {
+      const self = await browserAPI.management.getSelf();
+      type = (self && self.installType) || '';
+    }
+  } catch (_) {}
+  const locked = type === 'admin';
+  setStatusWord(badge, locked ? 'locked' : type ? 'not locked' : 'unknown', locked);
+  const desc = $('guard-status-desc');
+  if (desc) {
+    desc.textContent = locked
+      ? 'BlockNSFW is installed by policy on this computer, so this browser’s Remove and Turn off buttons are greyed out.'
+      : type === 'development'
+        ? 'This copy is loaded for development, so it can’t be locked.'
+        : 'Right now, anyone can remove or turn off BlockNSFW from this browser’s extensions page.';
+  }
+}
+
 // The sentence beside each guarded control says what changing it will ask
 // for, so nothing is ever greyed out without a reason. It reads the same
 // settings the gates read and decides nothing itself.
@@ -2962,6 +2988,7 @@ async function render() {
 
     setIncognitoUI(await getIncognitoAllowed());
   } catch (_) {}
+  renderGuardStatus();
 
   await renderWhitelist();
   await renderSubscriptions();

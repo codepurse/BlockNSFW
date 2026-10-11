@@ -251,6 +251,14 @@ the urge works even when you know every PIN.
   The count of blocks on the toolbar icon is pine instead of indigo.
   `store-assets/` holds the new store images and the scripts that make them.
 
+- **Hard to remove, with Extension Guard** (Settings › Security). A group
+  says whether this browser can remove or turn off BlockNSFW, read from
+  `management.getSelf()` (an install type of `admin` means a policy put it
+  there), and links Extension Guard, the free Windows app that force-installs
+  it with a password to uninstall. Onboarding's step 4 links the download
+  instead of asking people to write in for a beta, and both say plainly that
+  the installer isn't signed yet.
+
 - **Problems and ideas go to support@monolab.dev.** Settings › About shows
   the address with a Copy button, in place of the links to GitHub. Sites that
   should or shouldn't be blocked are still reported from Community.

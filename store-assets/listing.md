@@ -41,6 +41,9 @@ FOR THE HARD MOMENT
 • A PIN over the settings that would weaken protection
 • After a slip: a slip costs one day, never the count
 
+HARD TO REMOVE
+Anyone can remove or turn off an extension in two clicks. Extension Guard, a free and open-source companion app for Windows, locks BlockNSFW into Chrome, Edge, Brave and Firefox: Remove and Turn off are greyed out, it puts the lock back if anything undoes it, and uninstalling it needs a password a parent or accountability partner holds. Settings › Security shows whether this browser is locked, and links the download: github.com/codepurse/extension-guard
+
 SEE HOW IT'S GOING
 Days kept, your week every Sunday, statistics and an audit log, all kept on your computer. Back up everything to one file, and restore it on a new computer.
 
