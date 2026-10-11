@@ -99,10 +99,17 @@ test('H8: the policy says the classifiers are off by default and local', () => {
 });
 
 test('H8: the policy is honest about how the PIN is stored', () => {
-  // It is stored unhashed. Saying so is what stops someone reusing a PIN that
-  // protects something else. See audit finding H6, still open.
-  assert.match(policy, /plain form|not hashed|unhashed/i,
-    'the PIN is stored unhashed; the policy should not imply otherwise');
+  // Since 2.0 the PIN is a salted PBKDF2 hash (shared/pin-hash.js, which
+  // closed audit finding H6). The policy says so, and still warns against
+  // reusing a PIN, because a short one can be guessed from its hash.
+  const pinHash = fs.readFileSync(path.join(__dirname, '..', 'shared', 'pin-hash.js'), 'utf8');
+  assert.match(pinHash, /PBKDF2/, 'the PIN is no longer hashed: the policy below must change with it');
+  assert.match(policy, /salted\s+PBKDF2-SHA256 hash/i,
+    'the policy should say the PIN is stored as a salted hash');
+  assert.doesNotMatch(policy, /plain form|not hashed|unhashed/i,
+    'the policy still says the PIN is stored unhashed');
+  assert.match(policy, /Do not reuse\s+a PIN/i,
+    'the warning against reusing a PIN went missing');
 });
 
 test('H8: the policy still makes its core promises', () => {
