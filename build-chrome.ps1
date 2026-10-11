@@ -92,6 +92,7 @@ $RuntimeFiles   = @(
     "hardest.html",
     "hardest.js",
     "options-supporter.js",
+    "options-backup.js",
     "release.html",
     "community.html",
     "community.js",

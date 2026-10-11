@@ -102,6 +102,16 @@
       white-space: pre-line;
       overflow-wrap: anywhere;
     }
+    /* Their own voice: played only when tapped. */
+    .gate-voice {
+      display: flex;
+      align-items: baseline;
+      gap: var(--space-3);
+      margin-top: var(--space-3);
+    }
+    .gate-voice-time {
+      color: var(--color-ink-3);
+    }
 
     .gate-actions {
       display: flex;
@@ -367,6 +377,10 @@
       <p class="meta">Your words</p>
       <p class="gate-plan" id="words-plan" hidden></p>
       <p class="gate-note" id="words-note" hidden></p>
+      <p class="gate-voice" id="words-voice" hidden>
+        <button type="button" class="btn-text" data-voice-play>Hear yourself</button>
+        <span class="mono tnum gate-voice-time" data-voice-time></span>
+      </p>
     </section>
 
     <!-- Ten minutes, waited out together; moved in the same way. -->
@@ -382,6 +396,8 @@
 
   <script src="shared/gateways.js"></script>
   <script src="shared/moments.js"></script>
+  <script src="shared/sound-store.js"></script>
+  <script src="shared/moment-voice.js"></script>
   <script src="shared/boost.js"></script>
   <script src="gateway.js"></script>
 </body>

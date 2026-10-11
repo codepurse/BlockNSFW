@@ -500,7 +500,7 @@ async function renderMoment() {
   const Boost = globalThis.Boost;
   const section = document.getElementById('moment');
   if (!Moments || !section) return;
-  const keys = [Moments.WORDS_KEY, Moments.PHOTO_KEY];
+  const keys = [Moments.WORDS_KEY, Moments.PHOTO_KEY, Moments.VOICE_KEY];
   if (Boost) keys.push(Boost.STATE_KEY);
   const store = await browserAPI.storage.local.get(keys);
   const words = Moments.normalizeWords(store[Moments.WORDS_KEY]);
@@ -513,6 +513,8 @@ async function renderMoment() {
     if (src) photo.src = src;
     photo.hidden = !src;
   }
+  // And a message in their own voice: on a tap, or by itself if they asked.
+  if (globalThis.MomentVoice) globalThis.MomentVoice.wire(document.getElementById('moment-voice'), store[Moments.VOICE_KEY], { autoplay: true });
 
   const show = (id, text) => {
     const el = document.getElementById(id);

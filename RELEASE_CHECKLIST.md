@@ -61,6 +61,12 @@ Then:
       it was), and make that person a new one
 - [ ] Recommended: buy the cheapest plan once with your own card in the live
       store, unlock it in a build from this release, then refund it in Polar
+- [ ] Once per release that touches sync: two computers (or two Chrome
+      profiles) signed in to the same Google account with sync on for
+      Extensions, both supporters, "Your progress on every computer" on in
+      both. Write a path line on one, open the popup on the other a minute
+      later: the line is there, and Settings › About says "1 other computer".
+      The automated check can only fake the browser's sync
 - [ ] Only now build the store zips (section 2)
 
 ## 1. Prepare

@@ -84,8 +84,21 @@ BlockNSFW stores data locally in your browser extension storage on your device. 
   It holds counts and hours only, never a site or a page
 - A photo you choose for the hard moment, if you choose one, shrunk on your
   device
+- A message you record in your own voice for the hard moment, if you record
+  one (up to a minute), or a sound file you choose instead (up to ten
+  minutes). The microphone is used only while you record, and only after
+  your browser asks you to allow it. The sound stays on your device and
+  plays when you tap "Hear yourself", or by itself on the blocked page if
+  you switch that on
 - The colours of a Supporter look, if you choose one
 - Your supporter code, if you enter one
+- A random identifier for this computer, made on the device, used only to
+  tell your computers apart in a backup or in sync
+- Your other computers' history, if it reached this one from a backup or
+  sync: the same kind of record as the long record above (counts and hours,
+  never a site or a page), the last five weeks of when you turned back,
+  waited a moment out or slipped, and a name for each computer such as
+  "Chrome on Windows"
 
 This locally stored information remains on your device unless you remove it, reset extension data, or uninstall the extension, except for entries that are automatically trimmed or expire as described below.
 
@@ -277,10 +290,45 @@ sees your payment details.
 
 The Supporter extras themselves (days 8 to 30 of the path, the evening
 check-in, Your good days, When it's hardest, Your month and Your year, the
-photo for the hard moment and Supporter looks) are not open source, unlike
-the rest of BlockNSFW. They ship inside the
-extension like everything else, never decide what is blocked, make no network
-requests, and keep what they store on your device, as described above.
+photo and the voice message for the hard moment, your progress on every
+computer, and Supporter looks) are not open source, unlike the rest of
+BlockNSFW. They ship inside the extension like everything else, never decide
+what is blocked, make no network requests of their own, and keep what they
+store on your device, as described above, except what you choose to sync
+(section 11).
+
+### 11. Your Progress on Every Computer (Browser Sync)
+
+Off until you switch it on, in Settings › About › Your data, and only for
+supporters.
+
+- What: your long record (counts and hours per day, never a site or a page),
+  the last five weeks of when you turned back, waited a moment out or
+  slipped, the path and the lines you wrote, your evening check-ins of the
+  last 120 days, your own words, and a name for each computer such as
+  "Chrome on Windows"
+- Where: your browser's own sync (`storage.sync`), which your browser stores
+  with your Google account (Chrome, Edge) or Firefox account, under that
+  provider's privacy policy. BlockNSFW has no server for this and never sees
+  it. It travels only if you're signed in to your browser with sync on
+- Never: protection settings, your whitelist or lists, the PIN, the Pact or
+  its witness, an access code, your Supporter code, your photo or your voice
+  message
+- When: when you open the popup or Settings, at most once a minute
+- Switching it off stops it. What was already synced stays in your browser's
+  sync until you remove it there or reset your browser's sync
+
+### 12. Backups
+
+A backup is a file you save yourself, from Settings › About › Your data. It
+goes wherever you put it; BlockNSFW sends it nowhere. It holds your settings
+and lists, your history (counts and hours per day, and the last five weeks
+of when you turned back, waited a moment out or slipped), the path,
+check-ins, your own words, your photo and voice message, and your current
+run. It never holds the PIN, the Pact or its witness, an access code, your
+Supporter code, the log of blocked addresses or which sites were blocked
+most. Because it holds your history, words, photo and voice, keep the file
+somewhere private.
 
 ## How We Use Data
 
@@ -348,6 +396,9 @@ You can:
 - clear extension data by resetting settings or uninstalling the extension
 - decide whether to submit a blocked or misblocked site report
 - decide whether to read or write a community story, and ask us to remove one you submitted
+- save a backup of your data, restore one, or delete the file
+- record, replay or remove a voice message, and remove a photo
+- switch your progress on every computer on or off
 
 ## Children's Privacy
 

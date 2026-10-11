@@ -344,6 +344,13 @@
       margin-bottom: var(--space-4);
       border-radius: var(--radius-xs);
     }
+    /* Their own voice, for this moment: played only when tapped. */
+    .moment-voice {
+      margin-bottom: var(--space-4);
+    }
+    .moment-voice-time {
+      color: var(--color-ink-3);
+    }
     .moment-plan {
       font-size: 17px;
       line-height: 1.5;
@@ -414,6 +421,10 @@
       <section class="moment" id="moment" aria-labelledby="moment-head" hidden>
         <h2 class="visually-hidden" id="moment-head">For this moment</h2>
         <img class="moment-photo" id="moment-photo" alt="A photo you chose for this moment" hidden />
+        <p class="moment-line moment-voice" id="moment-voice" hidden>
+          <button type="button" class="btn-text" data-voice-play>Hear yourself</button>
+          <span class="moment-voice-time tnum" data-voice-time></span>
+        </p>
         <div class="moment-words" id="moment-words" hidden>
           <p class="meta meta-brass moment-label">For this moment, in your words</p>
           <p class="moment-plan" id="moment-plan" hidden></p>
@@ -470,6 +481,8 @@
 
   <script src="blocked-themes.js"></script>
   <script src="shared/moments.js"></script>
+  <script src="shared/sound-store.js"></script>
+  <script src="shared/moment-voice.js"></script>
   <script src="shared/boost.js"></script>
   <script src="blocked.js"></script>
 </body>

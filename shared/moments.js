@@ -31,6 +31,20 @@
   // data: URL: { src, at }. It stays on the device.
   var PHOTO_KEY = 'pblocker_moment_photo';
   var PHOTO_MAX = 1500000;
+  // A message in the person's own voice for the hard moment, recorded in
+  // Settings (a Supporter extra, up to a minute) or a sound file they chose
+  // (up to ten minutes and 15 MB). The sound itself is a file in IndexedDB
+  // (shared/sound-store.js); this key holds a note about it:
+  //   { store: 'idb', type, size, at, ms, auto }
+  // (One kept before that, or carried in a backup, holds the sound itself as
+  // a data: URL instead: { src, at, ms, auto }.) It plays when they tap it, or
+  // by itself on the blocked page when `auto` is set and the browser allows
+  // it. It stays on the device.
+  var VOICE_KEY = 'pblocker_moment_voice';
+  var VOICE_FILE_MAX = 15 * 1024 * 1024;
+  var VOICE_MAX = Math.ceil(VOICE_FILE_MAX / 3) * 4 + 64;
+  var VOICE_MS_MAX = 600000;
+  var VOICE_TYPES = ['audio/webm', 'audio/ogg', 'audio/mp4', 'audio/mpeg', 'audio/wav'];
   var DAY = 24 * 60 * 60 * 1000;
   var WINDOW_DAYS = 30;
   var LIMITS = { plan: 400, note: 600, name: 60, phone: 32 };
@@ -93,6 +107,36 @@
   function photoSrc(raw) {
     var src = raw && typeof raw === 'object' && typeof raw.src === 'string' ? raw.src : '';
     return src.length <= PHOTO_MAX && /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+\/]+=*$/.test(src) ? src : '';
+  }
+
+  // The voice message's src, or '' when there is none or it isn't plain
+  // audio (WebM, Ogg or MP4 as browsers record it; MP3 or WAV as files come).
+  function voiceSrc(raw) {
+    var src = raw && typeof raw === 'object' && typeof raw.src === 'string' ? raw.src : '';
+    return src.length <= VOICE_MAX && /^data:audio\/(webm|ogg|mp4|mpeg|wav);base64,[A-Za-z0-9+\/]+=*$/.test(src) ? src : '';
+  }
+
+  // Whether the note points to a sound kept in IndexedDB, of a plain kind
+  // and a size it may be.
+  function voiceStored(raw) {
+    return !!(raw && typeof raw === 'object' && raw.store === 'idb' && VOICE_TYPES.indexOf(raw.type) !== -1 &&
+      Number(raw.size) > 0 && Number(raw.size) <= VOICE_FILE_MAX);
+  }
+
+  // Whether there is a sound to hear, either way it's kept.
+  function hasVoice(raw) {
+    return !!voiceSrc(raw) || voiceStored(raw);
+  }
+
+  // Whether it plays by itself when a page is blocked.
+  function voiceAuto(raw) {
+    return !!(raw && typeof raw === 'object' && raw.auto === true && hasVoice(raw));
+  }
+
+  // How long it runs, in milliseconds (0 when unknown).
+  function voiceMs(raw) {
+    var ms = raw && typeof raw === 'object' ? Math.floor(Number(raw.ms)) : 0;
+    return ms > 0 ? Math.min(ms, VOICE_MS_MAX) : 0;
   }
 
   // A tel: link only for something that is plainly a phone number.
@@ -217,16 +261,21 @@
 
   // { kept, counted }: of the last `counted` days (up to 30, fewer for a new
   // install, today included), how many had no slip and no time unprotected.
+  // `others` (shared/progress.js others()) adds your other computers: a day
+  // is kept only if it was kept on every one.
   function daysKept(opts) {
     var now = opts.now;
+    var o = opts.others || null;
     var windowDays = opts.windowDays || WINDOW_DAYS;
     var today = startOfDay(now);
-    var first = typeof opts.firstSeen === 'number' && opts.firstSeen > 0 ? startOfDay(opts.firstSeen) : today;
+    var firstSeen = typeof opts.firstSeen === 'number' && opts.firstSeen > 0 ? opts.firstSeen : 0;
+    if (o && o.firstSeen > 0 && (!firstSeen || o.firstSeen < firstSeen)) firstSeen = o.firstSeen;
+    var first = firstSeen ? startOfDay(firstSeen) : today;
     var sinceFirst = Math.floor((today - first) / DAY) + 1;
     var counted = Math.max(1, Math.min(windowDays, sinceFirst));
     var slipDays = {};
-    normalizeSlips(opts.slips).forEach(function (s) { slipDays[s.day] = true; });
-    var off = offIntervals(opts.disabledLog, now, opts.currentlyEnabled);
+    normalizeSlips(opts.slips).concat(o ? o.slips : []).forEach(function (s) { slipDays[s.day] = true; });
+    var off = offIntervals(opts.disabledLog, now, opts.currentlyEnabled).concat(o ? o.off : []);
 
     var kept = 0;
     for (var i = 0; i < counted; i++) {
@@ -249,6 +298,16 @@
     PHOTO_KEY: PHOTO_KEY,
     PHOTO_MAX: PHOTO_MAX,
     photoSrc: photoSrc,
+    VOICE_KEY: VOICE_KEY,
+    VOICE_MAX: VOICE_MAX,
+    voiceSrc: voiceSrc,
+    voiceMs: voiceMs,
+    voiceAuto: voiceAuto,
+    voiceStored: voiceStored,
+    hasVoice: hasVoice,
+    VOICE_FILE_MAX: VOICE_FILE_MAX,
+    VOICE_MS_MAX: VOICE_MS_MAX,
+    VOICE_TYPES: VOICE_TYPES,
     SLIPS_KEY: SLIPS_KEY,
     KEPT_KEY: KEPT_KEY,
     FIRST_SEEN_KEY: FIRST_SEEN_KEY,

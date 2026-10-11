@@ -182,8 +182,10 @@
   }
 
   async function renderKept() {
+    const Progress = globalThis.Progress;
     const store = await browserAPI.storage.local.get([
-      Moments.SLIPS_KEY, Moments.FIRST_SEEN_KEY, 'pblocker_audit_disabled', 'pblocker_settings'
+      Moments.SLIPS_KEY, Moments.FIRST_SEEN_KEY, 'pblocker_audit_disabled', 'pblocker_settings',
+      Progress ? Progress.ELSEWHERE_KEY : 'pblocker_elsewhere'
     ]);
     const settings = store.pblocker_settings || {};
     const result = Moments.daysKept({
@@ -191,7 +193,9 @@
       firstSeen: store[Moments.FIRST_SEEN_KEY],
       slips: store[Moments.SLIPS_KEY],
       disabledLog: store.pblocker_audit_disabled,
-      currentlyEnabled: settings.enabled !== false
+      currentlyEnabled: settings.enabled !== false,
+      // Your other computers (shared/progress.js), from a backup or sync.
+      others: Progress ? Progress.others(Progress.normalizeElsewhere(store[Progress.ELSEWHERE_KEY])) : null
     });
     $('kept-figure').textContent = `${result.kept} of ${result.counted}`;
     $('kept-words').textContent = result.counted >= 30

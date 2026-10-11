@@ -13,7 +13,7 @@ const DIR = path.join(ROOT, 'extras');
 const STANDINS = fs.readdirSync(DIR).filter((f) => !f.endsWith('.md')).sort();
 
 test('the stand-ins are the extras and the list of them', () => {
-  assert.deepEqual(STANDINS, ['checkin.js', 'extras.js', 'gooddays.js', 'hardest.js', 'looks.js', 'month.js', 'path-days.js', 'photo.js']);
+  assert.deepEqual(STANDINS, ['checkin.js', 'extras.js', 'gooddays.js', 'hardest.js', 'looks.js', 'month.js', 'path-days.js', 'photo.js', 'sync.js', 'voice.js']);
   const readme = fs.readFileSync(path.join(DIR, 'README.md'), 'utf8');
   for (const f of STANDINS) assert.ok(readme.includes('`' + f + '`'), `extras/README.md names ${f}`);
 });

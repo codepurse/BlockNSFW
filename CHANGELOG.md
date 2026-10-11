@@ -101,7 +101,7 @@ the urge works even when you know every PIN.
 - **Supporter** (Settings › Supporter), optional, for this browser extension.
   Protection is the same for everyone: paying never makes blocking stronger
   or weaker, and nothing that's free today will ever move behind it. Support
-  pays for what comes next, and adds eight things for going further:
+  pays for what comes next, and adds ten things for going further:
   - **The path.** Thirty short pages, one a day, each with one small thing to
     do: a step to take, a line to write, or a page to open. Four weeks:
     seeing it, changing the setting, the inside work, and the life after. A
@@ -132,6 +132,23 @@ the urge works even when you know every PIN.
     something worth staying for, shown on the blocked page above your words.
     It is shrunk on the device and never leaves it; it stays after a plan
     ends, and removing it never needs Supporter.
+  - **A message in your own voice** (Settings › Your own words). Up to a
+    minute, recorded on a good day, to the you who's struggling, or a sound
+    or song of up to ten minutes and 15 MB chosen from your computer (MP3,
+    M4A, Ogg, WebM or WAV), kept as a file in the extension's own storage. The blocked page and the gateway pause offer "Hear
+    yourself"; with "Play it by itself when a page is blocked" on, the
+    blocked page starts it when it opens, and if the browser holds the sound
+    back it says so and one tap plays it. The microphone is open only while
+    recording; the sound stays on the device, and after a plan ends, like
+    the photo.
+  - **Your progress on every computer** (Settings › About › Your data), off
+    until switched on. Days kept, the path, check-ins and your words follow
+    you through the browser's own sync, wherever you're signed in to Chrome
+    or Firefox. Each computer's history stays its own and is added up when
+    shown: a day counts as kept only if it was kept on every computer.
+    Protection settings, the PIN, the Pact and your Supporter code never
+    sync, so a change on one computer can't loosen another. It runs when the
+    popup or Settings opens, never in the background.
   - **Supporter looks** (Settings › Appearance). True black for dark, and an
     accent (Pine, Ink, Plum or Graphite) on every BlockNSFW page. Every
     accent keeps text at 4.5:1 or better, light and dark. Looks go back to
@@ -152,6 +169,17 @@ the urge works even when you know every PIN.
   made by mistake. The sidebar's Supporter row says thank you once you are
   one. BlockNSFW for Android has its own Supporter, in the app. Everything the
   extras write stays on the device.
+
+- **Back up, and restore** (Settings › About › Your data), for everyone. One
+  file holds your settings and lists, this computer's history and any others
+  it knows, the path, check-ins, your words, photo and voice, and your run.
+  It never holds the PIN, the Pact or its witness, an access code, your
+  Supporter code or which sites were blocked. Restoring adds to what's here
+  and never takes away: history from another computer is kept beside this
+  one's, the path and check-ins are merged, and the photo, voice and words
+  come back only where there are none. Settings and lists are replaced only
+  after your PIN when one is set, and never while the Pact is on. On a new
+  computer, your current run comes along.
 
 - **A choice of design for the blocked page.** Settings > Blocked Page now
   offers four designs beside Classic, each with a thumbnail and a Preview
@@ -481,7 +509,8 @@ the urge works even when you know every PIN.
   key lives outside both repositories.
 - **The Supporter extras are not open source.** Days 8 to 30 of the path, the
   check-in, Your good days, When it's hardest, Your month and Your year, the
-  photo picker and the looks live in a private repository, checked out at
+  photo picker, the voice recorder, sync and the looks live in a private
+  repository, checked out at
   `extras-private/` (ignored here), and the build scripts copy them over the
   empty stand-ins in `extras/` (`extras/README.md`). `-Zip` refuses to
   package without them; `-OpenSource` builds without them on purpose.
@@ -489,7 +518,16 @@ the urge works even when you know every PIN.
   line of counts per day, rolled up once a day by `background.js`, 400 days
   kept), `ui/scheme.js` lays a kept look over the tokens (colour tokens with
   plain colour values only), and `blocked.js` shows a kept photo
-  (`Moments.photoSrc` takes plain JPEG, PNG or WebP only). Everything that protects stays MIT and in
+  (`Moments.photoSrc` takes plain JPEG, PNG or WebP only) and plays a kept
+  voice message (`shared/moment-voice.js`; `Moments.voiceSrc` takes plain
+  WebM, Ogg or MP4 audio only). `shared/progress.js` keeps each computer's
+  history separate (a snapshot per computer, `pblocker_elsewhere`) and adds
+  them up only for showing, so a computer's own record is never rewritten
+  (the sound itself is a file in IndexedDB, `shared/sound-store.js`, with
+  only a short note in storage.local, which holds about 10 MB in all)
+  with another's; `shared/backup.js` makes and restores the backup, and
+  `Path.merge` settles two copies of the path the same way on both sides.
+  Everything that protects stays MIT and in
   this repository. `shared/path-days.js` keeps days 1 to 7 and the titles of
   the rest, and `add()`s the rest from the extra. The blocked page loads no
   extra and never reads the supporter state: all five designs are open

@@ -152,22 +152,26 @@ async function getKeptData() {
   const Moments = globalThis.Moments;
   if (!Moments) return null;
   const Gateways = globalThis.Gateways;
+  const Progress = globalThis.Progress;
   const store = await browserAPI.storage.local.get([
     Moments.SLIPS_KEY, Moments.FIRST_SEEN_KEY, Moments.KEPT_KEY, 'pblocker_audit_disabled', 'pblocker_settings',
-    Gateways ? Gateways.STOPS_KEY : 'pblocker_gateway_stops'
+    Gateways ? Gateways.STOPS_KEY : 'pblocker_gateway_stops', Progress ? Progress.ELSEWHERE_KEY : 'pblocker_elsewhere'
   ]);
   const settings = store.pblocker_settings || {};
   const stops = Gateways ? Gateways.normalizeStops(store[Gateways.STOPS_KEY]) : { total: 0 };
+  // Your other computers (shared/progress.js), from a backup or sync.
+  const others = Progress ? Progress.others(Progress.normalizeElsewhere(store[Progress.ELSEWHERE_KEY])) : null;
   return {
     days: Moments.daysKept({
       now: Date.now(),
       firstSeen: store[Moments.FIRST_SEEN_KEY],
       slips: store[Moments.SLIPS_KEY],
       disabledLog: store.pblocker_audit_disabled,
-      currentlyEnabled: settings.enabled !== false
+      currentlyEnabled: settings.enabled !== false,
+      others
     }),
-    moments: Moments.normalizeKept(store[Moments.KEPT_KEY]).count,
-    stops: stops.total,
+    moments: Moments.normalizeKept(store[Moments.KEPT_KEY]).count + (others ? others.counts.kept : 0),
+    stops: stops.total + (others ? others.counts.stops : 0),
     stopPattern: Gateways ? Gateways.pattern(stops) : null
   };
 }

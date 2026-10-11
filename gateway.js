@@ -54,14 +54,16 @@
     if (!words.hidden) $(slot).appendChild(words);
   }
 
-  function fillWords(words) {
+  function fillWords(words, voice) {
     const set = (id, text) => {
       $(id).textContent = text || '';
       $(id).hidden = !text;
     };
     set('words-plan', words.plan);
     set('words-note', words.note);
-    $('words').hidden = !(words.plan || words.note);
+    // A message in their own voice (shared/moment-voice.js), played only when tapped.
+    const heard = !!globalThis.MomentVoice && globalThis.MomentVoice.wire($('words-voice'), voice);
+    $('words').hidden = !(words.plan || words.note || heard);
   }
 
   // A call link for the person they named, where there's a number to call.
@@ -334,11 +336,11 @@
   async function init() {
     let store = {};
     try {
-      store = await browserAPI.storage.local.get(['pblocker_settings', Moments.WORDS_KEY, Boost.STATE_KEY]);
+      store = await browserAPI.storage.local.get(['pblocker_settings', Moments.WORDS_KEY, Moments.VOICE_KEY, Boost.STATE_KEY]);
     } catch (_) {}
     const settings = Gateways.normalizeSettings(store.pblocker_settings);
     const words = Moments.normalizeWords(store[Moments.WORDS_KEY]);
-    fillWords(words);
+    fillWords(words, store[Moments.VOICE_KEY]);
     $('wait-ok').addEventListener('click', waitedOut);
     const state = Boost.normalizeState(store[Boost.STATE_KEY]);
     if (state && (!state.until || state.until > Date.now())) runClosed(state, settings, words);

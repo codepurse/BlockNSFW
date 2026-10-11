@@ -11,6 +11,8 @@ extras**:
 | `month.js` | Your month and Your year |
 | `hardest.js` | When it's hardest |
 | `photo.js` | Choosing a photo for the hard moment, in Settings |
+| `voice.js` | Recording a message in your own voice for the hard moment, in Settings |
+| `sync.js` | Your progress on every computer, through the browser's own sync |
 | `looks.js` | Supporter looks (true black, an accent), in Settings |
 | `extras.js` | Which extras a build carries (here: none) |
 

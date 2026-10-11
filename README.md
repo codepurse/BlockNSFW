@@ -48,6 +48,7 @@ BlockNSFW combines several protection layers:
 - Reddit NSFW subreddit checks for Reddit-specific filtering paths
 - Optional Facebook Reels and Instagram Reels blocking toggles
 - First-run onboarding, local stats, streak tracking, whitelist management, and audit views
+- Back up and restore everything in one file (Settings › About › Your data); a backup never holds the PIN, the Pact or a Supporter code
 - Manual community reports for blocked / missed sites
 
 ## Architecture
@@ -226,7 +227,9 @@ come with Supporter; a build from here offers all five.)
 
 The **Supporter extras** are not open source: days 8 to 30 of the path, the
 evening check-in, Your good days, When it's hardest, Your month and Your
-year, the photo for the hard moment, and Supporter looks. They live in a
+year, the photo and the voice message for the hard moment, your progress on
+every computer (through the browser's own sync), and Supporter looks. They
+live in a
 private repository and ship only in the
 versions on the Chrome Web Store, Microsoft Edge Add-ons and Firefox Add-ons.
 `extras/` holds empty stand-ins for them (`extras/README.md`), so a build

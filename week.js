@@ -197,18 +197,26 @@
     try {
       store = await browserAPI.storage.local.get([
         'pblocker_settings', Gateways.STOPS_KEY, Moments.KEPT_KEY, Moments.SLIPS_KEY,
-        Moments.FIRST_SEEN_KEY, 'pblocker_audit_disabled', Boost.RISK_KEY, Weekly.SEEN_KEY
+        Moments.FIRST_SEEN_KEY, 'pblocker_audit_disabled', Boost.RISK_KEY, Weekly.SEEN_KEY,
+        globalThis.Progress ? globalThis.Progress.ELSEWHERE_KEY : 'pblocker_elsewhere'
       ]);
     } catch (_) {}
     const settings = store.pblocker_settings || {};
-    const firstSeen = Number(store[Moments.FIRST_SEEN_KEY]) > 0 ? Number(store[Moments.FIRST_SEEN_KEY]) : now;
+    const ownFirst = Number(store[Moments.FIRST_SEEN_KEY]) > 0 ? Number(store[Moments.FIRST_SEEN_KEY]) : now;
+    // Your other computers (shared/progress.js), from a backup or sync: their
+    // turns back, waits, slips and time unprotected count here too.
+    const Progress = globalThis.Progress;
+    const others = Progress ? Progress.others(Progress.normalizeElsewhere(store[Progress.ELSEWHERE_KEY])) : null;
+    const firstSeen = others && others.firstSeen > 0 ? Math.min(ownFirst, others.firstSeen) : ownFirst;
     const input = {
       now,
       firstSeen,
-      stops: Gateways.normalizeStops(store[Gateways.STOPS_KEY]).recent,
-      kept: Moments.normalizeKept(store[Moments.KEPT_KEY]).times,
-      slips: Moments.normalizeSlips(store[Moments.SLIPS_KEY]),
+      stops: Gateways.normalizeStops(store[Gateways.STOPS_KEY]).recent
+        .concat(others ? others.stops.map((at) => ({ key: 'elsewhere', at })) : []),
+      kept: Moments.normalizeKept(store[Moments.KEPT_KEY]).times.concat(others ? others.kept : []),
+      slips: Moments.normalizeSlips(store[Moments.SLIPS_KEY]).concat(others ? others.slips : []),
       off: Moments.offIntervals(store.pblocker_audit_disabled, now, settings.enabled !== false)
+        .concat(others ? others.off : [])
     };
 
     // Which week: the one asked for, if it's one on offer; else the newest ready.

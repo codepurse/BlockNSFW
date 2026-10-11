@@ -1977,6 +1977,36 @@
       outline: var(--focus-width) solid var(--color-pine-2);
       outline-offset: var(--focus-offset);
     }
+    .own-voice {
+      margin-top: var(--space-4);
+    }
+    .own-voice-row {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: var(--space-3) var(--space-4);
+      margin-top: var(--space-2);
+    }
+    .own-voice-time {
+      font-family: var(--font-mono);
+      font-size: 13px;
+      color: var(--color-ink-2);
+    }
+    .own-voice-row.is-recording .own-voice-time {
+      color: var(--color-pine);
+    }
+    .own-voice-auto {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--space-4);
+      max-width: 34rem;
+      margin-top: var(--space-3);
+    }
+    .own-voice-auto-label {
+      font-size: 14px;
+      color: var(--color-ink);
+    }
 
     @media (max-width: 520px) {
       .row {
@@ -2188,14 +2218,15 @@
           </ul>
           <div class="welcome-foot">
             <details class="wn-details">
-              <summary aria-label="Show the rest of this release&rsquo;s changes"><span class="wn-toggle-closed">Show 14 more</span><span class="wn-toggle-open">Show less</span> <svg class="icon icon-12" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M4 6l4 4 4-4" /></svg></summary>
+              <summary aria-label="Show the rest of this release&rsquo;s changes"><span class="wn-toggle-closed">Show 15 more</span><span class="wn-toggle-open">Show less</span> <svg class="icon icon-12" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M4 6l4 4 4-4" /></svg></summary>
               <ul class="wn-list">
                 <li><details class="wn-item"><summary>A friend can hold the key <span class="badge-new">New</span></summary><p>Someone you trust scans a code into the authenticator app on their phone. When you need a change without the wait, you ask them for the six-digit code it shows. They never see your browsing, and nothing goes through a server.</p></details></li>
                 <li><details class="wn-item"><summary>Your own words on the blocked page <span class="badge-new">New</span></summary><p>Write your plan, a note to yourself and someone to reach, in a calm moment. A blocked page shows them first, and offers to wait out the next ten or twenty minutes with you.</p></details></li>
                 <li><details class="wn-item"><summary>After a slip <span class="badge-new">New</span></summary><p>The popup&rsquo;s &ldquo;I slipped&rdquo; link opens a short, plain page. It counts as one day, never a reset, and offers what would help next time.</p></details></li>
                 <li><details class="wn-item"><summary>Your week <span class="badge-new">New</span></summary><p>Every Sunday evening, a short page about your week: each time you stopped at the door or waited it out, drawn day by day, three numbers beside the week before, and one thing to try next. The popup says when it&rsquo;s ready.</p></details></li>
                 <li><details class="wn-item"><summary>Days kept</summary><p>Statistics counts the days in the last 30 with protection on all day and no slip, beside your runs and the moments you waited out.</p></details></li>
-                <li><details class="wn-item"><summary>Supporter, for going further <span class="badge-new">New</span></summary><p>Optional, and protection stays the same for everyone. It adds the rest of a 30-day path, an evening check-in, your good days, when it&rsquo;s hardest, a letter every month, a photo for the hard moment, Supporter looks and four more blocked-page designs. The Supporter page compares what&rsquo;s free and what it adds, side by side.</p></details></li>
+                <li><details class="wn-item"><summary>Supporter, for going further <span class="badge-new">New</span></summary><p>Optional, and protection stays the same for everyone. It adds the rest of a 30-day path, an evening check-in, your good days, when it&rsquo;s hardest, a letter every month, a photo and a message in your own voice for the hard moment, your progress on every computer, Supporter looks and four more blocked-page designs. The Supporter page compares what&rsquo;s free and what it adds, side by side.</p></details></li>
+                <li><details class="wn-item"><summary>Back up, and restore <span class="badge-new">New</span></summary><p>Settings &rsaquo; About &rsaquo; Your data saves everything in one file: settings and lists, days kept, the path, check-ins, your words, photo and voice. Restoring adds to what&rsquo;s here and never takes away. Your PIN, the Pact and your Supporter code are never in it, and settings are replaced only with your PIN.</p></details></li>
                 <li><details class="wn-item"><summary>Your PIN is stored safely</summary><p>It is kept as a salted hash instead of plain text, and five wrong tries lock PIN entry for a while. A PIN from an older version keeps working.</p></details></li>
                 <li><details class="wn-item"><summary>The popup says whether you&rsquo;re protected</summary><p>It opens on a deep green band that says &ldquo;Protected&rdquo; and holds the protection switch. When protection is off the band turns plain and says so.</p></details></li>
                 <li><details class="wn-item"><summary>The blocked page no longer shows the blocked address</summary><p>It shows the site&rsquo;s ending only now, and never the words a page matched. The audit log shows a site&rsquo;s name instead of its full address.</p></details></li>
@@ -2716,6 +2747,33 @@
               </div>
               <p class="field-hint" id="own-photo-hint">Someone or something worth staying for. It shows on the blocked page above your words, and stays on this device.</p>
               <p class="field-error" id="own-photo-error" role="alert"></p>
+            </div>
+            <!-- A message in your own voice: shown by extras/voice.js (a
+                 Supporter extra); the open-source build leaves it hidden. -->
+            <div class="field own-voice" id="own-voice" hidden>
+              <span class="field-label" id="own-voice-label">A message in your own voice <span class="meta meta-brass row-tag" id="own-voice-tag" hidden>Supporter</span></span>
+              <div class="own-voice-row">
+                <button type="button" class="btn btn-ghost" id="own-voice-record" aria-describedby="own-voice-hint" hidden>Record a message</button>
+                <label class="btn btn-ghost own-photo-choose" id="own-voice-choose" hidden>
+                  <input type="file" class="visually-hidden" id="own-voice-file" accept="audio/mpeg,audio/mp4,audio/x-m4a,audio/aac,audio/ogg,audio/webm,audio/wav,audio/x-wav,.mp3,.m4a,.ogg,.oga,.opus,.webm,.wav" aria-describedby="own-voice-hint" />
+                  <span>Choose a sound</span>
+                </label>
+                <span class="own-voice-time tnum" id="own-voice-time" aria-live="off" hidden></span>
+                <button type="button" class="btn-text" id="own-voice-play" hidden>Listen</button>
+                <button type="button" class="btn-text" id="own-voice-remove" hidden>Remove</button>
+                <a class="arrow-link small" href="#supporter" id="own-voice-upsell" hidden>See Supporter</a>
+              </div>
+              <div class="own-voice-auto" id="own-voice-auto-row" hidden>
+                <label class="own-voice-auto-label" for="own-voice-auto">Play it by itself when a page is blocked</label>
+                <label class="switch">
+                  <input type="checkbox" class="switch-input" role="switch" id="own-voice-auto" aria-describedby="own-voice-auto-hint" />
+                  <span class="switch-track" aria-hidden="true"><span class="switch-thumb"></span></span>
+                  <span class="switch-state" aria-hidden="true"></span>
+                </label>
+              </div>
+              <p class="field-hint" id="own-voice-hint">Up to a minute, recorded on a good day, to the you who’s struggling. Or choose a sound or song of up to ten minutes and 15 MB (MP3, M4A, Ogg, WebM or WAV). It plays on the blocked page when you tap “Hear yourself”, and stays on this device.</p>
+              <p class="field-hint" id="own-voice-auto-hint" hidden>Some browsers don’t let a page play sound by itself until you’ve clicked on it. Then the blocked page says so, and one tap plays it.</p>
+              <p class="field-error" id="own-voice-error" role="alert"></p>
             </div>
           </div>
           <div class="btn-row">
@@ -3295,6 +3353,7 @@ title/Example Domain/"></textarea>
                 <tr><th scope="row">Your own words on the blocked page</th><td data-yes></td><td data-yes></td></tr>
                 <tr><th scope="row">After a slip</th><td data-yes></td><td data-yes></td></tr>
                 <tr><th scope="row">Your week, days kept and Statistics</th><td data-yes></td><td data-yes></td></tr>
+                <tr><th scope="row"><a href="#data-group">Back up and restore</a><span class="compare-desc">Everything in one file, to keep or to bring to another computer.</span></th><td data-yes></td><td data-yes></td></tr>
               </tbody>
               <tbody>
                 <tr class="compare-group"><th scope="rowgroup" colspan="3">Going further</th></tr>
@@ -3306,6 +3365,8 @@ title/Example Domain/"></textarea>
                 <tr class="compare-extra"><th scope="row"><a href="month.html">Your month and your year</a><span class="compare-desc">A letter at the start of every month, and every day of the year on one calendar.</span></th><td data-no></td><td data-yes></td></tr>
                 <tr class="compare-extra"><th scope="row"><a href="#blocked-design-picker">Four more blocked-page designs</a><span class="compare-desc">Calm, Verse, Motivation and Play: something to do while the urge passes.</span></th><td data-no></td><td data-yes></td></tr>
                 <tr class="compare-extra"><th scope="row"><a href="#own-photo">A photo for the hard moment</a><span class="compare-desc">Someone or something worth staying for, above your words on the blocked page.</span></th><td data-no></td><td data-yes></td></tr>
+                <tr class="compare-extra"><th scope="row"><a href="#own-voice">A message in your own voice</a><span class="compare-desc">Recorded on a good day, or a sound you choose; it plays on the blocked page.</span></th><td data-no></td><td data-yes></td></tr>
+                <tr class="compare-extra"><th scope="row"><a href="#data-group">Your progress on every computer</a><span class="compare-desc">Days kept, the path and check-ins, through the browser&rsquo;s own sync.</span></th><td data-no></td><td data-yes></td></tr>
                 <tr class="compare-extra"><th scope="row"><a href="#look-accent-row">Supporter looks</a><span class="compare-desc">True black for dark, and an accent colour for every page.</span></th><td data-no></td><td data-yes></td></tr>
               </tbody>
             </table>
@@ -3374,6 +3435,54 @@ title/Example Domain/"></textarea>
             </div>
           </div>
           <p class="field-hint contact-hint">Something not working, or an idea? Write to us. To report a site that should or shouldn’t be blocked, use <a class="link" href="#section-community">Community</a>.</p>
+        </div>
+
+        <!-- Back up and restore (options-backup.js, shared/backup.js), free for
+             everyone; every computer (extras/sync.js), a Supporter extra. -->
+        <div class="group group-split" id="data-group">
+          <div class="group-aside">
+            <h3 class="group-title">Your data</h3>
+            <p class="group-desc">Everything in one file, to keep or to bring to another computer.</p>
+          </div>
+          <div class="group-body">
+          <div class="rows rows-closed">
+            <div class="row">
+              <div class="row-text">
+                <span class="row-label">Back up</span>
+                <p class="row-desc">Your settings and lists, days kept, the path, check-ins, your words, photo and voice. Your PIN, the Pact and your Supporter code are never in it.</p>
+              </div>
+              <div class="row-control">
+                <button type="button" class="btn btn-ghost btn-sm" id="backup-export">Save a backup</button>
+              </div>
+            </div>
+            <div class="row">
+              <div class="row-text">
+                <span class="row-label">Restore</span>
+                <p class="row-desc">Adds a backup’s history, path and check-ins to what’s here, so nothing is lost. Settings and lists are replaced too, with your PIN if you have one, but not while the Pact is on.</p>
+              </div>
+              <div class="row-control">
+                <button type="button" class="btn btn-ghost btn-sm" id="backup-import">Restore a backup</button>
+                <input type="file" id="backup-import-file" accept=".json,application/json" hidden />
+              </div>
+            </div>
+            <!-- Shown by extras/sync.js (a Supporter extra); the open-source
+                 build leaves it hidden. -->
+            <div class="row" id="sync-row" hidden>
+              <div class="row-text">
+                <label class="row-label" for="sync-on">Your progress on every computer <span class="meta meta-brass row-tag" id="sync-tag" hidden>Supporter</span></label>
+                <p class="row-desc" id="sync-desc">Days kept, the path, check-ins and your words follow you to every computer where you’re signed in to Chrome or Firefox, through the browser’s own sync. Protection settings never sync: each computer keeps its own.</p>
+                <p class="field-hint" id="sync-status" role="status"></p>
+                <a class="arrow-link small" href="#supporter" id="sync-upsell" hidden>See Supporter</a>
+              </div>
+              <label class="switch" id="sync-switch" hidden>
+                <input type="checkbox" class="switch-input" role="switch" id="sync-on" aria-describedby="sync-desc sync-status" />
+                <span class="switch-track" aria-hidden="true"><span class="switch-thumb"></span></span>
+                <span class="switch-state" aria-hidden="true"></span>
+              </label>
+            </div>
+          </div>
+          <p class="field-hint">A backup holds your history, words, photo and voice. Keep the file somewhere private.</p>
+          </div>
         </div>
       </section>
 
@@ -3468,6 +3577,11 @@ title/Example Domain/"></textarea>
   <script src="shared/boost.js"></script>
   <script src="shared/moments.js"></script>
   <script src="shared/gateways.js"></script>
+  <script src="shared/ledger.js"></script>
+  <script src="shared/path.js"></script>
+  <script src="shared/progress.js"></script>
+  <script src="shared/sound-store.js"></script>
+  <script src="shared/backup.js"></script>
   <script src="shared/keyword-pattern.js"></script>
   <script src="shared/dns-providers.js"></script>
   <script src="shared/ai-image-models.js"></script>
@@ -3481,6 +3595,9 @@ title/Example Domain/"></textarea>
   <!-- Supporter looks and the photo for this moment: empty in the open-source build (extras/README.md). -->
   <script src="extras/looks.js"></script>
   <script src="extras/photo.js"></script>
+  <script src="extras/voice.js"></script>
+  <script src="extras/sync.js"></script>
   <script src="options-supporter.js"></script>
+  <script src="options-backup.js"></script>
 </body>
 </html>
