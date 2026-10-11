@@ -55,14 +55,22 @@ BlockNSFW stores data locally in your browser extension storage on your device. 
 - Rule-list subscriptions you have added, and the rules downloaded from them
 - Local blocked counts, daily history, and top blocked domains
 - Local audit/history entries related to blocked pages and extension disable/enable events
-- PIN or lock data if you set a PIN. The PIN is stored in your browser's
-  extension storage in plain form, not hashed. It is a deliberate speed bump
-  against your own impulse, not a defence against someone with access to your
-  computer — anyone who can open your browser's developer tools can read or
-  change extension settings directly, whatever the PIN is set to. Do not reuse
-  a PIN that protects anything else
+- PIN or lock data if you set a PIN. The PIN is stored as a salted
+  PBKDF2-SHA256 hash (150,000 rounds), never as plain text; a PIN saved by an
+  older version is turned into a hash the first time you enter it. A count of
+  wrong tries is kept too, so that after five, PIN entry waits a minute,
+  doubling up to an hour. The PIN is a deliberate speed bump against your own
+  impulse, not a defence against someone with access to your computer: a
+  short PIN can still be guessed from its hash, and anyone who can open your
+  browser's developer tools can change extension settings directly, whatever
+  the PIN is set to. Do not reuse a PIN that protects anything else
 - Access code configuration if you enable it. The code itself is generated
   fresh each time it is shown and is never stored
+- The Pact, if you make one: the wait you chose, the changes waiting it out,
+  the time last read from the server's clock, and a count of wrong witness
+  codes. With a witness, also the key their authenticator app shares with
+  this one, and your recovery codes
+- Storm Mode and your risk hours, if you use them: when each starts and ends
 - Streak and usage-related local counters used by extension features
 - The result of the most recent update check
 - Setup progress, such as whether first-run onboarding has been completed
