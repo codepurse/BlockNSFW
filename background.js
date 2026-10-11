@@ -2891,7 +2891,7 @@ async function bumpTabBadge(tabId, by) {
       tabId,
       text: total > BADGE_CAP ? BADGE_CAP_TEXT : String(total)
     });
-    await browserAPI.action.setBadgeBackgroundColor({ tabId, color: '#4f46e5' });
+    await browserAPI.action.setBadgeBackgroundColor({ tabId, color: '#0d3b31' });
   } catch (_) {
     // Badge support varies (and getBadgeText is unavailable on some Firefox
     // versions). Never let a cosmetic counter break the block that triggered it.

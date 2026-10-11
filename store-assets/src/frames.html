@@ -1,0 +1,432 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>BlockNSFW store images</title>
+<!-- Every store image, set in monolab Threshold (ui/tokens.css). render.js
+     photographs each .frame at its exact size; opened in a browser, this page
+     is the contact sheet. Plates show captures of the real extension, taken
+     by capture.js into ../captures/. -->
+<link rel="stylesheet" href="../../ui/tokens.css">
+<style>
+  html, body { margin: 0; }
+  body {
+    background: #d8d3c6;
+    padding: 48px;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 20px;
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+  .label { font: 500 12px/1 var(--font-mono); letter-spacing: .12em; text-transform: uppercase; color: #57574d; margin-top: 36px; }
+  .row { display: flex; gap: 32px; align-items: flex-start; flex-wrap: wrap; }
+  html.bare body { background: transparent; padding: 0; gap: 0; }
+  html.bare .label, html.bare .review { display: none; }
+
+  .frame {
+    position: relative;
+    flex: none;
+    overflow: hidden;
+    background-color: var(--color-paper);
+    background-image: var(--paper-tooth);
+    color: var(--color-ink);
+  }
+  .frame.on-sheet { background-color: var(--color-sheet); }
+  .frame.on-pine { background-color: var(--color-pine); background-image: none; color: var(--color-sheet); }
+
+  .meta {
+    font-family: var(--font-mono);
+    font-weight: 500;
+    font-size: 13px;
+    line-height: 1.3;
+    letter-spacing: .15em;
+    text-transform: uppercase;
+    color: var(--color-ink-3);
+  }
+  .idx { color: var(--color-brass); }
+  .on-pine .meta { color: var(--color-pine-ink); }
+  .on-pine .idx { color: var(--color-brass-2); }
+
+  /* ---------------------------------------------------------------
+     Screenshots, 1280 x 800. The rail runs the full height at 64px;
+     its pine tick moves down one fifth per screenshot, so the set reads
+     as one document. Claim left, evidence right, in a plate.
+     --------------------------------------------------------------- */
+  .shot { width: 1280px; height: 800px; }
+  .rail { position: absolute; left: 64px; top: 0; bottom: 0; width: 1px; background: var(--color-rule); }
+  .tick { position: absolute; left: 63px; width: 3px; height: 160px; top: calc(var(--i) * 160px); background: var(--color-pine); }
+  .on-pine .rail { background: var(--color-rule-dark); }
+  .on-pine .tick { background: var(--color-brass-2); }
+
+  .running {
+    position: absolute; left: 112px; right: 64px; top: 0; height: 92px;
+    display: flex; align-items: center; justify-content: space-between;
+    border-bottom: 1px solid var(--color-rule);
+  }
+  .on-pine .running { border-color: var(--color-rule-dark); }
+  .brand { display: flex; align-items: center; gap: 14px; font-family: var(--font-display); font-size: 25px; letter-spacing: -0.015em; }
+  .brand .tile { width: 32px; height: 32px; display: block; }
+
+  .body {
+    position: absolute; left: 112px; right: 64px; top: 93px; bottom: 0;
+    display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 64px;
+    align-items: center;
+  }
+  .claim { max-width: 452px; }
+  .claim > .meta { margin: 0 0 24px; }
+  .claim h2 {
+    margin: 0;
+    font-family: var(--font-display);
+    font-weight: 400;
+    font-size: 54px;
+    line-height: 1.06;
+    letter-spacing: -0.022em;
+    text-wrap: balance;
+  }
+  .claim .lede { margin: 24px 0 0; font-size: 19px; line-height: 1.5; color: var(--color-ink-2); text-wrap: pretty; }
+  .on-pine .claim h2 { color: var(--color-sheet); }
+  .on-pine .claim .lede { color: var(--color-pine-ink); }
+
+  .specs { margin: 36px 0 0; padding: 0; }
+  .spec {
+    display: flex; justify-content: space-between; align-items: baseline; gap: 24px;
+    border-top: 1px solid var(--color-rule); padding: 12px 0;
+  }
+  .spec:last-child { border-bottom: 1px solid var(--color-rule); }
+  .spec dt { font: 500 12px/1.3 var(--font-mono); letter-spacing: .15em; text-transform: uppercase; color: var(--color-ink-3); flex: none; }
+  .spec dd { margin: 0; font-size: 15.5px; line-height: 1.35; color: var(--color-ink); text-align: right; }
+  .spec dd .tnum { font-family: var(--font-mono); font-size: 14.5px; font-variant-numeric: tabular-nums; }
+  .on-pine .spec { border-color: var(--color-rule-dark); }
+  .on-pine .spec dt { color: var(--color-pine-ink); }
+  .on-pine .spec dd { color: var(--color-sheet); }
+
+  .evidence { margin: 0; justify-self: end; }
+  .plate { border: 1px solid var(--color-rule); background: var(--color-sheet); padding: 8px; }
+  .on-sheet .plate { background: var(--color-paper); }
+  .on-pine .plate { background: transparent; border-color: rgba(255, 255, 255, .15); }
+  .crop { position: relative; overflow: hidden; }
+  .crop img { position: absolute; display: block; max-width: none; }
+  .evidence figcaption { margin-top: 14px; }
+
+  /* ---------------------------------------------------------------
+     The field: the web arrives from the top, the threshold holds what
+     shouldn't reach you (a brass square where each one stopped), and
+     the rest gets down. Drawn by field() below.
+     --------------------------------------------------------------- */
+  .field { position: absolute; inset: 0; display: block; }
+
+  /* Small promo tile, 440 x 280: the one dark band. */
+  .promo { width: 440px; height: 280px; }
+  .promo .words { position: absolute; left: 32px; top: 0; bottom: 0; display: flex; flex-direction: column; justify-content: center; }
+  .promo .glyph { width: 48px; height: 48px; display: block; margin-bottom: 26px; }
+  .promo .name { font-family: var(--font-display); font-weight: 400; font-size: 46px; line-height: 1; letter-spacing: -0.025em; color: var(--color-sheet); }
+  .promo .meta { margin-top: 16px; font-size: 12px; color: var(--color-pine-ink); }
+
+  /* Marquee, 1400 x 560: a title page, the one centred composition. */
+  .marquee { width: 1400px; height: 560px; }
+  .marquee .words { position: absolute; left: 112px; top: 0; bottom: 0; width: 560px; display: flex; flex-direction: column; justify-content: center; }
+  .marquee .role { display: flex; align-items: center; gap: 14px; font-family: var(--font-display); font-size: 28px; letter-spacing: -0.015em; }
+  .marquee .role .tile { width: 48px; height: 48px; display: block; }
+  .marquee h1 { margin: 34px 0 0; font-family: var(--font-display); font-weight: 400; font-size: 64px; line-height: 1.04; letter-spacing: -0.025em; text-wrap: balance; }
+  .marquee .meta { margin-top: 26px; }
+
+  /* Icons: transparent outside the tile. */
+  .icon { background: none; overflow: visible; }
+  .icon svg { display: block; }
+
+  /* Review only: the icon on light and dark browser toolbars. */
+  .review { display: flex; gap: 24px; }
+  .bar { display: flex; align-items: center; gap: 18px; padding: 10px 18px; border-radius: 0; }
+  .bar.light { background: #f1f3f4; }
+  .bar.dark { background: #35363a; }
+  .bar .slot { width: 16px; height: 16px; opacity: .55; border: 1.5px solid currentColor; border-radius: 3px; }
+  .bar.light .slot { color: #5f6368; }
+  .bar.dark .slot { color: #c4c7c5; }
+</style>
+</head>
+<body>
+
+<!-- ============================ Screenshots ============================ -->
+<p class="label">Screenshot 1 · 1280 × 800 · Chrome, Edge, Firefox</p>
+<section class="frame shot" id="shot-1" style="--i:0">
+  <div class="rail"></div><div class="tick"></div>
+  <header class="running">
+    <span class="brand"><svg class="tile" data-icon="tile" viewBox="0 0 16 16"></svg>BlockNSFW</span>
+    <span class="meta"><span class="idx">01</span> / 05</span>
+  </header>
+  <div class="body">
+    <div class="claim">
+      <p class="meta"><span class="idx">01</span> · The blocked page</p>
+      <h2>Adult sites stop before the page loads.</h2>
+      <p class="lede">Six layers stand in the way: your own list, a built-in list, DNS, search, the words on the page, and an image check that runs on your device.</p>
+      <dl class="specs">
+        <div class="spec"><dt>Built-in list</dt><dd><span class="tnum">237,000+</span> adult sites</dd></div>
+        <div class="spec"><dt>Images</dt><dd>Checked here, never uploaded</dd></div>
+        <div class="spec"><dt>Price</dt><dd>Every protection is free</dd></div>
+      </dl>
+    </div>
+    <figure class="evidence">
+      <div class="plate"><div class="crop" data-src="blocked.png" data-cap="680" data-x="0" data-y="80" data-w="680" data-h="658" data-scale="0.89"></div></div>
+      <figcaption class="meta">The blocked page · the site never loaded</figcaption>
+    </figure>
+  </div>
+</section>
+
+<p class="label">Screenshot 2 · 1280 × 800</p>
+<section class="frame shot on-sheet" id="shot-2" style="--i:1">
+  <div class="rail"></div><div class="tick"></div>
+  <header class="running">
+    <span class="brand"><svg class="tile" data-icon="tile" viewBox="0 0 16 16"></svg>BlockNSFW</span>
+    <span class="meta"><span class="idx">02</span> / 05</span>
+  </header>
+  <div class="body">
+    <div class="claim">
+      <p class="meta"><span class="idx">02</span> · The toolbar</p>
+      <h2>On from the first minute, and slow to switch off.</h2>
+      <p class="lede">Turning protection off asks you to confirm in Settings. SafeSearch is held on for ten search engines, and a filtering DNS resolver can back it up.</p>
+      <dl class="specs">
+        <div class="spec"><dt>SafeSearch</dt><dd>Google, Bing, DuckDuckGo and 7 more</dd></div>
+        <div class="spec"><dt>DNS</dt><dd>4 family resolvers, or your own</dd></div>
+        <div class="spec"><dt>Account</dt><dd>None needed</dd></div>
+      </dl>
+    </div>
+    <figure class="evidence">
+      <div class="plate"><div class="crop" data-src="popup.png" data-cap="360" data-x="0" data-y="0" data-w="360" data-h="448" data-scale="1.24"></div></div>
+      <figcaption class="meta">The toolbar popup</figcaption>
+    </figure>
+  </div>
+</section>
+
+<p class="label">Screenshot 3 · 1280 × 800</p>
+<section class="frame shot" id="shot-3" style="--i:2">
+  <div class="rail"></div><div class="tick"></div>
+  <header class="running">
+    <span class="brand"><svg class="tile" data-icon="tile" viewBox="0 0 16 16"></svg>BlockNSFW</span>
+    <span class="meta"><span class="idx">03</span> / 05</span>
+  </header>
+  <div class="body">
+    <div class="claim">
+      <p class="meta"><span class="idx">03</span> · Gateways</p>
+      <h2>A pause before the sites where it starts.</h2>
+      <p class="lede">Mark the sites that lead you there. Each one makes you wait before it opens, and shows what you wrote for this moment, or plays it in your own voice.</p>
+      <dl class="specs">
+        <div class="spec"><dt>The pause</dt><dd><span class="tnum">5</span> to <span class="tnum">60</span> seconds</dd></div>
+        <div class="spec"><dt>Your words</dt><dd>On every blocked page</dd></div>
+        <div class="spec"><dt>Your voice</dt><dd>With Supporter</dd></div>
+      </dl>
+    </div>
+    <figure class="evidence">
+      <div class="plate"><div class="crop" data-src="gateway.png" data-cap="760" data-x="62" data-y="74" data-w="636" data-h="652" data-scale="0.9"></div></div>
+      <figcaption class="meta">The gateway pause, with your own words</figcaption>
+    </figure>
+  </div>
+</section>
+
+<p class="label">Screenshot 4 · 1280 × 800</p>
+<section class="frame shot on-sheet" id="shot-4" style="--i:3">
+  <div class="rail"></div><div class="tick"></div>
+  <header class="running">
+    <span class="brand"><svg class="tile" data-icon="tile" viewBox="0 0 16 16"></svg>BlockNSFW</span>
+    <span class="meta"><span class="idx">04</span> / 05</span>
+  </header>
+  <div class="body">
+    <div class="claim">
+      <p class="meta"><span class="idx">04</span> · The Pact</p>
+      <h2>Make anything that loosens it wait.</h2>
+      <p class="lede">With a pact, switching protection off or allowing a site waits out a cool-down you choose now. A friend can hold the code. Making protection stronger never waits.</p>
+      <dl class="specs">
+        <div class="spec"><dt>Cool-down</dt><dd><span class="tnum">15</span> minutes to <span class="tnum">3</span> days</dd></div>
+        <div class="spec"><dt>Witness</dt><dd>A code only your friend has</dd></div>
+        <div class="spec"><dt>Storm Mode</dt><dd>Locked for <span class="tnum">1</span>, <span class="tnum">4</span> or <span class="tnum">12</span> hours</dd></div>
+      </dl>
+    </div>
+    <figure class="evidence">
+      <div class="plate"><div class="crop" data-src="security.png" data-cap="640" data-x="0" data-y="404" data-w="640" data-h="644" data-scale="0.94"></div></div>
+      <figcaption class="meta">Settings · a change waiting out the pact</figcaption>
+    </figure>
+  </div>
+</section>
+
+<p class="label">Screenshot 5 · 1280 × 800</p>
+<section class="frame shot on-pine" id="shot-5" style="--i:4">
+  <div class="rail"></div><div class="tick"></div>
+  <header class="running">
+    <span class="brand"><svg class="tile" data-icon="glyph" viewBox="0 0 16 16"></svg>BlockNSFW</span>
+    <span class="meta"><span class="idx">05</span> / 05</span>
+  </header>
+  <div class="body">
+    <div class="claim">
+      <p class="meta"><span class="idx">05</span> · Supporter</p>
+      <h2>Keep the days, and read the month back.</h2>
+      <p class="lede">Every protection stays free. Supporter adds a 30-day path, a letter at the start of each month, your voice for the hard moment, and your history on every computer. From $2.99 a month.</p>
+      <dl class="specs">
+        <div class="spec"><dt>The path</dt><dd><span class="tnum">30</span> days, one a day</dd></div>
+        <div class="spec"><dt>Your month</dt><dd>Days kept, on one calendar</dd></div>
+        <div class="spec"><dt>Blocking</dt><dd>The same, free or not</dd></div>
+      </dl>
+    </div>
+    <figure class="evidence">
+      <div class="plate"><div class="crop" data-src="month.png" data-cap="1000" data-x="32" data-y="118" data-w="636" data-h="716" data-scale="0.8"></div></div>
+      <figcaption class="meta">Your month · a Supporter extra</figcaption>
+    </figure>
+  </div>
+</section>
+
+<!-- ============================ Promo tiles ============================ -->
+<p class="label">Small promo tile · 440 × 280 · Chrome, Edge</p>
+<section class="frame promo on-pine" id="promo-small">
+  <svg class="field" data-field="small" viewBox="0 0 440 280" preserveAspectRatio="none"></svg>
+  <div class="words">
+    <svg class="glyph" data-icon="glyph-lg"></svg>
+    <div class="name">BlockNSFW</div>
+    <div class="meta">Porn &amp; adult content blocker</div>
+  </div>
+</section>
+
+<p class="label">Marquee promo tile · 1400 × 560 · Chrome; Edge large tile</p>
+<section class="frame marquee" id="marquee">
+  <div class="rail"></div>
+  <svg class="field" data-field="marquee" viewBox="0 0 1400 560" preserveAspectRatio="none"></svg>
+  <div class="words">
+    <div class="role"><svg class="tile" data-icon="tile-lg"></svg>BlockNSFW</div>
+    <h1>Adult sites stop at the door.</h1>
+    <p class="meta">Porn &amp; adult content blocker · every protection free</p>
+  </div>
+</section>
+
+<!-- ============================ Icons ============================ -->
+<p class="label">Icons · toolbar 16 (drawn to the pixel) · 32 · 48 · Firefox 64 · store 128 (96 + 16 clear) · Edge logo 300</p>
+<div class="row">
+  <section class="frame icon" id="icon-16" style="width:16px;height:16px"><svg data-icon="tile-16" width="16" height="16"></svg></section>
+  <section class="frame icon" id="icon-32" style="width:32px;height:32px"><svg data-icon="tile" width="32" height="32" viewBox="0 0 16 16"></svg></section>
+  <section class="frame icon" id="icon-48" style="width:48px;height:48px"><svg data-icon="tile" width="48" height="48" viewBox="0 0 16 16"></svg></section>
+  <section class="frame icon" id="icon-64" style="width:64px;height:64px"><svg data-icon="tile" width="64" height="64" viewBox="0 0 16 16"></svg></section>
+  <section class="frame icon" id="icon-128" style="width:128px;height:128px;padding:16px;box-sizing:border-box"><svg data-icon="tile-lg" width="96" height="96"></svg></section>
+  <section class="frame icon" id="logo-300" style="width:300px;height:300px;padding:30px;box-sizing:border-box"><svg data-icon="tile-lg" width="240" height="240"></svg></section>
+</div>
+<div class="review">
+  <div class="bar light"><span class="slot"></span><svg data-icon="tile-16" width="16" height="16"></svg><span class="slot"></span><span class="slot"></span></div>
+  <div class="bar dark"><span class="slot"></span><svg data-icon="tile-16" width="16" height="16"></svg><span class="slot"></span><span class="slot"></span></div>
+  <div class="bar light"><span class="slot"></span><svg data-icon="tile" width="32" height="32" viewBox="0 0 16 16"></svg></div>
+  <div class="bar dark"><span class="slot"></span><svg data-icon="tile" width="32" height="32" viewBox="0 0 16 16"></svg></div>
+</div>
+
+<script>
+  'use strict';
+  // The icon: a shield with the eye struck through. Pine shield, sheet eye,
+  // brass stroke; "glyph" turns it round (sheet shield, pine eye) for the pine
+  // band. The viewBox is cropped to the shield, so it fills its box.
+  // Under 32px a vector shield goes soft, so the 16px toolbar icon is drawn
+  // pixel by pixel ("tile-16"), with a filled eye that still reads.
+  const C = { pine: '#0d3b31', sheet: '#fbf9f4', brass: '#c99a3a' };
+  function shieldEye(ground, ink) {
+    return `<path d="M7 5h34v18c0 11-7 18.5-17 22C14 41.5 7 34 7 23z" fill="${ground}"/>`
+      + `<g transform="translate(24 21) scale(.68) translate(-24 -24)">`
+      + `<path d="M6 24c5-8 11-11.5 18-11.5S37 16 42 24c-5 8-11 11.5-18 11.5S11 32 6 24z" fill="none" stroke="${ink}" stroke-width="4" stroke-linejoin="round"/>`
+      + `<circle cx="24" cy="24" r="8" fill="${ink}"/></g>`
+      + `<path d="M15 33L33 11" stroke="${ground}" stroke-width="6"/>`
+      + `<path d="M15 33L33 11" stroke="${C.brass}" stroke-width="3.2"/>`;
+  }
+  // 16 x 16, cell by cell: the shield's span on each row, a filled almond
+  // eye with a pine pupil, and a 45-degree brass stroke just right of the
+  // pupil, with a pine gap on its far side so the pupil stays whole.
+  function pixelIcon() {
+    const SHIELD = [[1, 14], [1, 14], [1, 14], [1, 14], [1, 14], [1, 14], [1, 14], [1, 14], [1, 14], [1, 14], [2, 13], [2, 13], [3, 12], [4, 11], [5, 10], [6, 9]];
+    const EYE = { 4: [6, 9], 5: [4, 11], 6: [3, 12], 7: [3, 12], 8: [4, 11], 9: [6, 9] };
+    const PUPIL = [[7, 6], [8, 6], [7, 7], [8, 7]];
+    const STROKE = [[13, 3], [12, 4], [11, 5], [10, 6], [9, 7], [8, 8], [7, 9], [6, 10], [5, 11]];
+    const grid = Array.from({ length: 16 }, () => Array(16).fill(null));
+    SHIELD.forEach(([l, r], y) => { for (let x = l; x <= r; x++) grid[y][x] = C.pine; });
+    Object.entries(EYE).forEach(([y, [l, r]]) => { for (let x = l; x <= r; x++) grid[y][x] = C.sheet; });
+    PUPIL.forEach(([x, y]) => { grid[y][x] = C.pine; });
+    STROKE.forEach(([x, y]) => { if (grid[y][x + 1] === C.sheet) grid[y][x + 1] = C.pine; });
+    STROKE.forEach(([x, y]) => { grid[y][x] = C.brass; });
+    let out = '';
+    grid.forEach((row, y) => row.forEach((fill, x) => { if (fill) out += `<rect x="${x}" y="${y}" width="1" height="1" fill="${fill}"/>`; }));
+    return out;
+  }
+  const ICONS = {
+    tile: ['4 5 40 40', shieldEye(C.pine, C.sheet)],
+    glyph: ['4 5 40 40', shieldEye(C.sheet, C.pine)],
+    'tile-16': ['0 0 16 16', pixelIcon()]
+  };
+  ICONS['tile-lg'] = ICONS.tile;
+  ICONS['glyph-lg'] = ICONS.glyph;
+  document.querySelectorAll('[data-icon]').forEach((svg) => {
+    const [box, body] = ICONS[svg.dataset.icon];
+    svg.setAttribute('viewBox', box);
+    if (svg.dataset.icon === 'tile-16') svg.setAttribute('shape-rendering', 'crispEdges');
+    svg.innerHTML = body;
+  });
+
+  // Plates: a crop of a 2x capture, scaled. Numbers are CSS pixels of the
+  // page as it was captured.
+  document.querySelectorAll('.crop').forEach((box) => {
+    const d = box.dataset, s = Number(d.scale);
+    box.style.width = Math.round(d.w * s) + 'px';
+    box.style.height = Math.round(d.h * s) + 'px';
+    const img = new Image();
+    img.src = '../captures/' + d.src;
+    img.alt = '';
+    img.style.width = d.cap * s + 'px';
+    img.style.left = -d.x * s + 'px';
+    img.style.top = -d.y * s + 'px';
+    box.appendChild(img);
+  });
+
+  // The field. A small seeded random, so every render is the same picture.
+  function rand(seed) {
+    let a = seed >>> 0;
+    return () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+  }
+  const NS = 'http://www.w3.org/2000/svg';
+  function line(svg, x1, y1, x2, y2, stroke, width) {
+    const l = document.createElementNS(NS, 'line');
+    Object.entries({ x1, y1, x2, y2, stroke, 'stroke-width': width }).forEach(([k, v]) => l.setAttribute(k, v));
+    svg.appendChild(l);
+  }
+  function square(svg, cx, cy, size, fill) {
+    const r = document.createElementNS(NS, 'rect');
+    Object.entries({ x: cx - size / 2, y: cy - size / 2, width: size, height: size, fill }).forEach(([k, v]) => r.setAttribute(k, v));
+    svg.appendChild(r);
+  }
+  // Arrivals come in from the left at ragged starts; the door holds about a
+  // quarter of them, each with a brass square where it stopped; the rest cross
+  // and run on to the edge.
+  function doorField(svg, o) {
+    const r = rand(o.seed);
+    line(svg, o.door, o.doorTop, o.door, o.doorBottom, o.doorInk, 1.5);
+    for (let y = o.top, i = 0; y <= o.bottom; y += o.step, i++) {
+      const start = Math.round(o.from + r() * o.spread);
+      if (r() < o.held) {
+        line(svg, start, y + .5, o.door - o.sq - 2, y + .5, o.heldInk, 1);
+        square(svg, o.door - o.sq / 2 - 1, y + .5, o.sq, o.brass);
+      } else {
+        line(svg, start, y + .5, o.right, y + .5, o.passInk, 1);
+      }
+    }
+  }
+  const FIELDS = {
+    small: (svg) => doorField(svg, {
+      seed: 5, from: 300, spread: 44, door: 400, right: 440, top: 22, bottom: 260, step: 12, held: .3, sq: 5,
+      doorTop: 0, doorBottom: 280, doorInk: 'rgba(251,249,244,.8)',
+      heldInk: 'rgba(251,249,244,.5)', passInk: 'rgba(251,249,244,.22)', brass: C.brass
+    }),
+    marquee: (svg) => doorField(svg, {
+      seed: 3, from: 690, spread: 150, door: 1120, right: 1400, top: 21, bottom: 540, step: 14, held: .26, sq: 7,
+      doorTop: 0, doorBottom: 560, doorInk: '#1a1a16',
+      heldInk: 'rgba(28,95,79,.75)', passInk: 'rgba(26,26,22,.2)', brass: '#8a6218'
+    })
+  };
+  document.querySelectorAll('[data-field]').forEach((svg) => FIELDS[svg.dataset.field](svg));
+
+  if (new URLSearchParams(location.search).has('bare')) document.documentElement.classList.add('bare');
+  window.framesReady = Promise.all([
+    document.fonts.ready,
+    ...[...document.images].map((im) => im.complete ? 0 : new Promise((r) => { im.onload = im.onerror = r; }))
+  ]).then(() => true);
+</script>
+</body>
+</html>

@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>BlockNSFW icon options</title>
+<link rel="stylesheet" href="../../ui/tokens.css">
+<style>
+  body { margin: 0; padding: 32px; background: #fff; font-family: var(--font-sans); color: #1a1a16; }
+  h2 { font: 500 12px/1 var(--font-mono); letter-spacing: .12em; text-transform: uppercase; color: #57574d; margin: 0 0 10px; }
+  .opt { display: grid; grid-template-columns: 220px repeat(4, auto) 1fr; gap: 20px; align-items: center; padding: 18px 0; border-top: 1px solid rgba(26,26,22,.15); }
+  .opt p { margin: 4px 0 0; font-size: 13px; color: #57574d; max-width: 210px; }
+  .bar { display: flex; align-items: center; gap: 14px; padding: 9px 14px; }
+  .light { background: #f1f3f4; } .dark { background: #35363a; }
+  .slot { width: 16px; height: 16px; border: 1.5px solid #9aa0a6; border-radius: 3px; opacity: .6; }
+  .big { display: flex; gap: 16px; align-items: center; }
+  svg { display: block; }
+</style>
+</head>
+<body>
+<div id="list"></div>
+<script>
+  const P = '#0d3b31', S = '#fbf9f4', B = '#c99a3a', B1 = '#8a6218', K = '#1a1a16';
+  const r = (x, y, w, h, f) => `<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="${f}"/>`;
+  const OPTIONS = [
+    { id: 'A', name: 'Held at the threshold', note: 'Three arrivals stopped above a brass threshold. Reads as "III".',
+      svg: r(0, 0, 16, 16, P) + [3, 7, 11].map((x) => r(x, 3, 2, 6, S)).join('') + r(2, 11, 12, 2, B) },
+    { id: 'B', name: 'The door', note: 'The blocked page\'s own picture: an arrival line held at the door, a brass square where it stopped.',
+      svg: r(0, 0, 16, 16, P) + r(11, 2, 2, 11, S) + r(2, 7, 6, 1, S) + r(8, 6, 3, 3, B) },
+    { id: 'B2', name: 'The door, heavier', note: 'Same idea, the arrival as heavy as the door.',
+      svg: r(0, 0, 16, 16, P) + r(11, 2, 2, 12, S) + r(2, 7, 7, 2, S) + r(9, 6, 2, 4, B) },
+    { id: 'C', name: 'The second door', note: 'Passes the first door, held at the second: "Held at the second door."',
+      svg: r(0, 0, 16, 16, P) + r(6, 3, 1, 10, 'rgba(251,249,244,.45)') + r(11, 2, 2, 12, S) + r(2, 7, 7, 2, S) + r(9, 6, 2, 4, B) },
+    { id: 'D', name: 'Held, on paper', note: 'The door on a sheet tile with a hairline edge: light, like the pages.',
+      svg: r(0, 0, 16, 16, 'rgba(26,26,22,.3)') + r(1, 1, 14, 14, S) + r(11, 3, 2, 10, P) + r(3, 7, 6, 2, P) + r(9, 6, 2, 4, B1) },
+    { id: 'E', name: 'One held, two through', note: 'monolab\'s mark turned round: two pass the threshold, one is held with a brass square.',
+      svg: r(0, 0, 16, 16, P) + r(3, 2, 2, 12, S) + r(11, 2, 2, 12, S) + r(7, 2, 2, 4, S) + r(7, 6, 2, 2, B) + r(1, 10, 14, 1, 'rgba(251,249,244,.6)') }
+  ];
+  OPTIONS.push({ id: 'B-large', grid: 48, name: 'The door, large sizes', note: 'For 128 and 300: a thinner door and arrival on a 48-unit grid, closer to the hairline drawing on the blocked page.',
+      svg: r(0, 0, 48, 48, P) + r(33, 7, 4, 33, S) + r(9, 22, 17, 3, S) + r(26, 20, 7, 7, B) });
+  OPTIONS.push({ id: 'B-large2', grid: 48, name: 'Large, finer still', note: 'Arrival 2 units, door 3.',
+      svg: r(0, 0, 48, 48, P) + r(33, 7, 3, 33, S) + r(9, 22.5, 18, 2, S) + r(27, 20, 6, 7, B) });
+  const icon = (o, px) => `<svg width="${px}" height="${px}" viewBox="0 0 ${o.grid || 16} ${o.grid || 16}" shape-rendering="crispEdges">${o.svg}</svg>`;
+  document.getElementById('list').innerHTML = OPTIONS.map((o) => `
+    <div class="opt">
+      <div><h2>${o.id} · ${o.name}</h2><p>${o.note}</p></div>
+      <div class="bar light"><span class="slot"></span>${icon(o, 16)}<span class="slot"></span></div>
+      <div class="bar dark"><span class="slot"></span>${icon(o, 16)}<span class="slot"></span></div>
+      <div class="bar light">${icon(o, 32)}</div>
+      <div class="bar dark">${icon(o, 32)}</div>
+      <div class="big">${icon(o, 48)}${icon(o, 96)}${icon(o, 160)}</div>
+    </div>`).join('');
+  window.framesReady = document.fonts.ready.then(() => true);
+</script>
+</body>
+</html>
