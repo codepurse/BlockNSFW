@@ -2569,6 +2569,26 @@ function buildDesignThumb(id) {
   return thumb;
 }
 
+// Classic is free; the other designs come with Supporter, in builds that carry
+// the Supporter extras (extras/extras.js). The open-source build sells
+// nothing, so every design is open there. The blocked page itself never asks:
+// it shows whichever design is saved (and any one when previewed), so nothing
+// about blocking waits on a Supporter answer. A plan that ends sets the design
+// back to Classic (options-supporter.js, popup.js).
+let designSupporter = null;   // null until Settings › Supporter answers
+function designsGated() {
+  return !!globalThis.SupporterExtras;
+}
+function designLocked(id) {
+  const themes = globalThis.BlockedThemes;
+  const free = themes ? themes.DEFAULT_ID : 'classic';
+  return designsGated() && designSupporter !== true && id !== free;
+}
+document.addEventListener('supporter-status', (e) => {
+  designSupporter = !!(e.detail && e.detail.supporter);
+  getSettings().then(renderDesignPicker).catch(() => {});
+});
+
 function buildDesignPicker(picker) {
   const themes = globalThis.BlockedThemes;
   if (!themes || picker.childElementCount) return;
@@ -2585,6 +2605,13 @@ function buildDesignPicker(picker) {
     const name = document.createElement('span');
     name.className = 'design-name';
     name.textContent = theme.name;
+    if (theme.id !== themes.DEFAULT_ID) {
+      const tag = document.createElement('span');
+      tag.className = 'meta meta-brass design-tag';
+      tag.textContent = 'Supporter';
+      tag.hidden = true;
+      name.appendChild(tag);
+    }
 
     const blurb = document.createElement('span');
     blurb.className = 'design-blurb';
@@ -2610,12 +2637,23 @@ function renderDesignPicker(settings) {
   buildDesignPicker(picker);
   const themes = globalThis.BlockedThemes;
   const current = themes ? themes.normalize(settings.blockedPageTheme) : 'classic';
+  let anyLocked = false;
   picker.querySelectorAll('.design-option').forEach((option) => {
     const selected = option.dataset.design === current;
+    const locked = !selected && designLocked(option.dataset.design);
+    anyLocked = anyLocked || locked;
     option.classList.toggle('is-selected', selected);
+    option.classList.toggle('is-locked', locked);
     const input = option.querySelector('input');
-    if (input) input.checked = selected;
+    if (input) {
+      input.checked = selected;
+      input.disabled = locked;
+    }
+    const tag = option.querySelector('.design-tag');
+    if (tag) tag.hidden = !locked;
   });
+  const upsell = $('blocked-design-upsell');
+  if (upsell) upsell.hidden = !anyLocked;
   // A custom URL or custom HTML replaces the built-in page, designs and all.
   const overridden =
     (settings.blockedPageType === 'custom' && !!String(settings.customBlockedPageUrl || '').trim()) ||
@@ -4215,7 +4253,20 @@ async function init() {
       // not PIN-gated. Replacing the page with your own URL or HTML still is.
       const themes = globalThis.BlockedThemes;
       const settings = await getSettings();
-      settings.blockedPageTheme = themes ? themes.normalize(e.target.value) : 'classic';
+      const chosen = themes ? themes.normalize(e.target.value) : 'classic';
+      // Asked again here rather than trusting the picker, which may have been
+      // drawn before Settings › Supporter answered.
+      if (designsGated() && chosen !== (themes ? themes.DEFAULT_ID : 'classic') && typeof Supporter !== 'undefined') {
+        let s = { supporter: false };
+        try { s = await Supporter.status(browserAPI.storage.local); } catch (_) {}
+        designSupporter = s.supporter === true;
+        if (!designSupporter) {
+          renderDesignPicker(settings);
+          showToast('That design comes with Supporter. Preview it any time.', 'info');
+          return;
+        }
+      }
+      settings.blockedPageTheme = chosen;
       await setSettings(settings);
       renderDesignPicker(settings);
       const theme = themes && themes.get(settings.blockedPageTheme);

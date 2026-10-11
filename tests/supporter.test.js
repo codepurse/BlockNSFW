@@ -197,8 +197,46 @@ test('a look survives a pause for want of an answer, but not a plan that ended',
   const fs = require('node:fs');
   const path = require('node:path');
   const root = path.join(__dirname, '..');
-  assert.match(fs.readFileSync(path.join(root, 'popup.js'), 'utf8'), /if \(!s\.supporter && !s\.unchecked\) endLook\(\);/);
+  assert.match(fs.readFileSync(path.join(root, 'popup.js'), 'utf8'), /if \(!s\.supporter && !s\.unchecked\) \{\s*endLook\(\);\s*endDesign\(\);/);
   assert.match(fs.readFileSync(path.join(root, 'options-supporter.js'), 'utf8'), /answered && !s\.supporter && !s\.unchecked && scheme/);
+  assert.match(fs.readFileSync(path.join(root, 'options-supporter.js'), 'utf8'), /if \(answered && !s\.supporter && !s\.unchecked\) endDesign\(\);/);
+});
+
+// --- Blocked-page designs: Classic free, the others with Supporter -----------------
+
+test('the design picker locks every design but Classic, only where the extras are sold', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const vm = require('node:vm');
+  const src = fs.readFileSync(path.join(__dirname, '..', 'options.js'), 'utf8');
+  const start = src.indexOf('let designSupporter = null;');
+  const end = src.indexOf("document.addEventListener('supporter-status'", start);
+  assert.ok(start > 0 && end > start, 'options.js keeps designLocked beside designSupporter');
+  const run = (extras, supporter) => {
+    const ctx = { globalThis: {}, BlockedThemes: undefined };
+    ctx.globalThis = ctx;
+    ctx.SupporterExtras = extras;
+    ctx.BlockedThemes = { DEFAULT_ID: 'classic' };
+    vm.runInNewContext(src.slice(start, end) + `\ndesignSupporter = ${JSON.stringify(supporter)};\nthis.locked = ['classic','calm','verse','motivation','play'].filter(designLocked);`, ctx);
+    return [...ctx.locked];
+  };
+  const store = { path: true };
+  assert.deepEqual(run(store, null), ['calm', 'verse', 'motivation', 'play'], 'locked until Supporter answers');
+  assert.deepEqual(run(store, false), ['calm', 'verse', 'motivation', 'play']);
+  assert.deepEqual(run(store, true), [], 'a supporter has all five');
+  assert.deepEqual(run(null, false), [], 'the open-source build sells nothing, so all five are open');
+});
+
+test('a plan that ends sets the blocked page back to Classic, only where the designs are sold', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  for (const file of ['popup.js', 'options-supporter.js']) {
+    const src = fs.readFileSync(path.join(__dirname, '..', file), 'utf8');
+    const body = src.slice(src.indexOf('async function endDesign()'), src.indexOf('async function endDesign()') + 600);
+    assert.match(body, /if \(!self\.SupporterExtras\) return;/, `${file}: open-source build leaves the design alone`);
+    assert.match(body, /blockedPageTheme === 'classic'\) return;/, `${file}: Classic stays`);
+    assert.match(body, /blockedPageTheme: 'classic'/, `${file}: anything else goes back to Classic`);
+  }
 });
 
 test('entering a code again after a plan ended opens it again', async () => {

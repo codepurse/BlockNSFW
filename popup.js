@@ -537,7 +537,10 @@ async function readSupporter() {
     const s = await Supporter.status(browserAPI.storage.local);
     // Not on a pause for want of an answer (shared/supporter.js `unchecked`):
     // the look comes back with the plan.
-    if (!s.supporter && !s.unchecked) endLook();
+    if (!s.supporter && !s.unchecked) {
+      endLook();
+      endDesign();
+    }
     return s.supporter;
   } catch (_) {
     return false;
@@ -548,6 +551,17 @@ async function readSupporter() {
 function endLook() {
   const scheme = self.UiScheme;
   if (scheme && scheme.getLook()) scheme.setLook(null).catch(() => {});
+}
+
+// So does a Supporter design for the blocked page, back to Classic, in builds
+// that sell the designs (options.js designLocked).
+async function endDesign() {
+  if (!self.SupporterExtras) return;
+  try {
+    const { [SETTINGS_KEY]: settings } = await browserAPI.storage.local.get(SETTINGS_KEY);
+    if (!settings || !settings.blockedPageTheme || settings.blockedPageTheme === 'classic') return;
+    await browserAPI.storage.local.set({ [SETTINGS_KEY]: { ...settings, blockedPageTheme: 'classic' } });
+  } catch (_) {}
 }
 
 // "Day 4 · Hungry, angry, lonely, tired." under The path.

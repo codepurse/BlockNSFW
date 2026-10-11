@@ -1488,6 +1488,20 @@
     .design-picker.is-overridden .design-option {
       opacity: 0.55;
     }
+    /* Classic is free; in store builds the other designs come with Supporter
+       (options.js designLocked). A locked one still previews. */
+    .design-option.is-locked {
+      cursor: default;
+    }
+    .design-option.is-locked:hover {
+      border-color: var(--color-rule);
+    }
+    .design-option.is-locked .design-thumb {
+      opacity: 0.6;
+    }
+    .design-tag {
+      margin-left: var(--space-2);
+    }
 
     /* The thumbnails: each design sketched in the system's own tones. */
     .design-thumb {
@@ -2181,7 +2195,7 @@
                 <li><details class="wn-item"><summary>After a slip <span class="badge-new">New</span></summary><p>The popup&rsquo;s &ldquo;I slipped&rdquo; link opens a short, plain page. It counts as one day, never a reset, and offers what would help next time.</p></details></li>
                 <li><details class="wn-item"><summary>Your week <span class="badge-new">New</span></summary><p>Every Sunday evening, a short page about your week: each time you stopped at the door or waited it out, drawn day by day, three numbers beside the week before, and one thing to try next. The popup says when it&rsquo;s ready.</p></details></li>
                 <li><details class="wn-item"><summary>Days kept</summary><p>Statistics counts the days in the last 30 with protection on all day and no slip, beside your runs and the moments you waited out.</p></details></li>
-                <li><details class="wn-item"><summary>Supporter, for going further <span class="badge-new">New</span></summary><p>Optional, and protection stays the same for everyone. It adds the rest of a 30-day path, an evening check-in, your good days, when it&rsquo;s hardest, a letter every month, a photo for the hard moment and Supporter looks. The Supporter page shows whatfour more blocked-page designs. Supporter compares what&rsquo;s free and what it adds, side by side.</p>rsquo;s free and what it adds, side by side.</p></details></li>
+                <li><details class="wn-item"><summary>Supporter, for going further <span class="badge-new">New</span></summary><p>Optional, and protection stays the same for everyone. It adds the rest of a 30-day path, an evening check-in, your good days, when it&rsquo;s hardest, a letter every month, a photo for the hard moment, Supporter looks and four more blocked-page designs. The Supporter page compares what&rsquo;s free and what it adds, side by side.</p></details></li>
                 <li><details class="wn-item"><summary>Your PIN is stored safely</summary><p>It is kept as a salted hash instead of plain text, and five wrong tries lock PIN entry for a while. A PIN from an older version keeps working.</p></details></li>
                 <li><details class="wn-item"><summary>The popup says whether you&rsquo;re protected</summary><p>It opens on a deep green band that says &ldquo;Protected&rdquo; and holds the protection switch. When protection is off the band turns plain and says so.</p></details></li>
                 <li><details class="wn-item"><summary>The blocked page no longer shows the blocked address</summary><p>It shows the site&rsquo;s ending only now, and never the words a page matched. The audit log shows a site&rsquo;s name instead of its full address.</p></details></li>
@@ -2597,6 +2611,7 @@
           <!-- Filled from blocked-themes.js, the same list the blocked page renders. -->
           <div class="design-picker" id="blocked-design-picker" role="radiogroup" aria-label="Blocked page design"></div>
           <p class="field-hint" id="blocked-design-note" hidden>Your own blocked page is switched on below, so it’s shown instead of these designs.</p>
+          <p class="field-hint" id="blocked-design-upsell" hidden>Classic is free. Calm, Verse, Motivation and Play come with <a class="link" href="#section-supporter">Supporter</a>; preview any of them first.</p>
 
           <p class="meta design-divider">or use your own page</p>
 
@@ -3276,7 +3291,7 @@ title/Example Domain/"></textarea>
               </tbody>
               <tbody>
                 <tr class="compare-group"><th scope="rowgroup" colspan="3">For the hard moment</th></tr>
-                <tr><th scope="row">Five blocked-page designs<span class="compare-desc">Classic&rsquo;s six doors, Calm, Verse, Motivation and Play.</span></th><td data-yes></td><td data-yes></td></tr>
+                <tr><th scope="row">The Classic blocked page<span class="compare-desc">The six doors: which layer held the page, and why.</span></th><td data-yes></td><td data-yes></td></tr>
                 <tr><th scope="row">Your own words on the blocked page</th><td data-yes></td><td data-yes></td></tr>
                 <tr><th scope="row">After a slip</th><td data-yes></td><td data-yes></td></tr>
                 <tr><th scope="row">Your week, days kept and Statistics</th><td data-yes></td><td data-yes></td></tr>
@@ -3289,6 +3304,7 @@ title/Example Domain/"></textarea>
                 <tr class="compare-extra"><th scope="row"><a href="gooddays.html">Your good days</a><span class="compare-desc">After two weeks, what your calm days have in common.</span></th><td data-no></td><td data-yes></td></tr>
                 <tr class="compare-extra"><th scope="row"><a href="hardest.html">When it&rsquo;s hardest</a><span class="compare-desc">Your hard moments by weekday and hour, and risk hours to match.</span></th><td data-no></td><td data-yes></td></tr>
                 <tr class="compare-extra"><th scope="row"><a href="month.html">Your month and your year</a><span class="compare-desc">A letter at the start of every month, and every day of the year on one calendar.</span></th><td data-no></td><td data-yes></td></tr>
+                <tr class="compare-extra"><th scope="row"><a href="#blocked-design-picker">Four more blocked-page designs</a><span class="compare-desc">Calm, Verse, Motivation and Play: something to do while the urge passes.</span></th><td data-no></td><td data-yes></td></tr>
                 <tr class="compare-extra"><th scope="row"><a href="#own-photo">A photo for the hard moment</a><span class="compare-desc">Someone or something worth staying for, above your words on the blocked page.</span></th><td data-no></td><td data-yes></td></tr>
                 <tr class="compare-extra"><th scope="row"><a href="#look-accent-row">Supporter looks</a><span class="compare-desc">True black for dark, and an accent colour for every page.</span></th><td data-no></td><td data-yes></td></tr>
               </tbody>

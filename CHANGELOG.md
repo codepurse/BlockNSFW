@@ -101,7 +101,7 @@ the urge works even when you know every PIN.
 - **Supporter** (Settings › Supporter), optional, for this browser extension.
   Protection is the same for everyone: paying never makes blocking stronger
   or weaker, and nothing that's free today will ever move behind it. Support
-  pays for what comes next, and adds seven things for going further:
+  pays for what comes next, and adds eight things for going further:
   - **The path.** Thirty short pages, one a day, each with one small thing to
     do: a step to take, a line to write, or a page to open. Four weeks:
     seeing it, changing the setting, the inside work, and the life after. A
@@ -136,6 +136,9 @@ the urge works even when you know every PIN.
     accent (Pine, Ink, Plum or Graphite) on every BlockNSFW page. Every
     accent keeps text at 4.5:1 or better, light and dark. Looks go back to
     plain when a plan ends.
+  - **Four more blocked-page designs**: Calm, Verse, Motivation and Play
+    (below). Classic stays free, and anyone can preview the others. A plan
+    that ends sets the blocked page back to Classic.
 
   Pay monthly, yearly or once for life; yearly is chosen first. Payment goes
   through Polar, whose receipt links to your purchases, where the code is
@@ -143,8 +146,8 @@ the urge works even when you know every PIN.
   with Polar when you unlock it, then about once a day when you open the
   extension, sending only the code and our store's ID, without cookies.
   Offline changes nothing. A cancelled plan runs to the end of the time paid
-  for, then the extras close; your check-ins and your book stay. Every
-  blocked-page design stays free. Settings shows what's free and what Supporter
+  for, then the extras close; your check-ins and your book stay. Settings
+  shows what's free and what Supporter
   adds side by side, links to manage or cancel a plan, and refunds a purchase
   made by mistake. The sidebar's Supporter row says thank you once you are
   one. BlockNSFW for Android has its own Supporter, in the app. Everything the
@@ -167,7 +170,10 @@ the urge works even when you know every PIN.
     from the spring to the sea. Every river is solvable and never dealt
     solved. No clock, no score, nothing saved.
 
-  All five are free. The choice is presentation only, so it is not behind the PIN. A custom
+  Classic is free; the other four come with Supporter in the store versions,
+  and every one can be previewed. The choice is presentation only, so it is
+  not behind the PIN, and the blocked page never asks about Supporter: it
+  shows the design that's saved. A custom
   blocked-page URL or your own HTML still takes over from any design. Every
   design fits from a small phone to a 4K screen, and follows light and dark.
 
@@ -486,7 +492,9 @@ the urge works even when you know every PIN.
   (`Moments.photoSrc` takes plain JPEG, PNG or WebP only). Everything that protects stays MIT and in
   this repository. `shared/path-days.js` keeps days 1 to 7 and the titles of
   the rest, and `add()`s the rest from the extra. The blocked page loads no
-  extra: all five designs stay free and open source.
+  extra and never reads the supporter state: all five designs are open
+  source, and only Settings' picker offers four of them to supporters, in
+  builds that carry the extras (an open-source build offers all five).
   `tests/extras-standins.test.js` fails if a stand-in stops being empty or if
   anything under `extras-private/` is tracked; `tests/supporter.test.js`
   fails if anything that blocks or shows the blocked page (background,

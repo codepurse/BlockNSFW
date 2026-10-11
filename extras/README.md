@@ -24,6 +24,8 @@ text filters, SafeSearch and DNS, Gateways, the Pact, Storm Mode, your own
 words, all five blocked-page designs and everything else that decides what
 is blocked. A build made from this repository protects exactly as the store
 version does. Without the extras, the pages that use them say so plainly.
+(Store versions offer Classic free and the other four designs to supporters;
+a build from here offers all five.)
 
 The extras never decide what is blocked, and like the rest of BlockNSFW they
 make no network requests: what they keep stays on the device.

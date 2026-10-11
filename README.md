@@ -221,7 +221,8 @@ blocklists, the AI image and text filters, SafeSearch and DNS, Gateways, the
 Pact, Storm Mode and risk hours, your own words, all five blocked-page
 designs, the first week of the path, statistics, and the Supporter page and
 its code check. A build from here blocks exactly what the store version
-blocks.
+blocks. (In the store versions Classic is the free design and the other four
+come with Supporter; a build from here offers all five.)
 
 The **Supporter extras** are not open source: days 8 to 30 of the path, the
 evening check-in, Your good days, When it's hardest, Your month and Your

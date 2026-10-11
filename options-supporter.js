@@ -138,6 +138,18 @@
     $('supporter-offer').textContent = offer || '';
   }
 
+  // A blocked-page design other than Classic goes back to Classic when the
+  // plan behind it ends, in builds that sell the designs. Nothing else in
+  // the settings changes.
+  async function endDesign() {
+    if (!self.SupporterExtras) return;
+    try {
+      const { pblocker_settings: settings } = await browserAPI.storage.local.get('pblocker_settings');
+      if (!settings || !settings.blockedPageTheme || settings.blockedPageTheme === 'classic') return;
+      await browserAPI.storage.local.set({ pblocker_settings: { ...settings, blockedPageTheme: 'classic' } });
+    } catch (_) {}
+  }
+
   async function renderStatus(opts) {
     let s = { supporter: false };
     let answered = false;
@@ -148,6 +160,8 @@
     // A Supporter look (ui/scheme.js) ends with the plan; only on a clear answer.
     const scheme = self.UiScheme;
     if (answered && !s.supporter && !s.unchecked && scheme && scheme.getLook()) scheme.setLook(null).catch(() => {});
+    // So does a Supporter design for the blocked page (options.js designLocked).
+    if (answered && !s.supporter && !s.unchecked) endDesign();
     renderNav(s);
     // The extras with a place in Settings (extras/looks.js, extras/photo.js)
     // follow the answer.
