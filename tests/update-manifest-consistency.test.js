@@ -83,7 +83,7 @@ test('pickUpdateUrl sends each browser to its own store', () => {
   const pickUpdateUrl = new Function('data', 'detectBrowserKey', 'DEFAULT_UPDATE_URL',
     body.replace('function pickUpdateUrl(data) {', '') + '\n');
 
-  const fallback = 'https://github.com/codepurse/BlockNSFW/releases';
+  const fallback = 'https://chromewebstore.google.com/detail/blocknsfw-%E2%80%93-porn-adult-co/fiecjgpoilkhmoieaboolkfmgbnhlhop';
   for (const [browser, expected] of [
     ['firefox', versionInfo.firefoxUrl],
     ['edge', versionInfo.edgeUrl],

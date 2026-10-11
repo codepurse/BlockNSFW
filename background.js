@@ -714,7 +714,7 @@ let remoteWhitelistPromise = null;
 // on each published release.
 const REMOTE_VERSION_URL = 'https://raw.githubusercontent.com/codepurse/BlockNSFW/refs/heads/main/data/version.json';
 const UPDATE_INFO_KEY = 'pblocker_update_info';
-const DEFAULT_UPDATE_URL = 'https://github.com/codepurse/BlockNSFW/releases';
+const DEFAULT_UPDATE_URL = 'https://chromewebstore.google.com/detail/blocknsfw-%E2%80%93-porn-adult-co/fiecjgpoilkhmoieaboolkfmgbnhlhop';
 const UPDATE_CHECK_TTL = 1000 * 60 * 60 * 12; // 12 hours
 let updateCheckPromise = null;
 

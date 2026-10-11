@@ -3059,7 +3059,7 @@ async function renderUpdateBanner() {
       sub.textContent = `Version ${info.latest} is ready. You have ${info.current}.${notes}`;
     }
     const link = $('update-banner-link');
-    if (link) link.href = info.url || 'https://github.com/codepurse/BlockNSFW/releases';
+    if (link) link.href = info.url || 'https://chromewebstore.google.com/detail/blocknsfw-%E2%80%93-porn-adult-co/fiecjgpoilkhmoieaboolkfmgbnhlhop';
     banner.classList.remove('hidden');
   } catch (_) {
     banner.classList.add('hidden');
@@ -3303,6 +3303,31 @@ function initGateways() {
   });
 }
 
+// About › Problems and ideas. The email starts with the version in its
+// subject; the address is also there to copy, for webmail, where an email
+// link opens nothing.
+const SUPPORT_EMAIL = 'support@monolab.dev';
+function initContact() {
+  const link = $('contact-email');
+  const copy = $('contact-copy');
+  const result = $('contact-result');
+  if (!link || !copy) return;
+  let version = '';
+  try { version = browserAPI.runtime.getManifest().version; } catch (_) {}
+  link.href = `mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent(`BlockNSFW ${version}`.trim() + ': ')}`;
+  let clear = null;
+  copy.addEventListener('click', async () => {
+    let ok = false;
+    try {
+      await navigator.clipboard.writeText(SUPPORT_EMAIL);
+      ok = true;
+    } catch (_) {}
+    result.textContent = ok ? 'Copied.' : `Copy it from here: ${SUPPORT_EMAIL}`;
+    clearTimeout(clear);
+    clear = setTimeout(() => { result.textContent = ''; }, 4000);
+  });
+}
+
 async function init() {
   setupColorSchemePicker();
   // Before the first render, so the boxes never show an unmigrated list.
@@ -3322,6 +3347,8 @@ async function init() {
 
   // Companion-extension promo in the sidebar
   applySievePromoLink();
+
+  initContact();
 
   // Toolbar pin prompt
   const pinDismissBtn = $('pin-banner-dismiss');

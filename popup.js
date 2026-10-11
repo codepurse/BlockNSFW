@@ -1650,7 +1650,7 @@ async function renderUpdateBanner() {
       sub.title = sub.textContent;
     }
     const link = $('update-banner-link');
-    if (link) link.href = info.url || 'https://github.com/codepurse/BlockNSFW/releases';
+    if (link) link.href = info.url || 'https://chromewebstore.google.com/detail/blocknsfw-%E2%80%93-porn-adult-co/fiecjgpoilkhmoieaboolkfmgbnhlhop';
     banner.classList.remove('hidden');
   } catch (_) {
     banner.classList.add('hidden');
@@ -1771,6 +1771,15 @@ document.addEventListener('DOMContentLoaded', async () => {
     monthLink.addEventListener('click', (e) => {
       e.preventDefault();
       openPage('month.html');
+    });
+  }
+  // The address, with a Copy button and a way to write, is in Settings ›
+  // About: an email link opened from the popup does nothing for webmail.
+  const contactBtn = $('contact-btn');
+  if (contactBtn) {
+    contactBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      openPage('options.html#contact');
     });
   }
   const pathLink = $('path-link');

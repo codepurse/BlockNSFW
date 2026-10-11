@@ -811,6 +811,20 @@
     .records .record + .record {
       border-top: 1px solid var(--color-rule);
     }
+    /* About › Problems and ideas: the address, Copy, and "Copied." */
+    .record.contact {
+      flex-wrap: wrap;
+    }
+    .contact-actions {
+      display: flex;
+      align-items: baseline;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      gap: var(--space-2) var(--space-3);
+    }
+    .contact-hint {
+      margin-top: var(--space-1);
+    }
     .records {
       border-top: 1px solid var(--color-rule);
       border-bottom: 1px solid var(--color-rule);
@@ -1997,14 +2011,6 @@
 
         <div class="promos">
           <p class="meta">beyond this browser</p>
-          <a href="https://github.com/codepurse/extension-guard" target="_blank" rel="noopener noreferrer" class="sidebar-promo">
-            <span class="sidebar-promo-head">
-              <span class="sidebar-promo-title">Desktop Guard</span>
-              <span class="meta sidebar-promo-tag">beta</span>
-              <svg class="icon icon-up-right" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M4.5 11.5l7-7M6 4.5h5.5V10" /></svg>
-            </span>
-            <span class="sidebar-promo-text">A companion app for Windows and Linux. It turns off the browser’s Remove and Disable buttons, so switching protection off needs a password someone else holds.</span>
-          </a>
           <a href="https://play.google.com/store/apps/details?id=com.blocknsfw.android" target="_blank" rel="noopener noreferrer" class="sidebar-promo">
             <span class="sidebar-promo-head">
               <span class="sidebar-promo-title">Android app</span>
@@ -2035,7 +2041,6 @@
         </div>
 
         <div class="sidebar-links">
-          <a href="https://github.com/codepurse/BlockNSFW" target="_blank" rel="noopener noreferrer" class="row-link">Source code on GitHub <svg class="icon icon-up-right" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M4.5 11.5l7-7M6 4.5h5.5V10" /></svg></a>
           <a href="https://buymeacoffee.com/monolab.co" target="_blank" rel="noopener noreferrer" class="row-link">Buy me a coffee <svg class="icon icon-up-right" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M4.5 11.5l7-7M6 4.5h5.5V10" /></svg></a>
         </div>
       </div>
@@ -3334,7 +3339,7 @@ title/Example Domain/"></textarea>
           </svg>
           <p class="section-eyebrow" aria-hidden="true"><span class="index">07</span><span>Settings</span></p>
           <h2 class="section-head" id="h-about">About</h2>
-          <p class="section-desc">The version you’re running, what changed, and the source code.</p>
+          <p class="section-desc">The version you’re running, what changed, and how to reach us.</p>
         </header>
         <div class="group">
           <div class="rows rows-closed">
@@ -3343,8 +3348,16 @@ title/Example Domain/"></textarea>
               <span class="record-value" id="about-version">—</span>
             </div>
             <a class="row-link" href="changelog.html">What changed in each version <svg class="icon icon-right" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M2.5 8h11M9.5 4l4 4-4 4" /></svg></a>
-            <a class="row-link" id="open-source-card" href="https://github.com/codepurse/BlockNSFW" target="_blank" rel="noopener noreferrer">Source code, bugs and ideas on GitHub <svg class="icon icon-up-right" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M4.5 11.5l7-7M6 4.5h5.5V10" /></svg></a>
+            <div class="record contact" id="contact">
+              <span class="row-label">Problems and ideas</span>
+              <span class="contact-actions">
+                <a class="record-value link" id="contact-email" href="mailto:support@monolab.dev">support@monolab.dev</a>
+                <button type="button" class="btn-text" id="contact-copy">Copy</button>
+                <span class="field-hint" id="contact-result" role="status"></span>
+              </span>
+            </div>
           </div>
+          <p class="field-hint contact-hint">Something not working, or an idea? Write to us. To report a site that should or shouldn’t be blocked, use <a class="link" href="#section-community">Community</a>.</p>
         </div>
       </section>
 
