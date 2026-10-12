@@ -223,8 +223,8 @@ the urge works even when you know every PIN.
   switches that say "on" and "off", hairline rows instead of cards, buttons
   that say exactly what they do, and no emoji, gradients, shadows or pills.
 - **Light and dark, your choice.** Every page used to be dark only. Settings,
-  Customization, Appearance now has a theme: System (the default) follows
-  your system, Light and Dark keep every BlockNSFW page that way, along with
+  Customization, Appearance now has a theme: Light (the default) and Dark
+  keep every BlockNSFW page that way, and System follows your computer, along with
   what it shows on websites. The choice reaches pages that are already open,
   and a page opens in it with no flash of the other. The light theme is
   monolab's own; the dark theme is a warm near-black, checked for contrast

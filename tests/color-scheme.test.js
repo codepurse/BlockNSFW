@@ -105,11 +105,13 @@ test('scheme: the kept copy is on <html> before storage answers', () => {
   assert.equal(UiScheme.get(), 'light');
 });
 
-test('scheme: with nothing kept, the page follows the system and carries no attribute', async () => {
+test('scheme: with nothing kept, the page is light', async () => {
   const { root, store, UiScheme } = loadScheme();
+  assert.equal(root.attrs['data-scheme'], 'light', 'light from the first paint');
   await store.answer();
-  assert.equal('data-scheme' in root.attrs, false);
-  assert.equal(UiScheme.get(), 'system');
+  assert.equal(root.attrs['data-scheme'], 'light');
+  assert.equal(UiScheme.get(), 'light');
+  assert.equal(UiScheme.DEFAULT, 'light');
 });
 
 test('scheme: storage is the record, so the page follows it when it answers', async () => {
@@ -120,11 +122,19 @@ test('scheme: storage is the record, so the page follows it when it answers', as
   assert.equal(local.data[KEY], 'dark', 'the copy is brought up to date for the next page');
 });
 
-test('scheme: an unknown value means the system', async () => {
+test('scheme: an unknown value means light', async () => {
   const { root, store } = loadScheme({ cached: 'sepia', stored: 'sepia' });
+  assert.equal(root.attrs['data-scheme'], 'light');
+  await store.answer();
+  assert.equal(root.attrs['data-scheme'], 'light');
+});
+
+test('scheme: only a kept "system" follows the computer', async () => {
+  const { root, store, UiScheme } = loadScheme({ cached: 'system', stored: 'system' });
   assert.equal('data-scheme' in root.attrs, false);
   await store.answer();
   assert.equal('data-scheme' in root.attrs, false);
+  assert.equal(UiScheme.get(), 'system');
 });
 
 test('scheme: choosing one keeps it in storage and in the copy, and shows it at once', async () => {
@@ -145,17 +155,18 @@ test('scheme: a change made on another page reaches this one, and its listeners'
   await store.answer();
   const seen = [];
   UiScheme.onChange((scheme) => seen.push(scheme));
-  for (const fn of store.listeners) fn({ [KEY]: { newValue: 'light' } }, 'local');
-  assert.equal(root.attrs['data-scheme'], 'light');
-  for (const fn of store.listeners) fn({ [KEY]: { newValue: 'light' } }, 'sync');
+  for (const fn of store.listeners) fn({ [KEY]: { newValue: 'dark' } }, 'local');
+  assert.equal(root.attrs['data-scheme'], 'dark');
+  for (const fn of store.listeners) fn({ [KEY]: { newValue: 'system' } }, 'sync');
   for (const fn of store.listeners) fn({ other: { newValue: 1 } }, 'local');
-  for (const fn of store.listeners) fn({ [KEY]: { oldValue: 'light' } }, 'local');
-  assert.deepEqual(seen, ['light', 'system'], 'a removed choice falls back to the system');
+  for (const fn of store.listeners) fn({ [KEY]: { oldValue: 'dark' } }, 'local');
+  assert.equal(root.attrs['data-scheme'], 'light');
+  assert.deepEqual(seen, ['dark', 'light'], 'a removed choice falls back to light');
 });
 
 test('scheme: without localStorage the page still follows storage', async () => {
   const { root, store } = loadScheme({ stored: 'dark', brokenLocalStorage: true });
-  assert.equal('data-scheme' in root.attrs, false);
+  assert.equal(root.attrs['data-scheme'], 'light');
   await store.answer();
   assert.equal(root.attrs['data-scheme'], 'dark');
 });
@@ -179,7 +190,7 @@ test('look: the kept copy is painted before storage answers, the light set in li
 test('look: dark gets the dark set, and following the system follows it', () => {
   const { root } = loadScheme({ cached: 'dark', cachedLook: LOOK });
   assert.deepEqual({ ...root.props }, { '--color-pine': '#88aacc', '--color-paper': '#000000' });
-  const sys = loadScheme({ cachedLook: LOOK, systemDark: false });
+  const sys = loadScheme({ cached: 'system', cachedLook: LOOK, systemDark: false });
   assert.equal(sys.root.props['--color-pine'], '#224466');
   sys.media.matches = true;
   sys.media.listeners.forEach((fn) => fn());
@@ -257,7 +268,7 @@ function loadHeldUi() {
     "const HELD_UI_RULES = { bn: 'color: var(--bn-ink);' };",
     "let heldUiCssText = '';",
     'let heldUiSheet;',
-    "let heldUiScheme = 'system';",
+    "let heldUiScheme = 'light';",
     'const heldUiStyleRefs = [];',
     'let heldUiStyleSweepAt = 64;',
     sourceFrom(CONTENT_SOURCE, 'function heldUiCss('),
@@ -272,8 +283,10 @@ function loadHeldUi() {
   return sandbox.api;
 }
 
-test('content: the placeholders follow the system until a theme is chosen', () => {
+test('content: the placeholders are light until a theme is chosen, and System follows the computer', () => {
   const ui = loadHeldUi();
+  assert.doesNotMatch(ui.heldUiCss(), /prefers-color-scheme/, 'light with nothing chosen');
+  ui.setHeldUiScheme('system');
   const css = ui.heldUiCss();
   assert.match(css, /\.bn \{ [^}]*--bn-paper: #f4f1e9;[^}]*color-scheme: light; \}/);
   assert.match(css, /@media \(prefers-color-scheme: dark\) \{ \.bn \{ [^}]*--bn-paper: #151612;/);
@@ -290,7 +303,7 @@ test('content: kept light, the placeholders never turn dark; kept dark, always',
   assert.doesNotMatch(dark, /prefers-color-scheme/);
   assert.match(dark, /\.bn \{ [^}]*--bn-paper: #151612;[^}]*color-scheme: dark; \}/);
   ui.setHeldUiScheme('nonsense');
-  assert.match(ui.heldUiCss(), /@media \(prefers-color-scheme: dark\)/);
+  assert.doesNotMatch(ui.heldUiCss(), /prefers-color-scheme|#151612/, 'anything unknown means light');
 });
 
 test('content: placeholders already on the page change with the theme', () => {

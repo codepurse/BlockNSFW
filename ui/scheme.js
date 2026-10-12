@@ -1,8 +1,10 @@
-// BlockNSFW — the colour scheme: follow the system, or keep light or dark.
+// BlockNSFW — the colour scheme: light, dark, or follow the system.
 //
 // Loaded first in <head> on every extension page, before the stylesheets, so
 // the choice is on <html> at the first paint. ui/tokens.css reads it as
 // data-scheme="light" | "dark"; with no attribute a page follows the system.
+// Light until Settings says otherwise: nothing kept, or anything unknown,
+// means light, and only a kept "system" follows the computer.
 // (data-theme is taken: the blocked page names its design with it.)
 //
 // browserAPI.storage holds the choice, and content.js reads it there for the
@@ -21,6 +23,7 @@
   const KEY = 'pblocker_color_scheme';
   const LOOK_KEY = 'pblocker_look';
   const SCHEMES = ['system', 'light', 'dark'];
+  const DEFAULT = 'light';
   const html = document.documentElement;
   const listeners = [];
 
@@ -39,11 +42,13 @@
   }
 
   function normalize(value) {
-    return SCHEMES.indexOf(value) === -1 ? 'system' : value;
+    return SCHEMES.indexOf(value) === -1 ? DEFAULT : value;
   }
 
+  // No attribute on <html> means the page follows the system.
   function current() {
-    return normalize(html.getAttribute('data-scheme'));
+    const scheme = html.getAttribute('data-scheme');
+    return scheme === 'light' || scheme === 'dark' ? scheme : 'system';
   }
 
   function isDark() {
@@ -181,6 +186,7 @@
     KEY: KEY,
     LOOK_KEY: LOOK_KEY,
     SCHEMES: SCHEMES.slice(),
+    DEFAULT: DEFAULT,
     get: current,
     set: set,
     onChange: onChange,
