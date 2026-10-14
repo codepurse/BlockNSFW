@@ -237160,3 +237160,22 @@
 # Auto-curated by ML pipeline on 2026-10-04 03:52 UTC
 0.0.0.0 oixxx.shop
 0.0.0.0 oolllxxx.shop
+
+# Added from a user report on 2026-10-14: live cam and random video chat
+# sites, where strangers on camera often turn explicit. tango.me is a mixed
+# live-streaming app, added at the reporter's request.
+0.0.0.0 tango.me
+0.0.0.0 callmechat.com
+0.0.0.0 camsurf.com
+0.0.0.0 1v1chat.com
+0.0.0.0 uhmegle.com
+0.0.0.0 umingle.com
+0.0.0.0 minichat.com
+0.0.0.0 chathub.cam
+0.0.0.0 monkey.app
+0.0.0.0 ome.tv
+0.0.0.0 emeraldchat.com
+0.0.0.0 thundr.com
+0.0.0.0 joingy.com
+0.0.0.0 camzey.com
+0.0.0.0 omegleweb.com
