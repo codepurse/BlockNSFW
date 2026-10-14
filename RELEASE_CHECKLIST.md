@@ -44,6 +44,10 @@ In `shared/supporter.js`:
       filled in (a plan without a link stays hidden)
 - [ ] The prices in `PLANS` match Polar's, and `OFFER` is null or has the
       right end date
+- [ ] An offer in `data/version.json` (`offer`) matches the Polar discount
+      preset on the checkout links: same prices, same last day. Starting or
+      ending an offer is a push of that file plus the Polar change, not a
+      release
 - [ ] `grep -n "sandbox" shared/supporter.js` shows only three lines: the
       comment about `mode`, and the `api:` and `portal:` lines. Any `mode:`
       or `url:` line in the result means a sandbox setting is still there

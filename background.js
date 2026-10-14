@@ -736,10 +736,24 @@ function pickUpdateUrl(data) {
   return DEFAULT_UPDATE_URL;
 }
 
+// version.json may also carry Supporter's current offer (shared/supporter.js,
+// OFFER), so a sale can start and end without a release. It's kept as data for
+// Settings to check and show as text; nothing here reads or acts on it, and
+// anything that isn't a small plain object is dropped.
+function offerFrom(data) {
+  const offer = data && data.offer;
+  if (!offer || typeof offer !== 'object' || Array.isArray(offer)) return null;
+  try {
+    return JSON.stringify(offer).length <= 1000 ? JSON.parse(JSON.stringify(offer)) : null;
+  } catch (_) {
+    return null;
+  }
+}
+
 // Fetch version.json (TTL-guarded, like the remote blocklist/whitelist) and
-// write { current, latest, updateAvailable, notes, url, checkedAt } to storage.
-// Returns the info object, or null on failure (callers fail silently — a failed
-// check must never block or surface an error to the user).
+// write { current, latest, updateAvailable, notes, url, offer, checkedAt } to
+// storage. Returns the info object, or null on failure (callers fail silently —
+// a failed check must never block or surface an error to the user).
 async function checkForUpdate(options = {}) {
   const { forceRefresh = false } = options;
   if (updateCheckPromise) return updateCheckPromise;
@@ -747,7 +761,8 @@ async function checkForUpdate(options = {}) {
   updateCheckPromise = (async () => {
     try {
       const { [UPDATE_INFO_KEY]: cached } = await browserAPI.storage.local.get(UPDATE_INFO_KEY);
-      const isFresh = cached && cached.checkedAt &&
+      // An answer saved before 2.0.1 has no `offer` yet, so it's asked again.
+      const isFresh = cached && cached.checkedAt && 'offer' in cached &&
         (Date.now() - cached.checkedAt) < UPDATE_CHECK_TTL;
       if (isFresh && !forceRefresh) return cached;
 
@@ -767,6 +782,7 @@ async function checkForUpdate(options = {}) {
         updateAvailable,
         notes: (data && typeof data.notes === 'string') ? data.notes : '',
         url: pickUpdateUrl(data),
+        offer: offerFrom(data),
         checkedAt: Date.now()
       };
       await browserAPI.storage.local.set({ [UPDATE_INFO_KEY]: info });

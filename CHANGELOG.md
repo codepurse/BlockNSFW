@@ -2,6 +2,43 @@
 
 All notable project changes should be documented here going forward.
 
+## [2.0.1] - 2026-10-14
+
+### Added
+
+- **The founding offer, in Settings.** Until November 13, Supporter's Yearly
+  and Lifetime plans are 30% off, and Settings › Supporter opens with it: what
+  it is and until when, above the plans, and each plan it lowers shows the
+  offer's price next to its own, struck through. The sidebar's Supporter entry
+  says it too ("Founding offer · until Nov 13", "last day" on the last day).
+  Settings drops it by itself after its last day. A later offer can also
+  arrive with the small file BlockNSFW already reads about twice a day to
+  check for updates, so it can start and end without a new version.
+
+### Changed
+
+- **The Supporter checkout says which page led to it**: the 2.0 page, the
+  popup, a page of the path, or a place in Settings, so we can see what helps
+  people decide. Only that one word goes to the checkout, with nothing about
+  you or your browsing (privacy policy, section 10).
+
+### For contributors
+
+- An offer has two halves, and both have to be set: a Polar discount preset on
+  the checkout links (what buyers pay) and `offer` in `data/version.json` (what
+  Settings says). `Supporter.cleanOffer` keeps only the words (`name`,
+  `title`, `text`), a `YYYY-MM-DD` last day and prices that lower a plan that
+  exists; `activeOffer(now, remote)`
+  prefers it over the built-in `OFFER`. A test fails if the file's offer, or
+  one of its prices, would be dropped.
+- `Supporter.checkoutUrl(plan, door)` adds `utm_source=<door>` and
+  `utm_medium=extension`. Doors are a fixed list (`Supporter.DOORS`); anything
+  else counts as `settings`. Pages outside Settings link to
+  `options.html?from=<door>#supporter`, and links inside Settings carry
+  `data-door`. A test checks every door a page names.
+- The update check stores `offer` with its answer. An answer saved before
+  2.0.1 has none, so the first check after updating asks again.
+
 ## [2.0.0] - 2026-10-12
 
 BlockNSFW 2.0 is built for the hard moment, not only the blocking. **The

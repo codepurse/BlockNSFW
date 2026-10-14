@@ -73,11 +73,33 @@
       url: 'https://api.polar.sh/v1/checkout-links/polar_cl_31MDhvtZNNC3FmBUQ9b7ZTSc0dsMcrGypA4652KTs9F/redirect' }
   ];
 
-  // An offer with an end, such as a founding price for the first month: a
-  // Polar discount code and the last day it works. Settings shows the line
-  // until that day has passed, then drops it by itself. null for none.
-  //   { text: 'Founding supporters: $10 off Lifetime with code FOUNDING.', until: '2026-11-30' }
-  var OFFER = null;
+  // An offer with an end, such as a founding price for the first month. It
+  // has two halves, and both have to be set:
+  //   - What buyers pay: a Polar discount, attached to the plans' checkout
+  //     links as a preset, ending the same day. Without it, the prices
+  //     Settings shows are a promise the checkout doesn't keep.
+  //   - What Settings says: an `offer` in data/version.json, which the
+  //     background fetches with the update check (about twice a day), so an
+  //     offer starts and ends without a new release:
+  //       "offer": { "name": "Founding offer",
+  //                  "title": "30% off Yearly and Lifetime",
+  //                  "text": "A yearly plan keeps this price for as long as you stay.",
+  //                  "until": "2026-11-13",
+  //                  "prices": { "yearly": "$20.99", "lifetime": "$62.99" } }
+  //     Settings heads the plans with it: the name and the last day small,
+  //     the title large, the text under it. The sidebar's Supporter entry
+  //     says the name and the last day too. `name`, `title` and `prices` are
+  //     optional; each price must be lower than the plan's own.
+  // OFFER is the same thing built in, for an offer that ships with a release;
+  // one from version.json wins. Settings drops either by itself once its
+  // last day has passed. null for none.
+  var OFFER = {
+    name: 'Founding offer',
+    title: '30% off Yearly and Lifetime',
+    text: 'For our first supporters. A yearly plan keeps this price for as long as you stay.',
+    until: '2026-11-13',
+    prices: { yearly: '$20.99', lifetime: '$62.99' }
+  };
 
   // A store code is asked about again after this long, so a monthly or yearly
   // plan that has ended closes the extras. A cancelled plan runs to the end
@@ -453,20 +475,98 @@
 
   // The plans to show: those with a checkout link, or all of them (to show
   // the prices) while none has one. Exactly one is `chosen`: the best one,
-  // or the first shown when the best has no link.
-  function offered() {
+  // or the first shown when the best has no link. With an offer, a plan it
+  // lowers shows the offer's price, keeps its own as `was`, and a yearly
+  // plan's "a month" note follows the new price.
+  function offered(offer) {
     var list = buyable() ? PLANS.filter(function (p) { return !!p.url; }) : PLANS.slice();
     var best = list.filter(function (p) { return p.best; })[0] || list[0];
-    return list.map(function (p) { return Object.assign({}, p, { chosen: p === best }); });
+    var prices = (offer && offer.prices) || {};
+    return list.map(function (p) {
+      var shown = Object.assign({}, p, { chosen: p === best });
+      if (prices[p.id]) {
+        shown.was = p.price;
+        shown.price = prices[p.id];
+        if (p.per === 'a year' && p.note) shown.note = '$' + (amountOf(shown.price) / 12).toFixed(2) + ' a month';
+      }
+      return shown;
+    });
   }
 
-  // The offer line, while its last day hasn't passed.
-  function offerFor(now) {
-    if (!OFFER || !OFFER.text) return null;
-    var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(OFFER.until || '');
-    if (!m) return null;
-    var end = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]) + 1).getTime();
-    return now < end ? OFFER.text : null;
+  // "$20.99" as 20.99; NaN for anything else.
+  function amountOf(price) {
+    var m = /^\$(\d{1,4}(?:\.\d{2})?)$/.exec(typeof price === 'string' ? price : '');
+    return m ? Number(m[1]) : NaN;
+  }
+
+  // An offer as Settings may show it, or null: words, and a last day it can
+  // read. Of its prices, only real reductions of plans that exist are kept.
+  // An offer from version.json is data from the network, so it's never more
+  // than text: Settings sets it with textContent.
+  function cleanOffer(raw) {
+    if (!raw || typeof raw !== 'object') return null;
+    var words = function (value, max) {
+      var s = typeof value === 'string' ? value.trim() : '';
+      return s.length <= max ? s : null;
+    };
+    var text = words(raw.text, 200);
+    var name = words(raw.name, 40);
+    var title = words(raw.title, 80);
+    if (!text || name === null || title === null) return null;
+    if (typeof raw.until !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(raw.until)) return null;
+    var given = raw.prices && typeof raw.prices === 'object' ? raw.prices : {};
+    var prices = {};
+    PLANS.forEach(function (p) {
+      var now = amountOf(given[p.id]);
+      if (now > 0 && now < amountOf(p.price)) prices[p.id] = given[p.id];
+    });
+    return { name: name, title: title, text: text, until: raw.until, prices: prices };
+  }
+
+  // The offer to show now: the one from version.json, else the built-in
+  // one, until the end of its last day, by this computer's calendar.
+  function activeOffer(now, remote) {
+    var offer = cleanOffer(remote) || cleanOffer(OFFER);
+    if (!offer) return null;
+    var d = offer.until.split('-').map(Number);
+    return now < new Date(d[0], d[1] - 1, d[2] + 1).getTime() ? offer : null;
+  }
+
+  // When an offer ends, said short: "last day" on its last day, else the
+  // day itself in this browser's language ("Nov 13").
+  function offerEnds(offer, now) {
+    var d = offer.until.split('-').map(Number);
+    var last = new Date(d[0], d[1] - 1, d[2]);
+    var today = new Date(now);
+    if (last.getFullYear() === today.getFullYear() && last.getMonth() === today.getMonth() && last.getDate() === today.getDate()) {
+      return 'last day';
+    }
+    try {
+      return 'until ' + last.toLocaleDateString([], { month: 'short', day: 'numeric' });
+    } catch (_) {
+      return 'until ' + offer.until;
+    }
+  }
+
+  // --- Where a buyer came from -----------------------------------------------------
+
+  // The checkout link says which door led to it, as utm_source, so Polar's
+  // checkouts show what people buy from: the 2.0 page, the popup, a page of
+  // the path, or a place in Settings. Only one of these names is ever sent,
+  // never an address or anything about browsing (PRIVACY_POLICY.md,
+  // section 10). Anything else counts as Settings.
+  var DOORS = ['settings', 'release', 'popup', 'path', 'gooddays', 'hardest', 'month', 'looks', 'designs', 'photo', 'voice', 'sync'];
+
+  function door(name) {
+    return DOORS.indexOf(name) === -1 ? 'settings' : name;
+  }
+
+  function checkoutUrl(plan, from) {
+    if (!plan || !plan.url) return '';
+    var url = new URL(plan.url);
+    url.searchParams.set('utm_source', door(from));
+    url.searchParams.set('utm_medium', 'extension');
+    return url.toString();
   }
 
   var exported = {
@@ -480,7 +580,12 @@
     buyable: buyable,
     offered: offered,
     portalUrl: portalUrl,
-    offerFor: offerFor,
+    cleanOffer: cleanOffer,
+    activeOffer: activeOffer,
+    offerEnds: offerEnds,
+    DOORS: DOORS,
+    door: door,
+    checkoutUrl: checkoutUrl,
     kindOf: kindOf,
     REVOKED: REVOKED,
     verifyStore: verifyStore,

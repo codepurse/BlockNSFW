@@ -388,11 +388,17 @@
       outline: var(--focus-width) solid var(--color-band-signal);
       outline-offset: var(--focus-offset);
     }
+    /* The note is one piece: when a row is narrow it moves under the name
+       whole, lined up with it. */
     .supporter-plan-name {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: baseline;
+      column-gap: var(--space-2);
       font-weight: 500;
     }
     .supporter-plan-note {
-      margin-left: var(--space-2);
+      white-space: nowrap;
       font-family: var(--font-mono);
       font-size: var(--text-meta);
       letter-spacing: 0.15em;
@@ -404,15 +410,43 @@
       font-family: var(--font-display);
       font-size: 20px;
     }
+    /* During an offer: the plan's own price, struck, before the offer's. */
+    .supporter-plan-was {
+      margin-right: 6px;
+      font-size: 15px;
+      color: var(--color-on-band-2);
+      text-decoration-thickness: 1px;
+    }
     .supporter-plan-per {
       margin-left: 4px;
       font-family: var(--font-sans);
       font-size: 13px;
       color: var(--color-on-band-2);
     }
+    /* An offer heads the plans: a brass rule, when it ends, what it is. */
     .supporter-offer {
-      font-size: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      padding-top: var(--space-3);
+      border-top: 2px solid var(--color-band-signal);
+    }
+    .supporter-offer-when {
+      font-family: var(--font-mono);
+      font-size: var(--text-meta);
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
       color: var(--color-band-signal);
+    }
+    .supporter-offer-title {
+      font-family: var(--font-display);
+      font-size: 24px;
+      line-height: 1.2;
+      color: var(--color-on-band);
+    }
+    .supporter-offer-text {
+      font-size: 14px;
+      color: var(--color-on-band-2);
     }
     .supporter-buy .btn {
       min-height: 48px;
@@ -2050,7 +2084,7 @@
         <a class="nav-link" href="#section-customization" data-target="section-customization"><span class="nav-index">03</span><span>Customization</span></a>
         <a class="nav-link" href="#section-security" data-target="section-security"><span class="nav-index">04</span><span>Security</span></a>
         <a class="nav-link" href="#section-community" data-target="section-community"><span class="nav-index">05</span><span>Community</span></a>
-        <a class="nav-link nav-link-supporter" href="#section-supporter" data-target="section-supporter"><span class="nav-index">06</span><span class="nav-supporter-text"><span class="nav-supporter-title">Supporter</span><span class="nav-supporter-sub" id="nav-supporter-sub">The path, your month and more</span></span><span class="nav-supporter-mark" id="nav-supporter-mark" aria-hidden="true" hidden></span></a>
+        <a class="nav-link nav-link-supporter" href="#section-supporter" data-target="section-supporter" data-door="settings"><span class="nav-index">06</span><span class="nav-supporter-text"><span class="nav-supporter-title">Supporter</span><span class="nav-supporter-sub" id="nav-supporter-sub">The path, your month and more</span></span><span class="nav-supporter-mark" id="nav-supporter-mark" aria-hidden="true" hidden></span></a>
         <a class="nav-link" href="#section-about" data-target="section-about"><span class="nav-index">07</span><span>About</span></a>
       </nav>
 
@@ -2633,7 +2667,7 @@
                 <span class="switch-track" aria-hidden="true"><span class="switch-thumb"></span></span>
                 <span class="switch-state" aria-hidden="true"></span>
               </label>
-              <a class="arrow-link small" href="#supporter" data-look-upsell hidden>See Supporter</a>
+              <a class="arrow-link small" href="#supporter" data-door="looks" data-look-upsell hidden>See Supporter</a>
             </div>
             <div class="row" id="look-accent-row" hidden>
               <div class="row-text">
@@ -2641,7 +2675,7 @@
                 <p class="row-desc" id="look-accent-desc">The colour of buttons, links and bands on every BlockNSFW page.</p>
               </div>
               <div class="look-swatches" id="look-accent" role="radiogroup" aria-labelledby="look-accent-label" aria-describedby="look-accent-desc" data-look-control></div>
-              <a class="arrow-link small" href="#supporter" data-look-upsell hidden>See Supporter</a>
+              <a class="arrow-link small" href="#supporter" data-door="looks" data-look-upsell hidden>See Supporter</a>
             </div>
           </div>
           </div>
@@ -2653,7 +2687,7 @@
           <!-- Filled from blocked-themes.js, the same list the blocked page renders. -->
           <div class="design-picker" id="blocked-design-picker" role="radiogroup" aria-label="Blocked page design"></div>
           <p class="field-hint" id="blocked-design-note" hidden>Your own blocked page is switched on below, so it’s shown instead of these designs.</p>
-          <p class="field-hint" id="blocked-design-upsell" hidden>Classic is free. Calm, Verse, Motivation and Play come with <a class="link" href="#section-supporter">Supporter</a>; preview any of them first.</p>
+          <p class="field-hint" id="blocked-design-upsell" hidden>Classic is free. Calm, Verse, Motivation and Play come with <a class="link" href="#section-supporter" data-door="designs">Supporter</a>; preview any of them first.</p>
 
           <p class="meta design-divider">or use your own page</p>
 
@@ -2754,7 +2788,7 @@
                   </label>
                   <button type="button" class="btn-text" id="own-photo-remove" hidden>Remove</button>
                 </div>
-                <a class="arrow-link small" href="#supporter" id="own-photo-upsell" hidden>See Supporter</a>
+                <a class="arrow-link small" href="#supporter" data-door="photo" id="own-photo-upsell" hidden>See Supporter</a>
               </div>
               <p class="field-hint" id="own-photo-hint">Someone or something worth staying for. It shows on the blocked page above your words, and stays on this device.</p>
               <p class="field-error" id="own-photo-error" role="alert"></p>
@@ -2772,7 +2806,7 @@
                 <span class="own-voice-time tnum" id="own-voice-time" aria-live="off" hidden></span>
                 <button type="button" class="btn-text" id="own-voice-play" hidden>Listen</button>
                 <button type="button" class="btn-text" id="own-voice-remove" hidden>Remove</button>
-                <a class="arrow-link small" href="#supporter" id="own-voice-upsell" hidden>See Supporter</a>
+                <a class="arrow-link small" href="#supporter" data-door="voice" id="own-voice-upsell" hidden>See Supporter</a>
               </div>
               <div class="own-voice-auto" id="own-voice-auto-row" hidden>
                 <label class="own-voice-auto-label" for="own-voice-auto">Play it by itself when a page is blocked</label>
@@ -3365,11 +3399,15 @@ title/Example Domain/"></textarea>
             <p class="supporter-note-sign" id="supporter-note-sign">— Monolab</p>
           </div>
           <div class="supporter-buy" id="supporter-buy">
+            <div class="supporter-offer" id="supporter-offer" hidden>
+              <p class="supporter-offer-when" id="supporter-offer-when"></p>
+              <p class="supporter-offer-title" id="supporter-offer-title"></p>
+              <p class="supporter-offer-text" id="supporter-offer-text"></p>
+            </div>
             <fieldset class="supporter-plans" id="supporter-plans">
               <legend class="meta supporter-plans-legend">Choose a plan</legend>
             </fieldset>
             <a class="btn btn-primary" id="supporter-buy-btn" target="_blank" rel="noopener noreferrer" hidden>Become a supporter</a>
-            <p class="supporter-offer" id="supporter-offer" hidden></p>
             <p class="supporter-buy-hint" id="supporter-buy-hint"></p>
             <p class="supporter-buy-hint">For this browser extension, on up to three of your browsers at once. BlockNSFW for Android has its own Supporter, in the app. Cancel any time, and if you bought it by mistake, we’ll refund it.</p>
           </div>
@@ -3525,7 +3563,7 @@ title/Example Domain/"></textarea>
                 <label class="row-label" for="sync-on">Your progress on every computer <span class="meta meta-brass row-tag" id="sync-tag" hidden>Supporter</span></label>
                 <p class="row-desc" id="sync-desc">Days kept, the path, check-ins and your words follow you to every computer where you’re signed in to Chrome or Firefox, through the browser’s own sync. Protection settings never sync: each computer keeps its own.</p>
                 <p class="field-hint" id="sync-status" role="status"></p>
-                <a class="arrow-link small" href="#supporter" id="sync-upsell" hidden>See Supporter</a>
+                <a class="arrow-link small" href="#supporter" data-door="sync" id="sync-upsell" hidden>See Supporter</a>
               </div>
               <label class="switch" id="sync-switch" hidden>
                 <input type="checkbox" class="switch-input" role="switch" id="sync-on" aria-describedby="sync-desc sync-status" />

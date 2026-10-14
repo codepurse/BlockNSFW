@@ -1,6 +1,6 @@
 # Privacy Policy for BlockNSFW
 
-**Last Updated:** October 11, 2026
+**Last Updated:** October 14, 2026
 
 ## Overview
 
@@ -165,7 +165,9 @@ you provided, on adding it and roughly once a day thereafter.
 BlockNSFW downloads its blocklist and whitelist from GitHub-hosted files in
 this project's repository, roughly twice a day, to keep filtering rules
 current. On the same schedule it fetches a small file listing the latest
-published version, so it can tell you when an update is available.
+published version, so it can tell you when an update is available. The same
+file can carry Supporter's current offer, such as a founding price, which
+Settings › Supporter shows as text.
 
 - Services used: `raw.githubusercontent.com` (the files `data/HOSTS.txt`,
   `data/WHITELIST.txt` and `data/version.json` in this project's public
@@ -293,6 +295,12 @@ sees your payment details.
 - The "Open your purchases" and "Manage or cancel your plan" links open
   Polar's purchases page (`polar.sh`, or `sandbox.polar.sh` while testing) in
   a new tab, only when you click them
+- The "Become a supporter" button opens Polar's checkout in a new tab, only
+  when you click it. Its address says which page of the extension led there,
+  as one word from a fixed list (for example `release` for the 2.0 page,
+  `popup`, `path`, or `settings`), so we can see what helps people decide.
+  Polar keeps that word with the checkout. Nothing else about you or your
+  browsing is in it
 - A code the developer makes by hand (one that starts with `BN1-`) is checked
   on your device and is never sent anywhere
 

@@ -247,11 +247,140 @@ test('entering a code again after a plan ended opens it again', async () => {
   assert.equal((await Supporter.status(storage, { store: STORE, now: month(2) })).supporter, true);
 });
 
-test('plans: three, yearly chosen first; the offer line ends by itself', () => {
+test('plans: three, yearly chosen first', () => {
   assert.deepEqual(Supporter.PLANS.map((p) => p.id), ['monthly', 'yearly', 'lifetime']);
   assert.deepEqual(Supporter.PLANS.filter((p) => p.best).map((p) => p.id), ['yearly']);
   assert.equal(typeof Supporter.buyable(), 'boolean');
-  assert.equal(Supporter.offerFor(Date.now()), Supporter.offerFor(Date.now()));
+});
+
+// --- Offers ---------------------------------------------------------------------
+
+const OFFER = {
+  name: 'Founding offer',
+  title: '30% off Yearly and Lifetime',
+  text: 'For our first supporters.',
+  until: '2026-11-13',
+  prices: { yearly: '$12.00', lifetime: '$10.00' }
+};
+const plan = (id) => Supporter.PLANS.find((p) => p.id === id);
+
+test('an offer is words and a last day; anything else is no offer', () => {
+  assert.deepEqual(Supporter.cleanOffer(OFFER), OFFER);
+  for (const bad of [
+    null, 'offer', 42, [],
+    { ...OFFER, text: '' },
+    { ...OFFER, text: '   ' },
+    { ...OFFER, text: 7 },
+    { ...OFFER, text: 'x'.repeat(201) },
+    { ...OFFER, name: 'x'.repeat(41) },
+    { ...OFFER, title: 'x'.repeat(81) },
+    { ...OFFER, until: undefined },
+    { ...OFFER, until: '13 November' },
+    { ...OFFER, until: 20261113 }
+  ]) {
+    assert.equal(Supporter.cleanOffer(bad), null, JSON.stringify(bad));
+  }
+  assert.deepEqual(Supporter.cleanOffer({ text: 'Words only.', until: '2026-11-13' }),
+    { name: '', title: '', text: 'Words only.', until: '2026-11-13', prices: {} });
+});
+
+test('an offer says when it ends, and says so on its last day', () => {
+  assert.match(Supporter.offerEnds(OFFER, new Date(2026, 9, 14, 9).getTime()), /^until .*13/);
+  assert.equal(Supporter.offerEnds(OFFER, new Date(2026, 10, 13, 0, 1).getTime()), 'last day');
+  assert.equal(Supporter.offerEnds(OFFER, new Date(2026, 10, 13, 23, 59).getTime()), 'last day');
+});
+
+test('an offer keeps only prices that lower a plan that exists', () => {
+  const kept = Supporter.cleanOffer({
+    ...OFFER,
+    prices: {
+      monthly: plan('monthly').price,   // the same price is no offer
+      yearly: '$999.99',                // higher than the plan's own
+      lifetime: '62.99',                // no dollar sign
+      weekly: '$1.00'                   // no such plan
+    }
+  });
+  assert.deepEqual(kept.prices, {});
+  assert.deepEqual(Supporter.cleanOffer({ ...OFFER, prices: { yearly: '$12' } }).prices, { yearly: '$12' });
+});
+
+test('an offer shows until the end of its last day, then ends by itself', () => {
+  const lastDay = new Date(2026, 10, 13, 23, 59).getTime();
+  const dayAfter = new Date(2026, 10, 14, 0, 0).getTime();
+  assert.equal(Supporter.activeOffer(new Date(2026, 9, 14).getTime(), OFFER).text, OFFER.text);
+  assert.equal(Supporter.activeOffer(lastDay, OFFER).text, OFFER.text);
+  assert.equal(Supporter.activeOffer(dayAfter, OFFER), null);
+  assert.equal(Supporter.activeOffer(new Date(2030, 0, 1).getTime(), null), null, 'long after any offer, there is none');
+  assert.equal(Supporter.activeOffer(new Date(2030, 0, 1).getTime(), { text: 'Broken' }), null);
+  const broken = Supporter.activeOffer(lastDay, { text: 'Broken' });
+  assert.notEqual(broken && broken.text, 'Broken', 'a broken offer is never shown');
+});
+
+test('the founding offer is built in, and ends after November 13', () => {
+  const offer = Supporter.activeOffer(new Date(2026, 9, 14, 12).getTime(), null);
+  assert.equal(offer.name, 'Founding offer');
+  assert.deepEqual(offer.prices, { yearly: '$20.99', lifetime: '$62.99' });
+  assert.equal(Supporter.activeOffer(new Date(2026, 10, 14, 0, 0).getTime(), null), null);
+});
+
+test('during an offer, a plan it lowers shows both prices, and yearly its new month', () => {
+  const shown = Supporter.offered(Supporter.cleanOffer(OFFER));
+  const yearly = shown.find((p) => p.id === 'yearly');
+  assert.equal(yearly.price, '$12.00');
+  assert.equal(yearly.was, plan('yearly').price);
+  assert.equal(yearly.note, '$1.00 a month');
+  const lifetime = shown.find((p) => p.id === 'lifetime');
+  assert.equal(lifetime.price, '$10.00');
+  assert.equal(lifetime.was, plan('lifetime').price);
+  assert.equal(lifetime.note, plan('lifetime').note, 'only a yearly plan has a month to work out');
+  const monthly = shown.find((p) => p.id === 'monthly');
+  assert.equal(monthly.price, plan('monthly').price);
+  assert.equal(monthly.was, undefined);
+  // The plans themselves never change.
+  assert.equal(plan('yearly').price, Supporter.offered().find((p) => p.id === 'yearly').price);
+  assert.ok(Supporter.offered().every((p) => p.was === undefined));
+});
+
+test('the offer in data/version.json is one Settings shows whole', () => {
+  // A typo there doesn't fail anywhere else: Settings just quietly drops the
+  // offer, or one of its prices.
+  const remote = JSON.parse(require('node:fs').readFileSync(require('node:path').join(__dirname, '..', 'data', 'version.json'), 'utf8')).offer;
+  if (!remote) return;
+  const clean = Supporter.cleanOffer(remote);
+  assert.ok(clean, 'version.json has an offer Settings would drop');
+  assert.deepEqual(clean.prices, remote.prices || {}, 'version.json has a price Settings would drop');
+});
+
+// --- Where a buyer came from ----------------------------------------------------
+
+test('the checkout link names the door, and only a known one', () => {
+  const yearly = plan('yearly');
+  const url = new URL(Supporter.checkoutUrl({ url: 'https://api.polar.sh/v1/checkout-links/polar_cl_x/redirect' }, 'release'));
+  assert.equal(url.origin + url.pathname, 'https://api.polar.sh/v1/checkout-links/polar_cl_x/redirect');
+  assert.equal(url.searchParams.get('utm_source'), 'release');
+  assert.equal(url.searchParams.get('utm_medium'), 'extension');
+  assert.deepEqual([...url.searchParams.keys()].sort(), ['utm_medium', 'utm_source']);
+  for (const odd of [undefined, null, '', 'https://example.com/', 'morning', 'constructor', '__proto__']) {
+    assert.equal(new URL(Supporter.checkoutUrl({ url: 'https://api.polar.sh/x' }, odd)).searchParams.get('utm_source'), 'settings', String(odd));
+  }
+  assert.equal(Supporter.checkoutUrl({ url: '' }, 'release'), '');
+  assert.equal(Supporter.checkoutUrl(null, 'release'), '');
+  if (yearly.url) assert.ok(Supporter.checkoutUrl(yearly, 'popup').startsWith(yearly.url + '?'));
+});
+
+test('every door a page names is one Supporter knows', () => {
+  // A misspelt door isn't an error anywhere: the sale just counts as Settings.
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const root = path.join(__dirname, '..');
+  const named = [];
+  for (const file of fs.readdirSync(root).filter((f) => /\.(html|js)$/.test(f))) {
+    const text = fs.readFileSync(path.join(root, file), 'utf8');
+    for (const m of text.matchAll(/options\.html\?from=([a-z]*)/g)) named.push([file, m[1]]);
+    for (const m of text.matchAll(/data-door="([a-z]*)"/g)) named.push([file, m[1]]);
+  }
+  assert.ok(named.length >= 10, `found only ${named.length} doors`);
+  for (const [file, name] of named) assert.ok(Supporter.DOORS.includes(name), `${file}: unknown door "${name}"`);
 });
 
 test('only plans with a checkout link are offered, and exactly one is chosen', () => {

@@ -30,16 +30,18 @@
     });
   }
 
+  // Words only a screen reader hears.
+  function said(text) {
+    const s = document.createElement('span');
+    s.className = 'visually-hidden';
+    s.textContent = text;
+    return s;
+  }
+
   // The comparison's cells: a check where it's included, a dash where it
   // isn't, each with words for screen readers.
   function fillCompare() {
     const NS = 'http://www.w3.org/2000/svg';
-    const said = (text) => {
-      const s = document.createElement('span');
-      s.className = 'visually-hidden';
-      s.textContent = text;
-      return s;
-    };
     document.querySelectorAll('#supporter-compare td[data-yes]').forEach((td) => {
       const svg = document.createElementNS(NS, 'svg');
       svg.setAttribute('class', 'compare-check');
@@ -78,35 +80,71 @@
     }
   }
 
-  // The sidebar's Supporter plate: what support opens, or a thank-you.
-  function renderNav(s) {
+  // The sidebar's Supporter plate: what support opens, the offer while there
+  // is one, or a thank-you. Drawn again when either answer comes in.
+  let lastStatus = { supporter: false };
+  let liveOffer = null;
+  function renderNav(s = lastStatus) {
+    lastStatus = s;
     const sub = $('nav-supporter-sub');
     const mark = $('nav-supporter-mark');
     if (!sub || !mark) return;
     const since = s.supporter && s.since ? formatShort(s.since) : '';
+    const offer = liveOffer && Supporter.buyable() && self.SupporterExtras
+      ? `${liveOffer.name || 'An offer'} · ${Supporter.offerEnds(liveOffer, Date.now())}`
+      : '';
     sub.textContent = s.supporter
       ? (since ? `Thank you · since ${since}` : 'Thank you')
-      : 'The path, your month and more';
+      : (offer || 'The path, your month and more');
     mark.hidden = !s.supporter;
   }
 
-  // The plans as radio rows; the button follows the chosen one.
-  function renderPlans() {
+  // The door that led here (Supporter.door): a page outside Settings says so
+  // in the address (options.html?from=release#section-supporter); a "See
+  // Supporter" link inside Settings carries data-door. Set on load.
+  let door = 'settings';
+  let chosen = null;
+
+  function pointButton() {
+    const url = Supporter.checkoutUrl(chosen, door);
+    if (url) $('supporter-buy-btn').href = url;
+  }
+
+  // The offer from version.json, kept by the background's update check.
+  async function remoteOffer() {
+    try {
+      const { pblocker_update_info: info } = await browserAPI.storage.local.get('pblocker_update_info');
+      return info && info.offer;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  // The plans as radio rows; the button follows the chosen one. Drawn again
+  // when an offer arrives or ends, keeping the plan already picked.
+  async function renderPlans() {
     const box = $('supporter-plans');
     const btn = $('supporter-buy-btn');
+    const offer = Supporter.activeOffer(Date.now(), await remoteOffer());
+    liveOffer = offer;
+    renderNav();
+    const kept = chosen && chosen.id;
     box.querySelectorAll('.supporter-plan').forEach((el) => el.remove());
     const pick = (plan) => {
-      if (plan.url) btn.href = plan.url;
+      chosen = plan;
+      pointButton();
       btn.textContent = `Become a supporter · ${plan.price}`;
     };
-    Supporter.offered().forEach((plan) => {
+    const plans = Supporter.offered(offer);
+    const first = plans.find((p) => p.id === kept) || plans.find((p) => p.chosen);
+    plans.forEach((plan) => {
       const label = document.createElement('label');
       label.className = 'supporter-plan';
       const input = document.createElement('input');
       input.type = 'radio';
       input.name = 'supporter-plan';
       input.value = plan.id;
-      input.checked = plan.chosen;
+      input.checked = plan === first;
       input.addEventListener('change', () => pick(plan));
       const name = document.createElement('span');
       name.className = 'supporter-plan-name';
@@ -119,23 +157,35 @@
       }
       const price = document.createElement('span');
       price.className = 'supporter-plan-price';
-      price.textContent = plan.price;
+      if (plan.was) {
+        // Struck through for the eye; said in words for a screen reader,
+        // which reads <s> as plain text.
+        const was = document.createElement('s');
+        was.className = 'supporter-plan-was';
+        was.textContent = plan.was;
+        price.append(said('Was '), was, said(', now '));
+      }
+      price.append(plan.price);
       const per = document.createElement('span');
       per.className = 'supporter-plan-per';
       per.textContent = plan.per;
       price.appendChild(per);
       label.append(input, name, price);
       box.appendChild(label);
-      if (plan.chosen) pick(plan);
+      if (plan === first) pick(plan);
     });
 
     const open = Supporter.buyable();
     btn.hidden = !open;
     $('supporter-buy-hint').textContent = open ? '' : 'Opens soon. Until then, the first week of the path is here for everyone.';
     $('supporter-buy-hint').hidden = open;
-    const offer = Supporter.offerFor(Date.now());
     $('supporter-offer').hidden = !offer || !open;
-    $('supporter-offer').textContent = offer || '';
+    if (offer) {
+      $('supporter-offer-when').textContent = [offer.name, Supporter.offerEnds(offer, Date.now())].filter(Boolean).join(' · ');
+      $('supporter-offer-title').textContent = offer.title;
+      $('supporter-offer-title').hidden = !offer.title;
+      $('supporter-offer-text').textContent = offer.text;
+    }
   }
 
   // A blocked-page design other than Classic goes back to Classic when the
@@ -281,6 +331,16 @@
     fillCompare();
     $('supporter-portal').href = Supporter.portalUrl();
     $('supporter-manage').href = Supporter.portalUrl();
+    door = Supporter.door(new URLSearchParams(location.search).get('from'));
+    document.addEventListener('click', (e) => {
+      const link = e.target.closest && e.target.closest('a[data-door]');
+      if (!link) return;
+      door = Supporter.door(link.dataset.door);
+      pointButton();
+    });
+    browserAPI.storage.onChanged.addListener((changes, area) => {
+      if (area === 'local' && changes.pblocker_update_info) renderPlans();
+    });
     renderPlans();
     renderStatus();
     hidePlaceholders();

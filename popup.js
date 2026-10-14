@@ -637,7 +637,7 @@ function buildCheckinRows(answers) {
 async function openCheckin() {
   if (!Checkin) return;
   if (!isSupporter) {
-    openPage('options.html#supporter');
+    openPage('options.html?from=popup#supporter');
     return;
   }
   const overlay = $('checkin-modal-overlay');
