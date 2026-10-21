@@ -23,6 +23,7 @@
     : typeof chrome !== 'undefined' ? chrome : null;
 
   const opener = document.getElementById('film-open');
+  const openers = document.querySelectorAll('[data-film-open]');
   const dialog = document.getElementById('film-dialog');
   const frame = document.getElementById('film-frame');
   const closeBtn = document.getElementById('film-close');
@@ -31,6 +32,7 @@
   if (!opener || !dialog || !frame || typeof dialog.showModal !== 'function') return;
 
   let player = null;
+  let lastOpener = opener;
   let ready = false;
   let waitTimer = 0;
 
@@ -122,12 +124,12 @@
     clearTimeout(waitTimer);
     if (player) { player.remove(); player = null; }
     removeReferrerRule();
-    // Back to the poster, whichever way the dialog was opened or closed.
-    if (!dialog.open && document.activeElement !== opener) opener.focus({ preventScroll: true });
+    // Back to what opened it (the poster when it opened by itself).
+    if (!dialog.open && document.activeElement !== lastOpener) lastOpener.focus({ preventScroll: true });
   }
 
   window.addEventListener('message', onMessage);
-  opener.addEventListener('click', open);
+  openers.forEach((el) => el.addEventListener('click', (event) => { lastOpener = event.currentTarget; open(); }));
   closeBtn && closeBtn.addEventListener('click', () => dialog.close());
   dialog.addEventListener('close', close);
   // The close event isn't always delivered (headless Chrome dropped it now and

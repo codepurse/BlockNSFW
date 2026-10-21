@@ -169,18 +169,21 @@
       margin-top: 14px;
     }
 
-    /* The film: a local poster that opens the YouTube player in a dialog
-       (release.js). Nothing loads from YouTube until it's opened. */
+    /* The film: one compact row between the cover and what's new. A small
+       local poster beside a few words; either opens the YouTube player in a
+       dialog (release.js). Nothing loads from YouTube until it's opened. */
     .release-film {
-      padding-bottom: 56px;
+      display: grid;
+      gap: var(--space-4) var(--space-6);
+      align-items: center;
+      margin-bottom: 56px;
+      padding-top: var(--space-5);
+      border-top: 1px solid var(--color-rule-2);
     }
-    .release-film-head {
-      display: flex;
-      flex-wrap: wrap;
-      align-items: baseline;
-      justify-content: space-between;
-      gap: var(--space-2) var(--space-4);
-      margin-bottom: var(--space-4);
+    @media (min-width: 40rem) {
+      .release-film {
+        grid-template-columns: minmax(0, 17rem) minmax(0, 1fr);
+      }
     }
     .release-film-poster {
       position: relative;
@@ -198,28 +201,36 @@
       height: auto;
       aspect-ratio: 16 / 9;
     }
+    /* The poster is the pine band in both themes, so what sits on it uses
+       the band's own inks. */
+    /* Bottom left: the poster's one empty corner (the centre is the 2.0). */
     .release-film-play {
       position: absolute;
-      left: 3.5%;
-      bottom: 6%;
-      display: inline-flex;
+      left: var(--space-2);
+      bottom: var(--space-2);
+      width: 36px;
+      height: 36px;
+      display: flex;
       align-items: center;
-      gap: var(--space-3);
-      min-height: 52px;
-      padding: 0 var(--space-5) 0 var(--space-4);
+      justify-content: center;
       border-radius: var(--radius-xs);
-      /* The poster is the pine band in both themes, so the button is the
-         band's light ink, not the page's primary. */
       background: var(--color-on-band);
       color: var(--color-band);
-      font-family: var(--font-sans);
-      font-size: 16px;
-      font-weight: 500;
     }
     .release-film-play svg {
-      width: 18px;
-      height: 18px;
+      width: 14px;
+      height: 14px;
+      margin-left: 2px;
       fill: currentColor;
+    }
+    .release-film-time {
+      position: absolute;
+      right: var(--space-2);
+      bottom: var(--space-2);
+      padding: 2px 6px;
+      background: var(--color-band);
+      color: var(--color-on-band);
+      font-size: 12px;
     }
     .release-film-poster:hover .release-film-play {
       background: var(--color-band-signal);
@@ -228,10 +239,24 @@
       outline: var(--focus-width) solid var(--color-pine-2);
       outline-offset: var(--focus-offset);
     }
-    .release-film-note {
-      margin-top: var(--space-3);
-      font-size: 13px;
+    .release-film-title {
+      margin-top: var(--space-2);
+      font-family: var(--font-display);
+      font-size: 26px;
+      font-weight: 400;
+      line-height: 1.2;
+    }
+    .release-film-desc {
+      max-width: 34rem;
+      margin-top: var(--space-2);
       color: var(--color-ink-2);
+    }
+    .release-film-actions {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: var(--space-3) 20px;
+      margin-top: var(--space-4);
     }
 
     .film-dialog {
@@ -434,15 +459,20 @@
     </section>
 
     <section class="release-film" id="film" aria-labelledby="film-head">
-      <div class="release-film-head">
-        <h2 class="meta" id="film-head">The 2.0 film · 1 minute</h2>
-        <a class="link small" data-film-watch href="https://www.youtube.com/watch?v=-1p8cWhCV9w" target="_blank" rel="noopener noreferrer">Watch on YouTube</a>
-      </div>
-      <button class="release-film-poster" type="button" id="film-open" aria-haspopup="dialog">
+      <button class="release-film-poster" type="button" id="film-open" data-film-open aria-haspopup="dialog" aria-label="Watch the 2.0 film">
         <img src="ui/release-film.jpg" alt="" width="1280" height="720" />
-        <span class="release-film-play"><svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M4 2.5v11l9-5.5z" /></svg>Watch the 2.0 film</span>
+        <span class="release-film-play" aria-hidden="true"><svg viewBox="0 0 16 16" focusable="false"><path d="M4 2.5v11l9-5.5z" /></svg></span>
+        <span class="release-film-time mono" aria-hidden="true">1:00</span>
       </button>
-      <p class="release-film-note">The film plays from YouTube. Nothing loads from YouTube until you press play.</p>
+      <div>
+        <p class="meta release-kicker">The 2.0 film · 1 minute</p>
+        <h2 class="release-film-title" id="film-head">See what’s new in a minute.</h2>
+        <p class="release-film-desc">Every new feature, drawn the way it works. It plays from YouTube, and nothing loads from YouTube until you press play.</p>
+        <div class="release-film-actions">
+          <button class="btn btn-primary btn-sm" type="button" data-film-open aria-haspopup="dialog">Watch the film</button>
+          <a class="link small" data-film-watch href="https://www.youtube.com/watch?v=-1p8cWhCV9w" target="_blank" rel="noopener noreferrer">Watch on YouTube</a>
+        </div>
+      </div>
     </section>
 
     <dialog class="film-dialog" id="film-dialog" aria-labelledby="film-box-title">
