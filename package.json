@@ -1,6 +1,6 @@
 {
   "name": "blocknsfw",
-  "version": "2.0.1",
+  "version": "2.0.2",
   "private": true,
   "description": "BlockNSFW browser extension source and tooling.",
   "scripts": {
