@@ -1,6 +1,6 @@
 # Privacy Policy for BlockNSFW
 
-**Last Updated:** October 14, 2026
+**Last Updated:** October 21, 2026
 
 ## Overview
 
@@ -345,6 +345,23 @@ run. It never holds the PIN, the Pact or its witness, an access code, your
 Supporter code, the log of blocked addresses or which sites were blocked
 most. Because it holds your history, words, photo and voice, keep the file
 somewhere private.
+
+### 13. The 2.0 Film (YouTube)
+
+The 2.0 page (and a link in Settings › What's new) offers a one-minute film
+about the update. It is hosted on YouTube. Nothing is loaded from YouTube
+until you press play: the page shows a picture that ships with the
+extension.
+
+- When: only when you open the film
+- What: the film plays in YouTube's privacy-enhanced player
+  (`www.youtube-nocookie.com`), which then loads video from Google's servers.
+  YouTube and Google handle that request under Google's privacy policy
+- To let the player run inside the extension, that one request is sent with
+  our website, `https://monolab.dev/`, as its referrer, for as long as the
+  film is open. Nothing about you or your browsing is added to it
+- Closing the film removes the player. "Watch on YouTube" opens the film on
+  www.youtube.com in a new tab instead
 
 ## How We Use Data
 

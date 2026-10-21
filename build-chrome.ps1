@@ -94,6 +94,7 @@ $RuntimeFiles   = @(
     "options-supporter.js",
     "options-backup.js",
     "release.html",
+    "release.js",
     "community.html",
     "community.js",
     "appwrite-client.js",

@@ -25,7 +25,7 @@ const policy = fs.readFileSync(path.join(ROOT, 'PRIVACY_POLICY.md'), 'utf8');
 // Files that can originate a network request at runtime.
 const NETWORK_SOURCES = [
   'background.js', 'content.js', 'offscreen.js', 'appwrite-client.js',
-  'community.js', 'options.js',
+  'community.js', 'options.js', 'release.js',
   path.join('shared', 'dns-providers.js'),
   path.join('shared', 'vit-classifier.js'),
   path.join('shared', 'supporter.js')

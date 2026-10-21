@@ -2,6 +2,28 @@
 
 All notable project changes should be documented here going forward.
 
+## [Unreleased]
+
+### Added
+
+- **The 2.0 film.** The 2.0 page opens on a one-minute film about the update,
+  and Settings › What's new links straight to it. It plays from YouTube in a
+  window over the page. Nothing loads from YouTube until you press play,
+  closing the window stops it, and "Watch on YouTube" opens it in a tab
+  instead (privacy policy, section 13).
+
+### For contributors
+
+- `release.js` drives the film's `<dialog>`. YouTube won't play inside an
+  extension page (error 153: extension pages send no web referrer), so while
+  the dialog is open a session rule (id 20001) sets `https://monolab.dev/` as
+  the referrer of that one embed request, in that tab only, and closing the
+  dialog removes it. If the player still reports an error, the dialog swaps
+  to a "Watch on YouTube" link. The poster is `ui/release-film.jpg`; the
+  film's source is `trailer/v2-launch/` (not shipped).
+- `release.js` is in both builds' file lists, and the privacy-policy test now
+  reads it for hosts.
+
 ## [2.0.1] - 2026-10-14
 
 ### Added
