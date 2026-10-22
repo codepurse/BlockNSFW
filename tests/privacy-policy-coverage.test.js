@@ -65,7 +65,7 @@ test('H8: every remote host the code calls is named in the privacy policy', () =
     '\nAdd them, or add them to NOT_ENDPOINTS if they are not really called.');
 });
 
-test('H8: all four DNS presets and the custom option are disclosed', () => {
+test('H8: every DNS preset and the custom option are disclosed', () => {
   const DNS = require('../shared/dns-providers.js');
   for (const provider of DNS.DNS_PROVIDERS) {
     const host = new URL(provider.doh).hostname;

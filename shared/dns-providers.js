@@ -39,7 +39,7 @@
       doh: 'https://family.cloudflare-dns.com/dns-query',
       mode: 'json',
       blocks: 'Adult content + malware',
-      note: 'Largest network of the four, usually the fastest. Recommended default.'
+      note: 'Largest network of the three, usually the fastest. Recommended default.'
     },
     {
       id: 'adguard',
@@ -55,14 +55,9 @@
       // return exactly this address while benign domains resolve normally.
       blockedIps: ['94.140.14.35']
     },
-    {
-      id: 'mullvad',
-      label: 'Mullvad DNS Family',
-      doh: 'https://family.dns.mullvad.net/dns-query',
-      mode: 'wire',
-      blocks: 'Adult content + gambling',
-      note: 'No-logging independently audited, servers run entirely in RAM. Best privacy of the four.'
-    },
+    // Mullvad DNS Family was listed here until Mullvad closed its public DNS
+    // on 2026-11-02. A setting still saved as 'mullvad' is an unknown id now,
+    // so getProviderOrDefault() moves it to the default.
     {
       id: 'cleanbrowsing',
       label: 'CleanBrowsing Adult Filter',
@@ -265,7 +260,7 @@
   // The three ways a filtering resolver says "no", all of which occur in the
   // roster above and were confirmed against each live service:
   //
-  //   NXDOMAIN            Mullvad, and Cloudflare for some domains
+  //   NXDOMAIN            Cloudflare, for some domains
   //   sinkhole address    Cloudflare (0.0.0.0), CleanBrowsing
   //   block-page address  AdGuard (94.140.14.35) — looks like a normal answer
   //

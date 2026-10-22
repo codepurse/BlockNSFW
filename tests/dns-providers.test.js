@@ -3,7 +3,7 @@
 //
 // Everything here is offline. The wireformat codec is exercised against packets
 // captured from the live resolvers rather than by hitting the network, so CI
-// does not depend on four third-party services being up.
+// does not depend on three third-party services being up.
 //
 // The behaviours worth pinning down, all of which are ways this layer can fail
 // *silently* rather than loudly:
@@ -13,8 +13,9 @@
 //      the whole filter passes adult domains through while looking healthy.
 //   2. A failed lookup must be null, never false. Collapsing the two makes an
 //      outage indistinguishable from a clean bill of health.
-//   3. Mullvad answers NXDOMAIN, Cloudflare and CleanBrowsing sinkhole. All
-//      three shapes have to read as blocked.
+//   3. Cloudflare answers NXDOMAIN for some domains, and Cloudflare and
+//      CleanBrowsing sinkhole the rest. All three shapes have to read as
+//      blocked.
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const {
@@ -22,6 +23,7 @@ const {
   getProvider,
   getProviderOrDefault,
   getFallbackProvider,
+  resolveProvider,
   encodeQuery,
   decodeResponse,
   toBase64Url,
@@ -59,6 +61,16 @@ test('an unknown or missing provider id falls back to the default', () => {
   assert.equal(getProvider('nope'), null);
   assert.equal(getProviderOrDefault('nope').id, 'cloudflare');
   assert.equal(getProviderOrDefault(undefined).id, 'cloudflare');
+});
+
+test('a saved Mullvad choice moves to the default', () => {
+  // Mullvad closed its public DNS on 2026-11-02, so the preset is gone. Anyone
+  // who picked it still has dnsProvider: 'mullvad' saved, and has to land on a
+  // resolver that answers, with a fallback, not on a dead endpoint.
+  assert.equal(getProvider('mullvad'), null);
+  assert.ok(!DNS_PROVIDERS.some((p) => /mullvad/i.test(p.doh)), 'no preset may point at Mullvad');
+  assert.equal(resolveProvider('mullvad', '').id, 'cloudflare');
+  assert.equal(getFallbackProvider(resolveProvider('mullvad', '').id).id, 'adguard');
 });
 
 test('the fallback is always a different provider than the primary', () => {
@@ -107,7 +119,7 @@ test('decodeResponse reads a normal answer', () => {
   });
 });
 
-test('decodeResponse reads NXDOMAIN, the shape Mullvad uses to block', () => {
+test('decodeResponse reads NXDOMAIN, the shape Cloudflare uses to block some domains', () => {
   const packet = '000081830001000000000000077' + '06f726e687562' + '03636f6d0000010001';
   const decoded = decodeResponse(toArrayBuffer(packet.replace(/\s/g, '')));
   assert.equal(decoded.rcode, 3);
@@ -164,7 +176,6 @@ test('interpret: NOERROR with no A records is not a block', () => {
 
 const {
   CUSTOM_PROVIDER_ID,
-  resolveProvider,
   makeCustomProvider,
   validateCustomDohUrl,
   withQuery,
@@ -203,7 +214,7 @@ test('a broken custom URL degrades to the default rather than to no DNS', () => 
   assert.equal(resolveProvider(CUSTOM_PROVIDER_ID, 'garbage').id, 'cloudflare');
   assert.equal(resolveProvider(CUSTOM_PROVIDER_ID, '').id, 'cloudflare');
   assert.equal(resolveProvider(CUSTOM_PROVIDER_ID, undefined).id, 'cloudflare');
-  assert.equal(resolveProvider('mullvad', 'ignored').id, 'mullvad');
+  assert.equal(resolveProvider('adguard', 'ignored').id, 'adguard');
 });
 
 test('a custom resolver has no fallback, by design', () => {

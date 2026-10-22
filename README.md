@@ -42,7 +42,7 @@ BlockNSFW combines several protection layers:
 - **On-device AI image detection** (opt-in). Two models: a bundled NSFW.js MobileNetV2, or Marqo's ViT-384 whose weights are fetched once on first use. Images are never uploaded.
 - **On-device AI text classification** (opt-in, beta). Currently requires corroboration from the image scanner before it will block a page on its own.
 - Search SafeSearch enforcement on Google, Bing, DuckDuckGo, Yahoo, Brave, Ecosia, Qwant, AOL Search, Presearch, and Yandex
-- Optional DNS-based blocking through one of four filtering resolvers — Cloudflare for Families, AdGuard DNS Family, Mullvad DNS Family, CleanBrowsing — or any DNS-over-HTTPS endpoint you supply
+- Optional DNS-based blocking through one of three filtering resolvers — Cloudflare for Families, AdGuard DNS Family, CleanBrowsing — or any DNS-over-HTTPS endpoint you supply
 - **Ruleset subscriptions**: follow a blocklist someone else maintains, in uBlacklist's format. Subscribed lists can only ever add blocks, never remove them.
 - **PIN and access-code locks** over the settings that would weaken protection
 - Reddit NSFW subreddit checks for Reddit-specific filtering paths
@@ -93,8 +93,8 @@ Network requests may occur for these features:
 - Remote blocklist and whitelist updates from GitHub-hosted text files
 - A twice-daily update check against a small `version.json` in this repository
 - Optional DNS filtering through whichever resolver you select — Cloudflare for
-  Families, AdGuard DNS Family, Mullvad DNS Family, CleanBrowsing, or a custom
-  DNS-over-HTTPS endpoint you provide. Queries go straight from your browser to
+  Families, AdGuard DNS Family, CleanBrowsing, or a custom DNS-over-HTTPS
+  endpoint you provide. Queries go straight from your browser to
   that resolver; nothing passes through our servers. A preset that stops
   answering fails over to a second one on a different network; a custom
   resolver deliberately does not

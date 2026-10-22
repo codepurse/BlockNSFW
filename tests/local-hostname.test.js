@@ -86,8 +86,8 @@ test('isIpLiteral separates addresses from names', () => {
 });
 
 // This is the coupling that turned a harmless-looking DNS check into a
-// dev-environment outage. It is correct on its own terms — Mullvad really does
-// signal a block with NXDOMAIN — which is exactly why the guard has to live at
+// dev-environment outage. It is correct on its own terms — Cloudflare really
+// does signal some blocks with NXDOMAIN — which is exactly why the guard has to live at
 // the call site rather than in interpret().
 test('NXDOMAIN reads as blocked, which is why local names must never be queried', () => {
   assert.equal(interpret(3, []), true);

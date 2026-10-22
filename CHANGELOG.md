@@ -2,6 +2,18 @@
 
 All notable project changes should be documented here going forward.
 
+## [Unreleased]
+
+### Removed
+
+- **Mullvad DNS Family is no longer a DNS Protection choice.** Mullvad closes
+  all of its public DNS servers on November 2, 2026, the family one included.
+  DNS Protection now offers Cloudflare for Families, AdGuard DNS Family and
+  CleanBrowsing, or your own resolver. If you had picked Mullvad, BlockNSFW
+  uses Cloudflare for Families instead, with AdGuard as its fallback, and
+  Settings shows that; nothing needs doing. The privacy policy no longer
+  lists Mullvad.
+
 ## [2.0.2] - 2026-10-21
 
 ### Added

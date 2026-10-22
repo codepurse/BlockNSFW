@@ -1,6 +1,6 @@
 # Privacy Policy for BlockNSFW
 
-**Last Updated:** October 21, 2026
+**Last Updated:** October 22, 2026
 
 ## Overview
 
@@ -131,7 +131,6 @@ not pass through any server we operate.
 - Services available, one selected at a time:
   - Cloudflare for Families — `family.cloudflare-dns.com` (default)
   - AdGuard DNS Family — `dns-family.adguard.com`
-  - Mullvad DNS Family — `family.dns.mullvad.net`
   - CleanBrowsing Adult Filter — `doh.cleanbrowsing.org`
   - **Custom** — any DNS-over-HTTPS endpoint you enter yourself. If you use
     this, the operator of that endpoint receives the queries, and their privacy
@@ -389,7 +388,7 @@ We do not sell personal data to third parties.
 We share or transmit limited data only when needed to provide a feature or process a request you initiate. The parties that may receive data are:
 
 - **The filtering DNS resolver you selected** — Cloudflare for Families,
-  AdGuard, Mullvad, CleanBrowsing, or an endpoint you entered yourself — when
+  AdGuard, CleanBrowsing, or an endpoint you entered yourself — when
   DNS Protection is enabled, and occasionally one other preset resolver when
   your selected one does not answer
 - **GitHub-hosted resources**, when blocklist, whitelist or version updates are

@@ -26,7 +26,7 @@ WHAT IT BLOCKS
 Six layers stand between you and an adult page:
 • Your own list of sites and words
 • A built-in list of 237,000+ adult sites, refused before anything loads
-• DNS filtering through a family resolver you choose (Cloudflare for Families, AdGuard Family, Mullvad Family or CleanBrowsing), or your own
+• DNS filtering through a family resolver you choose (Cloudflare for Families, AdGuard Family or CleanBrowsing), or your own
 • SafeSearch held on for Google, Bing, DuckDuckGo, Yahoo, Brave, Ecosia, Qwant, AOL, Presearch and Yandex
 • The words on the page
 • An image check that runs on your device, if you turn it on. Images are never uploaded.
