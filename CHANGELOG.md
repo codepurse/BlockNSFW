@@ -4,6 +4,15 @@ All notable project changes should be documented here going forward.
 
 ## [Unreleased]
 
+### Added
+
+- **A page that asks why, after BlockNSFW is removed.** The browser opens
+  monolab.dev/blocknsfw/goodbye, which asks for the reason in one tap and
+  answers it: a fix to look at for a wrongly blocked site, a way back for
+  someone who removed it in a hard moment. A note is optional. The address
+  carries only the version, the browser and roughly how long BlockNSFW was
+  installed (a day, a week, a month or longer); privacy policy, section 14.
+
 ### Removed
 
 - **Mullvad DNS Family is no longer a DNS Protection choice.** Mullvad closes

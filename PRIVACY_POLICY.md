@@ -1,6 +1,6 @@
 # Privacy Policy for BlockNSFW
 
-**Last Updated:** October 22, 2026
+**Last Updated:** October 25, 2026
 
 ## Overview
 
@@ -362,6 +362,31 @@ extension.
 - Closing the film removes the player. "Watch on YouTube" opens the film on
   www.youtube.com in a new tab instead
 
+### 14. The Page That Opens When You Remove BlockNSFW
+
+When you remove BlockNSFW, your browser opens a page on our website,
+`https://monolab.dev/blocknsfw/goodbye`, that asks why, in one tap. The
+extension sets this address while it is installed; the browser opens it after
+the extension is gone.
+
+- What the address carries: the BlockNSFW version, your browser (Chrome, Edge
+  or Firefox), and roughly how long BlockNSFW was installed (under a day,
+  under a week, under a month, or longer). Nothing else: no device ID, no
+  settings, nothing about what you browsed or blocked
+- What the page keeps: a count of the page being opened, with those three
+  things; the reason you tap, if you tap one; and a note, if you write and
+  send one, with the reason and the day beside it. Answering is optional, and
+  closing the tab sends nothing more
+- What it does not keep: your internet address (it is used for an hour, in a
+  one-way form, to limit how often one connection can send), your email
+  address (the page never asks for it), or any cookie
+- Where it is kept: our website's database (Upstash, through Vercel). The
+  counts are totals. Only the newest 500 notes are kept; older ones are
+  deleted as new ones arrive
+- Who sees it: the developer, to find out what to fix
+- Don't write anything in a note that identifies you. If you want a reply,
+  write to the address under Contact instead
+
 ## How We Use Data
 
 We use the limited data handled by BlockNSFW only to:
@@ -378,6 +403,7 @@ We use the limited data handled by BlockNSFW only to:
 - show, submit and moderate community stories, and count story likes
 - process and review manual user-submitted reports
 - prevent abuse and duplicate report or story submissions
+- learn why people remove BlockNSFW, from the page that opens when they do
 
 We do not use this data for unrelated purposes.
 
@@ -399,6 +425,8 @@ We share or transmit limited data only when needed to provide a feature or proce
 - **Reddit**, when Reddit NSFW checks are performed
 - **Our Appwrite-hosted backend**, when you manually submit a website report,
   when you open the Community page, and when you submit or like a story
+- **Our website, monolab.dev**, when you remove BlockNSFW and your browser
+  opens the page that asks why (section 14)
 
 Outside of the cases above, we do not share your data except if required by law, needed to protect security, or as part of a business transfer such as a merger or sale of assets.
 
@@ -411,6 +439,7 @@ Outside of the cases above, we do not share your data except if required by law,
 - Manual report cooldown data, duplicate-report keys, and the generated local device ID remain in local extension storage until cleared or the extension is removed.
 - Manual reports submitted to our backend may be stored in our backend database and retained for as long as reasonably necessary to review reports, reduce abuse, and improve filtering quality.
 - Community stories submitted to our backend are retained until removed. A published story is visible to anyone who opens the Community page. If you want a story you submitted taken down, contact us through the channel below and we will remove it.
+- Answers on the page that opens when you remove BlockNSFW are kept as running totals. Of the notes written there, only the newest 500 are kept.
 
 ## Security
 

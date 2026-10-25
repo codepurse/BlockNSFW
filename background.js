@@ -4482,7 +4482,41 @@ if (browserAPI.runtime.onStartup) {
   });
 }
 boostReconcile().catch(e => console.warn('BlockNSFW: boost check failed', e));
-ensureFirstSeen().catch(() => {});
+ensureFirstSeen()
+  .catch(() => {})
+  .then(setGoodbyePage)
+  .catch(e => console.warn('BlockNSFW: goodbye page could not be set', e));
+
+// --- The goodbye page ---------------------------------------------------------
+//
+// When BlockNSFW is removed, the browser opens monolab.dev/blocknsfw/goodbye,
+// which asks why with one tap. The address carries three things and nothing
+// else: the version, the browser, and roughly how long BlockNSFW was installed
+// — a day, a week, a month or longer, counted from the first day it ran (for
+// someone who updated from 1.x, the start of the run they were on then).
+// Privacy policy, section 14. Set on every wake, so the version and the age
+// stay current.
+const GOODBYE_URL = 'https://monolab.dev/blocknsfw/goodbye';
+
+function goodbyeAge(firstSeen, now) {
+  if (typeof firstSeen !== 'number' || !(firstSeen > 0)) return 'unknown';
+  const days = (now - firstSeen) / 86400000;
+  if (days < 1) return 'day';
+  if (days < 7) return 'week';
+  if (days < 30) return 'month';
+  return 'older';
+}
+
+async function setGoodbyePage() {
+  if (!browserAPI.runtime.setUninstallURL) return;
+  const store = await browserAPI.storage.local.get(FIRST_SEEN_KEY);
+  const params = new URLSearchParams({
+    v: browserAPI.runtime.getManifest().version,
+    b: detectBrowserKey(),
+    a: goodbyeAge(store[FIRST_SEEN_KEY], Date.now())
+  });
+  await browserAPI.runtime.setUninstallURL(`${GOODBYE_URL}?${params}`);
+}
 
 // --- The long record (shared/ledger.js) ---------------------------------------
 //
