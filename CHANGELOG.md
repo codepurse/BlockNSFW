@@ -38,6 +38,15 @@ All notable project changes should be documented here going forward.
   other videos are not, so they stay blurred and the page stays open. The
   count also starts over when YouTube moves to another video, and an image
   that is un-blurred no longer counts.
+- **A page you whitelisted still met its site's gateway.** With instagram.com
+  as a gateway and one profile on the whitelist, the profile went to the
+  pause like the rest of Instagram, and to the closed page during Storm Mode
+  and Risk Hours. The gateway never looked at the whitelist. Now a whitelist
+  entry for a page (instagram.com/someone) opens that page without the
+  pause, at any hour. An entry for a whole site (reddit.com) still only lifts
+  blocks, so whitelisting a site to undo a false block doesn't turn its
+  gateway off. Taking the page off the whitelist while it's open brings the
+  pause back.
 
 ### For contributors
 

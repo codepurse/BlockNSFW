@@ -2130,7 +2130,8 @@ function enforceInstagramReelsBlock() {
 // address that matches one goes to the pause, gateway.html, unless a recent Go
 // on covers it; during Risk Hours and Storm Mode it goes there regardless, and
 // the page says the site is closed. Checked once per address, so an app that
-// navigates with pushState (Instagram's Explore) meets it too.
+// navigates with pushState (Instagram's Explore) meets it too. A page the user
+// whitelisted by its own path (Gateways.exempt) never meets it.
 const GATEWAY_BOOST_KEY = 'pblocker_boost_state';
 let gatewaySettings = null;
 let gatewayCheckedHref = '';
@@ -2159,9 +2160,13 @@ function enforceGateways() {
   gatewayCheckedHref = href;
   const hit = Gateways.match(href, gatewaySettings);
   if (!hit) return;
-  browserAPI.storage.local.get([GATEWAY_BOOST_KEY, Gateways.PASS_KEY]).then((store) => {
+  browserAPI.storage.local.get([GATEWAY_BOOST_KEY, Gateways.PASS_KEY, 'pblocker_whitelist']).then((store) => {
     if (window.location.href !== href) return; // moved on while this was read
     const now = Date.now();
+    // Without DomainValidate there is no way to read a path entry, so the
+    // pause stands rather than guessing.
+    const pathMatches = self.DomainValidate && self.DomainValidate.whitelistPathMatches;
+    if (Gateways.exempt(href, store.pblocker_whitelist, pathMatches, now)) return;
     const boost = store[GATEWAY_BOOST_KEY];
     const closed = !!(boost && (boost.active === 'storm' || boost.active === 'risk') &&
       (!Number(boost.until) || Number(boost.until) > now));
@@ -5715,8 +5720,9 @@ function setupEventListeners() {
       setHeldUiScheme(changes.pblocker_color_scheme.newValue);
     }
 
-    // Storm Mode or Risk Hours starting closes a gateway already open.
-    if (changes[GATEWAY_BOOST_KEY]) {
+    // Storm Mode or Risk Hours starting closes a gateway already open, and so
+    // does the whitelist entry that let this page past it going away.
+    if (changes[GATEWAY_BOOST_KEY] || changes.pblocker_whitelist) {
       gatewayCheckedHref = '';
       enforceGateways();
     }

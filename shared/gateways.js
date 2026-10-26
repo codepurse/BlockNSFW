@@ -174,6 +174,26 @@
       g.custom.some(function (entry) { return hostIs(host, entry.split('/')[0]); });
   }
 
+  // Whether a whitelist entry for this very page lets it past the pause. Only
+  // an entry with a path counts ("instagram.com/someone" on an instagram.com
+  // gateway): that is the user saying this one page is fine. A whole-site entry
+  // only lifts blocks, so whitelisting reddit.com to undo a false block doesn't
+  // quietly turn a Reddit gateway off. pathMatches is
+  // DomainValidate.whitelistPathMatches, passed in so this file needs no other.
+  function exempt(href, whitelist, pathMatches, now) {
+    var url = parse(href);
+    if (!url || !Array.isArray(whitelist) || typeof pathMatches !== 'function') return false;
+    var host = url.hostname.toLowerCase();
+    return whitelist.some(function (item) {
+      if (!item || typeof item.domain !== 'string' || !item.path) return false;
+      if (item.type !== 'permanent' && !(item.expiresAt > now)) return false;
+      // A path of "/" is the whole site: it matches the root, a page path doesn't.
+      if (pathMatches('/', item.path)) return false;
+      return hostIs(host, item.domain.toLowerCase().replace(/^www\./, '')) &&
+        pathMatches(url.pathname, item.path);
+    });
+  }
+
   function nameFor(key) {
     var k = String(key || '');
     if (k.indexOf('custom:') === 0) return normalizeCustom(k.slice(7)) || 'this site';
@@ -266,6 +286,7 @@
     count: count,
     match: match,
     onGatewaySite: onGatewaySite,
+    exempt: exempt,
     nameFor: nameFor,
     isImageSearch: function (href) { var u = parse(href); return !!u && isImageSearch(u); },
     passValid: passValid,

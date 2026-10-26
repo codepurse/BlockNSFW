@@ -98,3 +98,24 @@ test('the sites where a gateway lives are watched, and only those', () => {
   assert.equal(G.onGatewaySite('https://news.example.com/', settings), false);
   assert.equal(G.onGatewaySite('https://duckduckgo.com/?q=a', { gateways: ['image-search'] }), true);
 });
+
+test('a page whitelisted by its own path skips the pause; a whole-site entry does not', () => {
+  const { whitelistPathMatches } = require('../shared/validate-domain.js');
+  const now = 1000;
+  const exempt = (href, list) => G.exempt(href, list, whitelistPathMatches, now);
+  const profile = [{ domain: 'instagram.com', path: '/someone/', type: 'permanent' }];
+  assert.equal(exempt('https://www.instagram.com/someone/', profile), true);
+  assert.equal(exempt('https://www.instagram.com/someone/reels/', profile), true, 'pages under it too');
+  assert.equal(exempt('https://www.instagram.com/someone_else/', profile), false, 'not a profile that starts with the name');
+  assert.equal(exempt('https://www.instagram.com/', profile), false, 'the rest of the site still pauses');
+  assert.equal(exempt('https://notinstagram.com/someone/', profile), false);
+  assert.equal(exempt('https://www.reddit.com/', [{ domain: 'reddit.com', path: null, type: 'permanent' }]), false,
+    'whitelisting a site to undo a false block leaves its gateway on');
+  assert.equal(exempt('https://www.reddit.com/', [{ domain: 'reddit.com', path: '/', type: 'permanent' }]), false);
+  const temporary = (expiresAt) => [{ domain: 'instagram.com', path: '/someone/', type: 'temporary', expiresAt }];
+  assert.equal(exempt('https://www.instagram.com/someone/', temporary(now + 1)), true);
+  assert.equal(exempt('https://www.instagram.com/someone/', temporary(now)), false, 'a lapsed allowance stops counting');
+  assert.equal(G.exempt('https://www.instagram.com/someone/', profile, undefined, now), false, 'no path reader, no exemption');
+  assert.equal(exempt('https://www.instagram.com/someone/', undefined), false);
+  assert.equal(exempt('https://www.instagram.com/someone/', [null, { path: '/someone/' }]), false);
+});
