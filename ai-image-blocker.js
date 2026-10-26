@@ -73,6 +73,60 @@
     img.classList.remove(PENDING_CLASS);
   }
 
+  // What the AI text blocker may take as corroboration from this filter: of the
+  // images judged on the page now on screen, how many are blurred right now.
+  // One running count of blurs used to stand in for this, and it misled in two
+  // ways. It never went down, so an image later cleared still counted. And it
+  // never restarted on a YouTube-style navigation (pushState, no new document),
+  // so a thumbnail blurred three videos ago still counted against this one.
+  // Both counts belong to one page address and start over when it changes;
+  // the WeakSets make each <img> count once, however often it is re-judged.
+  const evidence = {
+    page: null,
+    judged: new WeakSet(),
+    blurred: new WeakSet(),
+    checked: 0,
+    blocked: 0
+  };
+
+  function currentPageKey() {
+    try { return String(window.location.href || '').split('#')[0]; } catch (_) { return ''; }
+  }
+
+  function currentEvidence() {
+    const page = currentPageKey();
+    if (page !== evidence.page) {
+      evidence.page = page;
+      evidence.judged = new WeakSet();
+      evidence.blurred = new WeakSet();
+      evidence.checked = 0;
+      evidence.blocked = 0;
+    }
+    return evidence;
+  }
+
+  function noteJudged(img, blocked) {
+    const ev = currentEvidence();
+    if (!ev.judged.has(img)) {
+      ev.judged.add(img);
+      ev.checked++;
+    }
+    if (blocked && !ev.blurred.has(img)) {
+      ev.blurred.add(img);
+      ev.blocked++;
+    }
+  }
+
+  // Every path that takes a blur off an image goes through here.
+  function unblur(img) {
+    img.classList.remove('pblocker-ai-blocked');
+    const ev = currentEvidence();
+    if (ev.blurred.has(img)) {
+      ev.blurred.delete(img);
+      ev.blocked--;
+    }
+  }
+
   // Reveal everything still awaiting a verdict. Used when the model is
   // unavailable so the page is never left permanently broken.
   function revealAllPending() {
@@ -200,6 +254,7 @@
     if (!img || !img.classList) return;
     if (expectedSrc && (img.currentSrc || img.src) !== expectedSrc) return;
     const alreadyBlocked = img.classList.contains('pblocker-ai-blocked');
+    noteJudged(img, verdict === 'block');
     if (verdict === 'block') {
       if (!alreadyBlocked) {
         // Swap the pending hide for the blocked state: the <img> stays in
@@ -207,12 +262,6 @@
         // blocked class blurs it heavily.
         clearPending(img);
         img.classList.add('pblocker-ai-blocked');
-        // Page-level counter read by content.js's AI text blocker as a fusion
-        // signal (moderate text score + >=1 blocked image -> block the page).
-        try {
-          globalThis.__pblockerAIImageBlockCount =
-            (globalThis.__pblockerAIImageBlockCount | 0) + 1;
-        } catch (_) {}
         try {
           chrome.runtime.sendMessage({
             type: 'image_ai_filtered',
@@ -227,7 +276,7 @@
     // Cleared as safe: reveal it and remove any prior blur.
     clearPending(img);
     if (alreadyBlocked) {
-      img.classList.remove('pblocker-ai-blocked');
+      unblur(img);
     }
   }
 
@@ -273,9 +322,7 @@
 
   function clearAIBlockedImages() {
     try {
-      document.querySelectorAll('.pblocker-ai-blocked').forEach((img) => {
-        img.classList.remove('pblocker-ai-blocked');
-      });
+      document.querySelectorAll('.pblocker-ai-blocked').forEach(unblur);
       // Reveal anything that was hidden awaiting a verdict.
       revealAllPending();
     } catch (_) {}
@@ -434,7 +481,7 @@
       flushCacheToStorage();
       if (!isAiActive()) {
         clearPending(img);
-        if (img.classList) img.classList.remove('pblocker-ai-blocked');
+        if (img.classList) unblur(img);
         return;
       }
       applyVerdict(img, verdict, scores, src);
@@ -456,7 +503,7 @@
   // never be stranded hidden.
   function onImageSrcChanged(img) {
     if (!img || !img.classList) return;
-    img.classList.remove('pblocker-ai-blocked');
+    unblur(img);
     if (!isAiActive()) {
       clearPending(img);
       return;
@@ -586,6 +633,11 @@
     },
     onImageVisible,
     onImageSrcChanged,
+    // { checked, blocked } for the page now on screen; see `evidence` above.
+    pageEvidence() {
+      const ev = currentEvidence();
+      return { checked: ev.checked, blocked: ev.blocked };
+    },
     isReady() { return state.modelReady; },
     isDegraded() { return state.modelFailed; }
   };

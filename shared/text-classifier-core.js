@@ -412,15 +412,37 @@
 
   // ---- Verdict --------------------------------------------------------------
   //   'block'      -> confident enough to block on text alone
-  //   'fuse-block' -> moderately confident, corroborated by >=1 blocked image
+  //   'fuse-block' -> moderately confident, and the page's images agree
   //   'allow'      -> otherwise (or no model opinion)
-  function verdictForText(prob, thresholds, imageBlockCount) {
+  //
+  // `imageEvidence` is { checked, blocked }: of the images the AI image blocker
+  // judged on this page, how many it blurred. The images only count as agreeing
+  // when the blurred ones are a real share of the page. One blurred image used
+  // to be enough, and on YouTube the image model reads ordinary anime art in
+  // the related-videos column as "Hentai": two of ~60 thumbnails, unrelated to
+  // the video being watched, lowered the bar for the whole watch page and
+  // blocked it. On a page that is itself adult most images are flagged, so a
+  // share keeps that case while a stray thumbnail can no longer stand in for it.
+  // Three images, not two, because on a page that has only just loaded both
+  // counts are small, and two misreads among the first few judged would pass
+  // any share.
+  var FUSE_MIN_BLOCKED_IMAGES = 3;
+  var FUSE_MIN_BLOCKED_SHARE = 0.25;
+
+  function imagesCorroborate(imageEvidence) {
+    if (!imageEvidence) return false;
+    var blocked = imageEvidence.blocked > 0 ? imageEvidence.blocked : 0;
+    var checked = Math.max(imageEvidence.checked > 0 ? imageEvidence.checked : 0, blocked);
+    return blocked >= FUSE_MIN_BLOCKED_IMAGES && blocked >= checked * FUSE_MIN_BLOCKED_SHARE;
+  }
+
+  function verdictForText(prob, thresholds, imageEvidence) {
     if (typeof prob !== 'number' || prob < 0) return 'allow';
     var t = thresholds || DEFAULT_TEXT_THRESHOLDS;
     var blockT = typeof t.block === 'number' ? t.block : DEFAULT_TEXT_THRESHOLDS.block;
     var fuseT = typeof t.fuse === 'number' ? t.fuse : DEFAULT_TEXT_THRESHOLDS.fuse;
     if (prob >= blockT) return 'block';
-    if (prob >= fuseT && (imageBlockCount || 0) >= 1) return 'fuse-block';
+    if (prob >= fuseT && imagesCorroborate(imageEvidence)) return 'fuse-block';
     return 'allow';
   }
 
@@ -478,6 +500,8 @@
     DEFAULT_NGRAM_MIN: DEFAULT_NGRAM_MIN,
     DEFAULT_NGRAM_MAX: DEFAULT_NGRAM_MAX,
     DEFAULT_TEXT_THRESHOLDS: DEFAULT_TEXT_THRESHOLDS,
+    FUSE_MIN_BLOCKED_IMAGES: FUSE_MIN_BLOCKED_IMAGES,
+    FUSE_MIN_BLOCKED_SHARE: FUSE_MIN_BLOCKED_SHARE,
     PAGE_FEATURES: PAGE_FEATURES,
     utf8Bytes: utf8Bytes,
     fnv1a32: fnv1a32,
@@ -492,6 +516,7 @@
     pageFeatures: pageFeatures,
     scorePage: scorePage,
     scoreText: scoreText,
+    imagesCorroborate: imagesCorroborate,
     verdictForText: verdictForText,
     thresholdsFor: thresholdsFor,
     explain: explain,

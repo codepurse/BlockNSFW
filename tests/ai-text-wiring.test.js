@@ -42,8 +42,9 @@ function contentConst(name) {
   return m[1];
 }
 
-// A page: title, meta contents, visible lines. Returns what the extension did.
-function runScan({ title = '', metas = [], lines = [], strictness = 'balanced', images = 0, model = MODEL }) {
+// A page: title, meta contents, visible lines, and what the AI image blocker
+// found on it ({ checked, blocked }). Returns what the extension did.
+function runScan({ title = '', metas = [], lines = [], strictness = 'balanced', images = { checked: 0, blocked: 0 }, model = MODEL }) {
   const redirects = [];
   const sandbox = {
     TextClassifier: TC,
@@ -60,7 +61,7 @@ function runScan({ title = '', metas = [], lines = [], strictness = 'balanced', 
       body: {},
       querySelectorAll: () => metas.map(content => ({ getAttribute: () => content })),
     },
-    globalThis: { __pblockerAIImageBlockCount: images },
+    window: { AIImageBlocker: { pageEvidence: () => ({ ...images }) } },
     getSearchEngine: () => null,
     isExtensionStorePage: () => false,
     isLocalPage: () => false,
@@ -76,6 +77,7 @@ function runScan({ title = '', metas = [], lines = [], strictness = 'balanced', 
     const AI_TEXT_META_SELECTORS = ${contentConst('AI_TEXT_META_SELECTORS')};
     ${contentFunctionSource('getAiTextThresholds')}
     ${contentFunctionSource('gatherTextForModel')}
+    ${contentFunctionSource('getAiImageEvidence')}
     ${contentFunctionSource('checkPageTextWithModel')}
     this.result = checkPageTextWithModel();
     this.thresholds = getAiTextThresholds(aiTextStrictness);
@@ -101,7 +103,7 @@ test('title and meta tags travel separately from the visible text', () => {
 });
 
 test('an explicit page is blocked on text alone, with no image flagged', () => {
-  const { blocked, redirects } = runScan({ ...ADULT, images: 0 });
+  const { blocked, redirects } = runScan({ ...ADULT, images: { checked: 0, blocked: 0 } });
   assert.equal(blocked, true, 'text-only blocking must work: the v3 safety catch is gone');
   assert.equal(redirects.length, 1);
   assert.equal(redirects[0].reason, 'ai_text_scan');
@@ -137,6 +139,103 @@ test('a page that just talks about videos is not blocked, even at Strict', () =>
     strictness: 'strict',
   });
   assert.equal(blocked, false);
+});
+
+// The 2026-10 YouTube report: at Strict, Spanish music and anime videos were
+// blocked outright. The page's text scores in the fuse zone (Spanish function
+// words weigh too much), and the image model read two anime thumbnails in the
+// related column as "Hentai". One blurred image was enough to fuse. This is
+// that watch page, with the commenters' names left out.
+const YOUTUBE_AMV_ES = {
+  title: 'Still Worth Fighting For Sub Español - My Darkest Days [AMV] - YouTube',
+  metas: [
+    'Still Worth Fighting For Sub Español - My Darkest Days [AMV]',
+    'Si te gustó el video dale ME GUSTA, COMENTA y SUSCRÍBETE!!! AMV sin subtitulos',
+    'My Darkest Days, AMV, Anime, Anime Music Video, Sub, Esp, Español, Subtitulado, Still Worth Fighting For, Kyoukai no Kanata, Hard Rock, Rock Alternativo',
+  ],
+  lines: [
+    'Skip navigation',
+    'Still Worth Fighting For Sub Español - My Darkest Days [AMV]',
+    '90.8K subscribers',
+    '564K views 9y ago',
+    'Si te gustó el video dale ME GUSTA, COMENTA y SUSCRÍBETE!!!',
+    'AMV sin subtitulos: • Kyoukai no Kanata [AMV] - Still Worth Figh...',
+    '110 Comments',
+    'Add a comment...',
+    '6 months ago',
+    'Algun superviviente en 2026??',
+    'Es tan difícil dejarte ir y todavía sigo escuchando el sonido de tu voz cantando en mi cabeza, no puedo rendirme porque la cuerda se rompe lentamente, pero aún cuelga de un hilo, así que mira mis ojos una última vez',
+    'Like si estas escuchando este maravilloso amv en el 2020',
+    'Este amv me ayudó a volver con mi novia y cuando tenemos problemas lo escuchamos juntos',
+    '2:28 empieza la mejor parte',
+    'Dediqué este video una vez y ahora tiene una carga emocional para mi. Aún así amo esta canción.',
+    'No superó este video. Y la canción me encanta.',
+    'STILL WORTH FIGHTING FOR | Dragon Ball Z | [MEP/AMV]',
+    'Fallen Angel-Three Days Grace (sub español).',
+    'Jujutsu Kaisen AMV | AIZO by King Gnu',
+    'ANIME OPENINGS MIX FULL SONGS | MOST VIEWED OPENINGS',
+    'My Darkest Days - Still Worth Fighting For (Lyrics)',
+    'Start Again Sub Español - Red [AMV]',
+    'Anime Openings You\'ll Never Skip',
+    'My Darkest Days - Without You |ESPAÑOL|',
+    'Asta & Yami Vs. Dante ~ Black Clover「AMV」- Centuries',
+  ],
+};
+
+test('a YouTube watch page is not blocked over two misread thumbnails, even at Strict', () => {
+  const { blocked, redirects } = runScan({
+    ...YOUTUBE_AMV_ES,
+    strictness: 'strict',
+    images: { checked: 58, blocked: 2 },
+  });
+  assert.equal(blocked, false, 'two blurred thumbnails of other videos say nothing about this page');
+  assert.equal(redirects.length, 0);
+});
+
+// A page whose text alone is borderline, so the images decide.
+const BORDERLINE = {
+  title: 'Sexy lingerie try on haul - hot models in lace',
+  metas: ['Watch our hottest models try on sexy see-through lingerie and tiny bikinis.'],
+  lines: [
+    'Sexy lingerie try on haul with our hottest models',
+    'See-through lace bodysuits, tiny thongs and sheer stockings',
+    'Watch the full video for more hot try on clips',
+    'Subscribe for new sexy try on hauls every week',
+  ],
+};
+
+test('the borderline page sits in the Strict fuse zone, so the images decide', () => {
+  // If a retrained model moves it out of the zone, the two tests below stop
+  // testing the image rule: pick new text rather than delete them. (The YouTube
+  // page above may leave the zone downwards once the Spanish bias is fixed;
+  // its test still holds then.)
+  const strict = TC.thresholdsFor(MODEL, 'strict');
+  const prob = TC.scorePage({ head: [BORDERLINE.title, ...BORDERLINE.metas].join(' '), body: BORDERLINE.lines.join(' ') }, MODEL).prob;
+  assert.ok(prob >= strict.fuse && prob < strict.block, prob.toFixed(3));
+});
+
+test('a borderline page is blocked when most of its own images are blurred', () => {
+  const { blocked, redirects } = runScan({
+    ...BORDERLINE,
+    strictness: 'strict',
+    images: { checked: 12, blocked: 9 },
+  });
+  assert.equal(blocked, true);
+  assert.equal(redirects[0].reason, 'ai_text_scan');
+});
+
+test('a borderline page with only a stray blurred image or two is not', () => {
+  for (const images of [{ checked: 40, blocked: 1 }, { checked: 40, blocked: 2 }, { checked: 2, blocked: 2 }]) {
+    const { blocked } = runScan({ ...BORDERLINE, strictness: 'strict', images });
+    assert.equal(blocked, false, JSON.stringify(images));
+  }
+});
+
+test('without the AI image blocker there is no corroboration, and no error', () => {
+  const sandbox = { window: {} };
+  vm.createContext(sandbox);
+  vm.runInContext(`${contentFunctionSource('getAiImageEvidence')}\nthis.ev = getAiImageEvidence();`, sandbox);
+  assert.deepEqual({ ...sandbox.ev }, { checked: 0, blocked: 0 });
 });
 
 test('a page under the evidence floor is never scored, however explicit', () => {

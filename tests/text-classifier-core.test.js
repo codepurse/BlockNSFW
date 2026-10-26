@@ -169,12 +169,37 @@ test('scorePage: empty page is safe, not an error', () => {
 test('verdictForText: block / fuse-block / allow logic', () => {
   const TC = loadCore();
   const thr = { block: 0.9, fuse: 0.6 };
-  assert.equal(TC.verdictForText(0.95, thr, 0), 'block');
-  assert.equal(TC.verdictForText(0.92, thr, 5), 'block');
-  assert.equal(TC.verdictForText(0.70, thr, 0), 'allow');       // moderate, no image evidence
-  assert.equal(TC.verdictForText(0.70, thr, 2), 'fuse-block');  // moderate + images
-  assert.equal(TC.verdictForText(0.59, thr, 5), 'allow');       // below fuse threshold
-  assert.equal(TC.verdictForText(-1, thr, 5), 'allow');         // no model opinion
+  const none = { checked: 0, blocked: 0 };
+  const adultImages = { checked: 20, blocked: 15 };
+  assert.equal(TC.verdictForText(0.95, thr, none), 'block');
+  assert.equal(TC.verdictForText(0.92, thr, adultImages), 'block');
+  assert.equal(TC.verdictForText(0.70, thr, none), 'allow');              // moderate, no image evidence
+  assert.equal(TC.verdictForText(0.70, thr, adultImages), 'fuse-block');  // moderate + the page's images
+  assert.equal(TC.verdictForText(0.59, thr, adultImages), 'allow');       // below fuse threshold
+  assert.equal(TC.verdictForText(-1, thr, adultImages), 'allow');         // no model opinion
+  assert.equal(TC.verdictForText(0.70, thr, undefined), 'allow');         // image blocker absent
+});
+
+test('imagesCorroborate: a stray thumbnail is not the page', () => {
+  const TC = loadCore();
+  // The YouTube report: two misread anime thumbnails among ~58 judged.
+  assert.equal(TC.imagesCorroborate({ checked: 58, blocked: 2 }), false);
+  assert.equal(TC.imagesCorroborate({ checked: 58, blocked: 3 }), false, '3 of 58 is still a stray few');
+  // A page that is itself adult: most of what was judged is blurred.
+  assert.equal(TC.imagesCorroborate({ checked: 40, blocked: 30 }), true);
+  assert.equal(TC.imagesCorroborate({ checked: 4, blocked: 3 }), true, 'a small page, mostly blurred');
+  // The share boundary.
+  assert.equal(TC.imagesCorroborate({ checked: 12, blocked: 3 }), true, 'exactly a quarter');
+  assert.equal(TC.imagesCorroborate({ checked: 13, blocked: 3 }), false, 'just under a quarter');
+  // Too few to mean anything, however high the share: two misreads among the
+  // first images judged on a page that has only just loaded.
+  assert.equal(TC.imagesCorroborate({ checked: 2, blocked: 2 }), false);
+  assert.equal(TC.imagesCorroborate({ checked: 0, blocked: 0 }), false);
+  // Malformed input never corroborates.
+  assert.equal(TC.imagesCorroborate(null), false);
+  assert.equal(TC.imagesCorroborate({ checked: -5, blocked: -1 }), false);
+  // A blocked count larger than checked (should not happen) reads as all blurred.
+  assert.equal(TC.imagesCorroborate({ checked: 1, blocked: 3 }), true);
 });
 
 test('thresholdsFor: the model carries ordered thresholds for every level', () => {

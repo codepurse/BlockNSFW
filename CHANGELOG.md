@@ -23,6 +23,33 @@ All notable project changes should be documented here going forward.
   Settings shows that; nothing needs doing. The privacy policy no longer
   lists Mullvad.
 
+### Fixed
+
+- **YouTube videos were blocked when nothing on them was explicit.** With the
+  AI image and text blockers on, at Strict and sometimes at Balanced, music
+  and anime videos opened onto the blocked page, and again after going back
+  or switching to theater or full screen. The image filter misreads some
+  anime drawings in the related-videos column as adult. One blurred image
+  anywhere on the page was enough to lower the text blocker's bar, and the
+  text of some ordinary pages, Spanish ones especially, clears that lower
+  bar. Now the images only count against a page when at least three are
+  blurred and they make up at least a quarter of the images checked on it.
+  On a page that is itself adult, most of them are. A few thumbnails of
+  other videos are not, so they stay blurred and the page stays open. The
+  count also starts over when YouTube moves to another video, and an image
+  that is un-blurred no longer counts.
+
+### For contributors
+
+- The text blocker's image corroboration is now
+  `AIImageBlocker.pageEvidence()` → `{ checked, blocked }`, kept per page
+  address (pushState included) in `ai-image-blocker.js`. It replaces the
+  `globalThis.__pblockerAIImageBlockCount` counter, which only ever went up.
+  `TextClassifier.verdictForText` takes that object, and
+  `TextClassifier.imagesCorroborate` holds the rule (at least 3 blurred, and
+  at least 25% of those checked). Tests: `tests/ai-image-page-evidence.test.js`,
+  and the YouTube page from the report in `tests/ai-text-wiring.test.js`.
+
 ## [2.0.2] - 2026-10-21
 
 ### Added

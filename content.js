@@ -1761,7 +1761,7 @@ const MIN_TEXT_TOKENS_FOR_BLOCK = 12;
 
 // AI Text Blocker thresholds. `block` = redirect on text alone (high
 // confidence). `fuse` = lower bar that only redirects when the AI image blocker
-// also flagged >=1 image on the page (corroborating evidence).
+// blurred a real share of the page's images (TextClassifier.imagesCorroborate).
 //
 // A v4 model carries its own thresholds, chosen on held-out pages for a target
 // false-positive rate per level (tools/text_corpus/EVAL.md), and those always
@@ -2588,6 +2588,19 @@ function gatherTextForModel() {
   return { head: headParts.join(' '), body: getPageTextLinesForScan().join(' ') };
 }
 
+// What the AI image blocker found on this page: { checked, blocked }. All zero
+// when it is off or did not load, which is "no corroboration", never a block.
+function getAiImageEvidence() {
+  try {
+    if (typeof window.AIImageBlocker !== 'undefined' &&
+        window.AIImageBlocker &&
+        typeof window.AIImageBlocker.pageEvidence === 'function') {
+      return window.AIImageBlocker.pageEvidence();
+    }
+  } catch (_) {}
+  return { checked: 0, blocked: 0 };
+}
+
 function checkPageTextWithModel() {
   if (blockedTriggered) return false;
   if (!isEnabled || !aiTextBlocker) return false;
@@ -2625,8 +2638,8 @@ function checkPageTextWithModel() {
   if (typeof prob !== 'number' || prob < 0) return false;
 
   const thresholds = getAiTextThresholds(aiTextStrictness);
-  const imageBlockCount = (globalThis.__pblockerAIImageBlockCount | 0);
-  const verdict = TextClassifier.verdictForText(prob, thresholds, imageBlockCount);
+  const imageEvidence = getAiImageEvidence();
+  const verdict = TextClassifier.verdictForText(prob, thresholds, imageEvidence);
   if (debugMode) log(`AI text score ${prob.toFixed(3)} (block ${thresholds.block}, fuse ${thresholds.fuse}) -> ${verdict}`);
 
   if (verdict === 'block' || verdict === 'fuse-block') {
@@ -2639,7 +2652,7 @@ function checkPageTextWithModel() {
     } catch (_) {}
     const triggerNote = triggers.length > 0 ? ` [top signals: ${triggers.join(', ')}]` : '';
     const reason = verdict === 'fuse-block'
-      ? `AI text+image classifier flagged this page (text score ${prob.toFixed(2)}, ${imageBlockCount} image(s) blocked)${triggerNote}`
+      ? `AI text+image classifier flagged this page (text score ${prob.toFixed(2)}, ${imageEvidence.blocked} of ${imageEvidence.checked} image(s) blocked)${triggerNote}`
       : `AI text classifier flagged this page (score ${prob.toFixed(2)})${triggerNote}`;
     log(reason);
     notifyBackground('website_blocked', { reason, title: document.title });
