@@ -617,7 +617,35 @@ test('nothing that blocks reads the supporter state', () => {
     const src = fs.readFileSync(path.join(root, file), 'utf8');
     assert.doesNotMatch(src, /pblocker_supporter|Supporter\./, `${file} must not depend on Supporter`);
   }
-  // Nor does the blocked page load it: every design there is free.
+  // Nor does the blocked page load it: every design there is free. Its one
+  // extra, Proof it passes, follows a switch the plan sets elsewhere, and
+  // never reads the plan itself.
   const page = fs.readFileSync(path.join(root, 'blocked.html'), 'utf8');
-  assert.doesNotMatch(page, /supporter\.js|extras\//, 'blocked.html must not load Supporter or an extra');
+  assert.doesNotMatch(page, /supporter\.js/, 'blocked.html must not load Supporter');
+  assert.deepEqual([...page.matchAll(/"(extras\/[^"]+)"/g)].map((m) => m[1]), ['extras/proof.js'], 'blocked.html loads no other extra');
+  const stub = fs.readFileSync(path.join(root, 'extras', 'proof.js'), 'utf8');
+  assert.doesNotMatch(stub, /pblocker_supporter|Supporter\./);
+});
+
+test('Storm warning shows only for a supporter, only where it ships, and starts Storm Mode the usual way', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const src = fs.readFileSync(path.join(__dirname, '..', 'popup.js'), 'utf8');
+  const body = src.slice(src.indexOf('async function renderStormWarning('), src.indexOf('async function renderStormWarning(') + 700);
+  assert.match(body, /if \(!extra \|\| !isSupporter \|\| !self\.SupporterExtras \|\| !self\.SupporterExtras\.storm\) return;/);
+  assert.match(body, /Pact\.ask\(\{ type: 'boost_storm_start', until \}\)/);
+  const html = fs.readFileSync(path.join(__dirname, '..', 'popup.html'), 'utf8');
+  assert.match(html, /<section class="storm-warn" id="storm-warn"[^>]*hidden>/, 'hidden until the extra shows it');
+});
+
+test('Proof it passes comes and goes with the plan, only where it ships, only on a clear answer', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  for (const file of ['popup.js', 'options-supporter.js']) {
+    const src = fs.readFileSync(path.join(__dirname, '..', file), 'utf8');
+    const body = src.slice(src.indexOf('async function followProof('), src.indexOf('async function followProof(') + 600);
+    assert.match(body, /if \(!self\.SupporterExtras \|\| !self\.SupporterExtras\.proof \|\| !Moments\) return;/, `${file}: only in builds that carry it`);
+    assert.match(body, /Moments\.proofForPlan\(raw, supporter, Date\.now\(\)\)/, `${file}: the plan decides by Moments.proofForPlan`);
+    assert.match(src, /\(s\.supporter \|\| !s\.unchecked\)\)? followProof\(s\.supporter === true\)/, `${file}: never on a pause for want of an answer`);
+  }
 });

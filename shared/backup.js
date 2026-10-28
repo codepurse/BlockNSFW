@@ -4,15 +4,16 @@
 //
 // It holds your settings and lists; this computer's history (a Progress
 // snapshot) and your other computers'; the path, the evening check-ins, your
-// own words, the photo and the voice message; and your run.
+// own words, the photo and the voice message; the urges you waited out; and
+// your run.
 //
 // It never holds the PIN, the Pact or its witness, an access code, your
 // Supporter code (a backup isn't a way to share it), the log of blocked
 // addresses or the sites blocked most, or anything that's only a copy of
 // something downloaded.
 //
-// Restoring adds and never takes away: history, the path, check-ins and your
-// words are merged with what's here (shared/progress.js, Path.merge); the
+// Restoring adds and never takes away: history, the path, check-ins, waits and
+// your words are merged with what's here (shared/progress.js, Path.merge); the
 // photo and the voice come back only where there are none. Settings and lists
 // are replaced, but only when the caller allows it: options-backup.js asks
 // for the PIN when one is set and never replaces them while the Pact is on,
@@ -55,7 +56,7 @@
     var Path = mod('Path', deps);
     var out = SETTINGS_KEYS.concat(Progress.snapshotKeys(deps), [
       Progress.ELSEWHERE_KEY, Path.KEY, CHECKINS_KEY, Moments.WORDS_KEY, Moments.PHOTO_KEY,
-      Moments.VOICE_KEY, RUN_KEY, LONGEST_KEY
+      Moments.VOICE_KEY, Moments.WAITS_KEY, RUN_KEY, LONGEST_KEY
     ]);
     return out.filter(function (k, i) { return out.indexOf(k) === i; });
   }
@@ -88,6 +89,7 @@
         words: Moments.normalizeWords(s[Moments.WORDS_KEY]),
         photo: photo ? { src: photo, at: num(s[Moments.PHOTO_KEY].at) } : null,
         voice: voice ? { src: voice, at: num(s[Moments.VOICE_KEY].at), ms: Moments.voiceMs(s[Moments.VOICE_KEY]), auto: Moments.voiceAuto(s[Moments.VOICE_KEY]) } : null,
+        waits: Moments.normalizeWaits(s[Moments.WAITS_KEY]),
         run: { start: num(s[RUN_KEY]), longest: Math.floor(num(s[LONGEST_KEY])) }
       }
     };
@@ -174,6 +176,7 @@
     if (p.path) put(Path.KEY, Path.merge(l[Path.KEY], p.path));
     if (Array.isArray(p.checkins) && p.checkins.length) put(CHECKINS_KEY, Progress.mergeCheckins(l[CHECKINS_KEY], p.checkins));
     if (p.words) put(Moments.WORDS_KEY, Progress.mergeWords(l[Moments.WORDS_KEY], p.words, deps));
+    if (Array.isArray(p.waits) && p.waits.length) put(Moments.WAITS_KEY, Moments.mergeWaits(l[Moments.WAITS_KEY], p.waits));
     if (!Moments.photoSrc(l[Moments.PHOTO_KEY]) && Moments.photoSrc(p.photo)) {
       writes[Moments.PHOTO_KEY] = { src: p.photo.src, at: num(p.photo.at) || opts.now };
     }

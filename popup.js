@@ -541,6 +541,7 @@ async function readSupporter() {
       endLook();
       endDesign();
     }
+    if (s.supporter || !s.unchecked) followProof(s.supporter === true);
     return s.supporter;
   } catch (_) {
     return false;
@@ -561,6 +562,18 @@ async function endDesign() {
     const { [SETTINGS_KEY]: settings } = await browserAPI.storage.local.get(SETTINGS_KEY);
     if (!settings || !settings.blockedPageTheme || settings.blockedPageTheme === 'classic') return;
     await browserAPI.storage.local.set({ [SETTINGS_KEY]: { ...settings, blockedPageTheme: 'classic' } });
+  } catch (_) {}
+}
+
+// Proof it passes (extras/proof.js) comes on with the plan, unless it was
+// turned off by hand, and goes off when the plan ends.
+async function followProof(supporter) {
+  const Moments = self.Moments;
+  if (!self.SupporterExtras || !self.SupporterExtras.proof || !Moments) return;
+  try {
+    const { [Moments.PROOF_KEY]: raw } = await browserAPI.storage.local.get(Moments.PROOF_KEY);
+    const next = Moments.proofForPlan(raw, supporter, Date.now());
+    if (next) await browserAPI.storage.local.set({ [Moments.PROOF_KEY]: next });
   } catch (_) {}
 }
 
@@ -671,6 +684,23 @@ async function openCheckin() {
       $('checkin-error').textContent = 'That didn’t save. Try again.';
     }
   };
+}
+
+// Storm warning (extras/storm.js, a Supporter extra): on an evening that
+// looks like a hard one, the offer of Storm Mode through the hard hours. It
+// decides for itself whether tonight is such an evening; one tap starts the
+// storm here, the same way the Storm row does.
+async function renderStormWarning() {
+  const extra = self.StormWarning;
+  if (!extra || !isSupporter || !self.SupporterExtras || !self.SupporterExtras.storm) return;
+  try {
+    await extra.mount({
+      doc: document,
+      now: Date.now(),
+      start: (until) => Pact.ask({ type: 'boost_storm_start', until }),
+      started: () => updateUI()
+    });
+  } catch (_) {}
 }
 
 async function startStorm() {
@@ -1815,6 +1845,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   renderPathRow();
   renderCheckinRow();
   renderMonthRow();
+  renderStormWarning();
 
   // Anything whose wait is over is applied as the popup opens.
   if (Pact) Pact.ask({ type: 'pact_process' });

@@ -95,7 +95,10 @@ test('the blocked page and the gateway pause play it, and never ask about Suppor
     const html = read(page);
     assert.match(html, /<script src="shared\/moment-voice\.js"><\/script>/, `${page} loads the player`);
     assert.match(html, /data-voice-play>Hear yourself</, `${page} has the button`);
-    assert.doesNotMatch(html, /supporter\.js|extras\//, `${page} loads no Supporter code`);
+    assert.doesNotMatch(html, /supporter\.js/, `${page} loads no Supporter code`);
+    // The blocked page's one extra is the dial (extras/proof.js), which
+    // follows a switch and never asks about Supporter either.
+    assert.deepEqual([...html.matchAll(/"(extras\/[^"]+)"/g)].map((m) => m[1]), page === 'blocked.html' ? ['extras/proof.js'] : [], `${page}: no other extra`);
     assert.match(read(script), /Moments\.VOICE_KEY/, `${script} reads the message`);
   }
   assert.doesNotMatch(read('shared/moment-voice.js'), /pblocker_supporter|Supporter\./);

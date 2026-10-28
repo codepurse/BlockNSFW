@@ -14,6 +14,8 @@ extras**:
 | `voice.js` | Recording a message in your own voice for the hard moment, in Settings |
 | `sync.js` | Your progress on every computer, through the browser's own sync |
 | `looks.js` | Supporter looks (true black, an accent), in Settings |
+| `proof.js` | Proof it passes: the dial of urges you've waited out, on the blocked page, and its switch in Settings |
+| `storm.js` | Storm warning: on an evening that looks like a hard one, the popup offers Storm Mode through your hard hours; its switch in Settings |
 | `extras.js` | Which extras a build carries (here: none) |
 
 The extras themselves are not open source. They live in a separate, private

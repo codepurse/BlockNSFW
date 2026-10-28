@@ -7,7 +7,7 @@
 // same page with the filter turned off must still block.
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { buildUrlScanText, isFilterSwitchEngaged } = require('../shared/url-scan.js');
+const { buildUrlScanText, isFilterSwitchEngaged, isRecoverySearch } = require('../shared/url-scan.js');
 
 // The regex the early block runs over buildUrlScanText's output.
 const EARLY_PATH_KEYWORDS = /\b(porn|porno|pornography|xxx|nsfw|hentai|nude|naked|erotic)\b/i;
@@ -107,4 +107,63 @@ test('isFilterSwitchEngaged: values outside the boolean vocabulary are kept', ()
   assert.equal(isFilterSwitchEngaged('q', 'porn'), false);
   assert.equal(isFilterSwitchEngaged('nsfw', ''), false);
   assert.equal(isFilterSwitchEngaged(null, null), false);
+});
+
+// Regression: searching "how to quit porn addiction" held the whole results
+// page on Google, Bing and DuckDuckGo, because the early path check read
+// "porn" in the query as a search for porn. A search about quitting goes
+// through; SafeSearch and the result filter still apply to the page.
+const blocksEarly = (url) => !isRecoverySearch(url) && blocks(url);
+
+test('help searches are not held by the early path check', () => {
+  const searches = [
+    'https://www.google.com/search?q=how+to+quit+porn+addiction',
+    'https://www.google.co.uk/search?q=porn+addiction+help',
+    'https://www.bing.com/search?q=how+to+stop+watching+porn',
+    'https://duckduckgo.com/?q=porn+blocker+for+chrome&ia=web',
+    'https://html.duckduckgo.com/html/?q=nofap+porn+relapse',
+    'https://search.brave.com/search?q=effects+of+porn+on+the+brain',
+    'https://search.yahoo.com/search?p=overcoming+porn+addiction',
+    'https://yandex.com/search/?text=how+to+quit+porn',
+    'https://www.ecosia.org/search?q=porn+addiction+therapist',
+    'https://www.startpage.com/do/search?query=how+to+block+porn+sites',
+    'https://www.google.com/search?q=how+to+break+free+from+porn',
+    'https://www.google.com/search?q=living+porn-free+after+relapse',
+    'https://www.google.com/search?q=how+to+live+porn-free'
+  ];
+  for (const url of searches) {
+    assert.equal(isRecoverySearch(url), true, url);
+    assert.equal(blocksEarly(url), false, url);
+  }
+});
+
+test('searches looking for porn are still held, recovery words or not', () => {
+  const searches = [
+    'https://www.google.com/search?q=porn',
+    'https://www.google.com/search?q=free+porn+videos',
+    'https://www.bing.com/search?q=quit+free+porn',
+    'https://duckduckgo.com/?q=stop+porn+hd',
+    'https://www.google.com/search?q=porn+addiction+leaked+pics',
+    'https://www.google.com/search?q=help+porn+tube+download'
+  ];
+  for (const url of searches) {
+    assert.equal(isRecoverySearch(url), false, url);
+    assert.equal(blocksEarly(url), true, url);
+  }
+});
+
+test('isRecoverySearch only speaks for search engines', () => {
+  // The same words in an ordinary site's address are not a search for help.
+  assert.equal(isRecoverySearch('https://example.com/porn?q=how+to+quit+porn'), false);
+  assert.equal(isRecoverySearch('https://notgoogle.example/search?q=quit+porn'), false);
+  assert.equal(isRecoverySearch('https://www.google.com/search?q=quit+smoking'), true);
+  assert.equal(isRecoverySearch('https://www.google.com/search'), false);
+  assert.equal(isRecoverySearch('not a url'), false);
+  assert.equal(isRecoverySearch(null), false);
+});
+
+test('isRecoverySearch reads whole words', () => {
+  // "nonstop" is not "stop", and "helpless" is not "help".
+  assert.equal(isRecoverySearch('https://www.google.com/search?q=nonstop+porn'), false);
+  assert.equal(isRecoverySearch('https://www.google.com/search?q=helpless+porn'), false);
 });

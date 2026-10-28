@@ -94,6 +94,92 @@
       color: var(--color-ink);
     }
 
+    /* Storm warning (extras/storm.js): on an evening that looks hard, one
+       quiet line, tonight drawn as a line, and the offer. Full width like
+       the band, on sheet, with a brass rule on top because it is a signal. */
+    .storm-warn {
+      margin: 0 calc(-1 * var(--space-4));
+      padding: 22px var(--space-4);
+      border-top: 2px solid var(--color-brass);
+      background: var(--color-sheet);
+    }
+    .storm-warn-lead {
+      margin-top: var(--space-2);
+      font-family: var(--font-display);
+      font-size: 20px;
+      font-weight: 400;
+      line-height: 1.3;
+      letter-spacing: -0.005em;
+      color: var(--color-ink);
+    }
+    .storm-warn-chart {
+      margin: 18px 0 0;
+    }
+    .storm-warn-chart svg {
+      display: block;
+      width: 100%;
+      height: auto;
+      overflow: visible;
+    }
+    .storm-warn-text {
+      margin-top: 14px;
+      font-size: 14px;
+      line-height: 1.55;
+      color: var(--color-ink-2);
+    }
+    .storm-warn-actions {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: var(--space-2) var(--space-4);
+      margin-top: 18px;
+    }
+    .storm-tl-hard {
+      fill: var(--color-recess);
+    }
+    .storm-tl-edge,
+    .storm-tl-axis,
+    .storm-tl-now,
+    .storm-tl-bar {
+      fill: none;
+    }
+    .storm-tl-edge {
+      stroke: var(--color-brass);
+      stroke-width: 2;
+    }
+    .storm-tl-axis {
+      stroke: var(--color-rule-2);
+    }
+    .storm-tl-now {
+      stroke: var(--color-pine-2);
+      stroke-width: 1.5;
+    }
+    .storm-tl-dot {
+      fill: var(--color-pine-2);
+    }
+    .storm-tl-bar {
+      stroke: var(--color-pine);
+      stroke-width: 1.25;
+      stroke-dasharray: 3 2;
+    }
+    .storm-tl-label {
+      font-family: var(--font-sans);
+      font-size: 12px;
+      fill: var(--color-ink-3);
+    }
+    .storm-tl-label.is-now {
+      font-weight: 500;
+      fill: var(--color-pine-2);
+    }
+    .storm-tl-label.is-hard {
+      font-weight: 600;
+      fill: var(--color-brass);
+    }
+    .storm-tl-label.is-bar {
+      font-weight: 500;
+      fill: var(--color-pine);
+    }
+
     /* Counts: three figures in one line, each under its meta label. */
     .counts {
       display: grid;
@@ -267,6 +353,19 @@
       </button>
     </div>
   </header>
+
+  <!-- Storm warning: a frame extras/storm.js (a Supporter extra) fills and
+       shows on an evening that looks like a hard one. Hidden otherwise. -->
+  <section class="storm-warn" id="storm-warn" aria-labelledby="storm-warn-lead" hidden>
+    <p class="meta meta-brass">Storm warning</p>
+    <h2 class="storm-warn-lead" id="storm-warn-lead"></h2>
+    <figure class="storm-warn-chart" id="storm-warn-chart"><svg id="storm-warn-svg" viewBox="0 0 328 92" role="img"></svg></figure>
+    <p class="storm-warn-text" id="storm-warn-text"></p>
+    <div class="storm-warn-actions" id="storm-warn-actions">
+      <button type="button" class="btn btn-primary" id="storm-warn-go"></button>
+      <button type="button" class="btn-text" id="storm-warn-skip">Not tonight</button>
+    </div>
+  </section>
 
   <!-- Shown when the background reports a newer version. -->
   <div class="update hidden" id="update-banner">
@@ -572,6 +671,7 @@
   <script src="shared/progress.js"></script>
   <script src="extras/extras.js"></script>
   <script src="extras/sync.js"></script>
+  <script src="extras/storm.js"></script>
   <script src="popup.js"></script>
 </body>
 </html>

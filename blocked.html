@@ -57,6 +57,10 @@
     html:not([data-theme]) .blocked-card {
       display: grid;
       grid-template-columns: minmax(0, 1fr) minmax(16rem, 20rem);
+      /* A tall moment (the photo, the dial) lends its height to the last
+         row, so the way out, the address and the support line stay
+         together under Go back instead of drifting apart. */
+      grid-template-rows: auto auto auto auto 1fr;
       column-gap: 64px;
       align-items: start;
     }
@@ -390,6 +394,166 @@
       margin-top: var(--space-3);
       font-size: 14px;
     }
+
+    /* Proof it passes (extras/proof.js): a 20-minute dial with a dot for each
+       urge waited out, at the minute it passed, and the usual minute in
+       brass outside the ring. When the wait starts it is the timer, so the
+       line's own clock steps aside; the hand turns the dots behind it pine. */
+    .moment-proof {
+      margin-bottom: var(--space-5);
+    }
+    .proof-row {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: var(--space-4) var(--space-6);
+      margin-top: var(--space-2);
+    }
+    .proof-dial {
+      flex: 0 0 auto;
+      width: min(16rem, 100%);
+      margin: 0;
+    }
+    .proof-dial svg {
+      display: block;
+      width: 100%;
+      height: auto;
+      overflow: visible;
+    }
+    .proof-text {
+      flex: 1 1 13rem;
+      min-width: 0;
+    }
+    .proof-head {
+      font-family: var(--font-display);
+      font-size: 24px;
+      line-height: 1.25;
+      color: var(--color-ink);
+      text-wrap: balance;
+    }
+    .proof-sub {
+      margin-top: var(--space-2);
+      font-size: 15px;
+      line-height: 1.55;
+      color: var(--color-ink-2);
+      text-wrap: pretty;
+    }
+    .proof-key {
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+      margin-top: var(--space-3);
+    }
+    .proof-key i {
+      width: 3px;
+      height: 14px;
+      background: var(--color-brass);
+    }
+    .proof-tick,
+    .proof-arc,
+    .proof-hand,
+    .proof-usual {
+      fill: none;
+    }
+    /* The face is paper, so a design's own pattern (Verse's formwork dots)
+       never reads as one of the person's dots. */
+    .proof-ring {
+      fill: var(--color-paper);
+      stroke: var(--color-rule-2);
+    }
+    .proof-tick {
+      stroke: var(--color-rule-3);
+    }
+    .proof-arc {
+      stroke: var(--color-pine-2);
+      stroke-width: 3;
+    }
+    .proof-hand {
+      stroke: var(--color-pine);
+      stroke-width: 2;
+      stroke-linecap: round;
+    }
+    .proof-usual {
+      stroke: var(--color-brass);
+      stroke-width: 3;
+    }
+    .proof-label {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      letter-spacing: 0.12em;
+      fill: var(--color-ink-3);
+    }
+    .proof-dot {
+      fill: var(--color-ink-2);
+    }
+    .proof-dot.is-passed {
+      fill: var(--color-pine-2);
+    }
+    .proof-dot.is-ahead {
+      fill: none;
+      stroke: var(--color-ink-3);
+      stroke-width: 1;
+    }
+    .proof-new {
+      fill: var(--color-brass);
+    }
+    .proof-big {
+      font-family: var(--font-display);
+      font-size: 64px;
+      fill: var(--color-ink);
+    }
+    .proof-big.is-time {
+      font-family: var(--font-mono);
+      font-size: 34px;
+      font-variant-numeric: tabular-nums;
+    }
+    .moment.has-proof .moment-time {
+      display: none;
+    }
+    .proof-rate {
+      margin-top: var(--space-4);
+    }
+    .proof-ask {
+      font-family: var(--font-display);
+      font-size: 20px;
+      line-height: 1.3;
+      color: var(--color-ink);
+    }
+    .proof-seg {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--space-2);
+      margin-top: var(--space-3);
+    }
+    .proof-strength {
+      flex: 1 1 auto;
+      min-height: 44px;
+      padding: 6px var(--space-3);
+      border: 1px solid var(--color-rule-3);
+      border-radius: var(--radius-xs);
+      background: var(--color-sheet);
+      color: var(--color-ink);
+      font: inherit;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+    }
+    .proof-strength:hover {
+      border-color: var(--color-ink);
+    }
+    .proof-strength[aria-pressed="true"] {
+      border-color: var(--color-ink);
+      background: var(--color-ink);
+      color: var(--color-paper);
+    }
+    .proof-was {
+      margin-top: var(--space-2);
+    }
+    .proof-hint {
+      margin-top: var(--space-2);
+      font-size: 13px;
+      color: var(--color-ink-3);
+    }
   </style>
   <link rel="stylesheet" href="blocked-themes.css" />
 </head>
@@ -432,6 +596,20 @@
           <p class="moment-person" id="moment-person" hidden></p>
         </div>
         <p class="moment-boost" id="moment-boost" hidden></p>
+        <!-- Proof it passes: a frame that extras/proof.js (a Supporter extra)
+             draws in and shows while its switch is on. Without it, the wait
+             below is the plain timer. -->
+        <div class="moment-proof" id="moment-proof" hidden>
+          <p class="meta meta-brass moment-label">Proof it passes</p>
+          <div class="proof-row">
+            <figure class="proof-dial"><svg id="proof-dial" viewBox="0 0 340 340" role="img"></svg></figure>
+            <div class="proof-text">
+              <p class="proof-head" id="proof-head" aria-live="polite"></p>
+              <p class="proof-sub" id="proof-sub"></p>
+              <p class="proof-key" id="proof-key" hidden><i aria-hidden="true"></i><span class="meta">Your usual minute</span></p>
+            </div>
+          </div>
+        </div>
         <div class="moment-wait" id="moment-wait">
           <p class="moment-line" id="moment-wait-idle">
             <span>Wait it out:</span>
@@ -444,6 +622,12 @@
             <button type="button" class="btn-text" id="moment-ok">I’m OK now</button>
           </p>
           <p class="moment-line" id="moment-wait-done" role="status" hidden></p>
+        </div>
+        <div class="proof-rate" id="proof-rate" hidden>
+          <p class="proof-ask" id="proof-ask"></p>
+          <div class="proof-seg" id="proof-seg" role="group" aria-labelledby="proof-ask"></div>
+          <p class="meta meta-brass proof-was" id="proof-was" hidden></p>
+          <p class="proof-hint" id="proof-hint" hidden>Skip it if you like. The timer is already running.</p>
         </div>
         <a class="link moment-add" id="moment-add" href="#" hidden>Write your own words for this moment</a>
       </section>
@@ -484,6 +668,7 @@
   <script src="shared/sound-store.js"></script>
   <script src="shared/moment-voice.js"></script>
   <script src="shared/boost.js"></script>
+  <script src="extras/proof.js"></script>
   <script src="blocked.js"></script>
 </body>
 </html>

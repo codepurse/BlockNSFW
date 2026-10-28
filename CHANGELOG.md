@@ -2,9 +2,36 @@
 
 All notable project changes should be documented here going forward.
 
-## [Unreleased]
+## [2.0.3] - 2026-10-26
 
 ### Added
+
+- **Proof it passes, for supporters.** When you wait an urge out on the
+  blocked page, the timer becomes a 20-minute dial with a dot for every urge
+  you've waited out, set at the minute it passed. Before the wait it says how
+  long yours usually take ("Usually by minute 9"). As the hand turns, the
+  dots behind it turn green, and one line keeps count: "By now, 7 of your 23
+  had passed." After "I'm OK now", tonight's joins them. You can say how
+  strong it was before and after, or skip it; the timer never waits for an
+  answer. It comes on with Supporter and has a switch in Settings › Your own
+  words. How long each wait took is kept for everyone, on this device, so the
+  dial starts full; it's in the backup too. Privacy policy: What We Store
+  Locally, and sections 10 and 12.
+- **Storm warning, for supporters.** On an evening that looks like the
+  run-up to a hard night, the toolbar popup says so: "Tonight looks like a
+  hard one." Under it, tonight as a line: now, your hard hours shaded, and
+  Storm Mode on offer through them, with one line on why ("Your hard hours
+  start at 11 PM, and the last three nights got hard after 11:30 PM"). One
+  tap starts Storm Mode until an hour past your hard hours; "Not tonight"
+  puts it away until the next evening. It compares the last three nights
+  with your own usual, using only what's on this computer (hard moments and
+  how late they came, evening check-ins, how strong your urges were), says
+  "looks like", never starts anything by itself, and stays quiet until
+  there's enough on record. A switch under Settings › Security › Storm Mode
+  turns it off.
+- **Storm Mode can run until a set time**, as Storm warning offers it: to
+  the minute, at least an hour and at most twelve, and like every Storm
+  Mode it can only be made longer.
 
 - **A page that asks why, after BlockNSFW is removed.** The browser opens
   monolab.dev/blocknsfw/goodbye, which asks for the reason in one tap and
@@ -25,6 +52,23 @@ All notable project changes should be documented here going forward.
 
 ### Fixed
 
+- **Searching for help held the whole results page.** "How to quit porn
+  addiction" and "porn blocker for Chrome" opened onto the blocked page on
+  Google, Bing and DuckDuckGo, because the early check read the word "porn"
+  in the search as a search for porn. A search with words about quitting in
+  it (quit, stop, addiction, relapse, blocker, help, therapy, porn-free and
+  the like) now opens, on every search engine BlockNSFW knows. SafeSearch
+  and the result filter still apply to the page. A search that is also
+  looking for it ("quit free porn", "stop porn hd") is still held.
+- **A blocked site opened through Google Translate or the Wayback Machine.**
+  Both show someone else's site from their own address
+  (motherless-com.translate.goog, web.archive.org/web/…/motherless.com), so
+  only a site with an adult word in its name was caught. BlockNSFW now reads
+  the site out of the address and checks it like the site itself: the
+  blocklist, your own blocks, the keyword filter and DNS Protection, and a
+  site on your whitelist stays open. It reads through layers too, such as a
+  Wayback snapshot opened through Translate. Ordinary sites through either
+  are untouched.
 - **YouTube videos were blocked when nothing on them was explicit.** With the
   AI image and text blockers on, at Strict and sometimes at Balanced, music
   and anime videos opened onto the blocked page, and again after going back
@@ -58,6 +102,37 @@ All notable project changes should be documented here going forward.
   `TextClassifier.imagesCorroborate` holds the rule (at least 3 blurred, and
   at least 25% of those checked). Tests: `tests/ai-image-page-evidence.test.js`,
   and the YouTube page from the report in `tests/ai-text-wiring.test.js`.
+- `shared/moments.js` keeps every wait (`pblocker_waits`: when it started,
+  how long until "I'm OK now", strength before and after) and the Proof it
+  passes switch (`pblocker_proof`, set by `Moments.proofForPlan` from
+  `options-supporter.js` and `popup.js`, never read against the plan by the
+  blocked page). `blocked.html` now loads one extra, `extras/proof.js`, into a
+  frame of its own; with the stand-in, or the switch off, the wait is the
+  plain timer, and the guard tests allow that one extra and no other.
+- `Boost.startStormUntil(existing, until, now, serverNow)`; the background's
+  `boost_storm_start` takes `until` as well as `hours`. Storm warning is
+  `extras/storm.js` (loaded by `popup.html` and `options.html`); the popup
+  holds its frame (`#storm-warn`) and mounts it for supporters only, and it
+  keeps `pblocker_storm_warning` (switch, "Not tonight", the storm it
+  started).
+- `shared/proxied-url.js`: `ProxiedUrl.unwrap(url)` gives the address a
+  Translate (`*.translate.goog`, `translate.google.*?u=`) or Wayback Machine
+  (`web.archive.org/web/<stamp>/<url>`) page is showing, or null. The
+  background's `shouldBlock` checks that address as itself (and doesn't cache
+  the outer "not blocked"); the content script's early check does the same,
+  with the whitelist. `UrlScan.isRecoverySearch(url)` in `shared/url-scan.js`
+  exempts help searches from the early path check. Tests:
+  `tests/proxied-url.test.js`, `tests/url-scan.test.js`.
+- Blocklist curation (`scripts/curation`) took in almost nothing: the scorer
+  judged the first label of any three-part host (`ads.alphaporno.com` as
+  "ads"), and the run of 2026-10-25 merged none of 875,004 candidates. It now
+  judges the site's own name, reads strong keywords in every label, and skips
+  subdomains of hosts already listed. Adult AI services from the feeds (nudify
+  tools, AI sex chat, AI porn generators, `.ai` addresses) go to
+  `data/REVIEW_AI.md` with evidence from HaGeZi, OISD and Cloudflare for
+  Families, and `scripts/curation/apply_review.py` applies the marks there
+  (`data/REVIEW_REJECTED.txt` keeps the ones left out). See
+  `data/SOURCE_NOTES.txt`. Tests: `python -m pytest scripts/curation`.
 
 ## [2.0.2] - 2026-10-21
 

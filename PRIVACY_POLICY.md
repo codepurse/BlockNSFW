@@ -98,6 +98,15 @@ BlockNSFW stores data locally in your browser extension storage on your device. 
   your browser asks you to allow it. The sound stays on your device and
   plays when you tap "Hear yourself", or by itself on the blocked page if
   you switch that on
+- For each urge you wait out on the blocked page (the last 200): when the
+  wait started, how long it took until you pressed "I'm OK now" (never more
+  than the wait itself), and how strong it was before and after, from 1 to
+  5, if you said. Proof it passes, if it is switched on, draws these as a
+  dial on the blocked page; whether it is switched on is kept too
+- For Storm warning, if you use it: whether it is switched on, the evening
+  you last said "Not tonight", and when you last started Storm Mode from it.
+  The warning itself is worked out on your device each time the popup
+  opens, from the records above, and is not kept
 - The colours of a Supporter look, if you choose one
 - Your supporter code, if you enter one
 - A random identifier for this computer, made on the device, used only to
@@ -305,8 +314,9 @@ sees your payment details.
 
 The Supporter extras themselves (days 8 to 30 of the path, the evening
 check-in, Your good days, When it's hardest, Your month and Your year, the
-photo and the voice message for the hard moment, your progress on every
-computer, and Supporter looks) are not open source, unlike the rest of
+photo and the voice message for the hard moment, Proof it passes, Storm
+warning, your progress on every computer, and Supporter looks) are not open
+source, unlike the rest of
 BlockNSFW. They ship inside the extension like everything else, never decide
 what is blocked, make no network requests of their own, and keep what they
 store on your device, as described above, except what you choose to sync
@@ -339,8 +349,8 @@ A backup is a file you save yourself, from Settings › About › Your data. It
 goes wherever you put it; BlockNSFW sends it nowhere. It holds your settings
 and lists, your history (counts and hours per day, and the last five weeks
 of when you turned back, waited a moment out or slipped), the path,
-check-ins, your own words, your photo and voice message, and your current
-run. It never holds the PIN, the Pact or its witness, an access code, your
+check-ins, your own words, your photo and voice message, how long the urges
+you waited out took to pass, and your current run. It never holds the PIN, the Pact or its witness, an access code, your
 Supporter code, the log of blocked addresses or which sites were blocked
 most. Because it holds your history, words, photo and voice, keep the file
 somewhere private.

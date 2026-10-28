@@ -110,12 +110,53 @@
     return text;
   }
 
+  // Search engines, and the parameter each keeps the searched words in.
+  var SEARCH_HOST = /(^|\.)(google\.[a-z.]+|bing\.com|duckduckgo\.com|search\.brave\.com|yahoo\.com|yandex\.[a-z.]+|ecosia\.org|qwant\.com|startpage\.com|aol\.com|presearch\.(com|org))$/;
+  var SEARCH_PARAMS = ['q', 'p', 'text', 'query'];
+
+  // "free" in "break free from porn" or "porn-free" is the opposite of looking.
+  // "porn free" with a space is not here: it is also "free porn" reordered.
+  var FREE_FROM = /\b(break\s+free|free\s+from|(porn|porno|nsfw|xxx|hentai)-?free)\b/g;
+  // Words that say a search is about getting away from it.
+  var RECOVERY_WORDS = new RegExp('\\b(quit|quitting|stop|stopping|addict|addicts|addicted|addiction|addictions|addictive|recover|recovery|recovering|overcome|overcoming|relapse|relapsed|relapsing|urge|urges|craving|cravings|withdrawal|nofap|reboot|rebooting|rehab|therapy|therapist|counseling|counselling|counselor|counsellor|treatment|accountability|blocker|blockers|block|blocking|filter|help|heal|healing|harm|harms|harmful|effects|dangers|resist|avoid|abstain|sober|sobriety|struggle|struggling|cope|coping)\\b|' + FREE_FROM.source);
+  // Words that say someone is looking for it. "quit free porn" is still a
+  // search for free porn.
+  var SEEKING_WORDS = /\b(free|hd|4k|uncensored|download|downloads|stream|streaming|tube|cam|cams|webcam|gallery|galleries|pics|pictures|gif|gifs|clips|collection|leaked|leaks)\b/;
+
+  /**
+   * True when the address is a search-engine results page for a search about
+   * quitting: "how to quit porn addiction", "porn blocker for chrome". The early
+   * path check reads "porn" in such a query as a search for porn, and held the
+   * whole results page from the one person most needing it. SafeSearch and the
+   * result filter still apply to the page.
+   *
+   * @param {string|URL|Location} urlLike
+   * @returns {boolean}
+   */
+  function isRecoverySearch(urlLike) {
+    var u = toUrl(urlLike);
+    if (!u || !SEARCH_HOST.test(String(u.hostname || '').toLowerCase())) return false;
+    var query = '';
+    try {
+      var params = u.searchParams || new URLSearchParams(u.search || '');
+      for (var i = 0; i < SEARCH_PARAMS.length && !query; i++) {
+        query = params.get(SEARCH_PARAMS[i]) || '';
+      }
+    } catch (_) {
+      return false;
+    }
+    query = query.toLowerCase().replace(/\s+/g, ' ');
+    if (!RECOVERY_WORDS.test(query)) return false;
+    return !SEEKING_WORDS.test(query.replace(FREE_FROM, ' '));
+  }
+
   var exported = {
     FILTER_OFF_VALUES: FILTER_OFF_VALUES,
     FILTER_ON_VALUES: FILTER_ON_VALUES,
     NEGATED_PARAM_NAME: NEGATED_PARAM_NAME,
     isFilterSwitchEngaged: isFilterSwitchEngaged,
-    buildUrlScanText: buildUrlScanText
+    buildUrlScanText: buildUrlScanText,
+    isRecoverySearch: isRecoverySearch
   };
 
   if (typeof module !== 'undefined' && module.exports) {

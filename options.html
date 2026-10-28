@@ -2049,6 +2049,15 @@
       font-size: 14px;
       color: var(--color-ink);
     }
+    .own-proof {
+      margin-top: var(--space-4);
+    }
+    .storm-warn-field {
+      margin-top: var(--space-5);
+    }
+    .own-proof .own-voice-auto {
+      margin-top: 0;
+    }
 
     @media (max-width: 520px) {
       .row {
@@ -2822,6 +2831,21 @@
               <p class="field-hint" id="own-voice-auto-hint" hidden>Some browsers don’t let a page play sound by itself until you’ve clicked on it. Then the blocked page says so, and one tap plays it.</p>
               <p class="field-error" id="own-voice-error" role="alert"></p>
             </div>
+            <!-- Proof it passes: run by extras/proof.js (a Supporter extra);
+                 the open-source build leaves it hidden. -->
+            <div class="field own-proof" id="own-proof" hidden>
+              <div class="own-voice-auto">
+                <label class="own-voice-auto-label" for="own-proof-on">Proof it passes <span class="meta meta-brass row-tag" id="own-proof-tag" hidden>Supporter</span></label>
+                <label class="switch">
+                  <input type="checkbox" class="switch-input" role="switch" id="own-proof-on" aria-describedby="own-proof-hint own-proof-count" />
+                  <span class="switch-track" aria-hidden="true"><span class="switch-thumb"></span></span>
+                  <span class="switch-state" aria-hidden="true"></span>
+                </label>
+              </div>
+              <p class="field-hint" id="own-proof-hint">When you wait an urge out on the blocked page, the timer becomes a dial with a dot for every one you’ve waited out, at the minute it passed. Say how strong it was if you like. It stays on this device.</p>
+              <p class="field-hint" id="own-proof-count" hidden></p>
+              <a class="arrow-link small" href="#supporter" data-door="proof" id="own-proof-upsell" hidden>See Supporter</a>
+            </div>
           </div>
           <div class="btn-row">
             <button type="button" class="btn btn-ghost" id="own-words-save">Save your words</button>
@@ -3144,6 +3168,22 @@ title/Example Domain/"></textarea>
             <button type="button" class="btn btn-ghost" data-storm-hours="12">12 hours</button>
           </div>
           <p class="row-desc storm-on-desc" id="storm-on-desc" hidden></p>
+          <!-- Storm warning: run by extras/storm.js (a Supporter extra); the
+               open-source build leaves it hidden. -->
+          <div class="rows rows-closed storm-warn-field" id="storm-warn-field" hidden>
+            <div class="row">
+              <div class="row-text">
+                <label class="row-label" for="storm-warn-on">Warn me before a hard night <span class="meta meta-brass row-tag" id="storm-warn-tag" hidden>Supporter</span></label>
+                <p class="row-desc" id="storm-warn-desc">On an evening that looks like the run-up to a hard night, the toolbar popup says so and offers Storm Mode through your hard hours. It looks only at what’s on this computer, and never starts anything by itself.</p>
+                <a class="arrow-link small" href="#supporter" data-door="storm" id="storm-warn-upsell" hidden>See Supporter</a>
+              </div>
+              <label class="switch">
+                <input type="checkbox" class="switch-input" role="switch" id="storm-warn-on" aria-describedby="storm-warn-desc" />
+                <span class="switch-track" aria-hidden="true"><span class="switch-thumb"></span></span>
+                <span class="switch-state" aria-hidden="true"></span>
+              </label>
+            </div>
+          </div>
           </div>
         </div>
 
@@ -3459,6 +3499,8 @@ title/Example Domain/"></textarea>
                 <tr class="compare-extra"><th scope="row"><a href="#blocked-design-picker">Four more blocked-page designs</a><span class="compare-desc">Calm, Verse, Motivation and Play: something to do while the urge passes.</span></th><td data-no></td><td data-yes></td></tr>
                 <tr class="compare-extra"><th scope="row"><a href="#own-photo">A photo for the hard moment</a><span class="compare-desc">Someone or something worth staying for, above your words on the blocked page.</span></th><td data-no></td><td data-yes></td></tr>
                 <tr class="compare-extra"><th scope="row"><a href="#own-voice">A message in your own voice</a><span class="compare-desc">Recorded on a good day, or a sound you choose; it plays on the blocked page.</span></th><td data-no></td><td data-yes></td></tr>
+                <tr class="compare-extra"><th scope="row"><a href="#own-proof">Proof it passes</a><span class="compare-desc">The wait becomes a dial of every urge you’ve waited out, at the minute it passed.</span></th><td data-no></td><td data-yes></td></tr>
+                <tr class="compare-extra"><th scope="row"><a href="#storm-group">Storm warning</a><span class="compare-desc">On an evening that looks like a hard one, the popup offers Storm Mode through your hard hours.</span></th><td data-no></td><td data-yes></td></tr>
                 <tr class="compare-extra"><th scope="row"><a href="#data-group">Your progress on every computer</a><span class="compare-desc">Days kept, the path and check-ins, through the browser&rsquo;s own sync.</span></th><td data-no></td><td data-yes></td></tr>
                 <tr class="compare-extra"><th scope="row"><a href="#look-accent-row">Supporter looks</a><span class="compare-desc">True black for dark, and an accent colour for every page.</span></th><td data-no></td><td data-yes></td></tr>
               </tbody>
@@ -3689,6 +3731,8 @@ title/Example Domain/"></textarea>
   <script src="extras/looks.js"></script>
   <script src="extras/photo.js"></script>
   <script src="extras/voice.js"></script>
+  <script src="extras/proof.js"></script>
+  <script src="extras/storm.js"></script>
   <script src="extras/sync.js"></script>
   <script src="options-supporter.js"></script>
   <script src="options-backup.js"></script>

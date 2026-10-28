@@ -555,7 +555,7 @@
   // the path, or a place in Settings. Only one of these names is ever sent,
   // never an address or anything about browsing (PRIVACY_POLICY.md,
   // section 10). Anything else counts as Settings.
-  var DOORS = ['settings', 'release', 'popup', 'path', 'gooddays', 'hardest', 'month', 'looks', 'designs', 'photo', 'voice', 'sync'];
+  var DOORS = ['settings', 'release', 'popup', 'path', 'gooddays', 'hardest', 'month', 'looks', 'designs', 'photo', 'voice', 'sync', 'proof', 'storm'];
 
   function door(name) {
     return DOORS.indexOf(name) === -1 ? 'settings' : name;

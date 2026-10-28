@@ -494,13 +494,18 @@ const detailSettled = new Promise(done => { markDetailSettled = done; });
 //
 // The person's own words (shared/moments.js), written in a calm moment, come
 // first: their plan, their note, someone to reach. Then one line to wait the
-// urge out. Pressing "I'm OK now" counts a kept moment, on this device only.
+// urge out. Pressing "I'm OK now" counts a kept moment, and keeps how long it
+// took, on this device only.
+//
+// Proof it passes (extras/proof.js, a Supporter extra) draws those waits as
+// a dial that becomes the timer, while its switch is on. The page reads only
+// the switch, never the plan; without the extra the wait is the plain line.
 async function renderMoment() {
   const Moments = globalThis.Moments;
   const Boost = globalThis.Boost;
   const section = document.getElementById('moment');
   if (!Moments || !section) return;
-  const keys = [Moments.WORDS_KEY, Moments.PHOTO_KEY, Moments.VOICE_KEY];
+  const keys = [Moments.WORDS_KEY, Moments.PHOTO_KEY, Moments.VOICE_KEY, Moments.PROOF_KEY];
   if (Boost) keys.push(Boost.STATE_KEY);
   const store = await browserAPI.storage.local.get(keys);
   const words = Moments.normalizeWords(store[Moments.WORDS_KEY]);
@@ -558,11 +563,43 @@ async function renderMoment() {
       : `Your risk hours run until ${Boost.formatUntil(state.until, Date.now())}.`);
   }
 
-  wireWaitTimer(Moments);
+  const proof = await mountProof(Moments, store[Moments.PROOF_KEY]);
+  if (proof) section.classList.add('has-proof');
+  wireWaitTimer(Moments, proof);
   section.hidden = false;
 }
 
-function wireWaitTimer(Moments) {
+// The dial's controller, or null for the plain timer. A fault in the extra
+// costs the dial, never the page.
+async function mountProof(Moments, raw) {
+  const extra = globalThis.ProofItPasses;
+  if (!extra || !Moments.proofOn(raw)) return null;
+  try {
+    const store = await browserAPI.storage.local.get([Moments.WAITS_KEY, Moments.KEPT_KEY]);
+    const proof = extra.mount({
+      doc: document,
+      Moments,
+      waits: store[Moments.WAITS_KEY],
+      kept: Moments.normalizeKept(store[Moments.KEPT_KEY]).count
+    });
+    return proof && typeof proof.start === 'function' ? proof : null;
+  } catch (error) {
+    console.warn('BlockNSFW: could not draw the dial', error);
+    return null;
+  }
+}
+
+// Calls into the dial, if there is one, without letting it stop the timer.
+function tellProof(proof, step, arg) {
+  if (!proof) return undefined;
+  try {
+    return proof[step](arg);
+  } catch (_) {
+    return undefined;
+  }
+}
+
+function wireWaitTimer(Moments, proof) {
   const idle = document.getElementById('moment-wait-idle');
   const running = document.getElementById('moment-wait-running');
   const done = document.getElementById('moment-wait-done');
@@ -571,15 +608,20 @@ function wireWaitTimer(Moments) {
   const ok = document.getElementById('moment-ok');
   if (!idle || !running || !done || !time || !ok) return;
   let timer = null;
+  let startedAt = 0;
   let endsAt = 0;
+  // With the dial, the time is in its middle, so the line just encourages.
+  const waitingText = proof ? 'Most urges pass if you wait them out.' : 'left. Most urges pass if you wait them out.';
 
   const format = (ms) => {
     const total = Math.max(0, Math.ceil(ms / 1000));
     return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`;
   };
   const tick = () => {
-    const left = endsAt - Date.now();
+    const now = Date.now();
+    const left = endsAt - now;
     time.textContent = format(left);
+    tellProof(proof, 'tick', now);
     if (left > 0) return;
     clearInterval(timer);
     timer = null;
@@ -589,10 +631,12 @@ function wireWaitTimer(Moments) {
 
   idle.querySelectorAll('[data-wait]').forEach((button) => {
     button.addEventListener('click', () => {
-      endsAt = Date.now() + Number(button.dataset.wait) * 60 * 1000;
+      startedAt = Date.now();
+      endsAt = startedAt + Number(button.dataset.wait) * 60 * 1000;
       idle.hidden = true;
       running.hidden = false;
-      if (text) text.textContent = 'left. Most urges pass if you wait them out.';
+      if (text) text.textContent = waitingText;
+      tellProof(proof, 'start', { startedAt, endsAt });
       tick();
       clearInterval(timer);
       timer = setInterval(tick, 1000);
@@ -600,18 +644,29 @@ function wireWaitTimer(Moments) {
     });
   });
 
+  let answered = false;
   ok.addEventListener('click', async () => {
+    if (answered) return;
+    answered = true;
     clearInterval(timer);
     timer = null;
     running.hidden = true;
-    done.hidden = false;
+    const now = Date.now();
+    // How long it took: never past the wait itself, so a tab left open
+    // until morning still says ten minutes.
+    const ms = Math.max(0, Math.min(now, endsAt) - startedAt);
     let count = 0;
+    let waits = [];
     try {
-      const { [Moments.KEPT_KEY]: raw } = await browserAPI.storage.local.get(Moments.KEPT_KEY);
-      const kept = Moments.addKept(raw, Date.now());
+      const store = await browserAPI.storage.local.get([Moments.KEPT_KEY, Moments.WAITS_KEY]);
+      const kept = Moments.addKept(store[Moments.KEPT_KEY], now);
+      waits = Moments.addWait(store[Moments.WAITS_KEY], { at: startedAt, ms, before: tellProof(proof, 'before') || null });
       count = kept.count;
-      await browserAPI.storage.local.set({ [Moments.KEPT_KEY]: kept });
+      await browserAPI.storage.local.set({ [Moments.KEPT_KEY]: kept, [Moments.WAITS_KEY]: waits });
     } catch (_) {}
+    // The dial says it its own way; otherwise, one line.
+    if (tellProof(proof, 'passed', { at: startedAt, ms, kept: count, waits }) === true) return;
+    done.hidden = false;
     done.textContent = count > 1
       ? `That’s ${count} moments you’ve waited out. You can go back now.`
       : 'That’s one moment waited out. You can go back now.';

@@ -81,7 +81,20 @@
   // A new storm, or a longer one: pressing it again can only extend it.
   function startStorm(existing, hours, now, serverNow) {
     var h = STORM_HOURS.indexOf(Number(hours)) >= 0 ? Number(hours) : 1;
-    var next = { startedAt: now, startedAtServer: typeof serverNow === 'number' ? serverNow : null, durationMs: h * HOUR };
+    return longer(existing, { startedAt: now, startedAtServer: typeof serverNow === 'number' ? serverNow : null, durationMs: h * HOUR });
+  }
+
+  // Storm Mode until a time (a Storm warning's offer: through the hard hours
+  // and an hour past them). To the minute, never under an hour or past the
+  // longest storm; like startStorm, it can only make a storm longer.
+  var STORM_MAX = STORM_HOURS[STORM_HOURS.length - 1] * HOUR;
+  function startStormUntil(existing, until, now, serverNow) {
+    var wanted = Math.round((Number(until) - now) / MINUTE) * MINUTE;
+    var duration = isFinite(wanted) ? Math.min(STORM_MAX, Math.max(HOUR, wanted)) : HOUR;
+    return longer(existing, { startedAt: now, startedAtServer: typeof serverNow === 'number' ? serverNow : null, durationMs: duration });
+  }
+
+  function longer(existing, next) {
     var current = normalizeStorm(existing);
     if (current && current.startedAt + current.durationMs > next.startedAt + next.durationMs) return current;
     return next;
@@ -251,6 +264,8 @@
     OFFLINE_GRACE: OFFLINE_GRACE,
     normalizeStorm: normalizeStorm,
     startStorm: startStorm,
+    startStormUntil: startStormUntil,
+    STORM_MAX: STORM_MAX,
     stormEndsAt: stormEndsAt,
     stormOver: stormOver,
     normalizeRisk: normalizeRisk,

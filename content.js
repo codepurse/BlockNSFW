@@ -1357,6 +1357,10 @@ function isLikelyAdultHostEarly(host) {
 
 function isLikelyAdultPathEarly(urlStr) {
   try {
+    // "how to quit porn addiction" is a search for help, not for porn.
+    if (typeof UrlScan !== 'undefined' && UrlScan.isRecoverySearch && UrlScan.isRecoverySearch(urlStr)) {
+      return false;
+    }
     const path = buildUrlScanText(urlStr);
     return /\b(porn|porno|pornography|xxx|nsfw|hentai|nude|naked|erotic)\b/i.test(path);
   } catch (_) {
@@ -1505,22 +1509,42 @@ function getBlockedReasonLabel(reasonKey) {
         const pathMatches = (self.DomainValidate && self.DomainValidate.whitelistPathMatches)
           ? self.DomainValidate.whitelistPathMatches
           : (_p, storedPath) => !storedPath;
-        for (let i = 0; i < whitelist.length; i++) {
-          const item = whitelist[i];
-          // Skip expired temporary entries
-          if (item.type === 'temporary' && item.expiresAt && item.expiresAt <= now) continue;
-          if (hostMatchesDomain(normalizedHost, item.domain) && pathMatches(pathname, item.path)) {
-            return; // Whitelisted -> allow
-          }
-        }
-
-        // Respect remote global whitelist
         const remoteWL = result.pblocker_remote_whitelist_v1 || [];
-        for (let i = 0; i < remoteWL.length; i++) {
-          if (hostMatchesDomain(normalizedHost, remoteWL[i])) return;
-        }
+        const isAllowed = (hostToCheck, pathToCheck) => {
+          for (let i = 0; i < whitelist.length; i++) {
+            const item = whitelist[i];
+            // Skip expired temporary entries
+            if (item.type === 'temporary' && item.expiresAt && item.expiresAt <= now) continue;
+            if (hostMatchesDomain(hostToCheck, item.domain) && pathMatches(pathToCheck, item.path)) {
+              return true;
+            }
+          }
+          // Respect remote global whitelist
+          for (let i = 0; i < remoteWL.length; i++) {
+            if (hostMatchesDomain(hostToCheck, remoteWL[i])) return true;
+          }
+          return false;
+        };
+        if (isAllowed(normalizedHost, pathname)) return; // Whitelisted -> allow
 
-        const instantReasonKey = getLocalBlockReasonKey(urlStr, normalizedHost, {
+        // A site shown through Google Translate or the Wayback Machine is
+        // checked as itself too, unless that site is whitelisted
+        // (shared/proxied-url.js). The background does the same with the full
+        // list when it is asked about this address below.
+        const proxiedUrl = typeof ProxiedUrl !== 'undefined' ? ProxiedUrl.unwrap(urlStr) : null;
+        let proxiedHost = '';
+        if (proxiedUrl) {
+          try {
+            const proxied = new URL(proxiedUrl);
+            if (!isAllowed(normalizeHost(proxied.hostname), proxied.pathname || '/')) {
+              proxiedHost = normalizeHost(proxied.hostname);
+            }
+          } catch (_) {}
+        }
+        const localReason = (options) => getLocalBlockReasonKey(urlStr, normalizedHost, options) ||
+          (proxiedHost ? getLocalBlockReasonKey(proxiedUrl, proxiedHost, options) : null);
+
+        const instantReasonKey = localReason({
           customPatterns: liveListEntries(settings.customPatterns),
           useSmartBlockingEnabled: settings.useSmartBlocking,
           includeCustomPatterns: false,
@@ -1534,7 +1558,7 @@ function getBlockedReasonLabel(reasonKey) {
 
         // Preserve local custom/smart reasons without waiting for the default
         // list; those checks use settings and the small built-in early list.
-        const localReasonKey = getLocalBlockReasonKey(urlStr, normalizedHost, {
+        const localReasonKey = localReason({
           customPatterns: liveListEntries(settings.customPatterns),
           useSmartBlockingEnabled: settings.useSmartBlocking
         });

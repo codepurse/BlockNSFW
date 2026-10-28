@@ -151,12 +151,88 @@
     </header>
 
 
+    <!-- ===================== 2.0.3 ===================== -->
+    <section class="release" aria-labelledby="release-2-0-3">
+      <h2 class="section-head tnum" id="release-2-0-3">
+        <span class="index release-version">2.0.3</span>
+        <span>October 2026</span>
+        <span class="release-status meta-pine" data-status="current">Current</span>
+      </h2>
+      <div class="release-body">
+
+      <div class="group">
+        <h3 class="group-label">New</h3>
+        <ul class="rows rows-closed">
+          <li class="entry">
+            <h4 class="entry-title">Proof it passes, for supporters</h4>
+            <p class="entry-body">
+              When you wait an urge out on the blocked page, the timer becomes a dial with a dot for every urge you&rsquo;ve waited out, set at the minute it passed. Before the wait it says how long yours usually take. As the hand turns, the dots behind it turn green, and one line keeps count: &ldquo;By now, 7 of your 23 had passed.&rdquo; You can say how strong it was before and after, or skip it; the timer never waits for an answer. Turn it off in Settings &rsaquo; Your own words.
+            </p>
+          </li>
+          <li class="entry">
+            <h4 class="entry-title">Storm warning, for supporters</h4>
+            <p class="entry-body">
+              On an evening that looks like the run-up to a hard night, the toolbar popup says so: &ldquo;Tonight looks like a hard one.&rdquo; Under it, tonight as a line, with your hard hours shaded, and one tap to start Storm Mode through them. &ldquo;Not tonight&rdquo; puts it away until the next evening. It compares the last few nights with your own usual, using only what&rsquo;s on this computer, and never starts anything by itself. Turn it off in Settings &rsaquo; Security &rsaquo; Storm Mode.
+            </p>
+          </li>
+          <li class="entry">
+            <h4 class="entry-title">Storm Mode until a set time</h4>
+            <p class="entry-body">
+              As Storm warning offers it: until 2 AM, say, to the minute. At least an hour and at most twelve, and like every Storm Mode it can only be made longer.
+            </p>
+          </li>
+          <li class="entry">
+            <h4 class="entry-title">A page that asks why, after BlockNSFW is removed</h4>
+            <p class="entry-body">
+              It asks for the reason in one tap and answers it: a fix to look at for a wrongly blocked site, or a way back for someone who removed it in a hard moment. It carries only the version, the browser and roughly how long BlockNSFW was installed.
+            </p>
+          </li>
+        </ul>
+      </div>
+
+      <div class="group">
+        <h3 class="group-label">Fixed</h3>
+        <ul class="rows rows-closed">
+          <li class="entry">
+            <h4 class="entry-title">Searching for help held the whole results page</h4>
+            <p class="entry-body">
+              &ldquo;How to quit porn addiction&rdquo; opened onto the blocked page on Google, Bing and DuckDuckGo, because the word &ldquo;porn&rdquo; in the search was read as a search for porn. A search about quitting now opens, with SafeSearch and the result filter still on. One that is also looking for it, like &ldquo;quit free porn&rdquo;, is still held.
+            </p>
+          </li>
+          <li class="entry">
+            <h4 class="entry-title">Blocked sites opened through Google Translate or the Wayback Machine</h4>
+            <p class="entry-body">
+              Both show someone else&rsquo;s site from their own address, so only a site with an adult word in its name was caught. BlockNSFW now reads the site out of the address and checks it like the site itself, whitelist included. Ordinary sites through either are untouched.
+            </p>
+          </li>
+          <li class="entry">
+            <h4 class="entry-title">YouTube videos were blocked when nothing on them was explicit</h4>
+            <p class="entry-body">
+              With the AI image and text blockers on, some music and anime videos opened onto the blocked page. One misread thumbnail in the related videos was enough to tip the page. Now images only count against a page when at least three are blurred and they make up at least a quarter of those checked, and the count starts over on every new video.
+            </p>
+          </li>
+        </ul>
+      </div>
+
+      <div class="group">
+        <h3 class="group-label">Removed</h3>
+        <ul class="rows rows-closed">
+          <li class="entry">
+            <h4 class="entry-title">Mullvad DNS Family</h4>
+            <p class="entry-body">
+              Mullvad closes all of its public DNS servers on November 2, 2026. DNS Protection now offers Cloudflare for Families, AdGuard DNS Family and CleanBrowsing, or your own resolver. If you had picked Mullvad, Cloudflare for Families takes over by itself; nothing needs doing.
+            </p>
+          </li>
+        </ul>
+      </div>
+      </div>
+    </section>
+
     <!-- ===================== 2.0.2 ===================== -->
     <section class="release" aria-labelledby="release-2-0-2">
       <h2 class="section-head tnum" id="release-2-0-2">
         <span class="index release-version">2.0.2</span>
         <span>October 2026</span>
-        <span class="release-status meta-pine" data-status="current">Current</span>
       </h2>
       <div class="release-body">
 

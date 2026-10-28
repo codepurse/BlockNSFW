@@ -23,6 +23,7 @@ try {
     self.importScripts('shared/moments.js');
     self.importScripts('shared/gateways.js');
     self.importScripts('shared/ledger.js');
+    self.importScripts('shared/proxied-url.js');
   }
 } catch (_) {
   // shared/hostname.js or shared/host-keywords.js could not be loaded
@@ -2832,6 +2833,14 @@ async function shouldBlock(urlStr) {
     shouldBlockResult = true;
   }
 
+  // A site shown through Google Translate or the Wayback Machine is still that
+  // site, and is checked as itself, its whitelist entry included
+  // (shared/proxied-url.js).
+  const proxiedTarget = self.ProxiedUrl ? self.ProxiedUrl.unwrap(urlStr) : null;
+  if (!shouldBlockResult && proxiedTarget) {
+    shouldBlockResult = await shouldBlock(proxiedTarget);
+  }
+
   // DNS-over-HTTPS check via the user's chosen filtering resolver (runs only
   // if nothing else caught it).
   let dnsAnswered = true;
@@ -2848,8 +2857,9 @@ async function shouldBlock(urlStr) {
 
   // Cache the result aggressively — but never cache a "not blocked" that only
   // means the resolvers were unreachable, or a brief outage would whitelist the
-  // domain for the rest of this service worker's life.
-  if (dnsAnswered) {
+  // domain for the rest of this service worker's life. A proxied site's own
+  // check made that choice for itself, and is cached under its own address.
+  if (dnsAnswered && !(proxiedTarget && !shouldBlockResult)) {
     urlCheckCache.set(cacheKey, shouldBlockResult);
     limitCacheSize(urlCheckCache, MAX_CACHE_SIZE);
   }
@@ -4439,11 +4449,14 @@ function boostReconcile() {
   });
 }
 
-async function boostStartStorm(hours) {
+// For 1, 4 or 12 hours, or until a time (a Storm warning's offer).
+async function boostStartStorm(hours, until) {
   const B = self.Boost;
   const { [B.STORM_KEY]: existing } = await browserAPI.storage.local.get(B.STORM_KEY);
   const serverNow = await pactServerNow();
-  const storm = B.startStorm(existing, hours, Date.now(), serverNow);
+  const storm = typeof until === 'number'
+    ? B.startStormUntil(existing, until, Date.now(), serverNow)
+    : B.startStorm(existing, hours, Date.now(), serverNow);
   await browserAPI.storage.local.set({ [B.STORM_KEY]: storm });
   await boostReconcile();
   return { ok: true, until: B.stormEndsAt(storm) };
@@ -4453,7 +4466,7 @@ async function handleBoostMessage(message) {
   if (!self.Boost) return { ok: false, error: 'unavailable' };
   switch (message.type) {
     case 'boost_storm_start':
-      return boostStartStorm(message.hours);
+      return boostStartStorm(message.hours, message.until);
     case 'boost_reconcile':
       await boostReconcile();
       return { ok: true };

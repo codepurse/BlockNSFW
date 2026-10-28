@@ -9,6 +9,11 @@
 //   Kept moments: each time someone waits out an urge on the blocked page
 //   and presses "I'm OK now".
 //
+//   Waits: the same moments, each with how long it took to pass, and how
+//   strong it was before and after when the person said. Proof it passes
+//   (a Supporter extra, extras/proof.js) draws them as a dial: urges pass,
+//   and this is how long yours take.
+//
 //   Slips, and Days Kept: a slip is recorded as one day with what was going
 //   on, never as a reset. "Days kept" counts the days in the last 30 with no
 //   slip and protection on all day, so one bad night costs one day, not
@@ -168,6 +173,83 @@
     return { count: k.count + 1, last: now, times: times };
   }
 
+  // --- Waits -------------------------------------------------------------------
+
+  // [{ at, ms, before, after }]: when the wait started, how long until "I'm OK
+  // now" (never past the wait's own length, so a tab left open overnight
+  // still says ten minutes), and how strong it was from 1 (barely) to 5
+  // (overwhelming), or null when not said. The last WAITS_MAX are kept.
+  var WAITS_KEY = 'pblocker_waits';
+  var WAITS_MAX = 200;
+  var WAIT_MS_MAX = 20 * 60 * 1000;
+  var STRENGTHS = ['Barely', 'Some', 'Strong', 'Very strong', 'Overwhelming'];
+
+  function strength(value) {
+    var n = Number(value);
+    return n >= 1 && n <= STRENGTHS.length && Math.floor(n) === n ? n : null;
+  }
+
+  function normalizeWaits(raw) {
+    var byAt = {};
+    (Array.isArray(raw) ? raw : []).forEach(function (w) {
+      if (!w || typeof w !== 'object') return;
+      var at = Math.floor(Number(w.at));
+      var ms = Math.floor(Number(w.ms));
+      if (!(at > 0) || !(ms >= 0)) return;
+      byAt[at] = { at: at, ms: Math.min(ms, WAIT_MS_MAX), before: strength(w.before), after: strength(w.after) };
+    });
+    return Object.keys(byAt).map(function (k) { return byAt[k]; })
+      .sort(function (a, b) { return a.at - b.at; })
+      .slice(-WAITS_MAX);
+  }
+
+  // One more, or the same one again (the same `at`) told more.
+  function addWait(raw, wait) {
+    return normalizeWaits(normalizeWaits(raw).concat([wait]));
+  }
+
+  // How strong it was after, said once the wait was over.
+  function rateWait(raw, at, after) {
+    return normalizeWaits(raw).map(function (w) {
+      return w.at === at ? { at: w.at, ms: w.ms, before: w.before, after: strength(after) } : w;
+    });
+  }
+
+  // Two records of waits as one (a backup restored here): every wait once,
+  // and what either knows about how strong it was.
+  function mergeWaits(a, b) {
+    var mine = normalizeWaits(a);
+    var byAt = {};
+    mine.forEach(function (w) { byAt[w.at] = w; });
+    normalizeWaits(b).forEach(function (w) {
+      var here = byAt[w.at];
+      byAt[w.at] = here
+        ? { at: here.at, ms: here.ms, before: here.before || w.before, after: here.after || w.after }
+        : w;
+    });
+    return normalizeWaits(Object.keys(byAt).map(function (k) { return byAt[k]; }));
+  }
+
+  // --- Proof it passes ---------------------------------------------------------
+
+  // { on, ended, at }: whether the blocked page draws the dial. The switch is
+  // a Supporter extra in Settings; the plan turns it on (the first time, and
+  // again after a plan that ended) and off when it ends. The blocked page
+  // reads only this, never the plan.
+  var PROOF_KEY = 'pblocker_proof';
+
+  function proofOn(raw) {
+    return !!(raw && typeof raw === 'object' && raw.on === true);
+  }
+
+  // What the plan does to the switch, or null to leave it: a supporter gets
+  // it unless they turned it off themselves; a plan that ends turns it off.
+  function proofForPlan(raw, supporter, now) {
+    var p = raw && typeof raw === 'object' ? raw : null;
+    if (supporter) return !p || p.ended === true ? { on: true, at: now } : null;
+    return p && p.on === true ? { on: false, ended: true, at: now } : null;
+  }
+
   // --- Slips -------------------------------------------------------------------
 
   // A day as the user's own calendar sees it.
@@ -320,6 +402,18 @@
     telHref: telHref,
     normalizeKept: normalizeKept,
     addKept: addKept,
+    WAITS_KEY: WAITS_KEY,
+    WAITS_MAX: WAITS_MAX,
+    WAIT_MS_MAX: WAIT_MS_MAX,
+    STRENGTHS: STRENGTHS,
+    strength: strength,
+    normalizeWaits: normalizeWaits,
+    addWait: addWait,
+    rateWait: rateWait,
+    mergeWaits: mergeWaits,
+    PROOF_KEY: PROOF_KEY,
+    proofOn: proofOn,
+    proofForPlan: proofForPlan,
     dayKey: dayKey,
     normalizeSlips: normalizeSlips,
     addSlip: addSlip,

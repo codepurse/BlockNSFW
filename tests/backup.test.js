@@ -41,6 +41,7 @@ function oldComputer() {
     [Moments.WORDS_KEY]: { plan: 'Walk.', note: '', person: { name: 'Sam', phone: '' } },
     [Moments.PHOTO_KEY]: PHOTO,
     [Moments.VOICE_KEY]: VOICE,
+    [Moments.WAITS_KEY]: [{ at: NOW - 3 * DAY, ms: 540000, before: 4, after: 1 }],
     pblocker_streak_start: NOW - 40 * DAY,
     pblocker_longest_streak: 55
   };
@@ -93,6 +94,7 @@ test('onto a new computer: history beside its own, everything else back, and the
   assert.equal(writes[Moments.WORDS_KEY].plan, 'Walk.');
   assert.equal(writes[Moments.PHOTO_KEY].src, PHOTO.src);
   assert.equal(writes[Moments.VOICE_KEY].ms, 4200);
+  assert.deepEqual(writes[Moments.WAITS_KEY], [{ at: NOW - 3 * DAY, ms: 540000, before: 4, after: 1 }], 'the urges waited out come along');
   assert.equal(writes.pblocker_streak_start, NOW - 40 * DAY, 'the 40-day run comes along');
   assert.equal(writes.pblocker_longest_streak, 55);
   assert.deepEqual(writes.pblocker_whitelist, ['example.org']);
@@ -110,6 +112,7 @@ test('restoring never takes away: words, photo and voice here stay, and a run br
     [Moments.PHOTO_KEY]: { src: 'data:image/png;base64,iVBORw0KGgo=', at: 9 },
     [Moments.VOICE_KEY]: { src: 'data:audio/ogg;base64,T2dnUw==', at: 9, ms: 1000 },
     pblocker_checkins: [{ day: '2026-10-05', a: { mood: 1 }, at: 3 }],
+    [Moments.WAITS_KEY]: [{ at: NOW - 2 * DAY, ms: 300000 }],
     [Path.KEY]: { opened: { 1: '2026-09-01', 2: '2026-09-02', 3: '2026-09-03' }, done: {}, lines: {}, rounds: 0 }
   };
   const { writes } = Backup.plan(backup, here, { id: ID_NEW, now: NOW, withSettings: false });
@@ -119,6 +122,7 @@ test('restoring never takes away: words, photo and voice here stay, and a run br
   assert.ok(!('pblocker_streak_start' in writes), 'an older run never mends one broken here');
   assert.ok(!('pblocker_longest_streak' in writes), 'the longest here was longer');
   assert.equal(writes.pblocker_checkins.length, 2, 'check-ins add up');
+  assert.equal(writes[Moments.WAITS_KEY].length, 2, 'waits add up');
   assert.deepEqual(Object.keys(writes[Path.KEY].opened), ['1', '2', '3'], 'the path keeps the furthest day');
 });
 

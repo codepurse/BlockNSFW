@@ -19,6 +19,18 @@ test('startStorm: only the offered lengths, and pressing again can only extend',
   assert.equal(longer.durationMs, 12 * HOUR);
 });
 
+test('startStormUntil: to the minute, at least an hour, at most the longest storm, and only ever longer', () => {
+  const MIN = 60 * 1000;
+  const twoAm = new Date(2026, 9, 10, 2, 0, 0).getTime(); // from 21:00, five hours
+  const s = Boost.startStormUntil(null, twoAm, T0 + 20 * 1000, T0);
+  assert.equal(s.durationMs, 5 * HOUR, 'rounded to the minute');
+  assert.equal(Boost.stormEndsAt(Boost.startStormUntil(null, T0 + 10 * MIN, T0, T0)), T0 + HOUR, 'never under an hour');
+  assert.equal(Boost.startStormUntil(null, T0 + 30 * HOUR, T0, T0).durationMs, Boost.STORM_MAX, 'never past twelve hours');
+  assert.equal(Boost.startStormUntil(null, 'soon', T0, T0).durationMs, HOUR, 'nonsense is an hour');
+  const twelve = Boost.startStorm(null, 12, T0, T0);
+  assert.deepEqual(Boost.startStormUntil(twelve, twoAm, T0, T0), twelve, 'a longer storm already on stays');
+});
+
 test('stormOver: the server clock decides, so moving the computer clock ends nothing', () => {
   const storm = Boost.startStorm(null, 1, T0, T0);
   assert.equal(Boost.stormOver(storm, T0 + 24 * HOUR, T0 + 10 * 60 * 1000), false);

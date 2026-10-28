@@ -200,6 +200,19 @@
     } catch (_) {}
   }
 
+  // Proof it passes (extras/proof.js) comes on with the plan, unless it was
+  // turned off by hand, and goes off when the plan ends. The blocked page
+  // reads only this switch, never the plan.
+  async function followProof(supporter) {
+    const Moments = self.Moments;
+    if (!self.SupporterExtras || !self.SupporterExtras.proof || !Moments) return;
+    try {
+      const { [Moments.PROOF_KEY]: raw } = await browserAPI.storage.local.get(Moments.PROOF_KEY);
+      const next = Moments.proofForPlan(raw, supporter, Date.now());
+      if (next) await browserAPI.storage.local.set({ [Moments.PROOF_KEY]: next });
+    } catch (_) {}
+  }
+
   async function renderStatus(opts) {
     let s = { supporter: false };
     let answered = false;
@@ -212,6 +225,7 @@
     if (answered && !s.supporter && !s.unchecked && scheme && scheme.getLook()) scheme.setLook(null).catch(() => {});
     // So does a Supporter design for the blocked page (options.js designLocked).
     if (answered && !s.supporter && !s.unchecked) endDesign();
+    if (answered && (s.supporter || !s.unchecked)) followProof(s.supporter === true);
     renderNav(s);
     // The extras with a place in Settings (extras/looks.js, extras/photo.js)
     // follow the answer.

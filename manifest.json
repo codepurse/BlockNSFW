@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "BlockNSFW – Porn & Adult Content Blocker",
-  "version": "2.0.2",
+  "version": "2.0.3",
   "description": "Blocks porn and adult sites before they load, and helps in the hard moment. Every protection is free.",
   "permissions": [
     "storage",
@@ -58,6 +58,7 @@
         "shared/host-keywords.js",
         "shared/validate-domain.js",
         "shared/url-scan.js",
+        "shared/proxied-url.js",
         "shared/token-match.js",
         "shared/keyword-pattern.js",
         "shared/ruleset.js",
