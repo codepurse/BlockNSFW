@@ -32,6 +32,16 @@ All notable project changes should be documented here going forward.
 - **Storm Mode can run until a set time**, as Storm warning offers it: to
   the minute, at least an hour and at most twelve, and like every Storm
   Mode it can only be made longer.
+- **The blocked page names which of your own rules held a page.** When it
+  was a word from your blocked words, or an entry on your blocklist (a site,
+  a `/pattern/` or a `title/…/` rule), the page says so and offers the rule:
+  "Your rule: Show · Change it in Settings". "Change it in Settings" opens
+  the list with that line selected. A rule that is too broad, like `/sex/`
+  also holding a page about Essex, is now quick to find. The rule waits
+  behind "Show" because it can be an explicit word itself; the page's own
+  words and address are still never shown. In Classic it sits under the
+  address line, in the other designs under "Why this page was held".
+  Requested by a user.
 
 - **A page that asks why, after BlockNSFW is removed.** The browser opens
   monolab.dev/blocknsfw/goodbye, which asks for the reason in one tap and
@@ -60,6 +70,10 @@ All notable project changes should be documented here going forward.
   the like) now opens, on every search engine BlockNSFW knows. SafeSearch
   and the result filter still apply to the page. A search that is also
   looking for it ("quit free porn", "stop porn hd") is still held.
+- **A page held by one of your blocked words was described as explicit page
+  text** ("the words on the page were explicit, again and again"), and one
+  held by a `title/…/` rule as "Protection rules". They now read "Your
+  blocked words" and "Your blocklist", here and in the history.
 - **A blocked site opened through Google Translate or the Wayback Machine.**
   Both show someone else's site from their own address
   (motherless-com.translate.goog, web.archive.org/web/…/motherless.com), so
@@ -123,6 +137,14 @@ All notable project changes should be documented here going forward.
   with the whitelist. `UrlScan.isRecoverySearch(url)` in `shared/url-scan.js`
   exempts help searches from the early path check. Tests:
   `tests/proxied-url.test.js`, `tests/url-scan.test.js`.
+- `customPatternMatchingHost`, `customPatternMatchingTitle` and
+  `matchingCustomKeyword` in `content.js` return the user's entry that
+  matched (the boolean forms wrap them). The entry rides to the blocked page
+  as `detail.rule`, through session storage only, never an address or a
+  custom blocked page; blocked.js never reads it from the query string. New
+  reason code `custom_keyword`. "Change it in Settings" leaves
+  `pblocker_focus_rule` in session storage for `options.js`
+  (`applyFocusRule`). Tests: `tests/custom-rule-detail.test.js`.
 - Blocklist curation (`scripts/curation`) took in almost nothing: the scorer
   judged the first label of any three-part host (`ads.alphaporno.com` as
   "ads"), and the run of 2026-10-25 merged none of 875,004 candidates. It now

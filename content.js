@@ -1098,6 +1098,10 @@ function getBlockedRedirectUrl(targetUrl, reason, settings, detail) {
   //   detail.matched -> term(s) the block keyed on (keyword list, or the words
   //                     that most influenced the AI classifier)
   //   detail.score   -> AI classifier probability in [0,1]
+  //   detail.rule    -> the user's own blocklist entry or blocked word that
+  //                     matched, as they wrote it. It travels only through
+  //                     session storage, never in an address (where it would
+  //                     reach history), and never to a custom blocked page.
   detail = detail || {};
   const matchedList = Array.isArray(detail.matched) ? detail.matched : (detail.matched ? [detail.matched] : []);
   let extraParams = '';
@@ -1126,7 +1130,8 @@ function getBlockedRedirectUrl(targetUrl, reason, settings, detail) {
     reason,
     matched: matchedList,
     score: (typeof detail.score === 'number' && isFinite(detail.score))
-      ? detail.score : null
+      ? detail.score : null,
+    rule: typeof detail.rule === 'string' && detail.rule ? detail.rule.slice(0, 400) : null
   });
   if (key) return base + '?k=' + encodeURIComponent(key);
 
@@ -1225,14 +1230,20 @@ function customPatternCompiled(raw) {
 // page has loaded, so this is page-level only — navigation blocking cannot see
 // them.
 function customPatternsMatchTitle(title, patterns) {
-  if (!title || !Array.isArray(patterns) || patterns.length === 0) return false;
+  return customPatternMatchingTitle(title, patterns) !== null;
+}
+
+// The `title/…/` entry the title matched, as the user wrote it, or null. The
+// blocked page offers it, so an entry that is too broad can be found and fixed.
+function customPatternMatchingTitle(title, patterns) {
+  if (!title || !Array.isArray(patterns) || patterns.length === 0) return null;
   for (let i = 0; i < patterns.length; i++) {
     const raw = (patterns[i] || '').trim();
     if (!raw) continue;
     const compiled = customPatternCompiled(raw);
-    if (compiled.kind === 'title' && compiled.regex && compiled.regex.test(title)) return true;
+    if (compiled.kind === 'title' && compiled.regex && compiled.regex.test(title)) return raw;
   }
-  return false;
+  return null;
 }
 
 // The host a blocklist entry is really about: normalizeHost for the www./case
@@ -1247,7 +1258,13 @@ function blockHostBase(value) {
 }
 
 function customPatternsMatchHost(urlStr, host, patterns) {
-  if (!Array.isArray(patterns) || patterns.length === 0) return false;
+  return customPatternMatchingHost(urlStr, host, patterns) !== null;
+}
+
+// The entry the address matched, as the user wrote it, or null. The blocked
+// page offers it, so an entry that is too broad can be found and fixed.
+function customPatternMatchingHost(urlStr, host, patterns) {
+  if (!Array.isArray(patterns) || patterns.length === 0) return null;
   const h = normalizeHost(host);
   // Host-only wildcard patterns like *.example.com or example.com[/path]
   for (let i = 0; i < patterns.length; i++) {
@@ -1258,7 +1275,7 @@ function customPatternsMatchHost(urlStr, host, patterns) {
     // customPatternsMatchTitle and must not be treated as hostnames here.
     const compiled = customPatternCompiled(p);
     if (compiled.kind === 'url') {
-      if (compiled.regex && urlStr && compiled.regex.test(urlStr)) return true;
+      if (compiled.regex && urlStr && compiled.regex.test(urlStr)) return p;
       continue;
     }
     if (compiled.kind === 'title') continue;
@@ -1268,13 +1285,13 @@ function customPatternsMatchHost(urlStr, host, patterns) {
     // Support leading wildcard subdomain
     if (pHost.startsWith('*.')) {
       const base = blockHostBase(pHost.slice(2));
-      if (base && (h === base || h.endsWith('.' + base))) return true;
+      if (base && (h === base || h.endsWith('.' + base))) return p;
     } else {
       // A leading dot (".xyz", ".example.com") is the same entry as the bare
       // form, since a bare host already covers its subdomains. Without this it
       // matched nothing at all, without saying so.
       const base = blockHostBase(pHost);
-      if (base && (h === base || h.endsWith('.' + base))) return true;
+      if (base && (h === base || h.endsWith('.' + base))) return p;
     }
     // If path was provided, do a loose URL match as a fallback
     if (slashIdx >= 0) {
@@ -1283,11 +1300,11 @@ function customPatternsMatchHost(urlStr, host, patterns) {
         .replace(/\*/g, '.*');
       try {
         const re = new RegExp(escaped, 'i');
-        if (re.test(urlStr)) return true;
+        if (re.test(urlStr)) return p;
       } catch (_) {}
     }
   }
-  return false;
+  return null;
 }
 
 // Does this URL/host match one of the user's own blocked-site patterns?
@@ -1404,6 +1421,10 @@ function getBlockedReasonLabel(reasonKey) {
       return 'Blocked by DNS filter';
     case 'custom_blocklist':
       return 'Blocked by custom blocklist';
+    case 'custom_title_pattern':
+      return 'Blocked by your title patterns';
+    case 'custom_keyword':
+      return 'Blocked by your blocked words';
     case 'default_blocklist':
     case 'instant_host_match':
       return 'Blocked by built-in blocklist';
@@ -1482,7 +1503,7 @@ function getBlockedReasonLabel(reasonKey) {
         if (typeof tempUntil === 'number' && Date.now() < tempUntil) return;
         if (!settings.enabled) return;
 
-        const redirectNow = (reasonKey, notifyReasonLabel) => {
+        const redirectNow = (reasonKey, notifyReasonLabel, detail) => {
           try {
             // A blocked sub-frame is reported as a frame, not as a page: it
             // is one element of someone else's page, and counting it under
@@ -1498,7 +1519,7 @@ function getBlockedReasonLabel(reasonKey) {
             });
           } catch (_) {}
           try { window.stop(); } catch (_) {}
-          const blockedUrl = getBlockedRedirectUrl(urlStr, reasonKey, settings);
+          const blockedUrl = getBlockedRedirectUrl(urlStr, reasonKey, settings, detail);
           window.location.replace(blockedUrl);
         };
 
@@ -1558,12 +1579,19 @@ function getBlockedReasonLabel(reasonKey) {
 
         // Preserve local custom/smart reasons without waiting for the default
         // list; those checks use settings and the small built-in early list.
+        const customPatterns = liveListEntries(settings.customPatterns);
         const localReasonKey = localReason({
-          customPatterns: liveListEntries(settings.customPatterns),
+          customPatterns,
           useSmartBlockingEnabled: settings.useSmartBlocking
         });
         if (localReasonKey) {
-          redirectNow(localReasonKey, getBlockedReasonLabel(localReasonKey));
+          // Which of the user's own entries it was, so the blocked page can
+          // offer it.
+          const rule = localReasonKey === 'custom_blocklist'
+            ? (customPatternMatchingHost(urlStr, normalizedHost, customPatterns) ||
+              (proxiedHost ? customPatternMatchingHost(proxiedUrl, proxiedHost, customPatterns) : null))
+            : null;
+          redirectNow(localReasonKey, getBlockedReasonLabel(localReasonKey), rule ? { rule } : undefined);
           return;
         }
 
@@ -2387,11 +2415,12 @@ function isExtensionStorePage() {
 // smart blocking, and not skipped on search engines: the user typed this
 // pattern themselves, which is about as explicit an instruction as there is.
 function checkCustomTitlePatterns() {
-  if (!customPatternsMatchTitle(document.title || '', customBlockPatterns)) return false;
+  const rule = customPatternMatchingTitle(document.title || '', customBlockPatterns);
+  if (rule === null) return false;
   const reason = `Page title matched one of your blocked-site patterns: "${document.title}"`;
   log(reason);
   notifyBackground('website_blocked', { reason, title: document.title });
-  redirectToBlockedPage('custom_title_pattern');
+  redirectToBlockedPage('custom_title_pattern', { rule });
   return true;
 }
 
@@ -2425,6 +2454,12 @@ function checkPageMetadata() {
   const analysis = analyzeTextForAdultContent(textToCheck);
   
   const neutralMatches = analysis.totalMatches - analysis.safeMatches;
+  if (neutralMatches >= METADATA_BLOCK_THRESHOLD && analysis.customRule) {
+    // One of the user's own blocked words: say so, and name which one.
+    notifyBackground('website_blocked', { reason: getBlockedReasonLabel('custom_keyword'), title: document.title });
+    redirectToBlockedPage('custom_keyword', { rule: analysis.customRule });
+    return true;
+  }
   if (neutralMatches >= METADATA_BLOCK_THRESHOLD) {
     const reason = `Page metadata contained explicit content: ${analysis.matchedKeywords.join(', ')}`;
     log(reason);
@@ -2523,6 +2558,7 @@ function checkPageBodyText() {
 
   let matchedLines = 0;
   const matchedKeywords = new Set();
+  let customRule = null;
 
   for (const line of lines) {
     const analysis = analyzeTextForAdultContent(line);
@@ -2530,7 +2566,14 @@ function checkPageBodyText() {
 
     matchedLines++;
     analysis.matchedKeywords.forEach(keyword => matchedKeywords.add(keyword));
+    if (customRule === null && analysis.customRule) customRule = analysis.customRule;
 
+    if (matchedLines >= PAGE_TEXT_SCAN_MATCH_THRESHOLD && customRule !== null) {
+      // One of the user's own blocked words was among them: name which one.
+      notifyBackground('website_blocked', { reason: getBlockedReasonLabel('custom_keyword'), title: document.title });
+      redirectToBlockedPage('custom_keyword', { rule: customRule });
+      return true;
+    }
     if (matchedLines >= PAGE_TEXT_SCAN_MATCH_THRESHOLD) {
       const keywordSummary = Array.from(matchedKeywords).slice(0, 5);
       const reason = keywordSummary.length > 0
@@ -2741,6 +2784,13 @@ function customKeywordRegex(raw) {
 }
 
 function matchesCustomKeywords(lowerText) {
+  return matchingCustomKeyword(lowerText) !== null;
+}
+
+// The blocked word or pattern the text matched, as the user wrote it, or null.
+// The blocked page offers it, so a word that is too broad can be found and
+// fixed; the page's own text is never passed on.
+function matchingCustomKeyword(lowerText) {
   for (let i = 0; i < customKeywordList.length; i++) {
     const raw = customKeywordList[i];
     const entry = (raw || '').toString().trim();
@@ -2750,19 +2800,19 @@ function matchesCustomKeywords(lowerText) {
     // literal, so lists written before this feature behave identically.
     if (typeof KeywordPattern !== 'undefined' && KeywordPattern.isRegexEntry(entry)) {
       const pattern = customKeywordRegex(entry);
-      if (pattern && pattern.test(lowerText)) return true;
+      if (pattern && pattern.test(lowerText)) return entry;
       continue;
     }
 
     const keyword = entry.toLowerCase();
     if (/^[a-z0-9]+$/i.test(keyword)) {
       const pattern = new RegExp(`\\b${escapeRegExp(keyword)}\\b`, 'i');
-      if (pattern.test(lowerText)) return true;
+      if (pattern.test(lowerText)) return entry;
     } else {
-      if (lowerText.includes(keyword)) return true;
+      if (lowerText.includes(keyword)) return entry;
     }
   }
-  return false;
+  return null;
 }
 
 // Content analysis functions
@@ -2773,8 +2823,9 @@ function analyzeTextForAdultContent(text) {
   
   // Check custom blocked words first (always block if found)
   if (customKeywordList.length > 0) {
-    if (matchesCustomKeywords(lowerText)) {
-      return { isAdult: true, riskMatches: 100, safeMatches: 0, totalMatches: 100, matchedKeywords: ['Custom Blocked Word'] };
+    const customRule = matchingCustomKeyword(lowerText);
+    if (customRule !== null) {
+      return { isAdult: true, riskMatches: 100, safeMatches: 0, totalMatches: 100, matchedKeywords: ['Custom Blocked Word'], customRule };
     }
   }
 

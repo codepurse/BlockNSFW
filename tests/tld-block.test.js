@@ -75,7 +75,8 @@ function loadContentMatcher() {
   };
   vm.createContext(sandbox);
   vm.runInContext(
-    [functionSource('blockHostBase'), functionSource('customPatternsMatchHost')].join('\n') +
+    [functionSource('blockHostBase'), functionSource('customPatternsMatchHost'),
+      functionSource('customPatternMatchingHost')].join('\n') +
     '\nglobalThis.customPatternsMatchHost = customPatternsMatchHost;',
     sandbox
   );

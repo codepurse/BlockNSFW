@@ -423,6 +423,8 @@ const REASON_LABELS = {
   // getBlockedReasonLabel() in content.js
   'blocked by dns filter': 'DNS protection',
   'blocked by custom blocklist': 'Your blocklist',
+  'blocked by your title patterns': 'Your title patterns',
+  'blocked by your blocked words': 'Your blocked words',
   'blocked by built-in blocklist': 'Built-in blocklist',
   'blocked by smart keyword filter': 'Keyword filter',
   'blocked by metadata scan': 'Page details',
@@ -452,6 +454,7 @@ const REASON_LABELS = {
   page_text_scan: 'Page text',
   ai_text_scan: 'On-device AI',
   custom_title_pattern: 'Your title patterns',
+  custom_keyword: 'Your blocked words',
   blocked: 'Local filter rules',
   content: 'Local filter rules',
   local_filter: 'Local filter rules',

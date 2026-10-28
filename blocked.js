@@ -22,6 +22,10 @@ let url = getParam('url') || 'Unknown URL';
 let reason = getParam('reason') || '';
 let matched = getParam('matched') || '';
 let score = getParam('score') || '';
+// The user's own blocklist entry or blocked word that matched, as they wrote
+// it. Only ever read from session storage (loadStashedDetail): never from the
+// address, which any site can set, since this page is web-accessible.
+let rule = '';
 // `mode` is deliberately not read from the query string any more — see the
 // plain-HTML branch at the bottom of this file. content.js still sends it, so
 // older copies of the blocked page keep working during an update.
@@ -43,7 +47,10 @@ const previewTheme = (() => {
 //  - `message`: one plain sentence, what held it and what that means, which
 //    says whether the page never loaded or closed as soon as it was read;
 //  - `layer`: which of the six layers held it (LAYERS, below), for Classic's
-//    drawing, or null when the reason doesn't say.
+//    drawing, or null when the reason doesn't say;
+//  - `list`: for the user's own rules, the Settings box the rule lives in (an
+//    element id in options.html), so the page can offer the rule and a way to
+//    change it.
 function getReasonMeta(reasonCode) {
   switch (reasonCode) {
     case 'custom_blocklist':
@@ -51,7 +58,24 @@ function getReasonMeta(reasonCode) {
         sourceLabel: 'Your blocklist',
         detail: 'Blocked by your custom blocklist',
         message: 'You added this site to your own blocklist, on a calmer day. It never loaded.',
-        layer: 1
+        layer: 1,
+        list: 'patterns'
+      };
+    case 'custom_title_pattern':
+      return {
+        sourceLabel: 'Your blocklist',
+        detail: 'Blocked by a title rule on your blocklist',
+        message: 'The page’s title matched a rule on your own blocklist. It closed as soon as it was read.',
+        layer: 5,
+        list: 'patterns'
+      };
+    case 'custom_keyword':
+      return {
+        sourceLabel: 'Your blocked words',
+        detail: 'Blocked by your blocked words',
+        message: 'A word from your own blocked words is on this page. It closed as soon as it was read.',
+        layer: 5,
+        list: 'custom-keywords'
       };
     case 'default_blocklist':
     case 'instant_host_match':
@@ -168,9 +192,78 @@ function addRecord(list, label, value, valueClass) {
   list.appendChild(row);
 }
 
+// Read by options.js, which opens the box and selects the rule's line.
+const FOCUS_RULE_KEY = 'pblocker_focus_rule';
+
+// Which of the user's own rules held the page. A rule that is too broad
+// ("/sex/" also holding a page about Essex) is otherwise a guessing game. The
+// rule is the user's own words, but it may still be an explicit one, so it
+// waits behind "Show" rather than greeting someone in a hard moment.
+//
+// "Show · Change it in Settings", for one place on the page. Classic shows it
+// under the address line (#held-rule); the other designs, in "Why this page
+// was held" (addRuleRecord).
+function appendRuleControls(container, ruleText, settingsList) {
+  const show = document.createElement('button');
+  show.type = 'button';
+  show.className = 'link rule-show';
+  show.textContent = 'Show';
+  show.addEventListener('click', () => {
+    const code = document.createElement('code');
+    code.className = 'why-rule';
+    code.textContent = ruleText;
+    show.replaceWith(code);
+  });
+
+  const edit = document.createElement('button');
+  edit.type = 'button';
+  edit.className = 'link rule-edit';
+  edit.textContent = 'Change it in Settings';
+  edit.addEventListener('click', () => openRuleInSettings(settingsList, ruleText));
+
+  const sep = document.createElement('span');
+  sep.setAttribute('aria-hidden', 'true');
+  sep.textContent = ' · ';
+  container.append(show, sep, edit);
+}
+
+function addRuleRecord(list, ruleText, settingsList) {
+  if (!list) return;
+  const row = document.createElement('div');
+  row.className = 'record';
+  const term = document.createElement('dt');
+  term.className = 'meta';
+  term.textContent = 'your rule';
+  const data = document.createElement('dd');
+  data.className = 'why-value';
+  appendRuleControls(data, ruleText, settingsList);
+  row.append(term, data);
+  list.appendChild(row);
+}
+
+function showHeldRule(ruleText, settingsList) {
+  const line = document.getElementById('held-rule');
+  if (!line) return;
+  appendRuleControls(line, ruleText, settingsList);
+  line.hidden = false;
+}
+
+// Settings opens at the box, with the rule's line selected. The rule goes
+// through session storage, not the address, so it never reaches history.
+async function openRuleInSettings(settingsList, ruleText) {
+  try {
+    const area = browserAPI.storage && browserAPI.storage.session;
+    if (area && typeof area.set === 'function') {
+      await area.set({ [FOCUS_RULE_KEY]: { list: settingsList, rule: ruleText, ts: Date.now() } });
+    }
+  } catch (_) {}
+  openTab(runtimeURL('options.html#' + settingsList));
+}
+
 // The page title, its address, its favicon and the words it matched are all
 // part of what was held, so none of them is written here. The reason is named,
-// and the AI's confidence, which is a number, not the page's content.
+// and the AI's confidence, which is a number, not the page's content. The one
+// exception is the user's own rule, behind "Show" (addRuleRecord).
 function renderDetail() {
   const reasonMeta = getReasonMeta(reason);
   const shown = redactedHost(url);
@@ -202,6 +295,10 @@ function renderDetail() {
     const rows = document.getElementById('why-rows');
     addRecord(rows, 'reason', reasonMeta.sourceLabel);
     if (sure) addRecord(rows, 'ai confidence', sure, 'record-value tnum');
+    if (rule && reasonMeta.list) {
+      addRuleRecord(rows, rule, reasonMeta.list);
+      showHeldRule(rule, reasonMeta.list);
+    }
   }
 
   // Classic names the door and draws it; a design draws its own picture.
@@ -359,6 +456,7 @@ async function loadStashedDetail() {
     matched = Array.isArray(record.matched) ? record.matched.join(', ') : (record.matched || '');
     score = (typeof record.score === 'number' && isFinite(record.score))
       ? record.score.toFixed(2) : '';
+    rule = typeof record.rule === 'string' ? record.rule : '';
     return true;
   }
   return false;

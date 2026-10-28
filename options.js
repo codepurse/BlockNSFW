@@ -2995,6 +2995,61 @@ async function render() {
   applySubscribeQueryParam();
 }
 
+// Set by the blocked page's "Change it in Settings" (blocked.js), read once.
+const FOCUS_RULE_KEY = 'pblocker_focus_rule';
+const FOCUS_RULE_LISTS = ['patterns', 'custom-keywords'];
+
+/**
+ * The blocked page names the user's own rule that held it, and offers to
+ * change it. It leaves { list, rule } in session storage (not the address, so
+ * the rule never reaches history) and opens Settings at that box; this selects
+ * the rule's line in it. Nothing is changed: removing the line is still a save,
+ * with the PIN or the Pact if one is set.
+ */
+async function applyFocusRule() {
+  try {
+    const area = browserAPI.storage && browserAPI.storage.session;
+    if (!area || typeof area.get !== 'function') return;
+    const stored = await area.get(FOCUS_RULE_KEY);
+    const request = stored && stored[FOCUS_RULE_KEY];
+    if (!request) return;
+    await area.remove(FOCUS_RULE_KEY);
+    if (FOCUS_RULE_LISTS.indexOf(request.list) === -1 || typeof request.rule !== 'string') return;
+
+    const box = $(request.list);
+    if (!box) return;
+    const range = ruleLineRange(box.value, request.rule);
+    if (window.BlockNSFWSettings) window.BlockNSFWSettings.reveal(box);
+    box.focus();
+    if (!range) return;
+    box.setSelectionRange(range.start, range.end);
+    // Bring the line into view inside the box, a few lines from its top.
+    const lineHeight = parseFloat(getComputedStyle(box).lineHeight) || 20;
+    const before = box.value.slice(0, range.start).split('\n').length - 1;
+    box.scrollTop = Math.max(0, (before - 2) * lineHeight);
+  } catch (_) {}
+}
+
+/**
+ * Where a rule's line sits in a list box, or null. The content script reads
+ * a list with its notes dropped and an escaped `\#word` unescaped, so both
+ * spellings are looked for.
+ */
+function ruleLineRange(text, rule) {
+  const wanted = String(rule || '').trim();
+  if (!wanted) return null;
+  let start = 0;
+  for (const line of String(text || '').split('\n')) {
+    const trimmed = line.trim();
+    if (trimmed === wanted || trimmed === '\\' + wanted) {
+      const offset = line.indexOf(trimmed);
+      return { start: start + offset, end: start + offset + trimmed.length };
+    }
+    start += line.length + 1;
+  }
+  return null;
+}
+
 /**
  * A subscribe link opens Settings with ?subscribe=<url>. The address is filled
  * into the box and the section scrolled to, but nothing is added — the user
@@ -3403,6 +3458,8 @@ async function init() {
   initHardMoments();
   initGateways();
   await render();
+  // After render, so the box already holds the list.
+  await applyFocusRule();
 
   // Update-available banner
   const dismissBtn = $('update-banner-dismiss');

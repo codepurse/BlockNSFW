@@ -231,6 +231,12 @@
       letter-spacing: 0.04em;
       color: var(--color-ink);
     }
+    /* Classic's place for the user's own rule, under the address line; the
+       other designs hide this line and show it in "Why this page was held". */
+    .held-rule {
+      display: block;
+      margin-top: var(--space-2);
+    }
 
     /* The held mark: pale pine, the Held icon, the word in pine. It wipes
        down once as the page appears. */
@@ -303,6 +309,13 @@
     .why-value {
       font-size: 14px;
       text-align: right;
+    }
+    /* The user's own rule, once shown: as typed, wrapping anywhere, since a
+       pattern can be one long word. */
+    .why-rule {
+      font-family: var(--font-mono);
+      font-size: 13px;
+      overflow-wrap: anywhere;
     }
     .blocked-message {
       padding: var(--space-3) 0;
@@ -637,7 +650,7 @@
         <a class="btn btn-ghost" id="settings" href="#">Settings</a>
       </div>
 
-      <p class="held-address">Address: <span class="held-address-value" id="held-address">••••••••</span>. Never shown, never saved.</p>
+      <p class="held-address">Address: <span class="held-address-value" id="held-address">••••••••</span>. Never shown, never saved.<span class="held-rule" id="held-rule" hidden>Your rule: </span></p>
 
       <details class="why" id="why" open>
         <summary class="meta">
