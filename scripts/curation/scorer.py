@@ -9,13 +9,26 @@ import config
 import ingest
 
 
-def _extract_core_label(domain: str) -> str:
-    """Get the deepest subdomain label (usually the brand name)."""
+def _host_labels(domain: str) -> list[str]:
+    """The labels before the public suffix: ['ads', 'alphaporno'] for
+    ads.alphaporno.com, ['example'] for example.co.uk."""
     parts = domain.split('.')
-    # Skip ccTLD and TLD (last 2 parts typically)
-    if len(parts) >= 3:
-        return parts[-3]
-    return parts[0]
+    suffix = 1
+    if (len(parts) >= 3 and len(parts[-1]) == 2
+            and parts[-2] in config.SECOND_LEVEL_SUFFIX_LABELS):
+        suffix = 2
+    return parts[:-suffix] or parts[:1]
+
+
+def _extract_core_label(domain: str) -> str:
+    """The site's own name, the label just before the public suffix.
+
+    This used to take the third label from the end of any three-part host,
+    meant for example.co.uk, so ads.alphaporno.com was judged as "ads" and
+    1.pornoabuelas.net as "1": the curation run of 2026-10-25 merged none of
+    its 875,004 candidates.
+    """
+    return _host_labels(domain)[-1]
 
 
 def _ngram_overlap(a: str, b: str, n: int = 3) -> float:
@@ -60,11 +73,14 @@ def score_keyword(domain: str) -> float:
     score = 0.0
     domain_lower = domain.lower()
     label = _extract_core_label(domain_lower)
+    # A strong keyword counts in any label of the host, so
+    # 1videoporno.en.wanadoo.es counts as well as videoporno.es.
+    labels = _host_labels(domain_lower)
 
     # Strong keywords — exact match or hyphen-bounded
     for kw in config.STRONG_HOST_KEYWORDS:
         kw_lower = kw.lower()
-        if _is_hyphen_bounded(label, kw_lower) or kw_lower in label:
+        if any(kw_lower in part for part in labels):
             score = max(score, 0.95)
             break
 
@@ -220,6 +236,24 @@ def score_safety(domain: str) -> float:
     return 0.0
 
 
+_AI_KIND_PATTERNS = [(kind, re.compile(pattern)) for kind, pattern in config.AI_ADULT_KINDS]
+
+
+def ai_kind(domain: str) -> str | None:
+    """Which kind of adult AI service the name looks like, or None.
+
+    'nudify', 'companion' or 'generator' from the name, else 'ai-domain' for
+    any .ai address. Only meaningful for a domain an adult feed already lists.
+    """
+    domain_lower = domain.lower()
+    for kind, pattern in _AI_KIND_PATTERNS:
+        if pattern.search(domain_lower):
+            return kind
+    if domain_lower.rsplit('.', 1)[-1] in config.AI_TLDS:
+        return 'ai-domain'
+    return None
+
+
 def score_domain(domain: str) -> tuple[float, dict]:
     """Compute final 0-1 score for a domain. Returns (score, feature_dict)."""
     # Check safety first
@@ -231,6 +265,7 @@ def score_domain(domain: str) -> tuple[float, dict]:
             'structure': 0.0,
             'similarity': 0.0,
             'safety': 1.0,
+            'ai_kind': None,
         }
 
     keyword = score_keyword(domain)
@@ -282,6 +317,12 @@ def score_domain(domain: str) -> tuple[float, dict]:
 
     # Apply safety penalty (for any partial-safety scoring in the future)
     total -= features['safety'] * config.WEIGHT_SAFETY_PENALTY
+
+    # An adult AI service goes to review whatever the rest says, and only a
+    # strong keyword (aiporn.com) takes it further.
+    features['ai_kind'] = ai_kind(domain)
+    if features['ai_kind'] and total < config.AUTO_MERGE_THRESHOLD:
+        total = max(total, config.AI_REVIEW_SCORE)
 
     # Clamp to [0, 1]
     total = max(0.0, min(1.0, total))

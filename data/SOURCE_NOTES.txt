@@ -69,6 +69,26 @@ primary feedstock for new HOSTS.txt entries. The flow is:
 Do NOT bulk-import reports. Each entry is reviewed individually to
 keep the false-positive rate low.
 
+Adult AI services
+-----------------
+
+Nudify / undress / deepfake tools, AI sex chat and companion apps, AI
+porn generators, and .ai addresses in the feeds rarely have a name the
+scorer trusts, so the weekly pipeline never merges them by itself. It
+lists them in `REVIEW_AI.md` by kind, with evidence for each: which
+lists carry it (our two feeds, plus HaGeZi NSFW and OISD NSFW, which are
+GPL-3.0 and only read for this, never copied) and what Cloudflare for
+Families answers. Sites with no address are left off until they return.
+
+Mark a line `[x]` to block it, `[-]` to leave it out (it goes to
+`REVIEW_REJECTED.txt` and is never proposed again), or leave `[ ]`.
+Marks survive the weekly run. Then, from the repo root:
+
+    python scripts/curation/apply_review.py
+
+which appends the [x] lines to HOSTS.txt and rebuilds blocklist.json and
+the static ruleset.
+
 Packaged fallback
 -----------------
 

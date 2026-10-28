@@ -41,7 +41,7 @@ def load_existing_hosts_set() -> set[str]:
     return domains
 
 
-def update_hosts(new_domains: set[str]) -> int:
+def update_hosts(new_domains: set[str], comment: str = 'Auto-curated by ML pipeline') -> int:
     """Append new domains to HOSTS.txt. Returns count added."""
     path = Path(config.HOSTS_FILE)
     existing = load_existing_hosts_set()
@@ -50,9 +50,29 @@ def update_hosts(new_domains: set[str]) -> int:
         return 0
 
     with path.open('a', encoding='utf-8') as f:
-        f.write(f"\n# Auto-curated by ML pipeline on {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}\n")
+        f.write(f"\n# {comment} on {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}\n")
         for d in sorted(to_add):
             f.write(f"0.0.0.0 {d}\n")
+    return len(to_add)
+
+
+def add_rejected(domains: set[str]) -> int:
+    """Append domains to REVIEW_REJECTED_FILE. Returns count added."""
+    path = Path(config.REVIEW_REJECTED_FILE)
+    existing = set()
+    if path.exists():
+        existing = {_parse_line(line) for line in path.read_text(encoding='utf-8').splitlines()}
+    to_add = domains - existing
+    if not to_add:
+        return 0
+    new_file = not path.exists()
+    with path.open('a', encoding='utf-8') as f:
+        if new_file:
+            f.write("# Domains reviewed and left out of data/HOSTS.txt. The curation pipeline\n")
+            f.write("# never proposes these again. Delete a line to have it proposed again.\n")
+        f.write(f"\n# Reviewed on {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}\n")
+        for d in sorted(to_add):
+            f.write(f"{d}\n")
     return len(to_add)
 
 
@@ -83,3 +103,110 @@ def write_review_queue(review_items: list[tuple[str, float, str]]) -> None:
         for domain, score, source in sorted(review_items, key=lambda x: (-x[1], x[0])):
             short_source = source if len(source) < 60 else source[:57] + "..."
             f.write(f"| `{domain}` | {score:.2f} | {short_source} |\n")
+
+
+# One line of the AI review list: "- [x] `example.ai` · BLP HZ · Cloudflare blocks"
+REVIEW_LINE_RE = re.compile(r'^- \[([ xX-])\] `([^`]+)`')
+BLOCK_MARK = 'x'
+LEAVE_OUT_MARK = '-'
+UNDECIDED_MARK = ' '
+
+
+def read_review_marks(path_str: str) -> dict[str, str]:
+    """{domain: mark} from a review list; marks are 'x', '-' or ' '."""
+    path = Path(path_str)
+    if not path.exists():
+        return {}
+    marks = {}
+    for line in path.read_text(encoding='utf-8').splitlines():
+        m = REVIEW_LINE_RE.match(line)
+        if m:
+            marks[m.group(2)] = m.group(1).lower()
+    return marks
+
+
+def _short_sources(source: str) -> list[str]:
+    shorts = {feed['name']: feed['short'] for feed in config.EXTERNAL_FEEDS}
+    shorts['user-report'] = 'report'
+    return [shorts.get(name.strip(), name.strip()) for name in source.split(',') if name.strip()]
+
+
+def write_ai_review(items: list[tuple[str, str, str]], evidence: dict[str, dict]) -> dict:
+    """Write REVIEW_AI_FILE: the adult AI services found in the feeds, by kind.
+
+    Each item is (domain, source, kind). Marks already in the file are kept,
+    so a run never undoes someone's review. A new line comes marked [x] when
+    Cloudflare for Families blocks it and at least two lists have it, else
+    [ ]. A domain with no address is left off (it comes back if it returns),
+    unless someone already marked it. Returns counts for the log.
+    """
+    previous = read_review_marks(config.REVIEW_AI_FILE)
+    by_kind: dict[str, list[tuple[str, str, list[str], str]]] = {}
+    counts = {'written': 0, 'premarked': 0, 'offline': 0, 'kept_marks': 0}
+    for domain, source, kind in items:
+        info = evidence.get(domain, {})
+        family = info.get('family', 'unknown')
+        lists = _short_sources(source) + list(info.get('lists', []))
+        mark = previous.get(domain)
+        if mark is None:
+            if family == 'gone':
+                counts['offline'] += 1
+                continue
+            mark = BLOCK_MARK if family == 'blocks' and len(lists) >= 2 else UNDECIDED_MARK
+            if mark == BLOCK_MARK:
+                counts['premarked'] += 1
+        else:
+            counts['kept_marks'] += 1
+        by_kind.setdefault(kind, []).append((domain, mark, lists, family))
+        counts['written'] += 1
+
+    family_words = {
+        'blocks': 'Cloudflare blocks',
+        'allows': 'Cloudflare allows',
+        'gone': 'no address',
+        'unknown': 'Cloudflare not asked',
+    }
+    path = Path(config.REVIEW_AI_FILE)
+    with path.open('w', encoding='utf-8', newline='\n') as f:
+        f.write("# Adult AI sites to review\n\n")
+        f.write(f"_Written by the curation pipeline on {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}. "
+                "Marks you make here are kept when it runs again._\n\n")
+        f.write("Sites the blocklists we follow (Block List Project, StevenBlack) carry that look like\n")
+        f.write("adult AI services: nudify, undress and deepfake tools, sex chat and companion apps,\n")
+        f.write("porn generators, and other `.ai` addresses. Their names rarely have a word the\n")
+        f.write("scorer trusts, so none of them goes into `data/HOSTS.txt` by itself.\n\n")
+        f.write("Mark each line, then run `python scripts/curation/apply_review.py`:\n\n")
+        f.write("- `[x]` block it: added to `data/HOSTS.txt`\n")
+        f.write("- `[-]` leave it out: added to `data/REVIEW_REJECTED.txt`, never proposed again\n")
+        f.write("- `[ ]` not decided yet: stays here\n\n")
+        f.write("A line arrives marked `[x]` when Cloudflare for Families blocks the site and at least\n")
+        f.write("two lists have it. Check those too.\n\n")
+        f.write("Lists: BLP Block List Project, SB StevenBlack, HZ HaGeZi NSFW, OI OISD NSFW\n")
+        f.write("(HZ and OI are only read for this; nothing is copied from them).\n")
+        if counts['offline']:
+            f.write(f"\nLeft off: {counts['offline']} sites with no address. They come back here if they return.\n")
+        if not by_kind:
+            f.write("\n_No sites pending review._\n")
+        for kind in ('nudify', 'companion', 'generator', 'ai-domain'):
+            rows = by_kind.get(kind)
+            if not rows:
+                continue
+            rows.sort(key=lambda r: (r[3] != 'blocks', -len(r[2]), r[0]))
+            f.write(f"\n## {config.AI_KIND_TITLES[kind]}\n\n")
+            for domain, mark, lists, family in rows:
+                f.write(f"- [{mark}] `{domain}` · {' '.join(lists)} · {family_words.get(family, family)}\n")
+    return counts
+
+
+def remove_review_lines(path_str: str, domains: set[str]) -> None:
+    """Drop the lines for these domains from a review list."""
+    path = Path(path_str)
+    if not path.exists() or not domains:
+        return
+    kept = []
+    for line in path.read_text(encoding='utf-8').splitlines():
+        m = REVIEW_LINE_RE.match(line)
+        if m and m.group(2) in domains:
+            continue
+        kept.append(line)
+    path.write_text('\n'.join(kept) + '\n', encoding='utf-8', newline='\n')

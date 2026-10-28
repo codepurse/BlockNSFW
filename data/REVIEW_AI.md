@@ -1,0 +1,787 @@
+# Adult AI sites to review
+
+_Written by the curation pipeline on 2026-10-26 15:20 UTC. Marks you make here are kept when it runs again._
+
+Sites the blocklists we follow (Block List Project, StevenBlack) carry that look like
+adult AI services: nudify, undress and deepfake tools, sex chat and companion apps,
+porn generators, and other `.ai` addresses. Their names rarely have a word the
+scorer trusts, so none of them goes into `data/HOSTS.txt` by itself.
+
+Mark each line, then run `python scripts/curation/apply_review.py`:
+
+- `[x]` block it: added to `data/HOSTS.txt`
+- `[-]` leave it out: added to `data/REVIEW_REJECTED.txt`, never proposed again
+- `[ ]` not decided yet: stays here
+
+A line arrives marked `[x]` when Cloudflare for Families blocks the site and at least
+two lists have it. Check those too.
+
+Lists: BLP Block List Project, SB StevenBlack, HZ HaGeZi NSFW, OI OISD NSFW
+(HZ and OI are only read for this; nothing is copied from them).
+
+Left off: 58 sites with no address. They come back here if they return.
+
+## Nudify, undress or deepfake
+
+- [x] `celebdeepfakes.net` · SB BLP HZ OI · Cloudflare blocks
+- [x] `deepfake.com` · SB BLP HZ OI · Cloudflare blocks
+- [x] `deepnudenow.com` · SB BLP HZ OI · Cloudflare blocks
+- [x] `mrdeepfakes.xyz` · SB BLP HZ OI · Cloudflare blocks
+- [x] `nudeai.com` · SB BLP HZ OI · Cloudflare blocks
+- [x] `realdeepfakes.com` · SB BLP HZ OI · Cloudflare blocks
+- [x] `undress.cc` · SB BLP HZ OI · Cloudflare blocks
+- [x] `undressai.com` · SB BLP HZ OI · Cloudflare blocks
+- [x] `ai-nudes.ai` · BLP HZ OI · Cloudflare blocks
+- [x] `ai-nudes.app` · BLP HZ OI · Cloudflare blocks
+- [x] `ai-undress.ai` · BLP HZ OI · Cloudflare blocks
+- [x] `ainude.photos` · BLP HZ OI · Cloudflare blocks
+- [x] `ainude.pictures` · BLP HZ OI · Cloudflare blocks
+- [x] `ainudez.com` · BLP HZ OI · Cloudflare blocks
+- [x] `cdn.realdeepfakes.com` · SB HZ OI · Cloudflare blocks
+- [x] `celebsdeepfake.com` · BLP HZ OI · Cloudflare blocks
+- [x] `clothoff.app` · BLP HZ OI · Cloudflare blocks
+- [x] `clothoff.net` · BLP HZ OI · Cloudflare blocks
+- [x] `clothoff.shop` · BLP HZ OI · Cloudflare blocks
+- [x] `creators.deepfake.com` · SB HZ OI · Cloudflare blocks
+- [x] `deep-nude.co` · BLP HZ OI · Cloudflare blocks
+- [x] `deep-nudes.com` · BLP HZ OI · Cloudflare blocks
+- [x] `deepfakesceleb.com` · BLP HZ OI · Cloudflare blocks
+- [x] `deepfakesnsfw.com` · BLP HZ OI · Cloudflare blocks
+- [x] `deepnude.ca` · BLP HZ OI · Cloudflare blocks
+- [x] `deepnude.com` · BLP HZ OI · Cloudflare blocks
+- [x] `deepnude.org` · BLP HZ OI · Cloudflare blocks
+- [x] `deepnude.porn` · BLP HZ OI · Cloudflare blocks
+- [x] `deepnudeaitool.com` · BLP HZ OI · Cloudflare blocks
+- [x] `deepnudes.co` · BLP HZ OI · Cloudflare blocks
+- [x] `deepnudify.com` · BLP HZ OI · Cloudflare blocks
+- [x] `dreamnudesai.com` · BLP HZ OI · Cloudflare blocks
+- [x] `koreadeepfake.com` · BLP HZ OI · Cloudflare blocks
+- [x] `nude-ai.ai` · BLP HZ OI · Cloudflare blocks
+- [x] `nudeai.fun` · BLP HZ OI · Cloudflare blocks
+- [x] `nudify-ai.top` · BLP HZ OI · Cloudflare blocks
+- [x] `nudify.online` · BLP HZ OI · Cloudflare blocks
+- [x] `undress-ai.app` · BLP HZ OI · Cloudflare blocks
+- [x] `undress-girl.com` · BLP HZ OI · Cloudflare blocks
+- [x] `undress.app` · BLP HZ OI · Cloudflare blocks
+- [x] `undress.love` · BLP HZ OI · Cloudflare blocks
+- [x] `undressapp.ai` · BLP HZ OI · Cloudflare blocks
+- [x] `undressbaby.com` · BLP HZ OI · Cloudflare blocks
+- [x] `undressherapp.org` · BLP HZ OI · Cloudflare blocks
+- [x] `undressly.ai` · BLP HZ OI · Cloudflare blocks
+- [x] `undressme.net` · BLP HZ OI · Cloudflare blocks
+- [x] `xundress.com` · BLP HZ OI · Cloudflare blocks
+- [x] `ainude.porn` · BLP HZ · Cloudflare blocks
+- [x] `alldeepfake.com` · SB BLP · Cloudflare blocks
+- [x] `deepnudeaitool.app` · BLP OI · Cloudflare blocks
+- [x] `deepswapnude.com` · BLP OI · Cloudflare blocks
+- [x] `freeundressai.com` · BLP OI · Cloudflare blocks
+- [x] `girlsundressing.com` · BLP OI · Cloudflare blocks
+- [x] `kpopdeepfakes.net` · BLP OI · Cloudflare blocks
+- [x] `msdeepfakes.com` · SB BLP · Cloudflare blocks
+- [x] `nudesai.com` · BLP OI · Cloudflare blocks
+- [x] `nudify-ai.app` · BLP OI · Cloudflare blocks
+- [x] `nudifying.com` · BLP OI · Cloudflare blocks
+- [x] `totallyundressed.com` · BLP OI · Cloudflare blocks
+- [x] `undress.su` · BLP OI · Cloudflare blocks
+- [x] `undressjess.com` · BLP OI · Cloudflare blocks
+- [x] `undressme.ai` · BLP HZ · Cloudflare blocks
+- [x] `undressnudes.com` · BLP OI · Cloudflare blocks
+- [x] `undressvideo.com` · BLP OI · Cloudflare blocks
+- [x] `undresswith.ai` · BLP HZ · Cloudflare blocks
+- [ ] `adultdeepfakes.club` · BLP · Cloudflare blocks
+- [ ] `adultdeepfakes.live` · BLP · Cloudflare blocks
+- [ ] `adultdeepfakes.xyz` · BLP · Cloudflare blocks
+- [ ] `ai-deep-nude.com` · BLP · Cloudflare blocks
+- [ ] `celebs-undressed.com` · BLP · Cloudflare blocks
+- [ ] `deepfakenude.com` · BLP · Cloudflare blocks
+- [ ] `deepfakesx.com` · BLP · Cloudflare blocks
+- [ ] `deepnudeai.me` · BLP · Cloudflare blocks
+- [ ] `dressedundressed.net` · BLP · Cloudflare blocks
+- [ ] `iundress.com` · BLP · Cloudflare blocks
+- [ ] `kinkydressedandundressedonoff.tumblr.com` · BLP · Cloudflare blocks
+- [ ] `maggieundressed.tumblr.com` · BLP · Cloudflare blocks
+- [ ] `makenudeai.app` · BLP · Cloudflare blocks
+- [ ] `milf-undressed.tumblr.com` · BLP · Cloudflare blocks
+- [ ] `nudify.now` · BLP · Cloudflare blocks
+- [ ] `nudify.org` · BLP · Cloudflare blocks
+- [ ] `takeyaclothesoff.tumblr.com` · BLP · Cloudflare blocks
+- [ ] `teens-undressed.com` · BLP · Cloudflare blocks
+- [ ] `undressaitool.com` · BLP · Cloudflare blocks
+- [ ] `undressedimagination.tumblr.com` · BLP · Cloudflare blocks
+- [ ] `undressly.app` · BLP · Cloudflare blocks
+- [ ] `xnude-ai.com` · BLP · Cloudflare blocks
+- [ ] `youngundressed.com` · BLP · Cloudflare blocks
+- [ ] `undress.ws` · BLP HZ OI · Cloudflare allows
+- [ ] `undress.xxx` · BLP HZ OI · Cloudflare allows
+- [ ] `undress.zone` · BLP HZ OI · Cloudflare allows
+- [ ] `undressgirl.com` · BLP HZ OI · Cloudflare allows
+- [ ] `aideepnude.com` · BLP OI · Cloudflare allows
+- [ ] `ainude.best` · BLP HZ · Cloudflare allows
+- [ ] `ainudes.io` · BLP OI · Cloudflare allows
+- [ ] `braundress.net` · BLP HZ · Cloudflare allows
+- [ ] `clothoff.org` · BLP OI · Cloudflare allows
+- [ ] `deepfake.xxx` · BLP OI · Cloudflare allows
+- [ ] `deepfaker.app` · BLP HZ · Cloudflare allows
+- [ ] `deepnude-ai.com` · BLP HZ · Cloudflare allows
+- [ ] `deepnude.bot` · BLP OI · Cloudflare allows
+- [ ] `deepnude.cc` · BLP HZ · Cloudflare not asked
+- [ ] `deepswap.ai` · SB BLP · Cloudflare allows
+- [ ] `fastundress.net` · BLP OI · Cloudflare allows
+- [ ] `nudeai.de` · BLP HZ · Cloudflare allows
+- [ ] `nudify.ai` · BLP HZ · Cloudflare allows
+- [ ] `nudify.art` · BLP OI · Cloudflare allows
+- [ ] `nudify.info` · BLP OI · Cloudflare allows
+- [ ] `nudify.it` · BLP OI · Cloudflare allows
+- [ ] `nudify.site` · BLP HZ · Cloudflare allows
+- [ ] `nudifyaitool.com` · BLP OI · Cloudflare allows
+- [ ] `thetinyfeettreat-sandals-and-sundress-foot-slut-squirts.pages.dev` · BLP OI · Cloudflare allows
+- [ ] `undress.guru` · BLP OI · Cloudflare allows
+- [ ] `undress.photo` · BLP HZ · Cloudflare allows
+- [ ] `undress.show` · BLP HZ · Cloudflare allows
+- [ ] `undress.vip` · BLP HZ · Cloudflare allows
+- [ ] `undressai.art` · BLP HZ · Cloudflare allows
+- [ ] `undressai.site` · BLP OI · Cloudflare allows
+- [ ] `undressapp.com` · BLP OI · Cloudflare allows
+- [ ] `undressbae.com` · BLP HZ · Cloudflare allows
+- [ ] `undressed.com` · BLP OI · Cloudflare allows
+- [ ] `undressherapp.net` · BLP OI · Cloudflare allows
+- [ ] `undressing.app` · BLP OI · Cloudflare allows
+- [ ] `undressio.com` · BLP OI · Cloudflare allows
+- [ ] `undressninja.com` · BLP HZ · Cloudflare allows
+- [ ] `xundress.net` · BLP OI · Cloudflare allows
+- [ ] `adultdeepfakes.info` · BLP · Cloudflare allows
+- [ ] `adultdeepfakes.life` · BLP · Cloudflare allows
+- [ ] `adultdeepfakes.me` · BLP · Cloudflare allows
+- [ ] `adultdeepfakes.online` · BLP · Cloudflare allows
+- [ ] `adultdeepfakes.org` · BLP · Cloudflare allows
+- [ ] `adultdeepfakes.site` · BLP · Cloudflare allows
+- [ ] `adultdeepfakes.vip` · BLP · Cloudflare allows
+- [ ] `aiundresser.co` · BLP · Cloudflare not asked
+- [ ] `bbw-undressed.tumblr.com` · BLP · Cloudflare allows
+- [ ] `blood-splatteredsundress.tumblr.com` · BLP · Cloudflare allows
+- [ ] `clothoff.ph` · BLP · Cloudflare allows
+- [ ] `deepfakes.art` · BLP · Cloudflare allows
+- [ ] `deepnude.us` · BLP · Cloudflare allows
+- [ ] `deepnudeai.tools` · BLP · Cloudflare allows
+- [ ] `deepnudefree.com` · BLP · Cloudflare allows
+- [ ] `dressedundressedgirls.tumblr.com` · BLP · Cloudflare allows
+- [ ] `flawlessly-undressed.tumblr.com` · BLP · Cloudflare allows
+- [ ] `freedeepnude.com` · BLP · Cloudflare allows
+- [ ] `ideepfakes.com` · BLP · Cloudflare allows
+- [ ] `intellectualhomosexual-undressed.tumblr.com` · BLP · Cloudflare allows
+- [ ] `meundressed.tumblr.com` · BLP · Cloudflare allows
+- [ ] `mrdeepfakes.top` · BLP · Cloudflare allows
+- [ ] `nudify.me` · BLP · Cloudflare allows
+- [ ] `nudify.top` · BLP · Cloudflare allows
+- [ ] `nudify.vip` · BLP · Cloudflare allows
+- [ ] `nudify.xxx` · BLP · Cloudflare allows
+- [ ] `nudifyingai.com` · BLP · Cloudflare allows
+- [ ] `sweetundressingundressingmadness.tumblr.com` · BLP · Cloudflare allows
+- [ ] `undress-me-anywhere-qa.tumblr.com` · BLP · Cloudflare allows
+- [ ] `undressai.co` · BLP · Cloudflare allows
+- [ ] `undressai.tools` · BLP · Cloudflare allows
+- [ ] `undressapp.vip` · BLP · Cloudflare allows
+- [ ] `undressed-amateurs.tumblr.com` · BLP · Cloudflare allows
+- [ ] `undressed-folks.tumblr.com` · BLP · Cloudflare allows
+- [ ] `undressedladies.com` · BLP · Cloudflare not asked
+- [ ] `undressedlady.net` · BLP · Cloudflare allows
+- [ ] `undressednakedconfession-deacti.tumblr.com` · BLP · Cloudflare allows
+- [ ] `undressing.online` · BLP · Cloudflare allows
+- [ ] `undressing.xxx` · BLP · Cloudflare allows
+- [ ] `undressingai.pro` · BLP · Cloudflare allows
+- [ ] `undressingteens.co.nr` · BLP · Cloudflare allows
+- [ ] `undressjess.tumblr.com` · BLP · Cloudflare allows
+- [ ] `undressmygirlfriend.tumblr.com` · BLP · Cloudflare allows
+- [ ] `undressyoutonight.tumblr.com` · BLP · Cloudflare allows
+- [ ] `welovewomen-dressedundressed.tumblr.com` · BLP · Cloudflare allows
+
+## AI sex chat or companion
+
+- [x] `girlfriendgpt.com` · SB BLP HZ OI · Cloudflare blocks
+- [x] `gptgirlfriend.online` · SB BLP HZ OI · Cloudflare blocks
+- [x] `ai-sex-chat.net` · BLP HZ OI · Cloudflare blocks
+- [x] `livesexbot.com` · BLP HZ OI · Cloudflare blocks
+- [x] `sexchatai.ai` · BLP HZ OI · Cloudflare blocks
+- [x] `spicychat.pro` · BLP HZ OI · Cloudflare blocks
+- [x] `aigirlfriend.wtf` · BLP HZ · Cloudflare blocks
+- [x] `crushonbriana.com` · BLP OI · Cloudflare blocks
+- [x] `crushoncherie.com` · BLP OI · Cloudflare blocks
+- [x] `crushondiamond.com` · BLP OI · Cloudflare blocks
+- [x] `crushonhoney.com` · BLP OI · Cloudflare blocks
+- [x] `crushonkenzie.com` · BLP OI · Cloudflare blocks
+- [x] `eroticbot.com` · BLP OI · Cloudflare blocks
+- [x] `eroticcompanion.co.uk` · BLP OI · Cloudflare blocks
+- [x] `girlfriendgpt.online` · BLP OI · Cloudflare blocks
+- [x] `hornycompanion.org` · BLP OI · Cloudflare blocks
+- [x] `thaigirlfriend.org` · BLP OI · Cloudflare blocks
+- [x] `trainyoursexbot.com` · BLP OI · Cloudflare blocks
+- [ ] `ai-sexting.pro` · BLP · Cloudflare blocks
+- [ ] `gaycrushondad.tumblr.com` · BLP · Cloudflare blocks
+- [ ] `gaysexbot.com` · BLP · Cloudflare blocks
+- [ ] `horny-companion.com` · BLP · Cloudflare blocks
+- [ ] `sexbot.gallery` · BLP · Cloudflare blocks
+- [ ] `sexbot.nl` · BLP · Cloudflare blocks
+- [ ] `sexbot.us` · BLP · Cloudflare blocks
+- [ ] `sexbot.work` · BLP · Cloudflare blocks
+- [ ] `sexchatbot.net` · BLP · Cloudflare blocks
+- [ ] `aigirlfriend.baby` · BLP HZ OI · Cloudflare allows
+- [ ] `sextingai.app` · BLP HZ OI · Cloudflare allows
+- [ ] `ai-sexchat.com` · BLP OI · Cloudflare allows
+- [ ] `ai-sexting.com` · BLP OI · Cloudflare allows
+- [ ] `aigf.live` · BLP OI · Cloudflare allows
+- [ ] `aigirlfriend-free.com` · BLP OI · Cloudflare allows
+- [ ] `aigirlfriend.homes` · BLP OI · Cloudflare allows
+- [ ] `aigirlfriendnetwork.com` · BLP OI · Cloudflare allows
+- [ ] `aigirlfriendsex.com` · BLP OI · Cloudflare not asked
+- [ ] `aigirlfriendstudio.com` · BLP OI · Cloudflare allows
+- [ ] `aisexbot-org.pages.dev` · BLP OI · Cloudflare allows
+- [ ] `aisexchat.ca` · BLP OI · Cloudflare not asked
+- [ ] `aisexting.ai` · BLP OI · Cloudflare allows
+- [ ] `aisexting.chat` · BLP OI · Cloudflare allows
+- [ ] `bestaigirlfriendsites.com` · BLP OI · Cloudflare allows
+- [ ] `crushonhadid.com` · BLP OI · Cloudflare allows
+- [ ] `girlfriendgpt.ai` · BLP OI · Cloudflare allows
+- [ ] `sexchatai.pages.dev` · BLP OI · Cloudflare allows
+- [ ] `sextingai.net` · BLP OI · Cloudflare allows
+- [ ] `sextingaibot.com` · BLP OI · Cloudflare allows
+- [ ] `sexyaigirlfriend.xyz` · BLP OI · Cloudflare allows
+- [ ] `aigf.club` · BLP · Cloudflare allows
+- [ ] `aisexchat.dev` · BLP · Cloudflare allows
+- [ ] `aisexchat.site` · BLP · Cloudflare allows
+- [ ] `aisexchat.top` · BLP · Cloudflare allows
+- [ ] `aisexchatbot.com` · BLP · Cloudflare allows
+- [ ] `aisexchatbot.net` · BLP · Cloudflare allows
+- [ ] `aisexchatlist.ai` · BLP · Cloudflare allows
+- [ ] `aisexchats.com` · BLP · Cloudflare allows
+- [ ] `aisexchats.de` · BLP · Cloudflare allows
+- [ ] `aisexchatsites.ai` · BLP · Cloudflare allows
+- [ ] `aisexchatty.com` · BLP · Cloudflare allows
+- [ ] `aisexting.io` · BLP · Cloudflare allows
+- [ ] `aisexting.xyz` · BLP · Cloudflare allows
+- [ ] `aisextingbot.com` · BLP · Cloudflare allows
+- [ ] `aisextingchat.com` · BLP · Cloudflare allows
+- [ ] `aisextinggame.com` · BLP · Cloudflare allows
+- [ ] `aisextinghub.com` · BLP · Cloudflare allows
+- [ ] `bestaisexting.com` · BLP · Cloudflare allows
+- [ ] `buysexbot.ai` · BLP · Cloudflare allows
+- [ ] `crushondykes.tumblr.com` · BLP · Cloudflare allows
+- [ ] `cyber-sex-bot.tumblr.com` · BLP · Cloudflare allows
+- [ ] `elainaeroticcompanion.com` · BLP · Cloudflare allows
+- [ ] `essexgpt.xyz` · BLP · Cloudflare allows
+- [ ] `humanoidsexbot.com` · BLP · Cloudflare allows
+- [ ] `joiaigirlfriend.com` · BLP · Cloudflare allows
+- [ ] `nsfwgpt.ai` · BLP · Cloudflare allows
+- [ ] `privatesexbot.com` · BLP · Cloudflare allows
+- [ ] `pulsexbot.com` · BLP · Cloudflare allows
+- [ ] `sexbot.adult` · BLP · Cloudflare allows
+- [ ] `sexbot.biz` · BLP · Cloudflare allows
+- [ ] `sexbot.cam` · BLP · Cloudflare allows
+- [ ] `sexbot.co` · BLP · Cloudflare allows
+- [ ] `sexbot.watch` · BLP · Cloudflare allows
+- [ ] `sexbot9000.tumblr.com` · BLP · Cloudflare allows
+- [ ] `sexchatai.xyz` · BLP · Cloudflare allows
+- [ ] `sexgpt-bot.xyz` · BLP · Cloudflare allows
+- [ ] `sextingai.co` · BLP · Cloudflare allows
+- [ ] `sextingai.online` · BLP · Cloudflare allows
+- [ ] `whiskeypoweredsexbot.tumblr.com` · BLP · Cloudflare allows
+
+## AI porn generator
+
+- [x] `ainsfwtools.com` · BLP HZ OI · Cloudflare blocks
+- [x] `aisex1f.com` · BLP HZ OI · Cloudflare blocks
+- [x] `promptchan.com` · SB BLP OI · Cloudflare blocks
+- [x] `top-ai-nsfw.pages.dev` · BLP HZ OI · Cloudflare blocks
+- [x] `ai-sex-games.com` · BLP OI · Cloudflare blocks
+- [x] `ai-sexy.net` · BLP OI · Cloudflare blocks
+- [x] `aieroticpics.com` · BLP OI · Cloudflare blocks
+- [x] `aisex.chat` · BLP OI · Cloudflare blocks
+- [x] `aisex5f.com` · BLP OI · Cloudflare blocks
+- [x] `aisexgen.com` · BLP OI · Cloudflare blocks
+- [x] `eroticai.net` · BLP OI · Cloudflare blocks
+- [x] `nsfwai.com` · BLP OI · Cloudflare blocks
+- [x] `sexai.bond` · BLP OI · Cloudflare blocks
+- [ ] `ai-sex-gf.com` · BLP · Cloudflare blocks
+- [ ] `ai-sex.f4ll.top` · BLP · Cloudflare blocks
+- [ ] `ai-sexy-promption.com` · BLP · Cloudflare blocks
+- [ ] `aierotica.top` · BLP · Cloudflare blocks
+- [ ] `ainsfw.ai` · BLP · Cloudflare blocks
+- [ ] `aisex.com` · BLP · Cloudflare blocks
+- [ ] `aisex.eu.cc` · BLP · Cloudflare blocks
+- [ ] `aisex.jp` · BLP · Cloudflare blocks
+- [ ] `aisex.name` · BLP · Cloudflare blocks
+- [ ] `aisexdate.com` · BLP · Cloudflare blocks
+- [ ] `aisexdates.com` · BLP · Cloudflare blocks
+- [ ] `aisexflirt.com` · BLP · Cloudflare blocks
+- [ ] `aisexlive.com` · BLP · Cloudflare blocks
+- [ ] `aisex4f.com` · BLP HZ OI · Cloudflare allows
+- [ ] `nsfw-ai-chat.com` · BLP HZ OI · Cloudflare allows
+- [ ] `nsfwai.top` · BLP HZ OI · Cloudflare allows
+- [ ] `ai-erotica.io` · BLP OI · Cloudflare allows
+- [ ] `aierotica.io` · BLP OI · Cloudflare allows
+- [ ] `aierotica.org` · BLP OI · Cloudflare allows
+- [ ] `aisex.io` · BLP OI · Cloudflare allows
+- [ ] `aisex3f.com` · BLP OI · Cloudflare allows
+- [ ] `aisexdollclub.com` · BLP OI · Cloudflare allows
+- [ ] `aisexfinder.com` · BLP OI · Cloudflare allows
+- [ ] `aisexfinder.com.au` · BLP OI · Cloudflare allows
+- [ ] `aisexlove.club` · BLP OI · Cloudflare allows
+- [ ] `aisexmex.com` · BLP OI · Cloudflare allows
+- [ ] `aisexrank.top` · BLP OI · Cloudflare allows
+- [ ] `aisexy.ai` · BLP OI · Cloudflare allows
+- [ ] `aisexy.shop` · BLP OI · Cloudflare allows
+- [ ] `aisexychat.com` · BLP OI · Cloudflare allows
+- [ ] `aisexygf.com` · BLP OI · Cloudflare allows
+- [ ] `aisexyimg.com` · BLP OI · Cloudflare allows
+- [ ] `eroticai.chat` · BLP OI · Cloudflare allows
+- [ ] `hornyai.pro` · BLP OI · Cloudflare not asked
+- [ ] `sexai-en.com` · BLP OI · Cloudflare allows
+- [ ] `sexai.lat` · BLP OI · Cloudflare allows
+- [ ] `ai-erotic.com` · BLP · Cloudflare allows
+- [ ] `ai-eroticstory.com` · BLP · Cloudflare allows
+- [ ] `ai-horny-slut.site` · BLP · Cloudflare allows
+- [ ] `ai-sex-game.com` · BLP · Cloudflare allows
+- [ ] `ai-sex.org` · BLP · Cloudflare allows
+- [ ] `aierotic-games.com` · BLP · Cloudflare allows
+- [ ] `aierotic.games` · BLP · Cloudflare allows
+- [ ] `aierotic.top` · BLP · Cloudflare allows
+- [ ] `aierotica.com` · BLP · Cloudflare allows
+- [ ] `aieroticgames.com` · BLP · Cloudflare allows
+- [ ] `aierotichat.com` · BLP · Cloudflare allows
+- [ ] `aieroticsmut.com` · BLP · Cloudflare allows
+- [ ] `ainsfwgenerator.online` · BLP · Cloudflare allows
+- [ ] `aisex.club` · SB · Cloudflare allows
+- [ ] `aisexapp.xyz` · BLP · Cloudflare allows
+- [ ] `aisexbuyers.com` · BLP · Cloudflare allows
+- [ ] `aisexdao.xyz` · BLP · Cloudflare allows
+- [ ] `aisexdollreviews.com` · BLP · Cloudflare allows
+- [ ] `aisexdollsstore.com` · BLP · Cloudflare allows
+- [ ] `aisexfantasy.com` · BLP · Cloudflare allows
+- [ ] `aisexhub.xyz` · BLP · Cloudflare allows
+- [ ] `aisexlabs.xyz` · BLP · Cloudflare allows
+- [ ] `aisexloveshop.com` · BLP · Cloudflare allows
+- [ ] `aisexonline.com` · BLP · Cloudflare allows
+- [ ] `aisexpay.xyz` · BLP · Cloudflare allows
+- [ ] `aisexrobots.blog` · BLP · Cloudflare allows
+- [ ] `aisexrobots.info` · BLP · Cloudflare allows
+- [ ] `aisexrobots.online` · BLP · Cloudflare allows
+- [ ] `aisexrobots.store` · BLP · Cloudflare allows
+- [ ] `aisexswap.xyz` · BLP · Cloudflare allows
+- [ ] `aisextbot.com` · BLP · Cloudflare allows
+- [ ] `aisextoyreviews.com` · BLP · Cloudflare allows
+- [ ] `aisextoys.xyz` · BLP · Cloudflare allows
+- [ ] `basexai.xyz` · BLP · Cloudflare allows
+- [ ] `becausexai.com` · BLP · Cloudflare allows
+- [ ] `blocksexai.xyz` · BLP · Cloudflare allows
+- [ ] `cashsexai.xyz` · BLP · Cloudflare allows
+- [ ] `causexai.com` · BLP · Cloudflare allows
+- [ ] `chainsexai.xyz` · BLP · Cloudflare allows
+- [ ] `character-ai-nsfw.com` · BLP · Cloudflare allows
+- [ ] `chatsexai.xyz` · BLP · Cloudflare allows
+- [ ] `cloudsexai.xyz` · BLP · Cloudflare allows
+- [ ] `coinsexai.xyz` · BLP · Cloudflare allows
+- [ ] `daosexai.xyz` · BLP · Cloudflare allows
+- [ ] `dappsexai.xyz` · BLP · Cloudflare allows
+- [ ] `defisexai.xyz` · BLP · Cloudflare allows
+- [ ] `erotic-ai.pp.ua` · BLP · Cloudflare allows
+- [ ] `erotic-ai.pro` · BLP · Cloudflare allows
+- [ ] `gptsexai.xyz` · BLP · Cloudflare allows
+- [ ] `horny-ai.app` · BLP · Cloudflare allows
+- [ ] `horny-ai.art` · BLP · Cloudflare allows
+- [ ] `horny-ai.cc` · BLP · Cloudflare allows
+- [ ] `horny-ai.chat` · BLP · Cloudflare allows
+- [ ] `horny-ai.com` · BLP · Cloudflare allows
+- [ ] `horny-ai.ink` · BLP · Cloudflare allows
+- [ ] `horny-ai.live` · BLP · Cloudflare allows
+- [ ] `horny-ai.online` · BLP · Cloudflare allows
+- [ ] `kisexai.cc` · BLP · Cloudflare allows
+- [ ] `loonahorsexai.com` · BLP · Cloudflare allows
+- [ ] `nextgensexai.com` · BLP · Cloudflare allows
+- [ ] `nftsexai.xyz` · BLP · Cloudflare allows
+- [ ] `nsfw-ai-chat.live` · BLP · Cloudflare allows
+- [ ] `nsfw-ai.net` · BLP · Cloudflare allows
+- [ ] `nsfwai.porn` · BLP · Cloudflare allows
+- [ ] `nsfwai.tools` · BLP · Cloudflare allows
+- [ ] `phasexai.net` · BLP · Cloudflare allows
+- [ ] `pulsexai.io` · BLP · Cloudflare allows
+- [ ] `quantumsexai.com` · BLP · Cloudflare allows
+- [ ] `sex-ai.xyz` · BLP · Cloudflare allows
+- [ ] `sexai.ai` · BLP · Cloudflare allows
+- [ ] `sexai.love` · BLP · Cloudflare allows
+- [ ] `sexai.tools` · BLP · Cloudflare allows
+- [ ] `ssexai.com` · BLP · Cloudflare allows
+- [ ] `sussex-ai.co.uk` · BLP · Cloudflare allows
+- [ ] `synapsex-ai.com` · BLP · Cloudflare allows
+- [ ] `vlaamsex-ai.com` · BLP · Cloudflare not asked
+- [ ] `vlaamsexai.com` · BLP · Cloudflare not asked
+- [ ] `vlxxsexai.xyz` · BLP · Cloudflare allows
+- [ ] `vpnsexai.xyz` · BLP · Cloudflare allows
+- [ ] `vrsexai.xyz` · BLP · Cloudflare allows
+- [ ] `xrsexai.xyz` · BLP · Cloudflare allows
+- [ ] `zksexai.xyz` · BLP · Cloudflare allows
+
+## Other .ai addresses
+
+- [x] `juicychat.ai` · SB BLP HZ OI · Cloudflare blocks
+- [x] `missav.ai` · SB BLP HZ OI · Cloudflare blocks
+- [x] `onlynsfw.ai` · SB BLP HZ OI · Cloudflare blocks
+- [x] `seduced.ai` · SB BLP HZ OI · Cloudflare blocks
+- [x] `sexy.ai` · SB BLP HZ OI · Cloudflare blocks
+- [x] `sugarlab.ai` · SB BLP HZ OI · Cloudflare blocks
+- [x] `buceta.ai` · BLP HZ OI · Cloudflare blocks
+- [x] `camsoda.ai` · BLP HZ OI · Cloudflare blocks
+- [x] `candynetwork.ai` · BLP HZ OI · Cloudflare blocks
+- [x] `cherrypop.ai` · BLP HZ OI · Cloudflare blocks
+- [x] `craveu.ai` · BLP HZ OI · Cloudflare blocks
+- [x] `erogen.ai` · BLP HZ OI · Cloudflare blocks
+- [x] `erota.ai` · BLP HZ OI · Cloudflare blocks
+- [x] `fluxnsfw.ai` · BLP HZ OI · Cloudflare blocks
+- [x] `fuckd.ai` · BLP HZ OI · Cloudflare blocks
+- [x] `girlfriendly.ai` · BLP HZ OI · Cloudflare blocks
+- [x] `hifun.ai` · BLP HZ OI · Cloudflare blocks
+- [x] `hornydreams.ai` · BLP HZ OI · Cloudflare blocks
+- [x] `hotbunny.ai` · BLP HZ OI · Cloudflare blocks
+- [x] `ineedthis.ai` · BLP HZ OI · Cloudflare blocks
+- [x] `jasmin.ai` · BLP HZ OI · Cloudflare blocks
+- [x] `javhay.ai` · BLP HZ OI · Cloudflare blocks
+- [x] `javsubtitles.ai` · BLP HZ OI · Cloudflare blocks
+- [x] `kissyvid.ai` · BLP HZ OI · Cloudflare blocks
+- [x] `kupid.ai` · SB BLP HZ · Cloudflare blocks
+- [x] `lucydream.ai` · BLP HZ OI · Cloudflare blocks
+- [x] `lustcrush.ai` · BLP HZ OI · Cloudflare blocks
+- [x] `lustgf.ai` · BLP HZ OI · Cloudflare blocks
+- [x] `lusychat.ai` · BLP HZ OI · Cloudflare blocks
+- [x] `luvy.ai` · BLP HZ OI · Cloudflare blocks
+- [x] `maturenl.ai` · BLP HZ OI · Cloudflare blocks
+- [x] `motionmuse.ai` · BLP HZ OI · Cloudflare blocks
+- [x] `nakedly.ai` · SB BLP HZ · Cloudflare blocks
+- [x] `nextpart.ai` · SB BLP HZ · Cloudflare blocks
+- [x] `nudemaker.ai` · BLP HZ OI · Cloudflare blocks
+- [x] `secretdesires.ai` · BLP HZ OI · Cloudflare blocks
+- [x] `swipey.ai` · SB HZ OI · Cloudflare blocks
+- [x] `whatslove.ai` · BLP HZ OI · Cloudflare blocks
+- [x] `xeve.ai` · BLP HZ OI · Cloudflare blocks
+- [x] `xnudes.ai` · BLP HZ OI · Cloudflare blocks
+- [x] `xpicture.ai` · BLP HZ OI · Cloudflare blocks
+- [x] `123top.ai` · BLP OI · Cloudflare blocks
+- [x] `33b.ai` · BLP OI · Cloudflare blocks
+- [x] `5278.ai` · BLP OI · Cloudflare blocks
+- [x] `77b.ai` · BLP OI · Cloudflare blocks
+- [x] `97x.ai` · BLP OI · Cloudflare blocks
+- [x] `99d.ai` · BLP OI · Cloudflare blocks
+- [x] `99g.ai` · BLP OI · Cloudflare blocks
+- [x] `99p.ai` · BLP OI · Cloudflare blocks
+- [x] `99t.ai` · BLP OI · Cloudflare blocks
+- [x] `bot3.ai` · BLP HZ · Cloudflare blocks
+- [x] `bustygirls.lightspeedworld.ai` · BLP OI · Cloudflare blocks
+- [x] `chatprofiles.ai` · BLP OI · Cloudflare blocks
+- [x] `cumshots.lightspeedworld.ai` · BLP OI · Cloudflare blocks
+- [x] `dirtygpt.ai` · BLP OI · Cloudflare blocks
+- [x] `eroticmassage.ai` · BLP OI · Cloudflare blocks
+- [x] `erotika.ai` · BLP OI · Cloudflare blocks
+- [x] `fams.ai` · BLP HZ · Cloudflare blocks
+- [x] `fetishpreneur.ai` · SB BLP · Cloudflare blocks
+- [x] `gay.lightspeedworld.ai` · BLP OI · Cloudflare blocks
+- [x] `haysex.ai` · BLP OI · Cloudflare blocks
+- [x] `javfinder.ai` · BLP HZ · Cloudflare blocks
+- [x] `jiuse.ai` · BLP OI · Cloudflare blocks
+- [x] `kalon.ai` · BLP HZ · Cloudflare blocks
+- [x] `me4u.ai` · BLP HZ · Cloudflare blocks
+- [x] `myimg.ai` · BLP HZ · Cloudflare blocks
+- [x] `privee.ai` · BLP HZ · Cloudflare blocks
+- [x] `sexchatgpt.ai` · BLP OI · Cloudflare blocks
+- [x] `sexlab.ai` · BLP OI · Cloudflare blocks
+- [x] `sexloop.ai` · BLP OI · Cloudflare blocks
+- [x] `sexy.lightspeedworld.ai` · BLP OI · Cloudflare blocks
+- [x] `sexyfeet.ai` · BLP OI · Cloudflare blocks
+- [x] `sugargenbox.ai` · BLP OI · Cloudflare blocks
+- [x] `webcamsex.ai` · BLP OI · Cloudflare blocks
+- [ ] `adultworld.ai` · BLP · Cloudflare blocks
+- [ ] `flirton.ai` · SB · Cloudflare blocks
+- [ ] `haijiao.ai` · BLP · Cloudflare blocks
+- [ ] `leelee.ai` · BLP · Cloudflare blocks
+- [ ] `pixygen.ai` · BLP · Cloudflare blocks
+- [ ] `powerad.ai` · SB · Cloudflare blocks
+- [ ] `removeclothes.ai` · BLP · Cloudflare blocks
+- [ ] `shemale.ai` · BLP · Cloudflare blocks
+- [ ] `tickletalk.ai` · BLP · Cloudflare blocks
+- [ ] `xemsex.ai` · BLP · Cloudflare blocks
+- [ ] `xxvn.ai` · BLP · Cloudflare blocks
+- [ ] `dreamgf.ai` · SB BLP HZ OI · Cloudflare allows
+- [ ] `eroplay.ai` · SB BLP HZ OI · Cloudflare allows
+- [ ] `golove.ai` · SB BLP HZ OI · Cloudflare allows
+- [ ] `honeychat.ai` · SB BLP HZ OI · Cloudflare allows
+- [ ] `hotchat.ai` · SB BLP HZ OI · Cloudflare allows
+- [ ] `infatuated.ai` · SB BLP HZ OI · Cloudflare allows
+- [ ] `joi.ai` · SB BLP HZ OI · Cloudflare allows
+- [ ] `lovescape.ai` · SB BLP HZ OI · Cloudflare allows
+- [ ] `redgifs.ai` · SB BLP HZ OI · Cloudflare allows
+- [ ] `secrets.ai` · SB BLP HZ OI · Cloudflare allows
+- [ ] `thotchat.ai` · SB BLP HZ OI · Cloudflare allows
+- [ ] `aroused.ai` · BLP HZ OI · Cloudflare allows
+- [ ] `cornhub.ai` · SB BLP OI · Cloudflare allows
+- [ ] `darlink.ai` · BLP HZ OI · Cloudflare allows
+- [ ] `deepfiction.ai` · BLP HZ OI · Cloudflare allows
+- [ ] `deepmode.ai` · BLP HZ OI · Cloudflare allows
+- [ ] `dreamdolls.ai` · BLP HZ OI · Cloudflare allows
+- [ ] `dreamle.ai` · BLP HZ OI · Cloudflare allows
+- [ ] `easyerp.ai` · BLP HZ OI · Cloudflare allows
+- [ ] `erosmate.ai` · BLP HZ OI · Cloudflare allows
+- [ ] `fantasy.ai` · BLP HZ OI · Cloudflare allows
+- [ ] `fantasygf.ai` · SB BLP HZ · Cloudflare allows
+- [ ] `flirtcam.ai` · BLP HZ OI · Cloudflare allows
+- [ ] `fluxfun.ai` · BLP HZ OI · Cloudflare allows
+- [ ] `freegf.ai` · BLP HZ OI · Cloudflare allows
+- [ ] `get-honey.ai` · BLP HZ OI · Cloudflare allows
+- [ ] `glamgirls.ai` · BLP HZ OI · Cloudflare allows
+- [ ] `gstory.ai` · BLP HZ OI · Cloudflare allows
+- [ ] `honeybot.ai` · BLP HZ OI · Cloudflare allows
+- [ ] `hotimage.ai` · BLP HZ OI · Cloudflare allows
+- [ ] `joyland.ai` · SB BLP HZ · Cloudflare allows
+- [ ] `kink.ai` · BLP HZ OI · Cloudflare allows
+- [ ] `luvr.ai` · BLP HZ OI · Cloudflare allows
+- [ ] `mamacita.ai` · BLP HZ OI · Cloudflare allows
+- [ ] `mybabes.ai` · BLP HZ OI · Cloudflare allows
+- [ ] `mylovely.ai` · BLP HZ OI · Cloudflare allows
+- [ ] `nastia.ai` · BLP HZ OI · Cloudflare allows
+- [ ] `nectar.ai` · SB BLP HZ · Cloudflare allows
+- [ ] `nemora.ai` · BLP HZ OI · Cloudflare allows
+- [ ] `no.nolo.ai` · SB HZ OI · Cloudflare allows
+- [ ] `nolo.ai` · BLP HZ OI · Cloudflare allows
+- [ ] `nonolo.ai` · BLP HZ OI · Cloudflare allows
+- [ ] `nudes.ai` · BLP HZ OI · Cloudflare allows
+- [ ] `onlybabes.ai` · SB BLP HZ · Cloudflare allows
+- [ ] `onlywaifus.ai` · BLP HZ OI · Cloudflare allows
+- [ ] `openlover.ai` · BLP HZ OI · Cloudflare allows
+- [ ] `pinku.ai` · BLP HZ OI · Cloudflare allows
+- [ ] `playshot.ai` · BLP HZ OI · Cloudflare allows
+- [ ] `portalk.ai` · BLP HZ OI · Cloudflare allows
+- [ ] `rabu.ai` · BLP HZ OI · Cloudflare allows
+- [ ] `rochat.ai` · BLP HZ OI · Cloudflare allows
+- [ ] `sauci.ai` · BLP HZ OI · Cloudflare allows
+- [ ] `secretcrush.ai` · BLP HZ OI · Cloudflare allows
+- [ ] `sexiness.ai` · BLP HZ OI · Cloudflare allows
+- [ ] `sexlove.ai` · BLP HZ OI · Cloudflare allows
+- [ ] `sinfulx.ai` · BLP HZ OI · Cloudflare allows
+- [ ] `soulkyn.ai` · SB BLP OI · Cloudflare allows
+- [ ] `spicygen.ai` · BLP HZ OI · Cloudflare allows
+- [ ] `the-cuties.ai` · BLP HZ OI · Cloudflare allows
+- [ ] `trynectar.ai` · SB BLP HZ · Cloudflare allows
+- [ ] `unhinged.ai` · BLP HZ OI · Cloudflare allows
+- [ ] `wishapp.ai` · BLP HZ OI · Cloudflare allows
+- [ ] `xchar.ai` · SB BLP OI · Cloudflare allows
+- [ ] `xotic.ai` · BLP HZ OI · Cloudflare allows
+- [ ] `66y.ai` · BLP OI · Cloudflare allows
+- [ ] `91av.ai` · BLP OI · Cloudflare allows
+- [ ] `91tv.ai` · BLP OI · Cloudflare allows
+- [ ] `99h.ai` · BLP OI · Cloudflare allows
+- [ ] `99k.ai` · BLP OI · Cloudflare allows
+- [ ] `99q.ai` · BLP OI · Cloudflare allows
+- [ ] `99se.ai` · BLP OI · Cloudflare allows
+- [ ] `a2e.ai` · BLP HZ · Cloudflare allows
+- [ ] `adultgame.ai` · BLP OI · Cloudflare allows
+- [ ] `adultwork.ai` · BLP OI · Cloudflare allows
+- [ ] `afterdark.ai` · BLP OI · Cloudflare allows
+- [ ] `aigcn.ai` · BLP OI · Cloudflare allows
+- [ ] `aimour.ai` · BLP HZ · Cloudflare allows
+- [ ] `aipose.ai` · BLP HZ · Cloudflare allows
+- [ ] `animero.ai` · BLP OI · Cloudflare allows
+- [ ] `anyfans.ai` · BLP HZ · Cloudflare allows
+- [ ] `app.brainbot.ai` · BLP OI · Cloudflare allows
+- [ ] `atlascloud.ai` · BLP HZ · Cloudflare allows
+- [ ] `avtv.ai` · BLP OI · Cloudflare allows
+- [ ] `basedlabs.ai` · BLP HZ · Cloudflare allows
+- [ ] `bettersex.ai` · BLP OI · Cloudflare allows
+- [ ] `bimbim.ai` · BLP OI · Cloudflare allows
+- [ ] `blush.ai` · BLP HZ · Cloudflare allows
+- [ ] `botify.ai` · BLP HZ · Cloudflare allows
+- [ ] `character.ai` · BLP HZ · Cloudflare allows
+- [ ] `chat.kuki.ai` · BLP OI · Cloudflare allows
+- [ ] `chatgirls.ai` · BLP OI · Cloudflare allows
+- [ ] `chatreal.ai` · BLP HZ · Cloudflare allows
+- [ ] `cherry.ai` · BLP OI · Cloudflare allows
+- [ ] `creategay.ai` · BLP OI · Cloudflare allows
+- [ ] `crushchat.ai` · BLP HZ · Cloudflare allows
+- [ ] `dehouse.ai` · BLP OI · Cloudflare allows
+- [ ] `desirex.ai` · BLP OI · Cloudflare allows
+- [ ] `digi.ai` · BLP HZ · Cloudflare allows
+- [ ] `dominatrix.ai` · BLP HZ · Cloudflare allows
+- [ ] `dopple.ai` · BLP HZ · Cloudflare allows
+- [ ] `dreampress.ai` · BLP HZ · Cloudflare allows
+- [ ] `dreamswipe.ai` · BLP OI · Cloudflare allows
+- [ ] `dreemy.ai` · BLP HZ · Cloudflare allows
+- [ ] `eroticfantasies.ai` · BLP OI · Cloudflare allows
+- [ ] `facy.ai` · BLP HZ · Cloudflare allows
+- [ ] `fallfor.ai` · BLP HZ · Cloudflare allows
+- [ ] `feelreal.ai` · BLP HZ · Cloudflare allows
+- [ ] `fengyue.ai` · BLP OI · Cloudflare allows
+- [ ] `fetishgirls.ai` · BLP OI · Cloudflare allows
+- [ ] `foxychat.ai` · BLP HZ · Cloudflare allows
+- [ ] `freesexchat.ai` · BLP OI · Cloudflare allows
+- [ ] `gamcore.ai` · BLP OI · Cloudflare allows
+- [ ] `gaybearx.ai` · BLP OI · Cloudflare allows
+- [ ] `girlfriend.ai` · BLP HZ · Cloudflare allows
+- [ ] `herahaven.ai` · BLP HZ · Cloudflare allows
+- [ ] `heygf.ai` · BLP OI · Cloudflare allows
+- [ ] `hornyspace.ai` · BLP OI · Cloudflare allows
+- [ ] `hot.ai` · BLP OI · Cloudflare allows
+- [ ] `hottalks.ai` · BLP HZ · Cloudflare allows
+- [ ] `hubbby.ai` · BLP OI · Cloudflare allows
+- [ ] `kindroid.ai` · BLP HZ · Cloudflare allows
+- [ ] `latenight.ai` · BLP HZ · Cloudflare allows
+- [ ] `leezatko.ai` · BLP OI · Cloudflare allows
+- [ ] `localforge.ai` · BLP HZ · Cloudflare allows
+- [ ] `lovemy.ai` · BLP HZ · Cloudflare allows
+- [ ] `lovie.ai` · BLP OI · Cloudflare allows
+- [ ] `makesexy.ai` · BLP OI · Cloudflare allows
+- [ ] `moemate.ai` · BLP HZ · Cloudflare allows
+- [ ] `moltfans.ai` · BLP OI · Cloudflare allows
+- [ ] `moshimosh.ai` · BLP HZ · Cloudflare allows
+- [ ] `muah.ai` · BLP HZ · Cloudflare allows
+- [ ] `mydirty.ai` · BLP OI · Cloudflare allows
+- [ ] `mysentient.ai` · BLP HZ · Cloudflare allows
+- [ ] `mysexpartner.ai` · BLP OI · Cloudflare allows
+- [ ] `naughtygf.ai` · BLP HZ · Cloudflare allows
+- [ ] `nomi.ai` · BLP HZ · Cloudflare allows
+- [ ] `nsfwartgenerator.ai` · BLP HZ · Cloudflare allows
+- [ ] `nsfwc.ai` · BLP HZ · Cloudflare allows
+- [ ] `nsfwgifs.ai` · BLP OI · Cloudflare allows
+- [ ] `nsfwkling.ai` · BLP HZ · Cloudflare allows
+- [ ] `onlygfs.ai` · BLP OI · Cloudflare allows
+- [ ] `p1.cgw.ai` · BLP OI · Cloudflare allows
+- [ ] `pephop.ai` · BLP HZ · Cloudflare allows
+- [ ] `perimeterx.widget.insent.ai` · SB BLP · Cloudflare allows
+- [ ] `picso.ai` · BLP HZ · Cloudflare allows
+- [ ] `pirr.ai` · BLP HZ · Cloudflare allows
+- [ ] `pixelbunny.ai` · BLP HZ · Cloudflare allows
+- [ ] `pixeldojo.ai` · BLP HZ · Cloudflare allows
+- [ ] `pixelhaha.ai` · BLP OI · Cloudflare allows
+- [ ] `playbox.ai` · BLP HZ · Cloudflare allows
+- [ ] `pocketgirlfriend.ai` · BLP OI · Cloudflare allows
+- [ ] `pocketromance.ai` · BLP OI · Cloudflare allows
+- [ ] `poly.ai` · BLP HZ · Cloudflare allows
+- [ ] `rosychat.ai` · BLP HZ · Cloudflare allows
+- [ ] `rushchat.ai` · BLP HZ · Cloudflare allows
+- [ ] `selira.ai` · BLP OI · Cloudflare allows
+- [ ] `sex8.ai` · BLP OI · Cloudflare allows
+- [ ] `sexybabe.ai` · BLP OI · Cloudflare allows
+- [ ] `shpritz.ai` · BLP OI · Cloudflare allows
+- [ ] `smexy.ai` · BLP HZ · Cloudflare allows
+- [ ] `soulfun.ai` · BLP HZ · Cloudflare allows
+- [ ] `soulgen.ai` · SB BLP · Cloudflare allows
+- [ ] `spicyranks.ai` · BLP OI · Cloudflare allows
+- [ ] `tingo.ai` · BLP HZ · Cloudflare allows
+- [ ] `topart.ai` · BLP OI · Cloudflare allows
+- [ ] `unstability.ai` · BLP HZ · Cloudflare allows
+- [ ] `viyou.ai` · BLP HZ · Cloudflare allows
+- [ ] `wavespeed.ai` · BLP HZ · Cloudflare allows
+- [ ] `wetchat.ai` · BLP OI · Cloudflare allows
+- [ ] `xmates.ai` · BLP OI · Cloudflare allows
+- [ ] `yollo.ai` · BLP HZ · Cloudflare allows
+- [ ] `1905tv.ai` · BLP · Cloudflare allows
+- [ ] `4kvm.ai` · BLP · Cloudflare allows
+- [ ] `a.vdo.ai` · SB · Cloudflare allows
+- [ ] `adultdaycare.ai` · BLP · Cloudflare allows
+- [ ] `adultgpt.ai` · BLP · Cloudflare allows
+- [ ] `aichatting.ai` · BLP · Cloudflare allows
+- [ ] `amigay.ai` · BLP · Cloudflare allows
+- [ ] `analytics.jst.ai` · SB · Cloudflare allows
+- [ ] `api.native.ai` · SB · Cloudflare allows
+- [ ] `api.omnilocal.ai` · SB · Cloudflare allows
+- [ ] `bikinioff.ai` · BLP · Cloudflare allows
+- [ ] `bitiplex.ai` · SB · Cloudflare allows
+- [ ] `bondagent.ai` · BLP · Cloudflare allows
+- [ ] `boudoir.ai` · BLP · Cloudflare allows
+- [ ] `cdn.jst.ai` · SB · Cloudflare allows
+- [ ] `cdn.native.ai` · SB · Cloudflare allows
+- [ ] `cdn.rebel.ai` · SB · Cloudflare not asked
+- [ ] `cdn.smalk.ai` · SB · Cloudflare allows
+- [ ] `chub.ai` · BLP · Cloudflare allows
+- [ ] `cryptosex.ai` · BLP · Cloudflare allows
+- [ ] `darlingchat.ai` · SB · Cloudflare allows
+- [ ] `data.hailuo.ai` · SB · Cloudflare allows
+- [ ] `dealsexpert.ai` · BLP · Cloudflare allows
+- [ ] `deepsweet.ai` · BLP · Cloudflare allows
+- [ ] `depart.trinitymedia.ai` · SB · Cloudflare allows
+- [ ] `digitaltoolsexchange.ai` · BLP · Cloudflare allows
+- [ ] `dippy.ai` · BLP · Cloudflare allows
+- [ ] `dirtyjob.ai` · BLP · Cloudflare allows
+- [ ] `douchu.ai` · BLP · Cloudflare allows
+- [ ] `eduloo.ai` · BLP · Cloudflare allows
+- [ ] `essex.univalley.ai` · BLP · Cloudflare allows
+- [ ] `essexuat.univalley.ai` · BLP · Cloudflare allows
+- [ ] `evaapp.ai` · BLP · Cloudflare allows
+- [ ] `event.filum.ai` · SB · Cloudflare allows
+- [ ] `faceswaptool.ai` · BLP · Cloudflare allows
+- [ ] `falcons.ai` · BLP · Cloudflare allows
+- [ ] `fantasizehub.ai` · BLP · Cloudflare allows
+- [ ] `gayhookup.ai` · BLP · Cloudflare allows
+- [ ] `gayrimenkul.ai` · BLP · Cloudflare allows
+- [ ] `get.successpath.ai` · SB · Cloudflare allows
+- [ ] `getcody.ai` · BLP · Cloudflare allows
+- [ ] `glossexpress.chat.blip.ai` · BLP · Cloudflare allows
+- [ ] `gptease.ai` · BLP · Cloudflare allows
+- [ ] `haruka.ai` · BLP · Cloudflare allows
+- [ ] `heyhoney.ai` · BLP · Cloudflare allows
+- [ ] `iamhorny.ai` · BLP · Cloudflare allows
+- [ ] `ifsexpert.ai` · BLP · Cloudflare allows
+- [ ] `juiceychat.ai` · SB · Cloudflare allows
+- [ ] `juicytalk.ai` · BLP · Cloudflare allows
+- [ ] `kkbr.ai` · BLP · Cloudflare allows
+- [ ] `lagrimasdeleotortugaylamariposa.ai` · BLP · Cloudflare allows
+- [ ] `lasvegasexhibitrental.ai` · BLP · Cloudflare allows
+- [ ] `leolatortugaylamariposa.ai` · BLP · Cloudflare allows
+- [ ] `limitlessexpo.ai` · BLP · Cloudflare allows
+- [ ] `m2.ai` · SB · Cloudflare allows
+- [ ] `makefun.ai` · BLP · Cloudflare allows
+- [ ] `media.evolv.ai` · SB · Cloudflare not asked
+- [ ] `milfordveterinaryclinic.ai` · BLP · Cloudflare allows
+- [ ] `miniapps.ai` · BLP · Cloudflare allows
+- [ ] `myanima.ai` · SB · Cloudflare allows
+- [ ] `myerotic.ai` · BLP · Cloudflare allows
+- [ ] `mysextoy.ai` · BLP · Cloudflare allows
+- [ ] `nexusexpo.ai` · BLP · Cloudflare allows
+- [ ] `notthreadgay.ai` · BLP · Cloudflare allows
+- [ ] `nsfw-character.ai` · BLP · Cloudflare allows
+- [ ] `nsfwaichat.ai` · BLP · Cloudflare allows
+- [ ] `nsfwcharacters.ai` · BLP · Cloudflare allows
+- [ ] `nsfwgenerator.ai` · BLP · Cloudflare allows
+- [ ] `nsfwmuah.ai` · BLP · Cloudflare allows
+- [ ] `nsfws.ai` · BLP · Cloudflare allows
+- [ ] `nsfwyodayo.ai` · BLP · Cloudflare allows
+- [ ] `onlymonster.ai` · BLP · Cloudflare allows
+- [ ] `onlyrizz.ai` · SB · Cloudflare allows
+- [ ] `onlytwins.ai` · BLP · Cloudflare allows
+- [ ] `pandorasbox.ai` · BLP · Cloudflare allows
+- [ ] `panion.ai` · BLP · Cloudflare allows
+- [ ] `participants.evolv.ai` · SB · Cloudflare not asked
+- [ ] `ptool.ai` · BLP · Cloudflare allows
+- [ ] `reversex.ai` · BLP · Cloudflare allows
+- [ ] `robotcompanion.ai` · BLP · Cloudflare allows
+- [ ] `seaart.ai` · BLP · Cloudflare allows
+- [ ] `sexapp.ai` · BLP · Cloudflare allows
+- [ ] `sexchatwith.ai` · BLP · Cloudflare allows
+- [ ] `sexcity.ai` · BLP · Cloudflare allows
+- [ ] `sexcrimesusa.ai` · BLP · Cloudflare allows
+- [ ] `sexing.ai` · BLP · Cloudflare allows
+- [ ] `sexmissbruk.ai` · BLP · Cloudflare allows
+- [ ] `sexmodel.ai` · BLP · Cloudflare allows
+- [ ] `sexologoia.ai` · BLP · Cloudflare allows
+- [ ] `sexu.ai` · BLP · Cloudflare allows
+- [ ] `sexup.ai` · BLP · Cloudflare allows
+- [ ] `sexvideochat.ai` · BLP · Cloudflare allows
+- [ ] `sexyai.ai` · BLP · Cloudflare allows
+- [ ] `sexyvideo.ai` · BLP · Cloudflare allows
+- [ ] `sexyvoice.ai` · BLP · Cloudflare allows
+- [ ] `static.omnilocal.ai` · SB · Cloudflare allows
+- [ ] `static.returngo.ai` · SB · Cloudflare allows
+- [ ] `stats.lab.zalo.ai` · SB · Cloudflare allows
+- [ ] `stripchats.ai` · SB · Cloudflare allows
+- [ ] `tag.wknd.ai` · SB · Cloudflare allows
+- [ ] `talkdirty.ai` · BLP · Cloudflare allows
+- [ ] `threadgay.ai` · BLP · Cloudflare allows
+- [ ] `top5adult.ai` · BLP · Cloudflare allows
+- [ ] `twinsapp.ai` · BLP · Cloudflare allows
+- [ ] `uxsexploitation.ai` · BLP · Cloudflare allows
+- [ ] `vaniabr.ai` · BLP · Cloudflare allows
+- [ ] `xsexdoll.ai` · BLP · Cloudflare allows
+- [ ] `zerotick.ai` · BLP · Cloudflare allows

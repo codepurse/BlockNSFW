@@ -101,23 +101,92 @@ SAFE_HOST_TOKENS = [
 HIGH_RISK_TLDS = {'xxx', 'adult', 'porn', 'sex'}
 BENIGN_TLDS = {'edu', 'gov', 'ac', 'mil'}
 
+# Second-level labels that are part of a country's public suffix (co.uk,
+# com.br), so the site's own name is the label before them.
+SECOND_LEVEL_SUFFIX_LABELS = {
+    'co', 'com', 'net', 'org', 'gov', 'edu', 'ac', 'ne', 'or', 'go', 'mil',
+    'gob', 'nic', 'ltd', 'plc', 'gen', 'info', 'biz', 'nom',
+}
+
+# Adult AI services: sex chat and companion apps, porn generators, and nudify,
+# undress or deepfake tools. Their names rarely carry a word the scorer trusts
+# (clothoff.net, undress.app, kupid.ai), so they were all dropped. A candidate
+# that matches goes to the AI review list (REVIEW_AI_FILE) instead, never
+# straight into HOSTS.txt. First match wins; matched against the whole host.
+# "ai" only counts at the edge of a name, so "thaisex" and "maisexo" don't.
+_ADULT = r'(porn|sex|nsfw|nude|nudes|hentai|xxx|lewd|horny|erotic|smut)'
+AI_ADULT_KINDS = [
+    ('nudify', r'nudif|undress|deep-?nude|cloth(es)?-?off|deep-?fake|deep-?swap'
+               r'|(^|[-.\d])ai-?nudes?|nudes?-?ai($|[-.\d])'),
+    ('companion', r'(ai|gpt|bot)-?girlfriend|girlfriend-?(ai|gpt|bot)|(^|[-.\d])ai-?gf($|[-.\d])'
+                  r'|gf-?ai($|[-.\d])|spicychat|crushon|janitorai'
+                  r'|' + _ADULT + r'-?(bot|chatbot|companion|gpt)($|[-.\d])'
+                  r'|(ai|gpt)-?sexting|sexting-?(ai|gpt)'
+                  r'|(^|[-.\d])ai-?' + _ADULT + r'-?chat|' + _ADULT + r'-?chat-?ai($|[-.\d])'),
+    ('generator', r'(^|[-.\d])ai-?' + _ADULT + r'|' + _ADULT + r'-?ai($|[-.\d])'
+                  r'|pornpen|promptchan'),
+]
+# An adult feed listing a .ai address is very likely listing an AI service,
+# whatever the name says (candy.ai, kupid.ai, muah.ai).
+AI_TLDS = {'ai'}
+AI_KIND_TITLES = {
+    'nudify': 'Nudify, undress or deepfake',
+    'companion': 'AI sex chat or companion',
+    'generator': 'AI porn generator',
+    'ai-domain': 'Other .ai addresses',
+}
+# Puts a matching candidate in review, above REVIEW_THRESHOLD and below
+# AUTO_MERGE_THRESHOLD.
+AI_REVIEW_SCORE = 0.6
+
 # External feed sources
 EXTERNAL_FEEDS = [
     {
+        'name': 'StevenBlack',
+        'short': 'SB',
         'url': 'https://raw.githubusercontent.com/StevenBlack/hosts/master/alternates/porn/hosts',
         'format': 'hosts',
     },
     {
+        'name': 'Block List Project',
+        'short': 'BLP',
         'url': 'https://raw.githubusercontent.com/blocklistproject/Lists/master/alt-version/porn-nl.txt',
         'format': 'plain',
     },
 ]
+
+# Lists read only as evidence on the AI review list: whether they also have a
+# domain. Both are GPL-3.0 and HOSTS.txt is MIT, so nothing is copied from
+# them; a domain still only goes in when someone marks it.
+EVIDENCE_FEEDS = [
+    {
+        'name': 'HaGeZi NSFW',
+        'short': 'HZ',
+        'url': 'https://raw.githubusercontent.com/hagezi/dns-blocklists/main/wildcard/nsfw.txt',
+        'format': 'wildcard',
+    },
+    {
+        'name': 'OISD NSFW',
+        'short': 'OI',
+        'url': 'https://nsfw.oisd.nl/domainswild',
+        'format': 'wildcard',
+    },
+]
+
+# Cloudflare for Families answers 0.0.0.0 for a domain it classes as adult or
+# malware: a second opinion on the AI review list, and a way to tell a site
+# that is gone (no such domain) from one that is up.
+FAMILY_DOH_URL = 'https://family.cloudflare-dns.com/dns-query'
+FAMILY_DOH_WORKERS = 16
 
 # File paths (relative to repo root)
 HOSTS_FILE = 'data/HOSTS.txt'
 WHITELIST_FILE = 'data/WHITELIST.txt'
 BLOCKLIST_JSON = 'blocklist.json'
 REVIEW_QUEUE_FILE = 'data/REVIEW_QUEUE.md'
+REVIEW_AI_FILE = 'data/REVIEW_AI.md'
+# Domains a maintainer looked at and left out; never proposed again.
+REVIEW_REJECTED_FILE = 'data/REVIEW_REJECTED.txt'
 REPORTS_DIR = 'data/reports'
 
 # Typosquat detection

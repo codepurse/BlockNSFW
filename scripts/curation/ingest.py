@@ -61,6 +61,19 @@ def parse_plain_format(text: str) -> list[str]:
     return domains
 
 
+def parse_wildcard_format(text: str) -> list[str]:
+    """Parse a wildcard domain list (`*.example.com` or `example.com` per line)."""
+    domains = []
+    for line in text.splitlines():
+        line = line.strip()
+        if not line or line.startswith('#') or line.startswith('!'):
+            continue
+        normalized = normalize_domain(line[2:] if line.startswith('*.') else line)
+        if normalized:
+            domains.append(normalized)
+    return domains
+
+
 def fetch_feed(url: str, fmt: str) -> list[str]:
     """Fetch and parse a remote feed."""
     try:
@@ -75,6 +88,8 @@ def fetch_feed(url: str, fmt: str) -> list[str]:
         return parse_hosts_format(text)
     elif fmt == 'plain':
         return parse_plain_format(text)
+    elif fmt == 'wildcard':
+        return parse_wildcard_format(text)
     else:
         print(f"[warn] Unknown feed format: {fmt}")
         return []
@@ -106,6 +121,29 @@ def load_whitelist() -> set[str]:
     return domains
 
 
+@functools.lru_cache(maxsize=1)
+def load_rejected() -> set[str]:
+    """Domains a maintainer reviewed and left out (REVIEW_REJECTED_FILE)."""
+    path = Path(config.REVIEW_REJECTED_FILE)
+    if not path.exists():
+        return set()
+    return set(parse_plain_format(path.read_text(encoding='utf-8', errors='ignore')))
+
+
+def is_covered(domain: str, blocked: set[str]) -> bool:
+    """True when the domain or a parent of it is already blocked.
+
+    The extension blocks every subdomain of a listed host (background.js
+    isUrlInDefaultBlocklist, and requestDomains in the static ruleset), so
+    proposing ads.example.com when example.com is listed adds nothing.
+    """
+    labels = domain.split('.')
+    for i in range(len(labels) - 1):
+        if '.'.join(labels[i:]) in blocked:
+            return True
+    return False
+
+
 def load_user_reports() -> list[str]:
     """Load user-submitted missed-site reports from data/reports/."""
     reports_dir = Path(config.REPORTS_DIR)
@@ -126,20 +164,40 @@ def load_user_reports() -> list[str]:
 
 
 def ingest_all() -> Iterator[tuple[str, str]]:
-    """Yield (domain, source) pairs from all sources."""
+    """Yield (domain, source) once per domain from all sources.
+
+    The source names every feed that lists the domain ("StevenBlack, Block
+    List Project"), or 'user-report'. A domain already covered by HOSTS.txt,
+    whitelisted, or rejected in review is skipped.
+    """
     blocked = load_existing_hosts()
     whitelist = load_whitelist()
+    rejected = load_rejected()
+    sources: dict[str, list[str]] = {}
+
+    def wanted(d: str) -> bool:
+        return d not in whitelist and d not in rejected and not is_covered(d, blocked)
 
     # External feeds
     for feed in config.EXTERNAL_FEEDS:
+        name = feed.get('name', feed['url'])
         for d in fetch_feed(feed['url'], feed['format']):
-            if d not in blocked and d not in whitelist:
-                yield d, feed['url']
+            if d in sources:
+                if name not in sources[d]:
+                    sources[d].append(name)
+            elif wanted(d):
+                sources[d] = [name]
 
     # User reports
     for d in load_user_reports():
-        if d not in blocked and d not in whitelist:
-            yield d, 'user-report'
+        if d in sources:
+            if 'user-report' not in sources[d]:
+                sources[d].append('user-report')
+        elif wanted(d):
+            sources[d] = ['user-report']
+
+    for d, names in sources.items():
+        yield d, ', '.join(names)
 
 
 if __name__ == '__main__':

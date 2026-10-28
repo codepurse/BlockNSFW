@@ -58,7 +58,71 @@ def test_score_clamped_to_unit_interval():
         assert 0.0 <= s <= 1.0, f"Score {s} out of range for {d}"
 
 
+def test_core_label_is_the_site_name():
+    """The site's own name is judged, not the first label of a long host.
+
+    Regression: ads.alphaporno.com was judged as "ads", and the 2026-10-25
+    run merged none of its 875,004 candidates.
+    """
+    assert scorer._extract_core_label('ads.alphaporno.com') == 'alphaporno'
+    assert scorer._extract_core_label('1.pornoabuelas.net') == 'pornoabuelas'
+    assert scorer._extract_core_label('example.co.uk') == 'example'
+    assert scorer._extract_core_label('cdn.example.com.br') == 'example'
+    assert scorer._extract_core_label('example.com') == 'example'
+    for d in ['ads.alphaporno.com', '1.pornoabuelas.net', '1videoporno.en.wanadoo.es']:
+        s, _ = scorer.score_domain(d)
+        assert s >= 0.85, f"{d} scored {s}"
+
+
+def test_adult_ai_services_go_to_review():
+    """Nudify, AI sex chat, AI porn and .ai addresses from the feeds are
+    reviewed, never dropped and never merged on the name alone."""
+    expected = {
+        'nudify.online': 'nudify',
+        'clothoff.net': 'nudify',
+        'undress.app': 'nudify',
+        'deepnude.cc': 'nudify',
+        'ai-nudes.ai': 'nudify',
+        'girlfriendgpt.com': 'companion',
+        'aigirlfriend.example': 'companion',
+        'spicychat.ai': 'companion',
+        'sexbot.example': 'companion',
+        'ai-sex-chat.net': 'companion',
+        'nsfwchatai.example': 'companion',
+        'sexai.ai': 'generator',
+        'ai-lewd.example': 'generator',
+        'kupid.ai': 'ai-domain',
+        'nectar.ai': 'ai-domain',
+    }
+    for d, kind in expected.items():
+        s, f = scorer.score_domain(d)
+        assert f['ai_kind'] == kind, f"{d}: {f['ai_kind']}"
+        assert 0.5 <= s < 0.85, f"{d} scored {s}"
+
+
+def test_ai_names_with_a_strong_keyword_still_merge():
+    s, f = scorer.score_domain('aipornxxx.com')
+    assert f['ai_kind'] == 'generator'
+    assert s >= 0.85
+
+
+def test_ai_only_counts_at_the_edge_of_a_name():
+    """"thaisex" and "maisexo" are not AI sex sites."""
+    for d in ['thaisex.com', 'maisexo.com', 'mumbaigf.com', 'example.com', 'aidan.com']:
+        assert scorer.ai_kind(d) is None, d
+
+
+def test_safe_tokens_beat_the_ai_rule():
+    s, f = scorer.score_domain('nudify-recovery-help.ai')
+    assert s == 0.0
+
+
 if __name__ == '__main__':
+    test_core_label_is_the_site_name()
+    test_adult_ai_services_go_to_review()
+    test_ai_names_with_a_strong_keyword_still_merge()
+    test_ai_only_counts_at_the_edge_of_a_name()
+    test_safe_tokens_beat_the_ai_rule()
     test_strong_keyword_high_score()
     test_typosquat_high_score()
     test_whitelist_force_zero()
