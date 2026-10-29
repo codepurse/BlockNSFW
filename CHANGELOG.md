@@ -42,6 +42,14 @@ All notable project changes should be documented here going forward.
   words and address are still never shown. In Classic it sits under the
   address line, in the other designs under "Why this page was held".
   Requested by a user.
+- **The in-page "held" button says more.** Its Held sources list now opens
+  with one line on what was held and from how many sites ("14 images, 3
+  videos and 1 frame, from 3 sites"), and each site says what its blocks
+  were ("12 images, 2 videos"). Only the list of sites scrolls, under a
+  heading and summary that stay put, with a thin scroll bar and "Scroll for
+  all 24 sites" beneath it while there is more below: Windows 11 and macOS
+  hide scroll bars until you scroll, so a long list looked like it simply
+  ended. Site names are still plain text, never links. Requested by a user.
 
 - **A page that asks why, after BlockNSFW is removed.** The browser opens
   monolab.dev/blocknsfw/goodbye, which asks for the reason in one tap and
@@ -145,6 +153,12 @@ All notable project changes should be documented here going forward.
   reason code `custom_keyword`. "Change it in Settings" leaves
   `pblocker_focus_rule` in session storage for `options.js`
   (`applyFocusRule`). Tests: `tests/custom-rule-detail.test.js`.
+- The in-page counter keeps `pageBlockedKinds` (host → `{ image, video,
+  iframe, 'search-result' }`) and `pageBlockedByType` beside
+  `pageBlockedEntries`; `heldKindsList`, `heldSummaryText` and
+  `updateHeldMoreCue` draw the panel, whose list is now its own scroll box
+  (`.bn-panel-list`, focusable) rather than the whole panel. Tests:
+  `tests/search-result-treatment.test.js`.
 - Blocklist curation (`scripts/curation`) took in almost nothing: the scorer
   judged the first label of any three-part host (`ads.alphaporno.com` as
   "ads"), and the run of 2026-10-25 merged none of 875,004 candidates. It now

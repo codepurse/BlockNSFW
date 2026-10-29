@@ -172,6 +172,8 @@ function loadCounterContext(href = 'https://duckduckgo.com/?q=apricots&ia=images
     updateFloatingCounter: () => {},
     scheduleFloatingCounterUpdate: () => {},
     pageBlockedEntries: new Map(),
+    pageBlockedKinds: new Map(),
+    pageBlockedByType: new Map(),
     pageBlockedTotal: 0,
     pageBlockedEntriesKey: '',
     floatingCounterExpanded: false
@@ -249,6 +251,63 @@ test('recordBlockedEntry: totals every block and groups repeats by host', () => 
   assert.equal(ctx.pageBlockedEntries.size, 2, 'the panel lists hosts');
   assert.equal(ctx.pageBlockedEntries.get('a.example'), 2);
   assert.equal(ctx.pageBlockedEntries.get('b.example'), 1);
+});
+
+test('recordBlockedEntry: keeps what each host\'s blocks were, and the page\'s', () => {
+  // A user asked for the Held sources panel to say more than a number.
+  const ctx = loadCounterContext('https://duckduckgo.com/?q=apricots');
+  ctx.recordBlockedEntry(fakeImage('https://cdn.example/a.jpg'), 'image');
+  ctx.recordBlockedEntry(fakeImage('https://cdn.example/b.jpg'), 'image');
+  ctx.recordBlockedEntry(fakeImage('https://cdn.example/c.mp4'), 'video');
+  ctx.recordBlockedEntry(fakeResult('https://other.example/1'), 'search-result');
+  ctx.recordBlockedEntry(fakeResult(null), 'search-result');
+
+  assert.deepEqual({ ...ctx.pageBlockedKinds.get('cdn.example') }, { image: 2, video: 1 });
+  assert.deepEqual({ ...ctx.pageBlockedKinds.get('other.example') }, { 'search-result': 1 });
+  // The page's tally includes the block whose source is unknown.
+  assert.deepEqual(Object.fromEntries(ctx.pageBlockedByType), { image: 2, video: 1, 'search-result': 2 });
+
+  ctx.window.location.search = '?q=apricots&ia=images';
+  ctx.recordBlockedEntry(fakeImage('https://new.example/a.jpg'), 'image');
+  assert.equal(ctx.pageBlockedKinds.has('cdn.example'), false, 'a new search starts a new tally');
+  assert.deepEqual(Object.fromEntries(ctx.pageBlockedByType), { image: 1 });
+});
+
+test('Held sources panel: says what was held, and from how many sites', () => {
+  const sandbox = {};
+  vm.createContext(sandbox);
+  const wordsAt = source.indexOf('const HELD_KIND_WORDS');
+  vm.runInContext([
+    source.slice(wordsAt, source.indexOf('];', wordsAt) + 2),
+    functionSource('heldKindsList'),
+    functionSource('heldSummaryText')
+  ].join('\n') + '\nglobalThis.list = heldKindsList; globalThis.summary = heldSummaryText;', sandbox);
+
+  assert.deepEqual([...sandbox.list({ video: 2, image: 12 })], ['12 images', '2 videos'], 'images first, whatever the order counted');
+  assert.deepEqual([...sandbox.list({ iframe: 1, 'search-result': 1 })], ['1 frame', '1 search result']);
+  assert.deepEqual([...sandbox.list({})], []);
+  assert.equal(sandbox.summary({ image: 14, video: 3, iframe: 1 }, 3), '14 images, 3 videos and 1 frame, from 3 sites');
+  assert.equal(sandbox.summary({ image: 1 }, 1), '1 image, from 1 site');
+  assert.equal(sandbox.summary({ 'search-result': 2 }, 0), '2 search results');
+  assert.equal(sandbox.summary({}, 0), '');
+});
+
+test('Held sources panel: the site list scrolls in its own box, with a cue', () => {
+  // Windows 11 and macOS hide scroll bars until you scroll, so a long list
+  // looked like it simply ended.
+  const rules = source.slice(source.indexOf('const HELD_UI_RULES'), source.indexOf('// The Held icon'));
+  assert.match(rules, /'bn-panel-list': '[^']*max-height:[^']*overflow-y: auto;[^']*scrollbar-width: thin;/);
+  assert.doesNotMatch(rules.match(/'bn-panel': '([^']*)'/)[1], /overflow/, 'the heading and summary stay put');
+  assert.doesNotMatch(rules, /gradient/, 'no gradients in the held UI');
+  const cue = functionSource('updateHeldMoreCue');
+  assert.match(cue, /Scroll for all \$\{sites\} sites/);
+  assert.match(cue, /parts\.more\.hidden = !\(below > 2\)/);
+  const build = functionSource('buildFloatingCounterUi');
+  assert.match(build, /list\.addEventListener\('scroll', \(\) => updateHeldMoreCue\(parts\)/);
+  assert.match(build, /setHeldAttrs\(list, \{ tabindex: '0'/, 'the list scrolls from the keyboard');
+  // Hosts stay inert text, with no address beyond the host.
+  const draw = functionSource('updateFloatingCounter');
+  assert.doesNotMatch(draw, /createElement\('a'\)|href/);
 });
 
 test('recordBlockedEntry: a block with no recoverable host still counts', () => {

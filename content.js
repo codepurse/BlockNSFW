@@ -481,6 +481,10 @@ let pageBlockedCountKey = '';
 let blockCountDisplay = 'badge'; // 'badge' | 'floating'
 // Hosts blocked on this page and how often, for the pill's detail panel.
 let pageBlockedEntries = new Map();
+// What each host's blocks were (host -> { image: n, video: n, … }), and the
+// same for the whole page, blocks with no known host included (type -> n).
+let pageBlockedKinds = new Map();
+let pageBlockedByType = new Map();
 let pageBlockedTotal = 0;
 let pageBlockedEntriesKey = '';
 let floatingCounterExpanded = false;
@@ -3818,13 +3822,21 @@ function recordBlockedEntry(element, type) {
     if (key !== pageBlockedEntriesKey) {
       pageBlockedEntriesKey = key;
       pageBlockedEntries = new Map();
+      pageBlockedKinds = new Map();
+      pageBlockedByType = new Map();
       pageBlockedTotal = 0;
       floatingCounterExpanded = false;
     }
 
     pageBlockedTotal++;
+    pageBlockedByType.set(type, (pageBlockedByType.get(type) || 0) + 1);
     const host = blockedEntryHost(element, type);
-    if (host) pageBlockedEntries.set(host, (pageBlockedEntries.get(host) || 0) + 1);
+    if (host) {
+      pageBlockedEntries.set(host, (pageBlockedEntries.get(host) || 0) + 1);
+      const kinds = pageBlockedKinds.get(host) || {};
+      kinds[type] = (kinds[type] || 0) + 1;
+      pageBlockedKinds.set(host, kinds);
+    }
 
     // Blocks arrive one image at a time on a scrolling page; redrawing per block
     // would thrash layout for no benefit.
@@ -3914,6 +3926,53 @@ function updateBlockedResultsNotice() {
   }
 }
 
+// What each counted kind is called in the Held sources panel, in the order the
+// panel lists them.
+const HELD_KIND_WORDS = [
+  ['image', 'image', 'images'],
+  ['video', 'video', 'videos'],
+  ['iframe', 'frame', 'frames'],
+  ['search-result', 'search result', 'search results']
+];
+
+/** ["12 images", "2 videos"] from a { type: count } tally, in a fixed order. */
+function heldKindsList(kinds) {
+  const parts = [];
+  for (const [type, one, many] of HELD_KIND_WORDS) {
+    const n = kinds ? Number(kinds[type]) || 0 : 0;
+    if (n > 0) parts.push(`${n} ${n === 1 ? one : many}`);
+  }
+  return parts;
+}
+
+/** The panel's first line: "14 images, 3 videos and 1 frame, from 3 sites". */
+function heldSummaryText(kinds, siteCount) {
+  const parts = heldKindsList(kinds);
+  if (!parts.length) return '';
+  const what = parts.length === 1
+    ? parts[0]
+    : `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}`;
+  if (!siteCount) return what;
+  return `${what}, from ${siteCount} ${siteCount === 1 ? 'site' : 'sites'}`;
+}
+
+/**
+ * Show "Scroll for all N sites" under the list while there is more of it below
+ * the fold. Windows 11 and macOS hide scroll bars until you scroll, so a long
+ * list otherwise looks like it simply ends.
+ */
+function updateHeldMoreCue(parts) {
+  try {
+    const list = parts.list;
+    const below = list.scrollHeight - list.clientHeight - list.scrollTop;
+    const sites = pageBlockedEntries.size;
+    parts.more.textContent = `Scroll for all ${sites} sites`;
+    parts.more.hidden = !(below > 2);
+  } catch (_) {
+    parts.more.hidden = true;
+  }
+}
+
 let floatingCounterTimer = null;
 
 function scheduleFloatingCounterUpdate() {
@@ -3971,12 +4030,18 @@ function updateFloatingCounter() {
     parts.panel.hidden = !expanded;
 
     // The list is drawn only while it is open, and dropped when it closes, so
-    // the hosts are not sitting in the page behind a closed panel.
+    // the hosts are not sitting in the page behind a closed panel. A redraw
+    // while it is open (more blocks arriving) keeps the reader's place.
+    const scrolledTo = expanded ? parts.list.scrollTop : 0;
     while (parts.list.firstChild) parts.list.removeChild(parts.list.firstChild);
+    parts.summary.textContent = '';
+    parts.more.hidden = true;
     if (!expanded) return;
 
     const ui = parts.ui;
     parts.heading.textContent = pageBlockedEntries.size === 1 ? 'Held source' : 'Held sources';
+    // Every block on the page by kind, those with no known source included.
+    parts.summary.textContent = heldSummaryText(Object.fromEntries(pageBlockedByType), pageBlockedEntries.size);
     if (pageBlockedEntries.size === 0) {
       parts.list.appendChild(heldNode(ui, 'div', 'bn-panel-empty', 'Source not known.'));
       return;
@@ -3986,10 +4051,16 @@ function updateFloatingCounter() {
     const sorted = Array.from(pageBlockedEntries.entries()).sort((a, b) => b[1] - a[1]);
     for (const [entryHost, count] of sorted) {
       const row = heldNode(ui, 'div', 'bn-panel-row');
-      row.appendChild(heldNode(ui, 'span', 'bn-host-name', entryHost));
-      row.appendChild(heldNode(ui, 'span', 'bn-host-count', String(count)));
+      const line = heldNode(ui, 'div', 'bn-host-line');
+      line.appendChild(heldNode(ui, 'span', 'bn-host-name', entryHost));
+      line.appendChild(heldNode(ui, 'span', 'bn-host-count', String(count)));
+      row.appendChild(line);
+      const kinds = heldKindsList(pageBlockedKinds.get(entryHost)).join(', ');
+      if (kinds) row.appendChild(heldNode(ui, 'div', 'bn-host-kinds', kinds));
       parts.list.appendChild(row);
     }
+    parts.list.scrollTop = scrolledTo;
+    updateHeldMoreCue(parts);
   } catch (error) {
     log('Error updating floating counter:', error);
   }
@@ -4146,11 +4217,18 @@ const HELD_UI_RULES = {
   'bn-fc': 'display: flex; flex-direction: column-reverse; align-items: flex-end; gap: 8px;',
   'bn-toggle': 'display: inline-flex; align-items: center; gap: 8px; margin: 0; padding: 8px 12px; font: inherit; font-size: 13px; line-height: 1.2; color: var(--bn-ink); background: var(--bn-sheet); border: 1px solid var(--bn-rule-2); border-radius: 2px; box-shadow: none; cursor: pointer; -webkit-appearance: none; appearance: none; transition: border-color 180ms cubic-bezier(0.22, 1, 0.36, 1);',
   'bn-count': 'font-size: 13px; font-weight: 500; color: var(--bn-ink);',
-  'bn-panel': 'min-width: 240px; max-width: min(360px, calc(100vw - 32px)); max-height: min(420px, calc(100vh - 96px)); overflow-y: auto; overscroll-behavior: contain; padding: 12px 16px 4px; background: var(--bn-sheet); color: var(--bn-ink); border: 1px solid var(--bn-rule-2); border-radius: 0;',
-  'bn-panel-head': 'margin: 0 0 8px; color: var(--bn-ink-3);',
-  'bn-panel-row': 'display: flex; justify-content: space-between; align-items: baseline; gap: 16px; padding: 8px 0; border-top: 1px solid var(--bn-rule); cursor: default; -webkit-user-select: none; user-select: none;',
+  // The heading and the summary stay put; only the list of sites scrolls, in
+  // its own box, with a thin scroll bar that is drawn rather than hidden.
+  'bn-panel': 'min-width: 240px; width: min(360px, calc(100vw - 32px)); padding: 12px 16px; background: var(--bn-sheet); color: var(--bn-ink); border: 1px solid var(--bn-rule-2); border-radius: 0;',
+  'bn-panel-head': 'margin: 0 0 4px; color: var(--bn-ink-3);',
+  'bn-panel-sum': 'margin: 0 0 8px; font-size: 13px; line-height: 1.45; color: var(--bn-ink);',
+  'bn-panel-list': 'max-height: min(320px, calc(100vh - 200px)); overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: var(--bn-rule-2) transparent; scrollbar-gutter: stable;',
+  'bn-panel-row': 'padding: 8px 0; border-top: 1px solid var(--bn-rule); cursor: default; -webkit-user-select: none; user-select: none;',
+  'bn-host-line': 'display: flex; justify-content: space-between; align-items: baseline; gap: 16px;',
   'bn-host-name': `min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: ${HELD_UI_MONO}; font-size: 12px; font-variant-numeric: tabular-nums; color: var(--bn-ink);`,
   'bn-host-count': `flex: none; font-family: ${HELD_UI_MONO}; font-size: 12px; font-variant-numeric: tabular-nums; color: var(--bn-ink-2);`,
+  'bn-host-kinds': 'margin-top: 2px; font-size: 12px; line-height: 1.4; color: var(--bn-ink-2);',
+  'bn-panel-more': 'margin: 0; padding-top: 8px; border-top: 1px solid var(--bn-rule-2); color: var(--bn-ink-3);',
   'bn-panel-empty': 'padding: 8px 0; border-top: 1px solid var(--bn-rule); color: var(--bn-ink-2);'
 };
 
@@ -4200,7 +4278,7 @@ function heldUiCss() {
       : '',
     rules,
     '.bn-toggle:hover, .bn-toggle[aria-expanded="true"] { border-color: var(--bn-ink); }',
-    '.bn-toggle:focus-visible, .bn-panel:focus-visible { outline: 2px solid var(--bn-pine-2); outline-offset: 3px; }',
+    '.bn-toggle:focus-visible, .bn-panel-list:focus-visible { outline: 2px solid var(--bn-pine-2); outline-offset: 3px; }',
     '@media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition: none !important; } }'
   ].join('\n');
   return heldUiCssText;
@@ -4530,17 +4608,24 @@ function buildFloatingCounterUi(host) {
   button.appendChild(count);
   button.appendChild(heldNode(ui, 'span', 'bn-meta bn-word', 'held'));
 
-  // Focusable, so a list longer than the panel can be scrolled from the
-  // keyboard. The hosts in it stay inert text: not links, nothing to click.
+  // The list is focusable, so when it is longer than its box it can be
+  // scrolled from the keyboard. The hosts in it stay inert text: not links,
+  // nothing to click.
   const panel = heldNode(ui, 'div', 'bn-panel');
   panel.id = HELD_SOURCES_PANEL_ID;
   panel.hidden = true;
-  setHeldAttrs(panel, { role: 'region', tabindex: '0', 'aria-labelledby': HELD_SOURCES_HEADING_ID });
+  setHeldAttrs(panel, { role: 'region', 'aria-labelledby': HELD_SOURCES_HEADING_ID });
   const heading = heldNode(ui, 'div', 'bn-meta bn-panel-head', 'Held sources');
   heading.id = HELD_SOURCES_HEADING_ID;
+  const summary = heldNode(ui, 'div', 'bn-panel-sum');
   const list = heldNode(ui, 'div', 'bn-panel-list');
+  setHeldAttrs(list, { tabindex: '0', 'aria-label': 'Held sources, busiest first' });
+  const more = heldNode(ui, 'div', 'bn-meta bn-panel-more');
+  more.hidden = true;
   panel.appendChild(heading);
+  panel.appendChild(summary);
   panel.appendChild(list);
+  panel.appendChild(more);
 
   button.addEventListener('click', (event) => {
     event.preventDefault();
@@ -4564,7 +4649,8 @@ function buildFloatingCounterUi(host) {
   wrap.appendChild(panel);
   ui.mount.appendChild(wrap);
 
-  const parts = { ui, button, count, panel, heading, list };
+  const parts = { ui, button, count, panel, heading, summary, list, more };
+  list.addEventListener('scroll', () => updateHeldMoreCue(parts), { passive: true });
   heldUiParts.set(host, parts);
   return parts;
 }
