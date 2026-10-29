@@ -59,6 +59,7 @@
         "shared/validate-domain.js",
         "shared/url-scan.js",
         "shared/proxied-url.js",
+        "shared/unsafe-search.js",
         "shared/token-match.js",
         "shared/keyword-pattern.js",
         "shared/ruleset.js",

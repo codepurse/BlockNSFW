@@ -107,6 +107,13 @@ function getReasonMeta(reasonCode) {
         message: 'The search asked for adult content. The results never loaded.',
         layer: 4
       };
+    case 'unsafe_search':
+      return {
+        sourceLabel: 'SafeSearch',
+        detail: 'Blocked image search without SafeSearch',
+        message: 'SafeSearch can’t reach this search engine’s images and videos, so they’re held while it’s on. Image search on Google, Bing and DuckDuckGo still works, with SafeSearch.',
+        layer: 4
+      };
     case 'reddit_nsfw':
       return {
         sourceLabel: 'NSFW community filter',

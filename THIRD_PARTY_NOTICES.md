@@ -11,6 +11,7 @@ maintainer-owned `codepurse/BlockNSFW` GitHub repository:
 
 - `REMOTE_BLOCKLIST_URL` = `https://raw.githubusercontent.com/codepurse/BlockNSFW/refs/heads/main/data/HOSTS.txt`
 - `REMOTE_WHITELIST_URL` = `https://raw.githubusercontent.com/codepurse/BlockNSFW/refs/heads/main/data/WHITELIST.txt`
+- `REMOTE_UNSAFE_SEARCH_URL` = `https://raw.githubusercontent.com/codepurse/BlockNSFW/refs/heads/main/data/UNSAFE_SEARCH.json`
 
 These data files are committed to the same repository (under `data/`) under
 the MIT License (see `data/LICENSE`). Provenance and snapshot details are

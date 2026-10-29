@@ -422,6 +422,7 @@ function displayHost(url) {
 const REASON_LABELS = {
   // getBlockedReasonLabel() in content.js
   'blocked by dns filter': 'DNS protection',
+  'blocked image search without safesearch': 'SafeSearch',
   'blocked by custom blocklist': 'Your blocklist',
   'blocked by your title patterns': 'Your title patterns',
   'blocked by your blocked words': 'Your blocked words',
@@ -443,6 +444,7 @@ const REASON_LABELS = {
   'social posts filtered': 'Social posts filtered',
   // Reason codes, and the event type stored when no reason was given
   dns_blocked: 'DNS protection',
+  unsafe_search: 'SafeSearch',
   custom_blocklist: 'Your blocklist',
   default_blocklist: 'Built-in blocklist',
   instant_host_match: 'Built-in blocklist',

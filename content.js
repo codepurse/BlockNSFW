@@ -531,6 +531,13 @@ let anyTextFeatureOn = true;
 // so a user-trusted site is a real escape hatch — no scanning, no per-mutation
 // work — instead of only processContent respecting it.
 let pageWhitelisted = false;
+// Image and video search on engines SafeSearch can't reach (shared/
+// unsafe-search.js): the downloaded rules' storage key (UnsafeSearch.STORAGE_KEY,
+// read before that module is asked), and loadSettings' copy of the switch and
+// the rules for checkUnsafeSearchPage.
+const UNSAFE_SEARCH_KEY = 'pblocker_unsafe_search_v1';
+let safeSearchOn = true;
+let unsafeSearchRules = null;
 
 // Adult content detection keywords (used for domain/site name lookups).
 // These are site names, so they are matched as standalone tokens via
@@ -1414,6 +1421,8 @@ function getBlockedReasonLabel(reasonKey) {
   switch (reasonKey) {
     case 'dns_blocked':
       return 'Blocked by DNS filter';
+    case 'unsafe_search':
+      return 'Blocked image search without SafeSearch';
     case 'custom_blocklist':
       return 'Blocked by custom blocklist';
     case 'custom_title_pattern':
@@ -1490,7 +1499,8 @@ function getBlockedReasonLabel(reasonKey) {
           'pblocker_settings',
           'pblocker_whitelist',
           'pblocker_temp_disable_until',
-          'pblocker_remote_whitelist_v1'
+          'pblocker_remote_whitelist_v1',
+          UNSAFE_SEARCH_KEY
         ]);
         const settings = result.pblocker_settings || { enabled: true, useSmartBlocking: true, customPatterns: [] };
         // Respect temporary disable
@@ -1542,6 +1552,15 @@ function getBlockedReasonLabel(reasonKey) {
           return false;
         };
         if (isAllowed(normalizedHost, pathname)) return; // Whitelisted -> allow
+
+        // Image or video search on an engine SafeSearch can't reach, known by
+        // its address (shared/unsafe-search.js). Part of SafeSearch, so it
+        // goes off with it. Ones only the page can show are checkUnsafeSearchPage.
+        if (settings.safeSearchEnabled !== false && typeof UnsafeSearch !== 'undefined' &&
+            UnsafeSearch.matchAddress(urlStr, UnsafeSearch.rulesFrom(result[UNSAFE_SEARCH_KEY]))) {
+          redirectNow('unsafe_search', getBlockedReasonLabel('unsafe_search'));
+          return;
+        }
 
         // A site shown through Google Translate or the Wayback Machine is
         // checked as itself too, unless that site is whitelisted
@@ -1893,9 +1912,11 @@ async function loadSettings() {
       'pblocker_temp_disable_until',
       'pblocker_subscriptions',
       'pblocker_subscription_rules',
-      'pblocker_color_scheme'
+      'pblocker_color_scheme',
+      UNSAFE_SEARCH_KEY
     ]);
     setHeldUiScheme(result.pblocker_color_scheme);
+    if (typeof UnsafeSearch !== 'undefined') unsafeSearchRules = UnsafeSearch.rulesFrom(result[UNSAFE_SEARCH_KEY]);
     loadSubscriptionRules(result.pblocker_subscriptions, result.pblocker_subscription_rules, true);
     
     const settings = result.pblocker_settings || {
@@ -1938,6 +1959,7 @@ async function loadSettings() {
       isEnabled = settings.enabled;
     }
     useSmartBlocking = settings.useSmartBlocking;
+    safeSearchOn = settings.safeSearchEnabled !== false;
     imageFilterLevel = normalizeImageFilterLevel(settings.imageFilterLevel);
     customKeywordList = liveListEntries(settings.customKeywordList);
     resetCustomKeywordCache(); // entries may have changed; drop stale compiles
@@ -2421,6 +2443,20 @@ function isExtensionStorePage() {
     hostMatchesDomain(host, 'chromewebstore.google.com') ||
     hostMatchesDomain(host, 'chrome.google.com') ||
     hostMatchesDomain(host, 'microsoftedge.microsoft.com');
+}
+
+// Image or video search on an engine SafeSearch can't reach, known from the
+// page itself: Startpage posts its image search to a plain /sp/search, and
+// SearXNG runs on thousands of hosts that no list can name (shared/
+// unsafe-search.js). The ones an address gives away never got this far.
+function checkUnsafeSearchPage() {
+  if (!safeSearchOn || !unsafeSearchRules || typeof UnsafeSearch === 'undefined') return false;
+  const rule = UnsafeSearch.matchPage(document, window.location.href, unsafeSearchRules);
+  if (!rule) return false;
+  log(`Image or video search SafeSearch can't reach: ${rule.name}`);
+  notifyBackground('website_blocked', { reason: getBlockedReasonLabel('unsafe_search'), title: document.title });
+  redirectToBlockedPage('unsafe_search');
+  return true;
 }
 
 // `title/…/` entries from the user's own blocklist. Deliberately not gated on
@@ -5771,6 +5807,7 @@ async function processContent() {
     // those passes stay in the top frame. The element filters below run
     // everywhere: they judge one image or one video and cost nothing per page.
     if (IS_TOP_FRAME) {
+      if (checkUnsafeSearchPage()) return;
       const searchEngine = getSearchEngine();
       if (searchEngine === 'yandex' && shouldBlockCurrentSearchQuery()) {
         log('Yandex search blocked - explicit query detected');

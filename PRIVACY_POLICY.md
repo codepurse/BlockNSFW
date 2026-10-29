@@ -172,14 +172,16 @@ you provided, on adding it and roughly once a day thereafter.
 
 BlockNSFW downloads its blocklist and whitelist from GitHub-hosted files in
 this project's repository, roughly twice a day, to keep filtering rules
-current. On the same schedule it fetches a small file listing the latest
-published version, so it can tell you when an update is available. The same
+current. With them comes a short list of search engines whose image and video
+search SafeSearch can't reach, so those can be held. On the same schedule it
+fetches a small file listing the latest published version, so it can tell you
+when an update is available. The same
 file can carry Supporter's current offer, such as a founding price, which
 Settings › Supporter shows as text.
 
 - Services used: `raw.githubusercontent.com` (the files `data/HOSTS.txt`,
-  `data/WHITELIST.txt` and `data/version.json` in this project's public
-  repository)
+  `data/WHITELIST.txt`, `data/UNSAFE_SEARCH.json` and `data/version.json` in
+  this project's public repository)
 - Purpose: update domain block and allow rules; check for a newer release
 - Data involved: standard request metadata only. These are plain file
   downloads — nothing about your browsing is sent with them, and the request

@@ -24,6 +24,7 @@ try {
     self.importScripts('shared/gateways.js');
     self.importScripts('shared/ledger.js');
     self.importScripts('shared/proxied-url.js');
+    self.importScripts('shared/unsafe-search.js');
   }
 } catch (_) {
   // shared/hostname.js or shared/host-keywords.js could not be loaded
@@ -1807,6 +1808,35 @@ async function ensureRemoteWhitelistUpToDate(options = {}) {
   return remoteWhitelistPromise;
 }
 
+// Search engines whose image and video search SafeSearch can't reach, added
+// since this release: data/UNSAFE_SEARCH.json, kept in storage for the content
+// script under UnsafeSearch.STORAGE_KEY (shared/unsafe-search.js, which holds
+// the engines that ship and never depends on this). On the blocklist's
+// schedule. A failed or unreadable download keeps the rules already there,
+// and waits as long as a good one would before the next try, so a missing
+// file costs GitHub one request per browser twice a day, not one per wake.
+const REMOTE_UNSAFE_SEARCH_URL = 'https://raw.githubusercontent.com/codepurse/BlockNSFW/refs/heads/main/data/UNSAFE_SEARCH.json';
+
+async function ensureUnsafeSearchUpToDate(options = {}) {
+  if (!self.UnsafeSearch) return null;
+  const key = self.UnsafeSearch.STORAGE_KEY;
+  const { [key]: stored } = await browserAPI.storage.local.get(key);
+  const now = Date.now();
+  const checkedAt = stored && Number(stored.checkedAt);
+  if (!options.forceRefresh && checkedAt && now - checkedAt < BLOCKLIST_CACHE_TTL) return stored;
+  const kept = stored && Array.isArray(stored.rules) ? stored.rules : [];
+  let rules = null;
+  try {
+    const response = await fetch(REMOTE_UNSAFE_SEARCH_URL, { cache: 'no-store' });
+    if (response.ok) rules = self.UnsafeSearch.parseRemote(await response.text());
+  } catch (_) {
+    rules = null;
+  }
+  const next = { rules: rules || kept, checkedAt: now, updatedAt: rules ? now : (stored && stored.updatedAt) || 0 };
+  await browserAPI.storage.local.set({ [key]: next });
+  return next;
+}
+
 function isInRemoteWhitelist(hostname) {
   if (remoteWhitelistSet.size === 0) return false;
   const normalized = normalizeDomainForCache(hostname);
@@ -3208,6 +3238,7 @@ browserAPI.runtime.onMessage.addListener((message, sender, sendResponse) => {
   } else if (message.type === 'refresh_remote_blocklist') {
     (async () => {
       try {
+        ensureUnsafeSearchUpToDate({ forceRefresh: true }).catch(() => {});
         const [blockResult] = await Promise.all([
           ensureRemoteBlocklistUpToDate({ forceRefresh: true }),
           ensureRemoteWhitelistUpToDate({ forceRefresh: true })
@@ -3912,6 +3943,7 @@ function initializeBackground() {
     await initializeExtensionStateTracking();
     await updateDnrRules();
     ensureRemoteWhitelistUpToDate().catch(e => console.warn('BlockNSFW: initial whitelist sync failed', e));
+    ensureUnsafeSearchUpToDate().catch(e => console.warn('BlockNSFW: search engine list sync failed', e));
     // Not forced: each subscription re-downloads only once its own day is up.
     // Deliberately not awaited — a slow or dead list host must not hold up
     // initialisation, and the rules already on disk are in use meanwhile.

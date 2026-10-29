@@ -1,0 +1,4 @@
+{
+  "about": "Search engines whose image and video search SafeSearch can't reach, added since the last release. BlockNSFW downloads this file about twice a day and holds image and video search on these engines while SafeSearch is on. The engines that ship are in shared/unsafe-search.js, which also describes the rule format; a rule here can only add an engine, never change or remove one that ships.",
+  "rules": []
+}
