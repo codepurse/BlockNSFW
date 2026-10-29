@@ -2500,12 +2500,21 @@ function sanitizeTextForScan(text) {
   return value.replace(/\s+/g, ' ').trim();
 }
 
+// Words a person can see, and nothing else. This fell back to textContent when
+// innerText came back empty, but empty is a page still loading: TikTok's body
+// is a run of <script> tags before anything is drawn, and textContent is their
+// source. Base64 in its config lowercases to "…bmfsexrp…", so the blocked word
+// /s[e3]x/ held a video page over text nobody could see. Nothing drawn yet is
+// nothing to judge; the scan runs again once the page has text. A body that
+// is not rendered at all gets the same answer, since innerText then returns
+// textContent too.
 function getPageTextLinesForScan() {
   if (!document.body) return [];
 
   let sourceText = '';
   try {
-    sourceText = document.body.innerText || document.body.textContent || '';
+    if (document.body.getClientRects().length === 0) return [];
+    sourceText = document.body.innerText || '';
   } catch (_) {
     return [];
   }
