@@ -224,6 +224,18 @@
             </p>
           </li>
           <li class="entry">
+            <h4 class="entry-title">The in-page &ldquo;held&rdquo; list named the search engine</h4>
+            <p class="entry-body">
+              Results held on DuckDuckGo were listed as duckduckgo.com, because the first link in each one is DuckDuckGo&rsquo;s own. Bing and Google could do the same. Each held result is now listed under the site it leads to.
+            </p>
+          </li>
+          <li class="entry">
+            <h4 class="entry-title">A page held by one of your blocked words said it was explicit</h4>
+            <p class="entry-body">
+              The blocked page described it as explicit page text, &ldquo;again and again&rdquo;, and a page held by a title rule on your blocklist only said &ldquo;Protection rules&rdquo;. They now say &ldquo;Your blocked words&rdquo; and &ldquo;Your blocklist&rdquo;, here and in the history.
+            </p>
+          </li>
+          <li class="entry">
             <h4 class="entry-title">Blocked sites opened through Google Translate or the Wayback Machine</h4>
             <p class="entry-body">
               Both show someone else&rsquo;s site from their own address, so only a site with an adult word in its name was caught. BlockNSFW now reads the site out of the address and checks it like the site itself, whitelist included. Ordinary sites through either are untouched.
@@ -233,6 +245,12 @@
             <h4 class="entry-title">YouTube videos were blocked when nothing on them was explicit</h4>
             <p class="entry-body">
               With the AI image and text blockers on, some music and anime videos opened onto the blocked page. One misread thumbnail in the related videos was enough to tip the page. Now images only count against a page when at least three are blurred and they make up at least a quarter of those checked, and the count starts over on every new video.
+            </p>
+          </li>
+          <li class="entry">
+            <h4 class="entry-title">A page you whitelisted still met its site&rsquo;s gateway</h4>
+            <p class="entry-body">
+              With instagram.com as a gateway and one profile on your whitelist, that profile still went to the pause, and to the closed page during Storm Mode and Risk Hours. A whitelist entry for a page now opens it without the pause. One for a whole site still only lifts blocks, so it doesn&rsquo;t switch the gateway off.
             </p>
           </li>
         </ul>
