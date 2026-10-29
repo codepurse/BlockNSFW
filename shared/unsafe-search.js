@@ -1,31 +1,43 @@
 // shared/unsafe-search.js
-// Image and video search on engines SafeSearch can't reach.
+// Search engines SafeSearch can't reach.
 //
 // SafeSearch is forced on the engines BlockNSFW knows how to force it on
-// (background.js, buildSafeSearchRules; content.js for the cookie-backed ones).
-// Everywhere else an image search shows thumbnails the engine serves itself, so
-// neither the blocklist nor DNS ever sees the adult site behind them. There are
-// hundreds of engines and no list can name them all, so this holds what the
-// danger is in, image and video search, rather than whole engines: a web
-// search's results are only links, and the blocklist holds a bad one when it's
-// opened. It is part of SafeSearch and goes off with it.
+// (background.js, buildSafeSearchRules; content.js for the cookie-backed ones),
+// and their results are filtered on the page. There are hundreds of others, and
+// forcing SafeSearch on each one isn't possible. On those, an image search
+// shows thumbnails the engine serves itself, the results aren't filtered, and
+// some open the sites they list on their own servers (Startpage's "Visit in
+// Anonymous View" goes through *-browse.startpage.com/av/proxy, the real
+// address encrypted), so neither the blocklist nor DNS ever sees the site. So
+// these engines are blocked outright, and searching goes through one
+// SafeSearch covers. The setting is unsafeSearchEnabled, on unless turned off,
+// next to SafeSearch's in Settings.
 //
-// A rule names an engine and how to know its image or video search:
-//   hosts      the engine's sites; each covers its subdomains
-//   paths      address paths that are image or video search ("/images" also
-//              covers "/images/..."), and/or
-//   params     address parameters that make it one ({ cat: ['images'] })
-//   generator  instead of hosts, for engines anyone can run on any host
-//              (SearXNG): what the page's <meta name="generator"> starts with
-//   page       CSS selectors that mark an image or video results page, for an
-//              engine whose address doesn't say (Startpage posts its search)
-// A rule with paths or params is checked against the address before the page
-// loads; one with page selectors is checked against the page once it has.
+// No list has every search engine. This one has the known ones, and finds
+// SearXNG, which anyone can run on their own site, from its pages wherever it
+// runs. Engines that are family-safe by design, such as Kiddle, KidzSearch and
+// Swisscows, are left open.
+//
+// A rule names an engine and how to know it:
+//   hosts      the engine's sites; each covers its subdomains. Alone, they
+//              block the whole engine, before the page loads.
+//   paths      optional: only these address paths ("/images" also covers
+//              "/images/..."), for an engine that shares its site with
+//              something else
+//   params     optional: only addresses with these parameters
+//              ({ cat: ['images'] })
+//   generator  instead of hosts, for engines anyone can run on any host: what
+//              the page's <meta name="generator"> starts with. Checked once the
+//              page has loaded.
+//   page       optional CSS selectors, one of which must be on the page, for a
+//              rule known by its page
 //
 // The engines that ship are below. data/UNSAFE_SEARCH.json in the project's
 // repository carries any added since; background.js downloads it and keeps the
 // rules in storage under STORAGE_KEY. Downloaded rules can only add engines,
-// and carry no patterns of any kind beyond plain paths and CSS selectors.
+// carry nothing beyond plain hosts, paths, parameters and CSS selectors, and
+// can never name an engine SafeSearch covers (PROTECTED), so a slip in that
+// file can't block Google for everyone.
 //
 // Loaded as a classic script by the content script and with importScripts by
 // the background, and as a CommonJS module in tests.
@@ -35,49 +47,48 @@
 
   var STORAGE_KEY = 'pblocker_unsafe_search_v1';
 
-  // Checked live on 2026-10-29 unless marked otherwise.
+  // Startpage, Mojeek and SearXNG were checked live on 2026-10-29; the rest
+  // are named by their published addresses.
   var ENGINES = [
-    {
-      // Images and Videos are forms that POST cat=images / cat=video to
-      // /sp/search, so the address says nothing; links with ?cat= do say.
-      // Its own family filter (qadf) can be switched off.
-      name: 'Startpage',
-      hosts: ['startpage.com'],
-      paths: ['/sp/search', '/do/search', '/do/dsearch', '/do/asearch'],
-      params: { cat: ['images', 'pics', 'video', 'videos'] },
-      page: [
-        'form#search input[name="cat"][value="images"]',
-        'form#search input[name="cat"][value="video"]'
-      ]
-    },
-    {
-      name: 'Mojeek',
-      hosts: ['mojeek.com'],
-      paths: ['/images']
-    },
-    {
-      // Needs an account, so not checked live: kagi.com/images?q=… and
-      // kagi.com/videos?q=… are its documented addresses.
-      name: 'Kagi',
-      hosts: ['kagi.com'],
-      paths: ['/images', '/videos']
-    },
+    { name: 'Startpage', hosts: ['startpage.com', 'ixquick.com'] },
+    { name: 'Mojeek', hosts: ['mojeek.com'] },
+    { name: 'Kagi', hosts: ['kagi.com'] },
+    { name: 'Dogpile', hosts: ['dogpile.com'] },
+    { name: 'MetaGer', hosts: ['metager.org', 'metager.de'] },
+    { name: 'Gibiru', hosts: ['gibiru.com'] },
+    { name: 'Yep', hosts: ['yep.com'] },
+    { name: 'Petal Search', hosts: ['petalsearch.com'] },
+    { name: 'Ghostery Private Search', hosts: ['ghosterysearch.com'] },
+    { name: 'Ask', hosts: ['ask.com'] },
+    { name: 'Lycos Search', hosts: ['search.lycos.com'] },
     {
       // Thousands of public instances, on any host. Every page carries
-      // <meta name="generator" content="searxng/…">, image and video results
-      // are article.category-images / .category-videos, and the search form
-      // keeps the chosen category as a hidden category_images / category_videos
-      // field, which holds a page whose results haven't arrived yet too.
+      // <meta name="generator" content="searxng/…"> (the older searx too).
       name: 'SearXNG',
-      generator: 'searx',
-      page: [
-        'article.category-images',
-        'article.category-videos',
-        'input[type="hidden"][name="category_images"]',
-        'input[type="hidden"][name="category_videos"]'
-      ]
+      generator: 'searx'
     }
   ];
+
+  // The engines SafeSearch covers. A downloaded rule naming one of them, or a
+  // parent of one ("co.uk" is a parent of google.co.uk), is no rule at all.
+  var PROTECTED_LABELS = ['google', 'bing', 'duckduckgo', 'yahoo', 'aol', 'brave', 'ecosia', 'qwant', 'presearch', 'yandex', 'youtube'];
+  var PROTECTED_DOMAINS = [
+    'google.com', 'google.co.uk', 'google.ca', 'google.com.au', 'google.co.in', 'google.co.jp',
+    'bing.com', 'duckduckgo.com', 'search.brave.com', 'yahoo.com', 'aol.com', 'ecosia.org',
+    'qwant.com', 'presearch.com', 'yandex.com', 'yandex.ru', 'youtube.com'
+  ];
+
+  function isProtectedHost(host) {
+    var h = String(host || '').toLowerCase();
+    var labels = h.split('.');
+    for (var i = 0; i < labels.length; i++) {
+      if (PROTECTED_LABELS.indexOf(labels[i]) !== -1) return true;
+    }
+    for (var j = 0; j < PROTECTED_DOMAINS.length; j++) {
+      if (PROTECTED_DOMAINS[j].slice(-(h.length + 1)) === '.' + h) return true;
+    }
+    return false;
+  }
 
   var MAX_RULES = 200;
   var MAX_LIST = 20;
@@ -97,7 +108,8 @@
 
   /**
    * A rule as it may be used, or null. Anything unexpected in a downloaded
-   * rule makes it no rule at all rather than a broader one.
+   * rule makes it no rule at all rather than a broader one, and a rule naming
+   * an engine SafeSearch covers is refused whole.
    */
   function normalizeRule(raw) {
     if (!raw || typeof raw !== 'object') return null;
@@ -105,6 +117,10 @@
     if (!name) return null;
     var rule = { name: name };
 
+    if (Array.isArray(raw.hosts)) {
+      var protectedHost = raw.hosts.some(function (h) { return typeof h === 'string' && isProtectedHost(h.trim().replace(/^www\./i, '')); });
+      if (protectedHost) return null;
+    }
     var hosts = strings(raw.hosts, function (h) { return HOST_RE.test(h.toLowerCase()); });
     if (hosts) rule.hosts = hosts.map(function (h) { return h.toLowerCase().replace(/^www\./, ''); });
     if (typeof raw.generator === 'string' && NAME_RE.test(raw.generator.trim().toLowerCase())) {
@@ -114,25 +130,31 @@
     var paths = strings(raw.paths, function (p) { return p.charAt(0) === '/' && !/[?#\s]/.test(p); });
     if (paths) rule.paths = paths.map(function (p) { return p.toLowerCase(); });
 
+    // Every parameter has to match, so one that can't be read can't be
+    // dropped: that would widen the rule.
     if (raw.params && typeof raw.params === 'object' && !Array.isArray(raw.params)) {
       var params = {};
-      var keys = Object.keys(raw.params).slice(0, MAX_LIST);
+      var keys = Object.keys(raw.params);
+      if (keys.length > MAX_LIST) return null;
       for (var i = 0; i < keys.length; i++) {
-        if (!NAME_RE.test(keys[i].toLowerCase())) continue;
-        var values = strings(raw.params[keys[i]], function () { return true; });
-        if (values) params[keys[i]] = values.map(function (v) { return v.toLowerCase(); });
+        var values = NAME_RE.test(keys[i].toLowerCase()) ? strings(raw.params[keys[i]], function () { return true; }) : null;
+        if (!values) return null;
+        params[keys[i]] = values.map(function (v) { return v.toLowerCase(); });
       }
-      if (Object.keys(params).length) rule.params = params;
+      if (keys.length) rule.params = params;
     }
 
     var page = strings(raw.page, function () { return true; });
     if (page) rule.page = page;
 
-    // An address rule needs a host; a page rule needs a host or a generator.
-    // Without them a rule would apply to every site there is.
-    var byAddress = !!(rule.hosts && (rule.paths || rule.params));
-    var byPage = !!(rule.page && (rule.hosts || rule.generator));
-    return byAddress || byPage ? rule : null;
+    // Paths, parameters or selectors that were given but didn't survive would
+    // leave a rule broader than it was written: the whole host. Drop it.
+    var given = function (value) { return Array.isArray(value) ? value.length > 0 : !!(value && typeof value === 'object' && Object.keys(value).length); };
+    if ((given(raw.paths) && !rule.paths) || (given(raw.params) && !rule.params) || (given(raw.page) && !rule.page)) return null;
+
+    // A rule needs hosts, or a generator to know its pages by. Without them it
+    // would apply to every site.
+    return rule.hosts || rule.generator ? rule : null;
   }
 
   /**
@@ -211,7 +233,7 @@
     return url.hostname.toLowerCase().replace(/\.$/, '');
   }
 
-  /** The rule whose image or video search this address is, or null. */
+  /** The engine this address belongs to, known before the page loads, or null. */
   function matchAddress(address, rules) {
     var url = parseAddress(address);
     if (!url) return null;
@@ -220,7 +242,7 @@
     var list = Array.isArray(rules) ? rules : ENGINES;
     for (var i = 0; i < list.length; i++) {
       var rule = list[i];
-      if (!rule.hosts || !(rule.paths || rule.params)) continue;
+      if (!rule.hosts || rule.page) continue;
       if (hostMatches(host, rule.hosts) && pathMatches(path, rule.paths) && paramsMatch(url.searchParams, rule.params)) {
         return rule;
       }
@@ -229,8 +251,8 @@
   }
 
   /**
-   * The rule whose image or video results this page shows, or null. `doc` is
-   * the page's document; only querySelector is used.
+   * The engine this page belongs to, known only from the page, or null. `doc`
+   * is the page's document; only querySelector is used.
    */
   function matchPage(doc, address, rules) {
     var url = parseAddress(address);
@@ -240,15 +262,15 @@
     var generator;
     for (var i = 0; i < list.length; i++) {
       var rule = list[i];
-      if (!rule.page) continue;
       if (rule.hosts) {
-        if (!hostMatches(host, rule.hosts)) continue;
+        if (!rule.page || !hostMatches(host, rule.hosts)) continue;
       } else if (rule.generator) {
         if (generator === undefined) {
           var meta = query(doc, 'meta[name="generator"]');
           generator = meta && typeof meta.content === 'string' ? meta.content.trim().toLowerCase() : '';
         }
         if (generator.indexOf(rule.generator) !== 0) continue;
+        if (!rule.page) return rule;
       } else {
         continue;
       }
@@ -272,6 +294,7 @@
   var exported = {
     STORAGE_KEY: STORAGE_KEY,
     ENGINES: ENGINES,
+    isProtectedHost: isProtectedHost,
     normalizeRule: normalizeRule,
     rulesFrom: rulesFrom,
     parseRemote: parseRemote,

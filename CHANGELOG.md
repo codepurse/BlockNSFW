@@ -71,21 +71,29 @@ All notable project changes should be documented here going forward.
   carries only the version, the browser and roughly how long BlockNSFW was
   installed (a day, a week, a month or longer); privacy policy, section 14.
 
-- **Image and video search on search engines SafeSearch can't reach is
-  held.** SafeSearch is forced on Google, Bing, DuckDuckGo, Yahoo, Brave,
-  Ecosia, Qwant, AOL Search, Presearch and Yandex. On any other engine an
-  image search shows thumbnails the engine serves itself, so neither the
-  blocklist nor DNS sees the site behind them, and "a search engine without a
-  filter" is the first thing to try when SafeSearch is in the way. With
-  SafeSearch on, image and video search are now held on Startpage, Mojeek,
-  Kagi and SearXNG, the one anyone can run on their own site, which is known
-  from the page itself wherever it runs. Web search on all of them still
-  works: its results are links, and the blocklist holds a bad one when it's
-  opened. The blocked page says SafeSearch held it, and that image search on
-  Google, Bing and DuckDuckGo still works. More engines can be added between
-  releases from `data/UNSAFE_SEARCH.json` (privacy policy, section 3), but no
-  list has every search engine. Turning SafeSearch off turns this off too,
-  with the same PIN, Pact or access code; a whitelist entry opens an engine.
+- **Search engines SafeSearch can't reach are blocked.** SafeSearch is
+  forced on Google, Bing, DuckDuckGo, Yahoo, Brave, Ecosia, Qwant, AOL
+  Search, Presearch and Yandex, and their results are filtered on the page.
+  There are hundreds of other engines, and "a search engine without a filter"
+  is the first thing to try when SafeSearch is in the way. On those, results
+  aren't filtered, an image search shows thumbnails the engine serves itself,
+  and some open the sites they list on their own servers: Startpage's "Visit
+  in Anonymous View" goes through its own address with the real one
+  encrypted, so neither the blocklist nor DNS ever sees the site. So they're
+  now blocked outright: Startpage, Mojeek, Kagi, Dogpile, MetaGer, Gibiru,
+  Yep, Petal Search, Ghostery Private Search, Ask and Lycos Search, and
+  SearXNG, the one anyone can run on their own site, which is known from its
+  pages wherever it runs. Engines that are family-safe by design (Kiddle,
+  KidzSearch, Swisscows) stay open. The blocked page says SafeSearch can't
+  reach the engine and to search with Google, Bing or DuckDuckGo instead.
+  More engines can be added between releases from `data/UNSAFE_SEARCH.json`
+  (privacy policy, section 3), which can never block an engine SafeSearch
+  covers, but no list has every search engine. It has a switch of its own,
+  on by default: Settings › Protection › Search and social › Block other
+  search engines. Turning it off asks for the PIN, the Pact or the access
+  code, as Safe Search does, and Storm Mode and Risk Hours turn it on. A
+  whitelist entry opens an engine. If you search with one of these today,
+  it's blocked after the update.
 
 ### Removed
 
@@ -202,12 +210,16 @@ All notable project changes should be documented here going forward.
   keeps `pblocker_storm_warning` (switch, "Not tonight", the storm it
   started).
 - `shared/unsafe-search.js`: `UnsafeSearch.ENGINES` (the engines that ship,
-  each with `hosts`, `paths`, `params`, `page` selectors or a `generator`),
+  each by `hosts`, which alone block the whole engine, or by a `generator`;
+  `paths`, `params` and `page` selectors can narrow a rule),
   `matchAddress(url, rules)`, `matchPage(document, url, rules)`,
-  `rulesFrom(stored)` and `parseRemote(text)`. The content script checks the
-  address in `instantBlockEarly` and the page in `checkUnsafeSearchPage`
+  `rulesFrom(stored)`, `parseRemote(text)` and `isProtectedHost(host)`, which
+  keeps a downloaded rule off the engines SafeSearch covers. The content
+  script checks the address in `instantBlockEarly` and the page in
+  `checkUnsafeSearchPage`
   (first of the top-frame checks), both after the whitelist and only with
-  `safeSearchEnabled`; new reason code `unsafe_search`. The background's
+  the new `unsafeSearchEnabled` setting (on unless false; in Boost's Storm and
+  Risk settings); new reason code `unsafe_search`. The background's
   `ensureUnsafeSearchUpToDate` downloads `data/UNSAFE_SEARCH.json` into
   `pblocker_unsafe_search_v1` on the blocklist's schedule; downloaded rules
   only add engines, and are plain hosts, paths, parameters and selectors.

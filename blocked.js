@@ -109,9 +109,9 @@ function getReasonMeta(reasonCode) {
       };
     case 'unsafe_search':
       return {
-        sourceLabel: 'SafeSearch',
-        detail: 'Blocked image search without SafeSearch',
-        message: 'SafeSearch can’t reach this search engine’s images and videos, so they’re held while it’s on. Image search on Google, Bing and DuckDuckGo still works, with SafeSearch.',
+        sourceLabel: 'Other search engines',
+        detail: 'Blocked search engine without SafeSearch',
+        message: 'SafeSearch can’t reach this search engine, so BlockNSFW holds it. Search with Google, Bing or DuckDuckGo instead: SafeSearch keeps them safe.',
         layer: 4
       };
     case 'reddit_nsfw':

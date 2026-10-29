@@ -477,6 +477,7 @@ const DEFAULT_SETTINGS = {
   dnsProvider: 'cloudflare', // see shared/dns-providers.js for the roster
   dnsCustomUrl: '', // DoH endpoint used when dnsProvider is 'custom'
   safeSearchEnabled: true,
+  unsafeSearchEnabled: true, // block search engines SafeSearch can't reach (shared/unsafe-search.js)
   facebookReelsEnabled: false,
   instagramReelsEnabled: false,
   aiImageBlocker: false, // Beta — opt-in (off on fresh install)
@@ -1808,8 +1809,8 @@ async function ensureRemoteWhitelistUpToDate(options = {}) {
   return remoteWhitelistPromise;
 }
 
-// Search engines whose image and video search SafeSearch can't reach, added
-// since this release: data/UNSAFE_SEARCH.json, kept in storage for the content
+// Search engines SafeSearch can't reach, added since this release:
+// data/UNSAFE_SEARCH.json, kept in storage for the content
 // script under UnsafeSearch.STORAGE_KEY (shared/unsafe-search.js, which holds
 // the engines that ship and never depends on this). On the blocklist's
 // schedule. A failed or unreadable download keeps the rules already there,

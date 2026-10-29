@@ -2615,18 +2615,30 @@
         <div class="group group-split" id="safe-search-card">
           <div class="group-aside">
           <h3 class="group-title">Search and social</h3>
-          <p class="group-desc">Forces family-safe results on the major search engines, and can hide Facebook and Instagram Reels.</p>
+          <p class="group-desc">Forces family-safe results on the major search engines, blocks the others, and can hide Facebook and Instagram Reels.</p>
           </div>
           <div class="group-body">
           <div class="rows rows-closed">
             <div class="row">
               <div class="row-text">
                 <label class="row-label" for="safe-search-enabled">Safe Search</label>
-                <p class="row-desc" id="safe-search-enabled-desc">Google, Bing, DuckDuckGo, Yahoo, Brave, Ecosia, Qwant, AOL Search, Presearch and Yandex. DuckDuckGo and Brave go through their dedicated safe sites; on the others strict filtering is enforced as each request is made, and their own SafeSearch controls are locked where that’s possible. On search engines it can’t reach, such as Startpage, Mojeek, Kagi and self-hosted SearXNG, image and video search are held; their web search still works. The list grows between releases, but no list has every search engine.</p>
+                <p class="row-desc" id="safe-search-enabled-desc">Google, Bing, DuckDuckGo, Yahoo, Brave, Ecosia, Qwant, AOL Search, Presearch and Yandex. DuckDuckGo and Brave go through their dedicated safe sites; on the others strict filtering is enforced as each request is made, and their own SafeSearch controls are locked where that’s possible.</p>
                 <span class="locked-note" data-lock="normal" data-lock-when="Turning it off" hidden></span>
               </div>
               <label class="switch">
                 <input type="checkbox" class="switch-input" role="switch" id="safe-search-enabled" aria-describedby="safe-search-enabled-desc" />
+                <span class="switch-track" aria-hidden="true"><span class="switch-thumb"></span></span>
+                <span class="switch-state" aria-hidden="true"></span>
+              </label>
+            </div>
+            <div class="row">
+              <div class="row-text">
+                <label class="row-label" for="unsafe-search-enabled">Block other search engines</label>
+                <p class="row-desc" id="unsafe-search-enabled-desc">Search engines Safe Search can’t reach are blocked, such as Startpage, Mojeek, Kagi, Dogpile and self-hosted SearXNG. Their results aren’t filtered, their image search shows pictures nothing else can check, and some open sites on their own servers. Search with one of the engines above instead. The list grows between releases, but no list has every search engine.</p>
+                <span class="locked-note" data-lock="normal" data-lock-when="Turning it off" hidden></span>
+              </div>
+              <label class="switch">
+                <input type="checkbox" class="switch-input" role="switch" id="unsafe-search-enabled" aria-describedby="unsafe-search-enabled-desc" />
                 <span class="switch-track" aria-hidden="true"><span class="switch-thumb"></span></span>
                 <span class="switch-state" aria-hidden="true"></span>
               </label>

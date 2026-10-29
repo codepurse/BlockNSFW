@@ -68,7 +68,7 @@ Main files:
 - `stats.html` / `stats.js` - statistics view
 - `data/HOSTS.txt` - curated source blocklist (self-hosted in `data/` under MIT)
 - `data/WHITELIST.txt` - curated global whitelist
-- `data/UNSAFE_SEARCH.json` - search engines whose image search SafeSearch can't reach, added since the last release (the ones that ship are in `shared/unsafe-search.js`)
+- `data/UNSAFE_SEARCH.json` - search engines SafeSearch can't reach, blocked while "Block other search engines" is on, added since the last release (the ones that ship are in `shared/unsafe-search.js`)
 - `data/SOURCE_NOTES.txt` - data-file provenance, curation policy, missed-site flow
 - `blocklist.json` - bundled fallback blocklist (regenerated from `data/HOSTS.txt`)
 - `build-chrome.ps1` / `build-firefox.ps1` - release bundle scripts

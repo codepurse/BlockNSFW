@@ -34,6 +34,7 @@ const DEFAULT_SETTINGS = {
   dnsProvider: 'cloudflare', // see shared/dns-providers.js for the roster
   dnsCustomUrl: '', // DoH endpoint used when dnsProvider is 'custom'
   safeSearchEnabled: true,
+  unsafeSearchEnabled: true,
   facebookReelsEnabled: false,
   instagramReelsEnabled: false,
   aiImageBlocker: false,
@@ -2886,6 +2887,10 @@ async function render() {
   if (safeSearchToggle) {
     safeSearchToggle.checked = safeSearchOn;
   }
+  const unsafeSearchToggle = $('unsafe-search-enabled');
+  if (unsafeSearchToggle) {
+    unsafeSearchToggle.checked = settings.unsafeSearchEnabled !== false;
+  }
   const facebookReelsToggle = $('facebook-reels-enabled');
   if (facebookReelsToggle) {
     facebookReelsToggle.checked = facebookReelsOn;
@@ -3891,6 +3896,31 @@ async function init() {
         e.target.checked
           ? 'Safe Search enforced on Google, Bing, DuckDuckGo, Yahoo, Brave, Ecosia, Qwant, AOL Search, Presearch & Yandex'
           : 'Safe Search enforcement disabled',
+        e.target.checked ? 'success' : 'info'
+      );
+    });
+  }
+
+  // Search engines Safe Search can't reach (shared/unsafe-search.js). On
+  // unless switched off, so an absent key reads as on.
+  const unsafeSearchToggleEl = $('unsafe-search-enabled');
+  if (unsafeSearchToggleEl) {
+    unsafeSearchToggleEl.addEventListener('change', async (e) => {
+      const settings = await getSettings();
+      if (settings.unsafeSearchEnabled !== false && !e.target.checked) {
+        const ok = await guardWeakening('allow search engines Safe Search can’t reach', {}, settingsChange({ unsafeSearchEnabled: false }));
+        if (!ok) {
+          e.target.checked = true;
+          return;
+        }
+      }
+      settings.unsafeSearchEnabled = e.target.checked;
+      await setSettings(settings);
+      await render();
+      showToast(
+        e.target.checked
+          ? 'Search engines Safe Search can’t reach are blocked.'
+          : 'Other search engines are allowed.',
         e.target.checked ? 'success' : 'info'
       );
     });

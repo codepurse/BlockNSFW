@@ -172,8 +172,8 @@ you provided, on adding it and roughly once a day thereafter.
 
 BlockNSFW downloads its blocklist and whitelist from GitHub-hosted files in
 this project's repository, roughly twice a day, to keep filtering rules
-current. With them comes a short list of search engines whose image and video
-search SafeSearch can't reach, so those can be held. On the same schedule it
+current. With them comes a short list of search engines SafeSearch can't
+reach, so those can be blocked. On the same schedule it
 fetches a small file listing the latest published version, so it can tell you
 when an update is available. The same
 file can carry Supporter's current offer, such as a founding price, which

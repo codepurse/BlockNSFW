@@ -531,12 +531,12 @@ let anyTextFeatureOn = true;
 // so a user-trusted site is a real escape hatch — no scanning, no per-mutation
 // work — instead of only processContent respecting it.
 let pageWhitelisted = false;
-// Image and video search on engines SafeSearch can't reach (shared/
-// unsafe-search.js): the downloaded rules' storage key (UnsafeSearch.STORAGE_KEY,
+// Search engines SafeSearch can't reach (shared/unsafe-search.js): the
+// downloaded rules' storage key (UnsafeSearch.STORAGE_KEY,
 // read before that module is asked), and loadSettings' copy of the switch and
 // the rules for checkUnsafeSearchPage.
 const UNSAFE_SEARCH_KEY = 'pblocker_unsafe_search_v1';
-let safeSearchOn = true;
+let unsafeSearchOn = true;
 let unsafeSearchRules = null;
 
 // Adult content detection keywords (used for domain/site name lookups).
@@ -1422,7 +1422,7 @@ function getBlockedReasonLabel(reasonKey) {
     case 'dns_blocked':
       return 'Blocked by DNS filter';
     case 'unsafe_search':
-      return 'Blocked image search without SafeSearch';
+      return 'Blocked search engine without SafeSearch';
     case 'custom_blocklist':
       return 'Blocked by custom blocklist';
     case 'custom_title_pattern':
@@ -1553,10 +1553,10 @@ function getBlockedReasonLabel(reasonKey) {
         };
         if (isAllowed(normalizedHost, pathname)) return; // Whitelisted -> allow
 
-        // Image or video search on an engine SafeSearch can't reach, known by
-        // its address (shared/unsafe-search.js). Part of SafeSearch, so it
-        // goes off with it. Ones only the page can show are checkUnsafeSearchPage.
-        if (settings.safeSearchEnabled !== false && typeof UnsafeSearch !== 'undefined' &&
+        // A search engine SafeSearch can't reach, known by its address
+        // (shared/unsafe-search.js). On unless its own switch is off. Ones
+        // only the page can show are checkUnsafeSearchPage.
+        if (settings.unsafeSearchEnabled !== false && typeof UnsafeSearch !== 'undefined' &&
             UnsafeSearch.matchAddress(urlStr, UnsafeSearch.rulesFrom(result[UNSAFE_SEARCH_KEY]))) {
           redirectNow('unsafe_search', getBlockedReasonLabel('unsafe_search'));
           return;
@@ -1959,7 +1959,7 @@ async function loadSettings() {
       isEnabled = settings.enabled;
     }
     useSmartBlocking = settings.useSmartBlocking;
-    safeSearchOn = settings.safeSearchEnabled !== false;
+    unsafeSearchOn = settings.unsafeSearchEnabled !== false;
     imageFilterLevel = normalizeImageFilterLevel(settings.imageFilterLevel);
     customKeywordList = liveListEntries(settings.customKeywordList);
     resetCustomKeywordCache(); // entries may have changed; drop stale compiles
@@ -2445,15 +2445,15 @@ function isExtensionStorePage() {
     hostMatchesDomain(host, 'microsoftedge.microsoft.com');
 }
 
-// Image or video search on an engine SafeSearch can't reach, known from the
-// page itself: Startpage posts its image search to a plain /sp/search, and
-// SearXNG runs on thousands of hosts that no list can name (shared/
-// unsafe-search.js). The ones an address gives away never got this far.
+// A search engine SafeSearch can't reach, known from the page itself: SearXNG
+// runs on thousands of hosts that no list can name, and says what it is in
+// every page's generator meta (shared/unsafe-search.js). The ones an address
+// gives away never got this far.
 function checkUnsafeSearchPage() {
-  if (!safeSearchOn || !unsafeSearchRules || typeof UnsafeSearch === 'undefined') return false;
+  if (!unsafeSearchOn || !unsafeSearchRules || typeof UnsafeSearch === 'undefined') return false;
   const rule = UnsafeSearch.matchPage(document, window.location.href, unsafeSearchRules);
   if (!rule) return false;
-  log(`Image or video search SafeSearch can't reach: ${rule.name}`);
+  log(`Search engine SafeSearch can't reach: ${rule.name}`);
   notifyBackground('website_blocked', { reason: getBlockedReasonLabel('unsafe_search'), title: document.title });
   redirectToBlockedPage('unsafe_search');
   return true;
