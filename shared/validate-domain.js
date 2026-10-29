@@ -192,6 +192,48 @@
     return false;
   }
 
+  /** Whether a site entry in the list holds this address. */
+  function blocksAddress(list, address) {
+    var entries = Array.isArray(list) ? list : [];
+    for (var i = 0; i < entries.length; i++) {
+      var regex = siteEntryRegex(entries[i]);
+      if (regex && regex.test(address)) return true;
+    }
+    return false;
+  }
+
+  // --- Sites that hold other things people need -------------------------------
+  // A few sites keep things nobody means to block under the same name as the
+  // part they want gone. A student blocked google.com to stop searching and
+  // lost Gmail and Google Classroom with it. The popup's Block button and the
+  // Block box beside search results say so before adding one of these, and
+  // name the entry that blocks only its searches.
+  var SHARED_SITES = [
+    {
+      host: 'google.com',
+      name: 'Google',
+      also: 'Gmail, Google Classroom, Docs, Drive and Meet',
+      search: 'google.com/search',
+      searchExample: 'https://www.google.com/search?q=example'
+    },
+    {
+      host: 'yahoo.com',
+      name: 'Yahoo',
+      also: 'Yahoo Mail',
+      search: 'search.yahoo.com',
+      searchExample: 'https://search.yahoo.com/search?p=example'
+    }
+  ];
+
+  /** The shared site this host is (itself or "www.", not a subdomain), or null. */
+  function sharedSite(host) {
+    var h = normalizeBlockHost(String(host || '')).replace(/^www\./, '');
+    for (var i = 0; i < SHARED_SITES.length; i++) {
+      if (SHARED_SITES[i].host === h) return SHARED_SITES[i];
+    }
+    return null;
+  }
+
   /**
    * The entries in a list that block only part of a site, as written, leaving
    * out any whose whole site another entry in the list already blocks.
@@ -263,6 +305,9 @@
     parseSiteEntry: parseSiteEntry,
     siteEntryRegex: siteEntryRegex,
     blocksWholeSite: blocksWholeSite,
+    blocksAddress: blocksAddress,
+    SHARED_SITES: SHARED_SITES,
+    sharedSite: sharedSite,
     partialSiteEntries: partialSiteEntries,
     normalizeWhitelistPath: normalizeWhitelistPath,
     whitelistPathMatches: whitelistPathMatches,

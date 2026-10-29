@@ -244,6 +244,12 @@
     #pact-modal-overlay .dialog-actions {
       flex-wrap: wrap;
     }
+    /* Three choices don't fit across the popup: stacked, the narrower block
+       on top and Cancel last. */
+    #shared-site-modal-overlay .dialog-actions {
+      flex-direction: column;
+      align-items: stretch;
+    }
 
     .links {
       border-top: 1px solid var(--color-rule);
@@ -634,6 +640,20 @@
       <div class="dialog-actions">
         <button type="button" id="storm-cancel" class="btn btn-ghost">Cancel</button>
         <button type="button" id="storm-ok" class="btn btn-primary">Start Storm Mode</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Blocking a site that also holds things people need (google.com holds
+       Gmail and Classroom): said first, with its searches offered alone. -->
+  <div id="shared-site-modal-overlay" class="dialog-scrim hidden" aria-hidden="true">
+    <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="shared-site-modal-title" aria-describedby="shared-site-modal-desc">
+      <h2 class="dialog-title" id="shared-site-modal-title">Block all of this site?</h2>
+      <p class="dialog-desc" id="shared-site-modal-desc"></p>
+      <div class="dialog-actions">
+        <button type="button" id="shared-site-search" class="btn btn-primary">Block only searches</button>
+        <button type="button" id="shared-site-all" class="btn btn-ghost">Block all of it</button>
+        <button type="button" id="shared-site-cancel" class="btn btn-ghost">Cancel</button>
       </div>
     </div>
   </div>

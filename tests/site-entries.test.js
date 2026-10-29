@@ -274,3 +274,63 @@ test('the notice is left for an update that crosses 2.0.3, and only then', async
     assert.equal(writes.length, 0, JSON.stringify(run));
   }
 });
+
+// --- Sites that hold other things people need ------------------------------------
+
+test('sharedSite knows google.com and yahoo.com, not their subdomains', () => {
+  assert.equal(DomainValidate.sharedSite('google.com').host, 'google.com');
+  assert.equal(DomainValidate.sharedSite('WWW.Google.com.').host, 'google.com');
+  assert.equal(DomainValidate.sharedSite('yahoo.com').host, 'yahoo.com');
+  for (const host of ['mail.google.com', 'classroom.google.com', 'google.co.uk', 'notgoogle.com', '', null]) {
+    assert.equal(DomainValidate.sharedSite(host), null, String(host));
+  }
+});
+
+test('each shared site takes what the warning names, and its searches entry keeps it', () => {
+  const named = {
+    'google.com': ['https://mail.google.com/mail/u/0/', 'https://classroom.google.com/u/0/h',
+      'https://docs.google.com/document/d/x', 'https://drive.google.com/drive/my-drive', 'https://meet.google.com/abc-defg-hij'],
+    'yahoo.com': ['https://mail.yahoo.com/d/folders/1']
+  };
+  for (const site of DomainValidate.SHARED_SITES) {
+    assert.ok(named[site.host], `${site.host} needs addresses for what it holds`);
+    for (const url of named[site.host]) {
+      assert.equal(navigation(site.host, url), true, `${site.host} should take ${url}`);
+      assert.equal(navigation(site.search, url), false, `${site.search} should keep ${url}`);
+      assert.equal(inPage(site.search, url), false, `${site.search} should keep ${url} in-page`);
+    }
+    assert.equal(navigation(site.search, site.searchExample), true, `${site.search} should hold a search`);
+    assert.equal(inPage(site.search, site.searchExample), true, `${site.search} should hold a search in-page`);
+  }
+});
+
+test('blocksAddress asks every site entry in a list', () => {
+  assert.equal(DomainValidate.blocksAddress(['# note', 'google.com/search'], 'https://www.google.com/search?q=x'), true);
+  assert.equal(DomainValidate.blocksAddress(['google.com/search'], 'https://mail.google.com/'), false);
+  assert.equal(DomainValidate.blocksAddress(['/google/'], 'https://www.google.com/'), false, 'a /pattern/ is not a site entry');
+  assert.equal(DomainValidate.blocksAddress(undefined, 'https://www.google.com/'), false);
+});
+
+test('the popup asks before blocking a shared site, and offers its searches', () => {
+  const popupSource = fs.readFileSync(path.join(root, 'popup.js'), 'utf8');
+  const popupHtml = fs.readFileSync(path.join(root, 'popup.html'), 'utf8');
+  const block = functionSource(popupSource, 'blockCurrentSite');
+  assert.match(block, /DomainValidate\.sharedSite\(domain\)/);
+  assert.match(block, /showSharedSiteDialog\(shared, domain, searchListed\)/);
+  assert.match(block, /if \(!choice\) return;/, 'Cancel adds nothing');
+  assert.match(block, /choice === 'search'\) entry = shared\.search/);
+  for (const id of ['shared-site-modal-overlay', 'shared-site-modal-title', 'shared-site-modal-desc', 'shared-site-cancel', 'shared-site-all', 'shared-site-search']) {
+    assert.match(popupHtml, new RegExp(`id="${id}"`), id);
+  }
+  assert.match(popupSource, /holdFocusIn\(\$\('shared-site-modal-overlay'\), \$\('shared-site-cancel'\)\)/);
+});
+
+test('the Block box beside a search result says what google.com also holds', () => {
+  const sandbox = { self: { DomainValidate } };
+  vm.createContext(sandbox);
+  vm.runInContext(functionSource(contentSource, 'quickBlockHint') + '\nglobalThis.hint = quickBlockHint;', sandbox);
+  assert.equal(sandbox.hint('google.com'),
+    'This also blocks Gmail, Google Classroom, Docs, Drive and Meet. To block only Google searches, add google.com/search to your blocklist in Settings.');
+  assert.equal(sandbox.hint('mail.google.com'), 'Its subdomains are blocked too. Shorten it to block more of a site.');
+  assert.match(functionSource(contentSource, 'openQuickBlock'), /input\.addEventListener\('input', \(\) => \{ hint\.textContent = quickBlockHint\(input\.value\); \}\)/);
+});

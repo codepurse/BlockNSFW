@@ -497,6 +497,41 @@ function showStormDialog() {
   });
 }
 
+// --- Blocking a site that holds other things -------------------------------------
+
+// Before "Block" adds a site like google.com, which also holds Gmail and
+// Classroom (DomainValidate.sharedSite). Resolves 'search' to block only its
+// searches, 'all' for the whole site, or null. When its searches are already
+// blocked, only the whole site is offered.
+function showSharedSiteDialog(site, domain, searchListed) {
+  const overlay = $('shared-site-modal-overlay');
+  if (!overlay) return Promise.resolve('all');
+  const all = $('shared-site-all');
+  const search = $('shared-site-search');
+  const cancel = $('shared-site-cancel');
+  $('shared-site-modal-title').textContent = `Block all of ${domain}?`;
+  $('shared-site-modal-desc').textContent = searchListed
+    ? `That also blocks ${site.also}. ${site.name} searches are already on your blocklist.`
+    : `That also blocks ${site.also}. To stop searching and keep the rest, block only ${site.name} searches.`;
+  all.textContent = `Block all of ${domain}`;
+  search.hidden = searchListed;
+  all.className = searchListed ? 'btn btn-primary' : 'btn btn-ghost';
+  openDialog(overlay);
+  (searchListed ? cancel : search).focus();
+  return new Promise(resolve => {
+    const finish = (value) => {
+      all.onclick = null;
+      search.onclick = null;
+      cancel.onclick = null;
+      closeDialog(overlay);
+      resolve(value);
+    };
+    all.onclick = () => finish('all');
+    search.onclick = () => finish('search');
+    cancel.onclick = () => finish(null);
+  });
+}
+
 // "New" beside Your week from its last evening until it's opened
 // (shared/weekly.js).
 async function markNewWeek() {
@@ -1265,7 +1300,17 @@ async function blockCurrentSite() {
       await updateUI(); // already blocked — just refresh the row state
       return;
     }
-    patterns.push(domain);
+    // Blocking google.com also blocks Gmail and Classroom: say so first, and
+    // offer to block only its searches.
+    let entry = domain;
+    const shared = self.DomainValidate.sharedSite(domain);
+    if (shared) {
+      const searchListed = self.DomainValidate.blocksAddress(patterns, shared.searchExample);
+      const choice = await showSharedSiteDialog(shared, domain, searchListed);
+      if (!choice) return;
+      if (choice === 'search') entry = shared.search;
+    }
+    patterns.push(entry);
     settings.customPatterns = patterns;
     await setSettings(settings);
     await updateUI();
@@ -1472,9 +1517,18 @@ async function updateUI() {
           blockBtn.textContent = alreadyBlocked ? 'Blocked' : 'Block';
         }
         if (blockDesc) {
+          // On google.com with only its searches blocked, say that rather
+          // than nothing: Block would add the rest of Google.
+          const shared = self.DomainValidate.sharedSite(domain);
+          const searchListed = !!shared && !alreadyBlocked &&
+            self.DomainValidate.blocksAddress(settings.customPatterns, shared.searchExample);
           blockDesc.textContent = isWhitelisted
             ? 'It’s on your whitelist. Remove it there to block it.'
-            : (alreadyBlocked ? 'This site is on your blocklist.' : 'Adds this site to your blocklist.');
+            : alreadyBlocked
+              ? 'This site is on your blocklist.'
+              : searchListed
+                ? `${shared.name} searches are on your blocklist. The rest of ${domain} isn’t.`
+                : 'Adds this site to your blocklist.';
         }
       }
     } else {
@@ -1784,6 +1838,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   holdFocusIn($('duration-modal-overlay'), $('duration-cancel'));
   holdFocusIn($('pact-modal-overlay'), $('pact-cancel'));
   holdFocusIn($('storm-modal-overlay'), $('storm-cancel'));
+  holdFocusIn($('shared-site-modal-overlay'), $('shared-site-cancel'));
 
   const stormBtn = $('storm-btn');
   if (stormBtn) stormBtn.addEventListener('click', startStorm);

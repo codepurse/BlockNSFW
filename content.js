@@ -3869,6 +3869,16 @@ function closeQuickBlock(refocus) {
   }
 }
 
+// The line under the Block box. A site that also holds Gmail and Classroom
+// (DomainValidate.sharedSite) says so, and where to block only its searches:
+// the box takes a site, not a path.
+function quickBlockHint(host) {
+  const shared = self.DomainValidate.sharedSite(host);
+  return shared
+    ? `This also blocks ${shared.also}. To block only ${shared.name} searches, add ${shared.search} to your blocklist in Settings.`
+    : 'Its subdomains are blocked too. Shorten it to block more of a site.';
+}
+
 function openQuickBlock(host, anchorHolder, anchorButton) {
   closeQuickBlock(false);
   if (!document.body) return;
@@ -3890,8 +3900,9 @@ function openQuickBlock(host, anchorHolder, anchorButton) {
   input.value = host;
   setHeldAttrs(input, { 'aria-label': 'Site to block', spellcheck: 'false', autocomplete: 'off' });
   panel.appendChild(input);
-  panel.appendChild(heldNode(ui, 'p', 'bn-qb-hint',
-    'Its subdomains are blocked too. Shorten it to block more of a site.'));
+  const hint = heldNode(ui, 'p', 'bn-qb-hint', quickBlockHint(host));
+  panel.appendChild(hint);
+  input.addEventListener('input', () => { hint.textContent = quickBlockHint(input.value); });
   const actions = heldNode(ui, 'div', 'bn-qb-actions');
   const go = heldNode(ui, 'button', 'bn-qb-go', 'Block');
   go.type = 'button';

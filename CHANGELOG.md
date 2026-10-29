@@ -155,7 +155,12 @@ All notable project changes should be documented here going forward.
   `example.com/adult` no longer holds `/adulting`. An entry with a path may
   now let through the rest of a site it used to hold, so after the update
   Settings lists any of yours that do, each with "Block all of …" (adding
-  never asks for your PIN), and "Keep them as they are".
+  never asks for your PIN), and "Keep them as they are". And "Block" in the
+  toolbar popup no longer takes all of Google in one tap: on google.com it
+  says first that blocking the site also blocks Gmail, Google Classroom,
+  Docs, Drive and Meet, and offers "Block only searches". The Block box
+  beside a search result says the same. Yahoo, which keeps Yahoo Mail under
+  yahoo.com, is treated alike.
 
 ### For contributors
 
@@ -220,8 +225,12 @@ All notable project changes should be documented here going forward.
   `hostCoveredByPatterns` all read entries through it; `globToRegexSource`
   and `blockHostBase` are gone. On an update that crosses 2.0.3,
   `notePathEntries` leaves `pblocker_path_entries_notice` (`{ entries, at }`)
-  for `options.js` (`renderPathEntriesNotice`). Tests:
-  `tests/site-entries.test.js`.
+  for `options.js` (`renderPathEntriesNotice`). `DomainValidate.SHARED_SITES`
+  lists sites that hold other things people need (what they hold, and the
+  entry for their searches alone); `sharedSite(host)` finds one, and the
+  popup's `blockCurrentSite` asks through `showSharedSiteDialog` before
+  adding it. The content script's `quickBlockHint` words the Block box.
+  Tests: `tests/site-entries.test.js`.
 - Blocklist curation (`scripts/curation`) took in almost nothing: the scorer
   judged the first label of any three-part host (`ads.alphaporno.com` as
   "ads"), and the run of 2026-10-25 merged none of 875,004 candidates. It now
