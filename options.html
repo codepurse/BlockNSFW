@@ -256,6 +256,23 @@
       align-items: center;
       gap: var(--space-2);
     }
+    .path-entries {
+      margin: var(--space-3) 0 0;
+      padding: 0;
+      list-style: none;
+    }
+    .path-entries li {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--space-2);
+      padding: var(--space-2) 0;
+      border-top: 1px solid var(--color-rule);
+    }
+    .path-entries code {
+      overflow-wrap: anywhere;
+    }
     .icon-btn {
       display: inline-flex;
       align-items: center;
@@ -2158,6 +2175,20 @@
         </div>
       </div>
 
+      <!-- Entries with a path: shown after the 2.0.3 update to someone whose
+           entries held their whole site until then (background.js,
+           notePathEntries), until each is dealt with. -->
+      <div class="banner hidden" id="path-entries-banner" role="status">
+        <div class="banner-text">
+          <p class="row-label">Entries with a path now block only that part of a site</p>
+          <p class="row-desc">Until this update, an entry like <code>reddit.com/r/example</code> held all of reddit.com once a page had loaded. It now holds only that part, as the entry says. If you meant the whole site, block it here. Adding to your blocklist never asks for your PIN.</p>
+          <ul class="path-entries" id="path-entries-list"></ul>
+        </div>
+        <div class="banner-actions">
+          <button type="button" class="btn btn-ghost btn-sm" id="path-entries-keep">Keep them as they are</button>
+        </div>
+      </div>
+
       <!-- Pin prompt: shown when the toolbar icon is not pinned, so the count is
            hidden behind the browser's extensions menu. -->
       <div class="banner hidden" id="pin-banner" role="status">
@@ -2977,7 +3008,7 @@ another phrase
           </div>
           <div class="group-body">
           <div class="rows rows-closed">
-            <div class="row"><div class="row-text"><span class="row-label">Sites, with wildcards</span><p class="row-desc"><code>pornhub.com</code> · <code>*.inappropriate.net</code> · <code>example.com/adult/*</code></p></div></div>
+            <div class="row"><div class="row-text"><span class="row-label">Sites, with wildcards</span><p class="row-desc"><code>pornhub.com</code> · <code>*.inappropriate.net</code> · <code>example.com/adult/*</code>. A site covers its subdomains, with or without <code>www.</code>, so <code>google.com</code> also blocks Gmail and Classroom. With a path, only that part is blocked: <code>google.com/search</code> holds Google searches and leaves the rest open.</p></div></div>
             <div class="row"><div class="row-text"><span class="row-label">A whole top-level domain</span><p class="row-desc"><code>.xyz</code> or <code>xyz</code> blocks every site that ends in it. Some endings are used almost only for spam and malware, and this covers all of them at once, which also makes it the broadest entry you can write, so check it’s what you want. Images from a blocked ending are hidden on the page rather than stopped on the network.</p></div></div>
             <div class="row"><div class="row-text"><span class="row-label">A regular expression on the address</span><p class="row-desc"><code>/example\.(net|org)/</code></p></div></div>
             <div class="row"><div class="row-text"><span class="row-label">A regular expression on the page title</span><p class="row-desc"><code>title/Example Domain/</code>. Title patterns match once the page loads, so the page shows briefly before it’s held; address patterns hold it before it loads at all.</p></div></div>

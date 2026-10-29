@@ -1225,20 +1225,14 @@ async function isCurrentSiteWhitelisted() {
   return whitelist.some(item => item.domain === domain && !item.path);
 }
 
-// Is `host` already covered by an existing custom pattern? Mirrors the host
-// half of content.js's customPatternsMatchHost so the popup won't add a
-// duplicate (or a domain already caught by a `*.` parent entry). Path-scoped
-// patterns (e.g. "example.com/x") are ignored here: they're narrower than the
-// whole-domain block this button adds, so they shouldn't suppress it.
+// Is `host` already covered by an existing custom pattern? Read the way
+// blocking reads it (shared/validate-domain.js), so the popup won't add a
+// duplicate, or a domain already caught by a parent or `www.` entry.
+// Path-scoped patterns (e.g. "example.com/x") don't count: they're narrower
+// than the whole-domain block this button adds, so they shouldn't suppress it.
 function hostCoveredByPatterns(host, patterns) {
   if (!host || !Array.isArray(patterns)) return false;
-  const h = host.toLowerCase().replace(/^www\./, '');
-  return patterns.some(raw => {
-    const p = (raw || '').trim().toLowerCase();
-    if (!p || p.indexOf('/') >= 0) return false; // skip path-scoped patterns
-    const base = p.startsWith('*.') ? p.slice(2) : p;
-    return h === base || h.endsWith('.' + base);
-  });
+  return self.DomainValidate.blocksWholeSite(patterns, host);
 }
 
 // Whether the current tab's domain is already on the custom blocklist.

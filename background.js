@@ -1838,17 +1838,6 @@ function patternToRegex(pattern) {
   return regex;
 }
 
-// Escapes a user glob for use inside a larger regex: regex metacharacters
-// become literals, while `*` and `?` keep their wildcard meaning. Unlike
-// patternToRegex this does not anchor, so the caller can wrap it in scheme and
-// path scaffolding without that scaffolding being escaped too.
-function globToRegexSource(glob) {
-  return String(glob)
-    .replace(/[.+^${}()|[\]\\]/g, '\\$&')
-    .replace(/\*/g, '.*')
-    .replace(/\?/g, '.');
-}
-
 function buildHostPatterns(patterns) {
   const compiled = [];
   // Pre-allocate array size for better memory efficiency
@@ -1890,43 +1879,12 @@ function buildHostPatterns(patterns) {
         continue;
       }
 
-      // Build the regex from the user's glob, then add the scheme and optional
-      // path as real regex syntax.
-      //
-      // These used to be concatenated first and escaped afterwards, which meant
-      // the scheme and path scaffolding was escaped along with the user's text:
-      // "example.com" compiled to /^https.:\/\/example\.com\(\/\..*\).$/ — a
-      // pattern demanding a literal "(" in the URL, so it matched nothing.
-      // Custom blocklist entries were therefore never blocked at navigation
-      // time; only the content script caught them, after the page had begun
-      // loading. Escaping the user's part alone fixes that.
-      if (!/^https?:\/\//i.test(p)) {
-        const slash = p.indexOf('/');
-        // A leading dot (".xyz", ".example.com") names the same thing as the
-        // bare form; left in, it compiled to a pattern demanding a literal
-        // double dot and so matched nothing. The content script applies the
-        // same rule, and the two layers have to agree.
-        const hostPart = (slash >= 0 ? p.slice(0, slash) : p).replace(/^\.+/, '');
-        const pathPart = slash >= 0 ? p.slice(slash) : '';
-        if (!hostPart) continue;
-        // A bare host covers its subdomains, matching how the content script
-        // reads the same entry (host === base || host endsWith '.' + base).
-        // The two layers must agree or a site blocks on one and not the other.
-        //
-        // The subdomain prefix stops at the first '/'. The '*.' form used to
-        // allow '.*' there, which ran on into the path: '*.xxx' blocked any
-        // page whose path ended in "a.xxx", and '*.example.com' blocked a
-        // search for "site.example.com". Subscribed lists made that reachable
-        // at scale — OISD's NSFW list carries '*.xxx', '*.porn', '*.sex' and
-        // '*.adult'.
-        const hostSrc = hostPart.startsWith('*.')
-          ? '(?:[^/]*\\.)?' + globToRegexSource(hostPart.slice(2))
-          : '(?:[^/]*\\.)?' + globToRegexSource(hostPart);
-        regex = new RegExp('^https?://' + hostSrc + globToRegexSource(pathPart) + '(/.*)?$', 'i');
-      } else {
-        regex = new RegExp('^' + globToRegexSource(p) + '(/.*)?$', 'i');
-      }
-      
+      // A site, with or without a path. What that covers is decided in one
+      // place, shared/validate-domain.js, which the content script reads too:
+      // the two used to compile entries a copy each, and a site blocked on one
+      // and not the other.
+      regex = self.DomainValidate.siteEntryRegex(p);
+
       if (regex) {
         compiled[validCount++] = regex;
       }
@@ -2005,16 +1963,11 @@ async function setSettings(newSettings) {
   await browserAPI.storage.local.set({ [SETTINGS_KEY]: newSettings });
 }
 
-// Whether a plain host entry on the user's blocklist already covers this host.
-// Path entries, /patterns/, title rules and notes are not host entries.
+// Whether an entry on the user's blocklist already blocks this host's whole
+// site, read the way navigation reads it (shared/validate-domain.js). Path
+// entries, /patterns/, title rules and notes don't.
 function blocklistCoversHost(host, patterns) {
-  const h = String(host || '').toLowerCase().replace(/^www\./, '');
-  return (Array.isArray(patterns) ? patterns : []).some((raw) => {
-    const p = String(raw || '').trim().toLowerCase();
-    if (!p || p[0] === '#' || p[0] === '!' || p.indexOf('/') !== -1) return false;
-    const base = p.replace(/^\*\./, '').replace(/^\.+/, '');
-    return !!base && (h === base || h.endsWith('.' + base));
-  });
+  return self.DomainValidate.blocksWholeSite(patterns, host);
 }
 
 /**
@@ -3780,11 +3733,14 @@ function customPatternsToImageBlockDomains(patterns, whitelistedDomains = []) {
   const domains = new Set();
 
   for (const raw of patterns) {
-    const pattern = clean(raw);
-    if (!pattern || pattern.includes('/')) continue;
+    // A whole site only, read the way navigation reads it ("www." and "/"
+    // change nothing). A path has no requestDomains form, and a host-wide
+    // image block would be broader than the entry.
+    const site = self.DomainValidate.parseSiteEntry(raw);
+    if (!site || !site.wholeSite) continue;
 
-    const host = pattern.startsWith('*.') ? pattern.slice(2) : pattern;
-    if (!host || host.includes('*')) continue;
+    const host = site.host;
+    if (host.includes('*')) continue;
     // A whole-TLD entry is deliberately excluded here. requestDomains takes
     // domains, not suffixes, and a rule blocking every image request under a
     // TLD is far broader than a network-level rule should be. The content
@@ -3983,6 +3939,31 @@ async function announceRelease(details) {
   return true;
 }
 
+// 2.0.3 made an entry with a path ("reddit.com/r/example") block only that part
+// of the site. Before it, the in-page check ignored the path and held the whole
+// site once a page loaded, so for anyone who relied on that the update opens
+// the rest of the site without asking. Settings lists those entries until
+// they're dealt with, with a free way to block the whole site again: adding to
+// the blocklist never asks for the PIN. An entry written with a scheme was
+// already read by its path in-page, and a site the built-in list blocks stays
+// blocked either way, so neither is listed.
+const PATH_ENTRIES_NOTICE_KEY = 'pblocker_path_entries_notice';
+
+async function notePathEntries(details) {
+  if (!details || details.reason !== 'update' || typeof VersionCompare === 'undefined') return false;
+  const current = browserAPI.runtime.getManifest().version;
+  if (!VersionCompare.crossed(details.previousVersion, current, '2.0.3')) return false;
+  const settings = await getSettings();
+  const entries = self.DomainValidate.partialSiteEntries(settings.customPatterns).filter((entry) => {
+    if (/^[a-z][a-z0-9+.-]*:\/\//i.test(entry)) return false;
+    const site = self.DomainValidate.parseSiteEntry(entry);
+    return !isUrlInDefaultBlocklist('https://' + site.host + '/');
+  });
+  if (entries.length === 0) return false;
+  await browserAPI.storage.local.set({ [PATH_ENTRIES_NOTICE_KEY]: { entries, at: Date.now() } });
+  return true;
+}
+
 browserAPI.runtime.onInstalled.addListener(async (details) => {
   try {
     await initializeBackground();
@@ -3998,6 +3979,9 @@ browserAPI.runtime.onInstalled.addListener(async (details) => {
 
     // 2.0, said once to someone updating from 1.x (announceRelease).
     announceRelease(details).catch(e => console.warn('BlockNSFW: 2.0 page open failed', e));
+
+    // Entries with a path now block only that part (notePathEntries).
+    notePathEntries(details).catch(e => console.warn('BlockNSFW: path entry check failed', e));
 
     // Fresh install only: open the first-run onboarding wizard once. Updates
     // keep using the in-page "What's New" card, so we don't nag on every bump.

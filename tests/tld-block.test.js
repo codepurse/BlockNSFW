@@ -68,14 +68,12 @@ function loadContentMatcher() {
   const sandbox = {
     console, Map, Set, RegExp, Array, String,
     self: { DomainValidate },
-    normalizeHost: (v) => String(v || '').trim().toLowerCase().replace(/^www\./, ''),
-    // Only host-form entries are under test here; regex and title forms have
-    // their own coverage.
-    customPatternCompiled: () => ({ kind: 'host' })
+    KeywordPattern: require('../shared/keyword-pattern.js')
   };
   vm.createContext(sandbox);
   vm.runInContext(
-    [functionSource('blockHostBase'), functionSource('customPatternsMatchHost'),
+    ['let customPatternRegexCache = new Map();', functionSource('customPatternCompiled'),
+      functionSource('siteMatchAddress'), functionSource('customPatternsMatchHost'),
       functionSource('customPatternMatchingHost')].join('\n') +
     '\nglobalThis.customPatternsMatchHost = customPatternsMatchHost;',
     sandbox

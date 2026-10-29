@@ -1210,8 +1210,9 @@ function matchesAdultKeywordHost(host) {
   return result;
 }
 
-// Compiled `/url/` and `title/…/` blocklist entries, keyed by raw text.
-// Compiling runs a timing probe, so it must not repeat per scan.
+// Compiled blocklist entries, keyed by raw text: `/url/` and `title/…/`
+// entries, and sites. Compiling a pattern runs a timing probe, so it must not
+// repeat per scan.
 let customPatternRegexCache = new Map();
 
 function resetCustomPatternCache() {
@@ -1224,6 +1225,11 @@ function customPatternCompiled(raw) {
   try {
     if (typeof KeywordPattern !== 'undefined' && KeywordPattern.compileListEntry) {
       compiled = KeywordPattern.compileListEntry(raw);
+    }
+    // Anything else names a site, and gets the matcher navigation uses too
+    // (shared/validate-domain.js), so the two layers can't disagree.
+    if (compiled.kind !== 'url' && compiled.kind !== 'title') {
+      compiled = { kind: 'site', regex: self.DomainValidate.siteEntryRegex(raw) };
     }
   } catch (_) {
     compiled = { kind: 'wildcard', regex: null };
@@ -1252,15 +1258,18 @@ function customPatternMatchingTitle(title, patterns) {
   return null;
 }
 
-// The host a blocklist entry is really about: normalizeHost for the www./case
-// handling every host goes through, plus the leading-dot rule that lets ".xyz"
-// and "xyz" name the same thing. Falls back to normalizeHost alone if the
-// shared module did not load, which keeps existing entries working.
-function blockHostBase(value) {
-  const stripped = (typeof self !== 'undefined' && self.DomainValidate && self.DomainValidate.normalizeBlockHost)
-    ? self.DomainValidate.normalizeBlockHost(value)
-    : String(value || '').trim().toLowerCase().replace(/^\.+/, '').replace(/\.+$/, '');
-  return normalizeHost(stripped);
+// The address a site entry is tested against. Callers pass image and link
+// addresses as the page wrote them, so a relative one is made whole; with no
+// address at all, it's the host's front page.
+function siteMatchAddress(urlStr, host) {
+  const raw = String(urlStr || '').trim();
+  if (/^https?:\/\//i.test(raw)) return raw;
+  if (raw) {
+    try {
+      return new URL(raw, window.location.href).href;
+    } catch (_) {}
+  }
+  return host ? 'https://' + host + '/' : '';
 }
 
 function customPatternsMatchHost(urlStr, host, patterns) {
@@ -1271,8 +1280,7 @@ function customPatternsMatchHost(urlStr, host, patterns) {
 // page offers it, so an entry that is too broad can be found and fixed.
 function customPatternMatchingHost(urlStr, host, patterns) {
   if (!Array.isArray(patterns) || patterns.length === 0) return null;
-  const h = normalizeHost(host);
-  // Host-only wildcard patterns like *.example.com or example.com[/path]
+  let address = null;
   for (let i = 0; i < patterns.length; i++) {
     const p = (patterns[i] || '').trim();
     if (!p) continue;
@@ -1284,31 +1292,12 @@ function customPatternMatchingHost(urlStr, host, patterns) {
       if (compiled.regex && urlStr && compiled.regex.test(urlStr)) return p;
       continue;
     }
-    if (compiled.kind === 'title') continue;
-    // Extract host part before first slash
-    const slashIdx = p.indexOf('/');
-    const pHost = slashIdx >= 0 ? p.slice(0, slashIdx) : p;
-    // Support leading wildcard subdomain
-    if (pHost.startsWith('*.')) {
-      const base = blockHostBase(pHost.slice(2));
-      if (base && (h === base || h.endsWith('.' + base))) return p;
-    } else {
-      // A leading dot (".xyz", ".example.com") is the same entry as the bare
-      // form, since a bare host already covers its subdomains. Without this it
-      // matched nothing at all, without saying so.
-      const base = blockHostBase(pHost);
-      if (base && (h === base || h.endsWith('.' + base))) return p;
-    }
-    // If path was provided, do a loose URL match as a fallback
-    if (slashIdx >= 0) {
-      const escaped = p
-        .replace(/[.+?^${}()|[\]\\]/g, '\\$&')
-        .replace(/\*/g, '.*');
-      try {
-        const re = new RegExp(escaped, 'i');
-        if (re.test(urlStr)) return p;
-      } catch (_) {}
-    }
+    if (compiled.kind === 'title' || !compiled.regex) continue;
+    // A site, with or without a path, tested against the whole address as
+    // navigation tests it. This compared hosts only, so a path was ignored:
+    // "google.com/search" held Gmail and Classroom once they loaded.
+    if (address === null) address = siteMatchAddress(urlStr, host);
+    if (compiled.regex.test(address)) return p;
   }
   return null;
 }

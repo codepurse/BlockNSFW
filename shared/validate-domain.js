@@ -100,6 +100,112 @@
     return !!host && !host.includes('.') && /^[a-z0-9-]+$/.test(host);
   }
 
+  // --- Blocklist site entries -------------------------------------------------
+  // What a site entry on the blocklist covers. The navigation matcher
+  // (background.js), the in-page check (content.js), the image rule and the
+  // popup all read entries through parseSiteEntry, so a site can't block on
+  // one and not the other. They used to carry a copy each, and the copies had
+  // drifted: the in-page check ignored a path, so "google.com/search" held
+  // Gmail and Classroom once they loaded, while the navigation matcher missed
+  // "/search?q=…" and so held no search at all.
+  //
+  //   - The host covers its subdomains, written bare, as "*.example.com" or as
+  //     ".example.com".
+  //   - "www." makes no difference: "www.example.com" is example.com. It's
+  //     typed out of habit, and reading it narrowly would open example.com to
+  //     everyone who did.
+  //   - A path blocks only that part of the site and what's below it:
+  //     "google.com/search" holds searches, "reddit.com/r/example" one
+  //     subreddit. A path of "/" or "/*" is the whole site.
+  //   - A scheme is ignored, so an address pasted from the address bar works.
+
+  // A /regex/ or title/…/ entry. Those are KeywordPattern's, not sites.
+  var PATTERN_ENTRY_RE = /^\s*(title\s*)?\/.*\/[a-z]*\s*$/i;
+
+  /**
+   * The site a blocklist entry names: { host, path, wholeSite }, or null for
+   * anything that is not a site entry (a note, a /regex/, a title/…/ rule, or
+   * a line with no host).
+   */
+  function parseSiteEntry(entry) {
+    if (typeof entry !== 'string') return null;
+    var text = entry.trim();
+    if (!text || text.charAt(0) === '#' || text.charAt(0) === '!') return null;
+    if (PATTERN_ENTRY_RE.test(text)) return null;
+    text = text.replace(/^[a-z][a-z0-9+.-]*:\/\//i, '');
+    var slash = text.indexOf('/');
+    var host = normalizeBlockHost(slash >= 0 ? text.slice(0, slash) : text);
+    if (host.indexOf('*.') === 0) host = host.slice(2);
+    host = host.replace(/^\.+/, '').replace(/^www\.(?=.)/, '');
+    if (!host) return null;
+    var path = slash >= 0 ? text.slice(slash) : '';
+    return { host: host, path: path, wholeSite: path === '' || path === '/' || path === '/*' };
+  }
+
+  // A user's glob as regex source: metacharacters become literals, and `*`
+  // and `?` stand for any run of / any one of `any`.
+  function globSource(text, any) {
+    return String(text)
+      .replace(/[.+^${}()|[\]\\]/g, '\\$&')
+      .replace(/[*?]/g, function (c) { return c === '*' ? any + '*' : any; });
+  }
+
+  /**
+   * The matcher for a site entry, tested against a whole http(s) address, or
+   * null for anything that is not a site entry.
+   */
+  function siteEntryRegex(entry) {
+    var site = parseSiteEntry(entry);
+    if (!site) return null;
+    // A wildcard in the host stops at the end of the host. It used to run on
+    // into the path, so "*.xxx" held any page whose path ended in "a.xxx".
+    var source = '^https?://(?:[^/?#@]*@)?(?:[^/?#@]*\\.)?' + globSource(site.host, '[^/?#]') + '(?::\\d+)?';
+    if (site.wholeSite) {
+      source += '(?:[/?#].*)?$';
+    } else {
+      // What's below the path is covered, but only from a boundary: "/adult"
+      // holds "/adult/x" and "/adult?page=2", not "/adulting".
+      var last = site.path.charAt(site.path.length - 1);
+      source += globSource(site.path, '.') + (last === '/' || last === '*' ? '.*$' : '(?:[/?#].*)?$');
+    }
+    try {
+      return new RegExp(source, 'i');
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /**
+   * Whether an entry in the list blocks this host's whole site: the host
+   * itself, a parent, or either written with "www.". An entry with a path
+   * covers only part of it, so it doesn't count.
+   */
+  function blocksWholeSite(list, host) {
+    var home = 'https://' + String(host || '').toLowerCase() + '/';
+    var entries = Array.isArray(list) ? list : [];
+    for (var i = 0; i < entries.length; i++) {
+      var site = parseSiteEntry(entries[i]);
+      if (!site || !site.wholeSite) continue;
+      var regex = siteEntryRegex(entries[i]);
+      if (regex && regex.test(home)) return true;
+    }
+    return false;
+  }
+
+  /**
+   * The entries in a list that block only part of a site, as written, leaving
+   * out any whose whole site another entry in the list already blocks.
+   */
+  function partialSiteEntries(list) {
+    var entries = Array.isArray(list) ? list : [];
+    var partial = [];
+    for (var i = 0; i < entries.length; i++) {
+      var site = parseSiteEntry(entries[i]);
+      if (site && !site.wholeSite && !blocksWholeSite(entries, site.host)) partial.push(entries[i].trim());
+    }
+    return partial;
+  }
+
   // --- Path-scoped whitelist support ------------------------------------------
   // A whitelist entry may carry an optional `path` so the user can allow just a
   // section of an otherwise-blocked site (e.g. reddit.com/r/NoFap without
@@ -154,6 +260,10 @@
     validateDomain: validateDomain,
     normalizeBlockHost: normalizeBlockHost,
     isTldEntry: isTldEntry,
+    parseSiteEntry: parseSiteEntry,
+    siteEntryRegex: siteEntryRegex,
+    blocksWholeSite: blocksWholeSite,
+    partialSiteEntries: partialSiteEntries,
     normalizeWhitelistPath: normalizeWhitelistPath,
     whitelistPathMatches: whitelistPathMatches,
     parseWhitelistInput: parseWhitelistInput

@@ -50,7 +50,7 @@ function loadMatchers() {
     'let customPatternRegexCache = new Map();',
     'const customKeywordRegexCache = new Map();',
     functionSource(contentSource, 'customPatternCompiled'),
-    functionSource(contentSource, 'blockHostBase'),
+    functionSource(contentSource, 'siteMatchAddress'),
     functionSource(contentSource, 'customPatternsMatchHost'),
     functionSource(contentSource, 'customPatternMatchingHost'),
     functionSource(contentSource, 'customPatternsMatchTitle'),

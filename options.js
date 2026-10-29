@@ -2997,6 +2997,65 @@ async function render() {
   await renderWhitelist();
   await renderSubscriptions();
   applySubscribeQueryParam();
+  await renderPathEntriesNotice();
+}
+
+// Left by background.js (notePathEntries) on the update that made a path count:
+// the user's entries with a path, each of which held its whole site until then.
+const PATH_ENTRIES_NOTICE_KEY = 'pblocker_path_entries_notice';
+
+/**
+ * Lists those entries, each with a way to block its whole site again. An entry
+ * since removed from the list, or whose whole site is blocked now, drops off,
+ * and the notice goes once none is left or "Keep them as they are" is pressed.
+ */
+async function renderPathEntriesNotice() {
+  const banner = $('path-entries-banner');
+  const list = $('path-entries-list');
+  if (!banner || !list) return;
+  const stored = await browserAPI.storage.local.get(PATH_ENTRIES_NOTICE_KEY);
+  const notice = stored && stored[PATH_ENTRIES_NOTICE_KEY];
+  const partial = new Set(self.DomainValidate.partialSiteEntries((await getSettings()).customPatterns));
+  const entries = (notice && Array.isArray(notice.entries) ? notice.entries : [])
+    .filter((entry) => partial.has(entry));
+  if (entries.length === 0) {
+    banner.classList.add('hidden');
+    if (notice) await browserAPI.storage.local.remove(PATH_ENTRIES_NOTICE_KEY);
+    return;
+  }
+  list.replaceChildren(...entries.map((entry) => {
+    const host = self.DomainValidate.parseSiteEntry(entry).host;
+    const item = document.createElement('li');
+    const code = document.createElement('code');
+    code.textContent = entry;
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'btn btn-ghost btn-sm';
+    button.textContent = `Block all of ${host}`;
+    button.addEventListener('click', () => blockWholeSite(host));
+    item.append(code, button);
+    return item;
+  }));
+  banner.classList.remove('hidden');
+}
+
+// Adding only tightens protection, so like the popup's Block button (#11) it
+// asks for no PIN and never waits on a Pact. Saving re-renders the page, which
+// refreshes the list box and this notice.
+async function blockWholeSite(host) {
+  const settings = await getSettings();
+  const patterns = Array.isArray(settings.customPatterns) ? settings.customPatterns.slice() : [];
+  if (!self.DomainValidate.blocksWholeSite(patterns, host)) {
+    patterns.push(host);
+    settings.customPatterns = patterns;
+    await setSettings(settings);
+  }
+  showToast(`All of ${host} is blocked now.`, 'success');
+}
+
+async function keepPathEntries() {
+  await browserAPI.storage.local.remove(PATH_ENTRIES_NOTICE_KEY);
+  await renderPathEntriesNotice();
 }
 
 // Set by the blocked page's "Change it in Settings" (blocked.js), read once.
@@ -3470,6 +3529,10 @@ async function init() {
   if (dismissBtn) dismissBtn.addEventListener('click', dismissUpdateBanner);
   await renderUpdateBanner();
   requestUpdateCheck();
+
+  // Entries with a path, after the update that changed them (render() lists them)
+  const keepPathEntriesBtn = $('path-entries-keep');
+  if (keepPathEntriesBtn) keepPathEntriesBtn.addEventListener('click', keepPathEntries);
 
   // Companion-extension promo in the sidebar
   applySievePromoLink();
@@ -4929,6 +4992,9 @@ async function init() {
     }
     if (area === 'local' && (changes[UPDATE_INFO_KEY] || changes[UPDATE_DISMISSED_KEY])) {
       renderUpdateBanner();
+    }
+    if (area === 'local' && changes[PATH_ENTRIES_NOTICE_KEY]) {
+      renderPathEntriesNotice();
     }
   });
 

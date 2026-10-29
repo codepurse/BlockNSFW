@@ -142,6 +142,20 @@ All notable project changes should be documented here going forward.
   blocks, so whitelisting a site to undo a false block doesn't turn its
   gateway off. Taking the page off the whitelist while it's open brings the
   pause back.
+- **An entry with a path held the whole site.** A student blocked google.com
+  and lost Gmail and Google Classroom with it. A site covers its subdomains,
+  so that much is how it works, but no entry held Google searches alone:
+  `google.com/search` and `www.google.com` both held all of Google once a
+  page loaded, because the check on the page ignored the path and dropped
+  the "www.", while the check before a page opens read them differently and
+  missed `/search?q=…` altogether. Every check now reads an entry the same
+  way. A site covers its subdomains, with or without "www.". A path holds
+  only that part of the site and what's below it, so `google.com/search`
+  holds Google searches and leaves Gmail and Classroom open, and
+  `example.com/adult` no longer holds `/adulting`. An entry with a path may
+  now let through the rest of a site it used to hold, so after the update
+  Settings lists any of yours that do, each with "Block all of …" (adding
+  never asks for your PIN), and "Keep them as they are".
 
 ### For contributors
 
@@ -197,6 +211,17 @@ All notable project changes should be documented here going forward.
   (`DomainValidate`, whitelist, already covered) before appending to
   `customPatterns`. Presses must be `isTrusted`. New setting
   `quickBlockButtons` (default on). Tests: `tests/quick-block.test.js`.
+- What a blocklist site entry covers now lives in `shared/validate-domain.js`:
+  `parseSiteEntry`, `siteEntryRegex`, `blocksWholeSite` and
+  `partialSiteEntries`. The background's `buildHostPatterns`,
+  `customPatternsToImageBlockDomains` and `blocklistCoversHost`, the
+  content script's `customPatternMatchingHost` (which now tests the whole
+  address, made absolute by `siteMatchAddress`) and the popup's
+  `hostCoveredByPatterns` all read entries through it; `globToRegexSource`
+  and `blockHostBase` are gone. On an update that crosses 2.0.3,
+  `notePathEntries` leaves `pblocker_path_entries_notice` (`{ entries, at }`)
+  for `options.js` (`renderPathEntriesNotice`). Tests:
+  `tests/site-entries.test.js`.
 - Blocklist curation (`scripts/curation`) took in almost nothing: the scorer
   judged the first label of any three-part host (`ads.alphaporno.com` as
   "ads"), and the run of 2026-10-25 merged none of 875,004 candidates. It now
