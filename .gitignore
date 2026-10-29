@@ -40,3 +40,8 @@ tools/text_corpus/cache/
 # Supporter extras: a separate private repository, checked out here and copied
 # into store builds by build-*.ps1. Never part of this repository.
 /extras-private/
+
+# Local drafts, kept out on purpose. Named one by one: other release notes
+# (RELEASE_NOTES_1.7.6.md and on) are committed.
+/RELEASE_NOTES_1.9.0.md
+/RESTYLE_REPORT_1.10.md
