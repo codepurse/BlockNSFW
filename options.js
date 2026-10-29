@@ -35,6 +35,7 @@ const DEFAULT_SETTINGS = {
   dnsCustomUrl: '', // DoH endpoint used when dnsProvider is 'custom'
   safeSearchEnabled: true,
   unsafeSearchEnabled: true,
+  pageTextScan: true,
   facebookReelsEnabled: false,
   instagramReelsEnabled: false,
   aiImageBlocker: false,
@@ -1624,12 +1625,21 @@ function getStreakMessage(days) {
   return 'Protection was turned on recently.';
 }
 
-const COMMITMENT_SENTENCE = 'By typing this sentence, I acknowledge that I am consciously choosing to override the protection I previously put in place to guard my focus, discipline, and personal growth. I understand that this action directly contradicts the commitment I made to become a stronger, more self-controlled, and purpose-driven version of myself. I accept full responsibility for this decision, including any negative impact it may have on my goals, my time, my mental clarity, and my long-term well-being. I recognize that this choice is not accidental, not forced, and not automatic it is entirely mine. I understand that I am stepping away from the standards I set for myself, and I do so knowingly, without excuses, and without blaming circumstances, emotions, or external triggers. I acknowledge that growth requires consistency and integrity, and by proceeding, I am choosing short-term gratification over long-term self-respect. I accept that this action reflects my current priorities, and I take complete ownership of whatever follows as a result of this decision.';
+// The level and the sentence are the user's choice (shared/off-lock.js).
+const OffLock = self.OffLock;
 
-async function showCommitmentGate() {
+// The steps before protection goes off: the streak, then the reason, then,
+// at the strict level, the sentence. `level` is 'pause' or 'strict'.
+async function showCommitmentGate(level, sentence) {
   const overlay = $('commitment-overlay');
   if (!overlay) return false;
   const opener = document.activeElement;
+  const totalSteps = level === 'strict' ? 3 : 2;
+  overlay.querySelectorAll('.commitment-total').forEach((el) => { el.textContent = `0${totalSteps}`; });
+  const lastDot = $('commitment-progress-3');
+  if (lastDot) lastDot.hidden = totalSteps < 3;
+  const reflectNextBtn = $('commitment-reflect-next');
+  if (reflectNextBtn) reflectNextBtn.textContent = totalSteps === 2 ? 'Turn off protection' : 'Continue';
 
   const streakStart = await getStreakStart();
   const streakMs = streakStart ? Date.now() - streakStart : 0;
@@ -1660,7 +1670,7 @@ async function showCommitmentGate() {
   const confirmHint = $('commitment-confirm-hint');
   if (reflectInput) reflectInput.value = '';
   if (confirmInput) confirmInput.value = '';
-  if (confirmHint) confirmHint.textContent = `Type: "${COMMITMENT_SENTENCE}"`;
+  if (confirmHint) confirmHint.textContent = sentence || '';
 
   updateCommitmentProgress(1);
 
@@ -1711,16 +1721,15 @@ async function showCommitmentGate() {
         matchIndicator.textContent = '';
         return;
       }
-      const target = COMMITMENT_SENTENCE.toLowerCase();
-      const current = value.toLowerCase();
-      if (target === current) {
+      const state = OffLock.progress(value, sentence);
+      if (state === 'match') {
         matchIndicator.textContent = 'It matches.';
         matchIndicator.className = 'commitment-match valid';
-      } else if (target.startsWith(current)) {
+      } else if (state === 'typing') {
         matchIndicator.textContent = 'Keep typing…';
         matchIndicator.className = 'commitment-match partial';
       } else {
-        matchIndicator.textContent = 'It doesn’t match yet. Check the spelling.';
+        matchIndicator.textContent = 'The last few words don’t match the sentence. Check them against it.';
         matchIndicator.className = 'commitment-match invalid';
       }
     };
@@ -1743,6 +1752,11 @@ async function showCommitmentGate() {
       }
       if (reflectError) reflectError.textContent = '';
       if (reflectInput) reflectInput.removeAttribute('aria-invalid');
+      if (totalSteps === 2) {
+        cleanup();
+        resolve(true);
+        return;
+      }
       goToStep(3);
     };
 
@@ -1759,8 +1773,8 @@ async function showCommitmentGate() {
     if (confirmDisable) confirmDisable.onclick = () => {
       const val = confirmInput ? confirmInput.value.trim() : '';
       const confirmError = $('commitment-confirm-error');
-      if (val.toLowerCase() !== COMMITMENT_SENTENCE.toLowerCase()) {
-        if (confirmError) confirmError.textContent = 'The sentence doesn’t match. Type it exactly as shown.';
+      if (!OffLock.matches(val, sentence)) {
+        if (confirmError) confirmError.textContent = 'It doesn’t match the sentence yet. A few slips are fine, but every word has to be there.';
         if (confirmInput) confirmInput.setAttribute('aria-invalid', 'true');
         return;
       }
@@ -1771,8 +1785,12 @@ async function showCommitmentGate() {
     };
 
     if (confirmInput) {
-      confirmInput.addEventListener('input', () => updateConfirmMatch(confirmInput.value));
-      confirmInput.addEventListener('paste', (e) => e.preventDefault());
+      // Assigned, not added: this runs each time the steps open, and an added
+      // listener would pile up one more per opening, each checking an old
+      // sentence.
+      confirmInput.oninput = () => updateConfirmMatch(confirmInput.value);
+      confirmInput.onpaste = (e) => e.preventDefault();
+      confirmInput.ondrop = (e) => e.preventDefault();
       confirmInput.onkeydown = (e) => {
         if (e.key === 'Escape') { cleanup(); resolve(false); }
       };
@@ -1788,9 +1806,10 @@ async function showCommitmentGate() {
   });
 }
 
-// Turning protection off. With a Pact the wait replaces the commitment
-// sentence; without one, the PIN, the access code and the sentence apply as
-// they always have. Resolves true when protection was turned off now.
+// Turning protection off. With a Pact the wait replaces the commitment steps;
+// without one, the PIN and the access code apply, then the steps the user
+// chose (shared/off-lock.js): none, the streak and a reason, or those and a
+// sentence. Resolves true when protection was turned off now.
 async function disableProtectionFlow() {
   if (await refusedByBoost()) return false;
   const pact = await readPact();
@@ -1800,14 +1819,127 @@ async function disableProtectionFlow() {
   } else {
     const ok = await requirePINIfSet('disable blocking', { critical: true });
     if (!ok) return false;
-    const committed = await showCommitmentGate();
-    if (!committed) return false;
+    const chosen = await getSettings();
+    const level = OffLock.normalizeLevel(chosen.offLock);
+    if (level !== 'simple') {
+      const committed = await showCommitmentGate(level, OffLock.sentenceFor(chosen.offSentence));
+      if (!committed) return false;
+    }
   }
   const s = await getSettings();
   s.enabled = false;
   await setSettings(s);
   await resetStreak();
   return true;
+}
+
+// --- Turning protection off: the level and the sentence (shared/off-lock.js) --
+
+// True while "Your own" is picked but not yet saved, so a re-render (any
+// settings change redraws the page) doesn't close the box mid-sentence.
+let offOwnEditing = false;
+
+function renderOffLock(settings) {
+  const level = OffLock.normalizeLevel(settings.offLock);
+  const sentence = OffLock.normalizeSentence(settings.offSentence);
+  document.querySelectorAll('input[name="off-lock"]').forEach((input) => { input.checked = input.value === level; });
+  const levelDesc = $('off-lock-desc');
+  if (levelDesc) levelDesc.textContent = OffLock.describeLevel(level);
+  const sentenceRow = $('off-sentence-row');
+  if (sentenceRow) sentenceRow.hidden = level !== 'strict';
+  const sentenceDesc = $('off-sentence-desc');
+  if (sentenceDesc) sentenceDesc.textContent = OffLock.describeSentence(sentence);
+  const field = $('off-own-field');
+  if (offOwnEditing) {
+    if (field) field.hidden = level !== 'strict';
+    return;
+  }
+  document.querySelectorAll('input[name="off-sentence"]').forEach((input) => { input.checked = input.value === sentence.kind; });
+  if (field) field.hidden = level !== 'strict' || sentence.kind !== 'own';
+  const box = $('off-own-text');
+  if (box && sentence.kind === 'own') box.value = sentence.text;
+}
+
+// Making it harder is free; making it easier is loosening protection, so it
+// faces the PIN, the access code (a critical change) or the Pact's wait.
+function setupOffLock() {
+  const save = async (patch, message) => {
+    const settings = await getSettings();
+    Object.assign(settings, patch);
+    await setSettings(settings);
+    if (message) showToast(message, 'success');
+  };
+
+  document.querySelectorAll('input[name="off-lock"]').forEach((input) => {
+    input.addEventListener('change', async () => {
+      if (!input.checked) return;
+      const settings = await getSettings();
+      const from = OffLock.normalizeLevel(settings.offLock);
+      const to = OffLock.normalizeLevel(input.value);
+      if (from === to) return;
+      if (OffLock.isEasierLevel(from, to) &&
+          !(await guardWeakening('make turning protection off easier', { critical: true }, settingsChange({ offLock: to })))) {
+        renderOffLock(await getSettings());
+        return;
+      }
+      await save({ offLock: to }, to === 'simple'
+        ? 'Turning protection off now asks only for your PIN, if you set one.'
+        : to === 'pause'
+          ? 'Turning protection off now shows your days and asks why, first.'
+          : 'Turning protection off now ends with a sentence typed by hand.');
+    });
+  });
+
+  document.querySelectorAll('input[name="off-sentence"]').forEach((input) => {
+    input.addEventListener('change', async () => {
+      if (!input.checked) return;
+      const field = $('off-own-field');
+      const error = $('off-own-error');
+      if (error) error.textContent = '';
+      if (input.value === 'own') {
+        offOwnEditing = true;
+        if (field) field.hidden = false;
+        const box = $('off-own-text');
+        if (box) box.focus();
+        return;
+      }
+      offOwnEditing = false;
+      if (field) field.hidden = true;
+      const settings = await getSettings();
+      const to = { kind: input.value };
+      if (OffLock.sentenceChangeLoosens(settings.offSentence, to) &&
+          !(await guardWeakening('use a shorter sentence to turn protection off', { critical: true }, settingsChange({ offSentence: to })))) {
+        renderOffLock(await getSettings());
+        return;
+      }
+      await save({ offSentence: to }, to.kind === 'full' ? 'Back to the full sentence.' : 'The short sentence it is.');
+    });
+  });
+
+  const ownSave = $('off-own-save');
+  if (ownSave) ownSave.addEventListener('click', async () => {
+    const box = $('off-own-text');
+    const error = $('off-own-error');
+    const text = box ? box.value.trim() : '';
+    const problem = OffLock.ownSentenceProblem(text);
+    if (problem) {
+      if (error) error.textContent = problem;
+      if (box) { box.setAttribute('aria-invalid', 'true'); box.focus(); }
+      return;
+    }
+    if (error) error.textContent = '';
+    if (box) box.removeAttribute('aria-invalid');
+    const settings = await getSettings();
+    const to = { kind: 'own', text };
+    if (OffLock.sentenceChangeLoosens(settings.offSentence, to) &&
+        !(await guardWeakening('use your own sentence to turn protection off', { critical: true }, settingsChange({ offSentence: to })))) {
+      offOwnEditing = false;
+      renderOffLock(await getSettings());
+      return;
+    }
+    offOwnEditing = false;
+    await save({ offSentence: to }, 'Your sentence is saved. Turning protection off now means typing it again.');
+  });
 }
 
 function updateCommitmentProgress(activeStep) {
@@ -2795,6 +2927,7 @@ async function render() {
     // reading as current, which is how the 1.7.4 list survived into 1.7.5.
     if (whatsNewVersion) whatsNewVersion.textContent = version ? `in ${version}` : '';
   }
+  renderOffLock(settings);
   $('patterns').value = deserializePatterns(settings.customPatterns);
   const customKeywords = $('custom-keywords');
   if (customKeywords) customKeywords.value = deserializePatterns(settings.customKeywordList || []);
@@ -2891,6 +3024,8 @@ async function render() {
   if (unsafeSearchToggle) {
     unsafeSearchToggle.checked = settings.unsafeSearchEnabled !== false;
   }
+  const pageTextToggle = $('page-text-scan');
+  if (pageTextToggle) pageTextToggle.checked = settings.pageTextScan !== false;
   const facebookReelsToggle = $('facebook-reels-enabled');
   if (facebookReelsToggle) {
     facebookReelsToggle.checked = facebookReelsOn;
@@ -3525,6 +3660,7 @@ async function init() {
   initPact();
   initHardMoments();
   initGateways();
+  setupOffLock();
   await render();
   // After render, so the box already holds the list.
   await applyFocusRule();
@@ -3896,6 +4032,31 @@ async function init() {
         e.target.checked
           ? 'Safe Search enforced on Google, Bing, DuckDuckGo, Yahoo, Brave, Ecosia, Qwant, AOL Search, Presearch & Yandex'
           : 'Safe Search enforcement disabled',
+        e.target.checked ? 'success' : 'info'
+      );
+    });
+  }
+
+  // "Read page text": the keyword scan of a page's own words and title. On
+  // unless switched off; turning it off is loosening, so it is guarded.
+  const pageTextToggleEl = $('page-text-scan');
+  if (pageTextToggleEl) {
+    pageTextToggleEl.addEventListener('change', async (e) => {
+      const settings = await getSettings();
+      if (settings.pageTextScan !== false && !e.target.checked) {
+        const ok = await guardWeakening('stop reading page text', {}, settingsChange({ pageTextScan: false }));
+        if (!ok) {
+          e.target.checked = true;
+          return;
+        }
+      }
+      settings.pageTextScan = e.target.checked;
+      await setSettings(settings);
+      await render();
+      showToast(
+        e.target.checked
+          ? 'Pages whose words are clearly adult are blocked.'
+          : 'Page text isn’t read any more. The blocklist and the image filters still work.',
         e.target.checked ? 'success' : 'info'
       );
     });

@@ -1,7 +1,8 @@
 // onboarding.js — first-run setup wizard for BlockNSFW.
 // Opened once on fresh install (see background.js onInstalled). Writes the same
 // storage keys the rest of the extension reads:
-//   pblocker_settings  — aiImageBlocker / aiTextBlocker / aiStrictness / aiTextStrictness / dnsFilterEnabled
+//   pblocker_settings  — pageTextScan / aiImageBlocker / aiTextBlocker / aiStrictness / aiTextStrictness /
+//                        offLock / offSentence (shared/off-lock.js) / dnsFilterEnabled
 //   pblocker_pin       — the PIN, hashed by shared/pin-hash.js (never overwrites one)
 //   pblocker_onboarding_completed — guard so the wizard never re-opens
 // CSP forbids inline scripts, so every handler is attached here via addEventListener.
@@ -62,8 +63,15 @@
     next: $('next'),
     done: $('done'),
     announce: $('announce'),
+    pageText: $('page-text'),
     aiImage: $('ai-image'),
     aiText: $('ai-text'),
+    offLockDetail: $('off-lock-detail'),
+    offSentenceField: $('off-sentence-field'),
+    offSentenceDetail: $('off-sentence-detail'),
+    offOwnField: $('off-own-field'),
+    offOwn: $('off-own'),
+    offOwnErr: $('off-own-err'),
     strictness: $('strictness'),
     strictnessDetail: $('strictness-detail'),
     dnsFilter: $('dns-filter'),
@@ -76,7 +84,7 @@
   const FOOT = {
     1: { back: false, skip: false, next: 'Start setup' },
     2: { back: true, skip: false, next: 'Save and continue' },
-    3: { back: true, skip: true, next: 'Set PIN and continue' },
+    3: { back: true, skip: false, next: 'Save and continue' },
     4: { back: true, skip: false, next: 'Continue' },
     5: { back: true, skip: true, next: 'Finish setup' }
   };
@@ -132,11 +140,61 @@
   async function saveAiStep() {
     const strictness = normalizeStrictness(els.strictness.value);
     await patchSettings({
+      pageTextScan: !!els.pageText.checked,
       aiImageBlocker: !!els.aiImage.checked,
       aiTextBlocker: !!els.aiText.checked,
       aiStrictness: strictness,
       aiTextStrictness: strictness
     });
+  }
+
+  // ---- turning it off (shared/off-lock.js) ---------------------------------
+  function chosen(name) {
+    const picked = document.querySelector(`input[name="${name}"]:checked`);
+    return picked ? picked.value : '';
+  }
+
+  function chosenLevel() {
+    return self.OffLock.normalizeLevel(chosen('off-lock'));
+  }
+
+  // What the choice says, and which parts of it show: the sentence only at
+  // Strict, the box for your own only when that's the sentence.
+  function renderOffLock() {
+    const level = chosenLevel();
+    const kind = chosen('off-sentence') || 'full';
+    els.offLockDetail.textContent = self.OffLock.describeLevel(level);
+    els.offSentenceField.hidden = level !== 'strict';
+    els.offSentenceDetail.textContent = kind === 'own'
+      ? 'One you write yourself, below.'
+      : self.OffLock.describeSentence({ kind });
+    els.offOwnField.hidden = level !== 'strict' || kind !== 'own';
+  }
+
+  function clearOwnError() {
+    els.offOwnErr.textContent = '';
+    els.offOwn.removeAttribute('aria-invalid');
+  }
+
+  // Returns true once the choice is saved; false, with the reason shown, when
+  // your own sentence isn't long enough yet.
+  async function saveOffLockStep() {
+    const level = chosenLevel();
+    let sentence = { kind: chosen('off-sentence') || 'full' };
+    if (level === 'strict' && sentence.kind === 'own') {
+      const text = els.offOwn.value.trim();
+      const problem = self.OffLock.ownSentenceProblem(text);
+      if (problem) {
+        els.offOwnErr.textContent = problem;
+        els.offOwn.setAttribute('aria-invalid', 'true');
+        els.offOwn.focus();
+        return false;
+      }
+      sentence = { kind: 'own', text };
+    }
+    clearOwnError();
+    await patchSettings({ offLock: level, offSentence: level === 'strict' ? sentence : { kind: 'full' } });
+    return true;
   }
 
   async function saveDnsStep() {
@@ -178,6 +236,7 @@
     if (img || txt) parts.push(STRICTNESS_LABEL[normalizeStrictness(els.strictness.value)] + ' strength');
     const hasPin = await getStored(PIN_KEY);
     if (hasPin[PIN_KEY]) parts.push('PIN set');
+    parts.push({ simple: 'Simple to turn off', pause: 'A pause before turning off', strict: 'Strict to turn off' }[chosenLevel()]);
     if (els.dnsFilter.checked) parts.push('DNS check on');
 
     const summary = $('done-summary');
@@ -197,6 +256,7 @@
       if (step === 2) {
         await saveAiStep();
       } else if (step === 3) {
+        if (!(await saveOffLockStep())) return; // your own sentence is too short — stay
         const ok = await trySavePin();
         if (!ok) return; // validation failed — stay on step
       } else if (step === 5) {
@@ -244,6 +304,7 @@
 
     // Pre-select the recommended defaults, seeded from any existing settings.
     const cur = (await getStored(SETTINGS_KEY))[SETTINGS_KEY] || {};
+    els.pageText.checked = cur.pageTextScan !== false;
     els.aiImage.checked = cur.aiImageBlocker !== undefined ? !!cur.aiImageBlocker : true;
     els.aiText.checked = cur.aiTextBlocker !== undefined ? !!cur.aiTextBlocker : true;
     els.strictness.value = normalizeStrictness(cur.aiStrictness || cur.aiTextStrictness || 'balanced');
@@ -253,6 +314,21 @@
       els.strictnessDetail.textContent = STRICTNESS[normalizeStrictness(els.strictness.value)];
     });
     els.dnsFilter.checked = cur.dnsFilterEnabled === true; // off unless already on
+
+    // Turning it off: Strict and the full sentence unless already chosen.
+    const level = self.OffLock.normalizeLevel(cur.offLock);
+    const sentence = self.OffLock.normalizeSentence(cur.offSentence);
+    document.querySelectorAll('input[name="off-lock"]').forEach((input) => {
+      input.checked = input.value === level;
+      input.addEventListener('change', renderOffLock);
+    });
+    document.querySelectorAll('input[name="off-sentence"]').forEach((input) => {
+      input.checked = input.value === sentence.kind;
+      input.addEventListener('change', () => { clearOwnError(); renderOffLock(); });
+    });
+    if (sentence.kind === 'own') els.offOwn.value = sentence.text;
+    els.offOwn.addEventListener('input', clearOwnError);
+    renderOffLock();
 
     // Copy buttons for the device-level resolver addresses. The label reads
     // "Copied" for a moment; the live region says which addresses.

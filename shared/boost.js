@@ -49,6 +49,7 @@
     aiTextStrictness: 'strict',
     safeSearchEnabled: true,
     unsafeSearchEnabled: true,
+    pageTextScan: true,
     facebookReelsEnabled: true,
     instagramReelsEnabled: true,
     searchImagesBlurred: true
@@ -63,6 +64,7 @@
     aiTextStrictness: 'strict',
     safeSearchEnabled: true,
     unsafeSearchEnabled: true,
+    pageTextScan: true,
     searchImagesBlurred: true
   };
 

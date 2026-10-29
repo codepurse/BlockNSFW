@@ -478,6 +478,7 @@ const DEFAULT_SETTINGS = {
   dnsCustomUrl: '', // DoH endpoint used when dnsProvider is 'custom'
   safeSearchEnabled: true,
   unsafeSearchEnabled: true, // block search engines SafeSearch can't reach (shared/unsafe-search.js)
+  pageTextScan: true, // "Read page text": the keyword scan of a page's words and title
   facebookReelsEnabled: false,
   instagramReelsEnabled: false,
   aiImageBlocker: false, // Beta — opt-in (off on fresh install)
@@ -3997,6 +3998,19 @@ async function notePathEntries(details) {
   return true;
 }
 
+// Before 2.0.3 the scan of a page's own words came with Smart detection.
+// Someone who had switched that off had page text off too, and keeps it off
+// now that page text has a switch of its own (pageTextScan).
+async function carryPageTextChoice(details) {
+  if (!details || details.reason !== 'update' || typeof VersionCompare === 'undefined') return false;
+  const current = browserAPI.runtime.getManifest().version;
+  if (!VersionCompare.crossed(details.previousVersion, current, '2.0.3')) return false;
+  const settings = await getSettings();
+  if (settings.useSmartBlocking !== false || settings.pageTextScan === false) return false;
+  await setSettings({ ...settings, pageTextScan: false });
+  return true;
+}
+
 browserAPI.runtime.onInstalled.addListener(async (details) => {
   try {
     await initializeBackground();
@@ -4015,6 +4029,9 @@ browserAPI.runtime.onInstalled.addListener(async (details) => {
 
     // Entries with a path now block only that part (notePathEntries).
     notePathEntries(details).catch(e => console.warn('BlockNSFW: path entry check failed', e));
+
+    // Page text has its own switch now; Smart detection off keeps it off.
+    carryPageTextChoice(details).catch(e => console.warn('BlockNSFW: page text choice carry-over failed', e));
 
     // Fresh install only: open the first-run onboarding wizard once. Updates
     // keep using the in-page "What's New" card, so we don't nag on every bump.

@@ -66,6 +66,9 @@ BlockNSFW stores data locally in your browser extension storage on your device. 
   the PIN is set to. Do not reuse a PIN that protects anything else
 - Access code configuration if you enable it. The code itself is generated
   fresh each time it is shown and is never stored
+- How turning protection off works, as you chose it, and, if you wrote your
+  own sentence for it, that sentence. It is part of your settings, so a backup
+  holds it too; it is never sent anywhere
 - The Pact, if you make one: the wait you chose, the changes waiting it out,
   the time last read from the server's clock, and a count of wrong witness
   codes. With a witness, also the key their authenticator app shares with

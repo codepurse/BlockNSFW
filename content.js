@@ -408,6 +408,10 @@ function updateYandexFamilyCookieValue(currentValue, expiresAt) {
 // Configuration and state management
 let isEnabled = true;
 let useSmartBlocking = true;
+// "Read page text": the keyword scan of a page's own words, title and
+// description. Its own switch since 2.0.3; it used to come with Smart
+// detection, which now covers addresses and NSFW communities and posts.
+let pageTextScanOn = true;
 let customKeywordList = [];
 // Rules from subscribed lists, held apart from the user's own patterns. Only the
 // patterns are held here: wildcards, paths, regexes and titles, capped at a
@@ -1959,6 +1963,7 @@ async function loadSettings() {
       isEnabled = settings.enabled;
     }
     useSmartBlocking = settings.useSmartBlocking;
+    pageTextScanOn = settings.pageTextScan !== false;
     unsafeSearchOn = settings.unsafeSearchEnabled !== false;
     imageFilterLevel = normalizeImageFilterLevel(settings.imageFilterLevel);
     customKeywordList = liveListEntries(settings.customKeywordList);
@@ -1985,7 +1990,7 @@ async function loadSettings() {
     // the MutationObserver would arm a debounced scan on every element
     // insertion in every ad slot, for a scan that then declines to run — the
     // pure-overhead shape this whole split exists to avoid.
-    anyTextFeatureOn = IS_TOP_FRAME && !!(useSmartBlocking || aiTextBlocker);
+    anyTextFeatureOn = IS_TOP_FRAME && !!(pageTextScanOn || aiTextBlocker);
 
     // Store custom blocked page settings globally for access during blocking
     blockedPageType = settings.blockedPageType || 'default';
@@ -2478,8 +2483,8 @@ function checkPageMetadata() {
   if (getSearchEngine()) return false;
   if (isExtensionStorePage()) return false;
   if (isLocalPage()) return false;
-  if (!useSmartBlocking) return false;
-  
+  if (!pageTextScanOn) return false;
+
   let textToCheck = document.title || '';
   
   // Collect text from meta tags
@@ -2601,7 +2606,7 @@ function checkPageBodyText() {
   if (getSearchEngine()) return false;
   if (isExtensionStorePage()) return false;
   if (isLocalPage()) return false;
-  if (!useSmartBlocking || !document.body) return false;
+  if (!pageTextScanOn || !document.body) return false;
 
   const lines = getPageTextLinesForScan();
   if (lines.length === 0) return false;

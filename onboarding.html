@@ -64,6 +64,10 @@
       font-family: var(--font-mono);
       letter-spacing: 0.2em;
     }
+    /* The PIN follows the turning-off choice on the same step. */
+    .pin-heading {
+      margin-top: var(--space-6);
+    }
 
     /* Resolver addresses: two IPv4 addresses that wrap between, never inside. */
     .device-rows {
@@ -147,11 +151,23 @@
 
       <!-- Step 2: AI protection -->
       <section class="step" data-step="2" hidden>
-        <p class="meta step-meta tnum" aria-hidden="true"><span class="meta-brass">02</span> / 05 · AI protection</p>
-        <h1 class="title title-page" tabindex="-1"><span class="visually-hidden">Step 2 of 5: </span>Turn on AI protection.</h1>
-        <p class="lede">These catch explicit content the blocklist misses. Keep both on for the most protection.</p>
+        <p class="meta step-meta tnum" aria-hidden="true"><span class="meta-brass">02</span> / 05 · What it checks</p>
+        <h1 class="title title-page" tabindex="-1"><span class="visually-hidden">Step 2 of 5: </span>Choose what BlockNSFW checks.</h1>
+        <p class="lede">The blocklist always runs. These decide what else is checked on the pages you visit. Keep them all on for the most protection.</p>
         <div class="step-body">
           <div class="rows rows-closed">
+            <div class="row">
+              <div class="row-text">
+                <label class="row-label" for="page-text" id="page-text-label">Page text</label>
+                <p class="row-desc" id="page-text-desc">Blocks pages whose words are clearly adult, using keyword lists in many languages. Turn it off if you only want images handled.</p>
+              </div>
+              <label class="switch">
+                <input class="switch-input" type="checkbox" role="switch" id="page-text"
+                       aria-labelledby="page-text-label" aria-describedby="page-text-desc" />
+                <span class="switch-track" aria-hidden="true"><span class="switch-thumb"></span></span>
+                <span class="switch-state" aria-hidden="true"></span>
+              </label>
+            </div>
             <div class="row">
               <div class="row-text">
                 <label class="row-label" for="ai-image" id="ai-image-label">AI image protection</label>
@@ -194,12 +210,40 @@
         </div>
       </section>
 
-      <!-- Step 3: PIN -->
+      <!-- Step 3: turning it off (shared/off-lock.js), and the PIN -->
       <section class="step" data-step="3" hidden>
-        <p class="meta step-meta tnum" aria-hidden="true"><span class="meta-brass">03</span> / 05 · PIN</p>
-        <h1 class="title title-page" tabindex="-1"><span class="visually-hidden">Step 3 of 5: </span>Add a PIN.</h1>
-        <p class="lede">A PIN puts a pause between you and turning protection off, so it can’t happen on impulse. You can skip this.</p>
+        <p class="meta step-meta tnum" aria-hidden="true"><span class="meta-brass">03</span> / 05 · Turning it off</p>
+        <h1 class="title title-page" tabindex="-1"><span class="visually-hidden">Step 3 of 5: </span>Choose how turning it off works.</h1>
+        <p class="lede">BlockNSFW is meant to take a moment to switch off, so it can’t happen on an impulse. Choose how much. You can make it harder any time; making it easier later asks for your PIN.</p>
         <div class="step-body">
+          <div class="field">
+            <span class="field-label" id="off-lock-label">How hard</span>
+            <div class="segmented" id="off-lock" role="radiogroup" aria-labelledby="off-lock-label" aria-describedby="off-lock-detail">
+              <label class="segment"><input type="radio" class="segment-input" name="off-lock" value="simple" /><span class="segment-label">Simple</span></label>
+              <label class="segment"><input type="radio" class="segment-input" name="off-lock" value="pause" /><span class="segment-label">Pause first</span></label>
+              <label class="segment"><input type="radio" class="segment-input" name="off-lock" value="strict" checked /><span class="segment-label">Strict</span></label>
+            </div>
+            <p class="field-hint" id="off-lock-detail" aria-live="polite"></p>
+          </div>
+
+          <div class="field" id="off-sentence-field">
+            <span class="field-label" id="off-sentence-label">The sentence to type</span>
+            <div class="segmented" id="off-sentence" role="radiogroup" aria-labelledby="off-sentence-label" aria-describedby="off-sentence-detail">
+              <label class="segment"><input type="radio" class="segment-input" name="off-sentence" value="full" checked /><span class="segment-label">Full</span></label>
+              <label class="segment"><input type="radio" class="segment-input" name="off-sentence" value="short" /><span class="segment-label">Short</span></label>
+              <label class="segment"><input type="radio" class="segment-input" name="off-sentence" value="own" /><span class="segment-label">Your own</span></label>
+            </div>
+            <p class="field-hint" id="off-sentence-detail" aria-live="polite"></p>
+          </div>
+
+          <div class="field" id="off-own-field" hidden>
+            <label class="field-label" for="off-own">Your sentence, in any language</label>
+            <textarea class="input" id="off-own" rows="4" maxlength="1500" aria-describedby="off-own-hint off-own-err"></textarea>
+            <p class="field-hint" id="off-own-hint">At least 30 words, or 60 characters in a language written without spaces. You’ll type it again by hand to turn protection off.</p>
+            <p class="field-error" id="off-own-err" role="alert"></p>
+          </div>
+
+          <p class="field-label pin-heading">A PIN, if you want one</p>
           <div class="pin-fields">
             <div class="field">
               <label class="field-label" for="pin">PIN</label>
@@ -330,6 +374,7 @@
   </div>
 
   <script src="shared/pin-hash.js"></script>
+  <script src="shared/off-lock.js"></script>
   <script src="onboarding.js"></script>
 </body>
 </html>

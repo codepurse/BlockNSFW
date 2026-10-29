@@ -64,6 +64,31 @@ All notable project changes should be documented here going forward.
   under Settings › Customization › Blocked search results turns it off.
   Requested by a user.
 
+- **You choose how hard turning BlockNSFW off is.** It was the same for
+  everyone: your days of protection, a reason, then a 164-word English
+  sentence typed back exactly, one wrong letter and start again. A review put
+  it plainly: setup never asked, and for anyone not fluent in English the
+  sentence couldn't be done, so uninstalling was the only way out. Setup now
+  asks: Simple (only your PIN, if you set one), Pause first (your days and a
+  reason), or Strict (both, then a sentence), with Strict chosen to start.
+  Under Strict you pick the sentence: the full one, word for word as before;
+  a short one of 41 words; or your own, in any language, at least 30 words or
+  60 characters in a language written without spaces. The sentence is
+  checked for being typed by hand, not for spelling: capital letters,
+  punctuation and spacing don't count, and about one slip in fifty characters
+  is forgiven, but every word has to be there and paste is still off. Both
+  live in Settings › Security › Turning protection off; making either easier
+  asks for your PIN, access code or Pact, and making it harder is free. If
+  you had BlockNSFW before, you stay on Strict with the full sentence.
+- **Reading page text has its own switch.** The scan of a page's words,
+  title and description came with Smart detection, whose description never
+  said so, and setup only offered the AI text blocker, so someone who
+  installed BlockNSFW for images couldn't find how to stop it reading text.
+  "Read page text" is now its own switch in Settings › Protection › Page
+  text, and setup offers it next to the AI switches. Smart detection keeps
+  addresses and communities and posts marked NSFW. If you had Smart detection
+  off, page text stays off after the update. Turning it off asks for your
+  PIN, and Storm Mode and Risk Hours turn it on.
 - **A page that asks why, after BlockNSFW is removed.** The browser opens
   monolab.dev/blocknsfw/goodbye, which asks for the reason in one tap and
   answers it: a fix to look at for a wrongly blocked site, a way back for
@@ -209,6 +234,21 @@ All notable project changes should be documented here going forward.
   holds its frame (`#storm-warn`) and mounts it for supporters only, and it
   keeps `pblocker_storm_warning` (switch, "Not tonight", the storm it
   started).
+- `shared/off-lock.js`: `OffLock` holds the levels (`simple`, `pause`,
+  `strict`, the default), the sentences (`FULL_SENTENCE`, moved word for word
+  from options.js, and `SHORT_SENTENCE`), `ownSentenceProblem(text)`,
+  `matches(typed, sentence)` and `progress(typed, sentence)` (Unicode-aware,
+  capitals, punctuation and spacing ignored, about 2% slips allowed, by a
+  banded edit distance), and `isEasierLevel` / `sentenceChangeLoosens`. New
+  settings `offLock` and `offSentence` (`{ kind: 'full' | 'short' | 'own',
+  text? }`); `disableProtectionFlow` reads them and `showCommitmentGate(level,
+  sentence)` stops after the reason at `pause`. Settings: `setupOffLock` /
+  `renderOffLock`; setup: step 3 (`saveOffLockStep`). New setting
+  `pageTextScan` (in Boost's Storm and Risk settings) gates
+  `checkPageMetadata`, `checkPageBodyText` and `anyTextFeatureOn` in place of
+  `useSmartBlocking`; the background's `carryPageTextChoice` turns it off on
+  the update to 2.0.3 for anyone with Smart detection off. Tests:
+  `tests/off-lock.test.js`.
 - `shared/unsafe-search.js`: `UnsafeSearch.ENGINES` (the engines that ship,
   each by `hosts`, which alone block the whole engine, or by a `generator`;
   `paths`, `params` and `page` selectors can narrow a rule),

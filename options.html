@@ -2524,6 +2524,29 @@
 
         <div class="group group-split">
           <div class="group-aside">
+          <h3 class="group-title">Page text</h3>
+          <p class="group-desc">Blocks a page when its words, title or description are clearly adult, using BlockNSFW’s keyword lists in many languages. If you only want images handled, turn it off: the blocklist and the image filters keep working.</p>
+          </div>
+          <div class="group-body">
+          <div class="rows rows-closed">
+            <div class="row">
+              <div class="row-text">
+                <label class="row-label" for="page-text-scan">Read page text</label>
+                <p class="row-desc" id="page-text-scan-desc">Your own blocked words and the AI text blocker have switches of their own.</p>
+                <span class="locked-note" data-lock="normal" data-lock-when="Turning it off" hidden></span>
+              </div>
+              <label class="switch">
+                <input type="checkbox" class="switch-input" role="switch" id="page-text-scan" aria-describedby="page-text-scan-desc" />
+                <span class="switch-track" aria-hidden="true"><span class="switch-thumb"></span></span>
+                <span class="switch-state" aria-hidden="true"></span>
+              </label>
+            </div>
+          </div>
+          </div>
+        </div>
+
+        <div class="group group-split">
+          <div class="group-aside">
           <div class="group-head">
             <h3 class="group-title">AI text blocker <span class="meta meta-pine">beta</span></h3>
           </div>
@@ -3279,6 +3302,56 @@ title/Example Domain/"></textarea>
           </div>
         </div>
 
+        <!-- What turning protection off takes (shared/off-lock.js). Chosen at
+             setup; making it easier asks for the PIN, access code or Pact. -->
+        <div class="group group-split" id="off-lock-card">
+          <div class="group-aside">
+          <h3 class="group-title">Turning protection off</h3>
+          <p class="group-desc">What it takes to switch BlockNSFW off, on top of your PIN, so it can’t happen on an impulse. Making it harder is always free.</p>
+          </div>
+          <div class="group-body">
+          <div class="rows rows-closed">
+            <div class="row">
+              <div class="row-text">
+                <span class="row-label" id="off-lock-label">How hard</span>
+                <p class="row-desc" id="off-lock-desc"></p>
+                <span class="locked-note" data-lock="critical" data-lock-when="Making it easier" hidden></span>
+              </div>
+              <div class="row-control">
+                <div class="segmented" id="off-lock-picker" role="radiogroup" aria-labelledby="off-lock-label" aria-describedby="off-lock-desc">
+                  <label class="segment"><input type="radio" class="segment-input" name="off-lock" value="simple" /><span class="segment-label">Simple</span></label>
+                  <label class="segment"><input type="radio" class="segment-input" name="off-lock" value="pause" /><span class="segment-label">Pause first</span></label>
+                  <label class="segment"><input type="radio" class="segment-input" name="off-lock" value="strict" /><span class="segment-label">Strict</span></label>
+                </div>
+              </div>
+            </div>
+            <div class="row" id="off-sentence-row">
+              <div class="row-text">
+                <span class="row-label" id="off-sentence-label">The sentence</span>
+                <p class="row-desc" id="off-sentence-desc"></p>
+                <span class="locked-note" data-lock="critical" data-lock-when="Changing it, unless to the full one," hidden></span>
+              </div>
+              <div class="row-control">
+                <div class="segmented" id="off-sentence-picker" role="radiogroup" aria-labelledby="off-sentence-label" aria-describedby="off-sentence-desc">
+                  <label class="segment"><input type="radio" class="segment-input" name="off-sentence" value="full" /><span class="segment-label">Full</span></label>
+                  <label class="segment"><input type="radio" class="segment-input" name="off-sentence" value="short" /><span class="segment-label">Short</span></label>
+                  <label class="segment"><input type="radio" class="segment-input" name="off-sentence" value="own" /><span class="segment-label">Your own</span></label>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="field" id="off-own-field" hidden>
+            <label class="field-label" for="off-own-text">Your sentence, in any language</label>
+            <textarea class="input" id="off-own-text" rows="4" maxlength="1500" aria-describedby="off-own-hint off-own-error"></textarea>
+            <p class="field-hint" id="off-own-hint">At least 30 words, or 60 characters in a language written without spaces. Turning protection off means typing it again by hand. Something only you would write works best.</p>
+            <p class="field-error" id="off-own-error" role="alert"></p>
+            <div class="btn-row">
+              <button type="button" class="btn btn-primary" id="off-own-save">Use this sentence</button>
+            </div>
+          </div>
+          </div>
+        </div>
+
         <div class="group group-split">
           <div class="group-aside">
           <div class="group-head">
@@ -3381,7 +3454,7 @@ title/Example Domain/"></textarea>
             <div class="row">
               <div class="row-text">
                 <label class="row-label" for="smart">Smart detection</label>
-                <p class="row-desc" id="smart-desc">Wider keyword detection that reads words in context.</p>
+                <p class="row-desc" id="smart-desc">Blocks addresses with adult words in them, and communities and posts marked NSFW or sensitive. The words on a page have their own switch, Read page text, under Protection.</p>
                 <span class="locked-note" data-lock="normal" data-lock-when="Changing it" hidden></span>
               </div>
               <label class="switch">
@@ -3683,7 +3756,8 @@ title/Example Domain/"></textarea>
     </main>
   </div>
 
-  <!-- The commitment steps: three, before protection is switched off. -->
+  <!-- The commitment steps before protection is switched off: two at the
+       "Pause first" level, three at "Strict" (shared/off-lock.js). -->
   <div id="commitment-overlay" class="dialog-scrim commitment-overlay hidden" aria-hidden="true">
     <div class="dialog commitment-modal" role="dialog" aria-modal="true" aria-label="Turn off protection">
       <div class="commitment-progress" aria-hidden="true">
@@ -3693,7 +3767,7 @@ title/Example Domain/"></textarea>
       </div>
 
       <div class="commitment-step" id="commitment-step-1">
-        <p class="meta commitment-step-label"><span class="meta-brass tnum">01</span> / 03 · before you turn it off</p>
+        <p class="meta commitment-step-label"><span class="meta-brass tnum">01</span> / <span class="commitment-total">03</span> · before you turn it off</p>
         <h2 class="dialog-title">Protection has been on</h2>
         <div class="commitment-streak">
           <span class="commitment-streak-number" id="commitment-streak-number">0</span>
@@ -3710,7 +3784,7 @@ title/Example Domain/"></textarea>
       </div>
 
       <div class="commitment-step hidden" id="commitment-step-2">
-        <p class="meta commitment-step-label"><span class="meta-brass tnum">02</span> / 03 · a moment to think</p>
+        <p class="meta commitment-step-label"><span class="meta-brass tnum">02</span> / <span class="commitment-total">03</span> · a moment to think</p>
         <h2 class="dialog-title">Before you go on</h2>
         <p class="dialog-desc">Why did you install BlockNSFW in the first place?</p>
         <div class="dialog-body">
@@ -3727,9 +3801,9 @@ title/Example Domain/"></textarea>
       </div>
 
       <div class="commitment-step hidden" id="commitment-step-3">
-        <p class="meta commitment-step-label"><span class="meta-brass tnum">03</span> / 03 · the last step</p>
+        <p class="meta commitment-step-label"><span class="meta-brass tnum">03</span> / <span class="commitment-total">03</span> · the last step</p>
         <h2 class="dialog-title">Type the sentence to confirm</h2>
-        <p class="dialog-desc">Type the whole sentence below, exactly. Read every word.</p>
+        <p class="dialog-desc">Type the sentence below by hand. Capital letters and punctuation don’t count, and a few slips are fine, but every word has to be there.</p>
         <div class="dialog-body">
           <div class="commitment-reference" id="commitment-confirm-hint"></div>
           <div class="field">
@@ -3758,6 +3832,7 @@ title/Example Domain/"></textarea>
   <script src="shared/browser-key.js"></script>
   <script src="appwrite-client.js"></script>
   <script src="shared/validate-domain.js"></script>
+  <script src="shared/off-lock.js"></script>
   <script src="shared/access-code.js"></script>
   <script src="shared/pin-hash.js"></script>
   <script src="shared/totp.js"></script>
