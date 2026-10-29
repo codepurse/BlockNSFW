@@ -163,6 +163,7 @@ function loadCounterContext(href = 'https://duckduckgo.com/?q=apricots&ia=images
     URL,
     URLSearchParams,
     decodeURIComponent,
+    atob,
     Map,
     Set,
     setTimeout,
@@ -181,6 +182,11 @@ function loadCounterContext(href = 'https://duckduckgo.com/?q=apricots&ia=images
   vm.createContext(sandbox);
   vm.runInContext(
     [
+      objectSource('SEARCH_SELECTORS'),
+      objectSource('SEARCH_ENGINE_OWN_HOSTS'),
+      functionSource('unwrapSearchRedirect'),
+      functionSource('hostFromAddressText'),
+      functionSource('searchResultHost'),
       objectSource('WRAPPED_IMAGE_URL_PARAMS'),
       objectSource('COUNTED_BLOCK_TYPES'),
       functionSource('safelyDecodeUrlCandidate'),
@@ -196,7 +202,8 @@ function loadCounterContext(href = 'https://duckduckgo.com/?q=apricots&ia=images
 }
 
 const fakeResult = (href) => ({
-  querySelector: () => (href ? { getAttribute: () => null, href } : null)
+  querySelector: () => (href ? { getAttribute: () => null, href } : null),
+  querySelectorAll: () => (href ? [{ getAttribute: () => null, href }] : [])
 });
 
 // An image keeps its address on itself, not in a descendant link, so the two
@@ -308,6 +315,25 @@ test('Held sources panel: the site list scrolls in its own box, with a cue', () 
   // Hosts stay inert text, with no address beyond the host.
   const draw = functionSource('updateFloatingCounter');
   assert.doesNotMatch(draw, /createElement\('a'\)|href/);
+});
+
+test('recordBlockedEntry: a held result is credited to its own site, not the engine', () => {
+  // A supporter's Held sources list showed "duckduckgo.com 1" for a site they
+  // never blocked: in every DuckDuckGo result the first link is the engine's own
+  // "Search domain …" icon, and the list took the first link.
+  const ctx = loadCounterContext('https://duckduckgo.com/?q=apricots');
+  const ddgResult = (site) => {
+    const links = [
+      { getAttribute: () => 'result-extras-site-search-link', href: 'https://duckduckgo.com/?q=' + site + '&ia=web' },
+      { getAttribute: () => null, href: 'https://www.' + site + '/page' }
+    ];
+    return { querySelector: () => links[0], querySelectorAll: () => links };
+  };
+  ctx.recordBlockedEntry(ddgResult('reddit.com'), 'search-result');
+  ctx.recordBlockedEntry(ddgResult('medium.com'), 'search-result');
+  assert.equal(ctx.pageBlockedEntries.has('duckduckgo.com'), false);
+  assert.equal(ctx.pageBlockedEntries.get('reddit.com'), 1);
+  assert.equal(ctx.pageBlockedEntries.get('medium.com'), 1);
 });
 
 test('recordBlockedEntry: a block with no recoverable host still counts', () => {

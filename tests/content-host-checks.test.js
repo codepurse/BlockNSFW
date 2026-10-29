@@ -66,6 +66,11 @@ function loadHostCheckContext(hostname = 'page.example') {
       source.indexOf('// Check if current page hostname is whitelisted')
     )}
     ${functionSource('hasBackgroundBlockedLink')}
+    ${functionSource('unwrapSearchRedirect')}
+    ${functionSource('elementLinkTargets')}
+    // Not a search page here, so no result site is added to the links.
+    function getSearchEngine() { return null; }
+    function searchResultHost() { return ''; }
   `, sandbox);
   return sandbox;
 }

@@ -464,6 +464,8 @@ let searchResultTreatment = 'hide'; // 'hide' | 'overlay'
 // Whether the "N results blocked" summary line is drawn at all. Some users want
 // no on-page footprint whatsoever.
 let searchSummaryEnabled = true;
+// A "Block" button beside each search result's address (addQuickBlockButtons).
+let quickBlockButtons = true;
 
 // Running total of results blocked on the current search, and the search it
 // belongs to. The incremental pass reports deltas — DuckDuckGo builds its
@@ -1650,6 +1652,13 @@ const SEARCH_SELECTORS = {
   google: {
     // Use simpler, more reliable selectors for individual results
     containers: '.g, .rc, .MjjYud',
+    // The address line under each result's title, where the Block button goes
+    // (addQuickBlockButtons). No match, no button: an unknown layout is left alone.
+    urlLine: 'cite',
+    // Google draws its "⋮" (About this result) in a row laid over the end of
+    // that line, exactly where a button after the title link lands. Going after
+    // the "⋮" instead puts it beside the menu rather than under it.
+    urlLineEnd: '.csDOgf',
     // Where the "N results blocked" summary goes — inserted before this node,
     // so it sits above the result list the way uBlacklist's line does. First
     // match wins; if none match, the parent of the first result is used.
@@ -1663,6 +1672,7 @@ const SEARCH_SELECTORS = {
   },
   bing: {
     containers: '.b_algo',
+    urlLine: 'cite',
     resultsAnchor: '#b_results',
     images: '.img_cont img, .mimg img',
     imageContext: {
@@ -1683,6 +1693,10 @@ const SEARCH_SELECTORS = {
     // "videos", "about", "related_searches"), so the two verticals can be taken
     // without touching the knowledge panel or the related-search row.
     containers: '[data-testid="result"], [data-testid="zci-videos"] article, li[data-layout="images"], li[data-layout="videos"], .nrn-react-div, .result, .web-result, .react-results--main .result',
+    urlLine: '[data-testid="result-extras-url-link"], .result__url',
+    // The address link is a full-width row, so a button after it would start a
+    // line of its own; floated to the right of the site name it stays on it.
+    urlLinePlace: 'float',
     // Each result article sits alone in its own <li>; hiding the list item
     // rather than the article keeps the replacement card outside the result's
     // wrapping <a>, which would otherwise stay clickable.
@@ -1707,6 +1721,7 @@ const SEARCH_SELECTORS = {
   },
   brave: {
     containers: '#results .snippet[data-type="web"], .snippet[data-type="web"]',
+    urlLine: 'cite, .netloc',
     resultsAnchor: '#results',
     images: '.image-result img',
     imageContext: {
@@ -1716,6 +1731,7 @@ const SEARCH_SELECTORS = {
   },
   yahoo: {
     containers: '.algo, .dd',
+    urlLine: 'cite',
     resultsAnchor: '#web, #results, .searchCenterMiddle',
     images: '.img img',
     imageContext: {
@@ -1727,6 +1743,7 @@ const SEARCH_SELECTORS = {
     // Keep selectors broad enough for different Yandex result layouts,
     // but still anchored to organic result containers.
     containers: '.serp-item, li.serp-item, .Organic, .organic, .main__result',
+    urlLine: '.Path, cite',
     resultsAnchor: '#search-result, .main__content, .serp-list',
     images: '.serp-item img, .ImagesContent img, .MMImage img',
     imageContext: {
@@ -1904,6 +1921,7 @@ async function loadSettings() {
       plainBlockedPageHtml: '',
       searchResultTreatment: 'hide',
       searchSummaryEnabled: true,
+      quickBlockButtons: true,
       blockCountDisplay: 'badge',
       facebookReelsEnabled: false,
       instagramReelsEnabled: false,
@@ -1967,6 +1985,7 @@ async function loadSettings() {
     // over every container on the page.
     searchResultTreatment = normalizeSearchResultTreatment(settings.searchResultTreatment);
     searchSummaryEnabled = settings.searchSummaryEnabled !== false;
+    quickBlockButtons = settings.quickBlockButtons !== false;
     blockCountDisplay = normalizeBlockCountDisplay(settings.blockCountDisplay);
     
     // Initialize AI image blocker if available
@@ -3053,13 +3072,14 @@ async function shouldBlockElement(element, backgroundBlockedLink, opts) {
     const title = element.title || '';
     const alt = element.alt || '';
 
-    // Check href attributes first (most reliable)
-    const links = Array.from(element.querySelectorAll('a[href]'));
+    // Check where the links go first (most reliable), read through the
+    // engine's own redirects (elementLinkTargets).
+    const links = elementLinkTargets(element);
     for (const link of links) {
       try {
-        if (isAdultURL(link.href)) {
+        if (isAdultURL(link)) {
           if (debugMode) {
-            log('Blocking element due to adult URL:', link.href);
+            log('Blocking element due to adult URL:', link);
           }
           return true;
         }
@@ -3069,7 +3089,7 @@ async function shouldBlockElement(element, backgroundBlockedLink, opts) {
     }
 
     const blockedByBackground = backgroundBlockedLink === undefined
-      ? await hasAnyBackgroundBlockedUrl(links.map(link => link.href))
+      ? await hasAnyBackgroundBlockedUrl(links)
       : backgroundBlockedLink;
     if (blockedByBackground) {
       if (debugMode) log('Blocking element due to background blocklist verdict');
@@ -3081,11 +3101,11 @@ async function shouldBlockElement(element, backgroundBlockedLink, opts) {
     for (const link of links) {
       try {
         // Check if it's a Reddit link to NSFW subreddit
-        if (useSmartBlocking && isRedditURL(link.href)) {
-          const shouldBlock = await shouldBlockRedditPage(link.href);
+        if (useSmartBlocking && isRedditURL(link)) {
+          const shouldBlock = await shouldBlockRedditPage(link);
           if (shouldBlock) {
             if (debugMode) {
-              log('Blocking element due to Reddit NSFW subreddit:', link.href);
+              log('Blocking element due to Reddit NSFW subreddit:', link);
             }
             return true;
           }
@@ -3414,11 +3434,31 @@ function shouldBlockSocialPost(element, site) {
 
 async function hasBackgroundBlockedLink(element) {
   if (!element || typeof element.querySelectorAll !== 'function') return false;
+  return hasAnyBackgroundBlockedUrl(elementLinkTargets(element));
+}
+
+/**
+ * Where an element's links lead. Search engines send results through
+ * themselves: Bing through /ck/a, Yahoo through /RU=, Google through /url and,
+ * in some browsers, an encrypted /goto. Read as written, every such link named
+ * the engine, so on Bing a result from a blocked site was never held. Each
+ * link is unwrapped where it can be (unwrapSearchRedirect), and on a search
+ * page the result's own site is added from searchResultHost, which falls back
+ * to the address line when no link names it.
+ */
+function elementLinkTargets(element) {
+  if (!element || typeof element.querySelectorAll !== 'function') return [];
+  const targets = [];
   const anchors = element.querySelectorAll('a[href], a[data-expanded-url]');
-  const urls = Array.from(anchors, anchor =>
-    anchor.getAttribute('data-expanded-url') || anchor.href || ''
-  );
-  return hasAnyBackgroundBlockedUrl(urls);
+  for (let i = 0; i < anchors.length; i++) {
+    const raw = anchors[i].getAttribute('data-expanded-url') || anchors[i].href || '';
+    if (!raw) continue;
+    targets.push(unwrapSearchRedirect(raw) || raw);
+  }
+  const engine = getSearchEngine();
+  const site = engine ? searchResultHost(element, engine) : '';
+  if (site) targets.push(`https://${site}/`);
+  return targets;
 }
 
 function isSearchResultContainer(element) {
@@ -3624,6 +3664,329 @@ async function filterSearchResults() {
     addBlockedResultCount(blockedCount);
   }
   updateBlockedResultsNotice();
+  addQuickBlockButtons();
+}
+
+// --- Quick block: a "Block" button beside each result -----------------------
+//
+// As uBlacklist does it: a small button by each result's address that adds its
+// site to the user's own blocklist. Adding only ever tightens protection, so
+// unlike a "Show" it cannot become a way around BlockNSFW, and it needs no PIN.
+// It still asks first, in a small box with the site name to confirm or edit,
+// because one stray click should not change someone's list.
+//
+// Placed only where the engine's address line is found (SEARCH_SELECTORS
+// urlLine), never inside a link, and never on image or video tiles: a layout
+// this does not know is left alone rather than guessed at.
+
+const QUICK_BLOCK_POPOVER_ID = 'pblocker-quick-block';
+let quickBlockPopover = null; // { host, close } while the box is open
+
+// Search engines can route a result's link through themselves. Bing writes
+// the destination base64-encoded after "a1" in /ck/a?u=, Yahoo puts it
+// percent-encoded in a /RU=…/ path segment, Google in /url?q=, DuckDuckGo in
+// /l/?uddg=. Anything else is the destination as it stands.
+function unwrapSearchRedirect(href) {
+  try {
+    const u = new URL(href, window.location.href);
+    if (u.protocol !== 'http:' && u.protocol !== 'https:') return '';
+    const host = u.hostname.toLowerCase();
+    if (/(^|\.)bing\.com$/.test(host) && u.pathname.indexOf('/ck/') === 0) {
+      const value = u.searchParams.get('u') || '';
+      if (value.indexOf('a1') !== 0) return '';
+      const b64 = value.slice(2).replace(/-/g, '+').replace(/_/g, '/');
+      return atob(b64 + '==='.slice((b64.length + 3) % 4));
+    }
+    if (/(^|\.)yahoo\.com$/.test(host)) {
+      const ru = /\/RU=([^/]+)\//.exec(u.pathname);
+      if (ru) return decodeURIComponent(ru[1]);
+    }
+    if (/(^|\.)google\.[a-z.]+$/.test(host) && u.pathname === '/url') {
+      return u.searchParams.get('q') || u.searchParams.get('url') || '';
+    }
+    if (/(^|\.)duckduckgo\.com$/.test(host) && u.pathname.indexOf('/l/') === 0) {
+      return u.searchParams.get('uddg') || '';
+    }
+    return u.href;
+  } catch (_) {
+    return '';
+  }
+}
+
+// The engine's own addresses inside a result (a cached copy, "more from this
+// site", its tracking redirect) are not the result's site.
+const SEARCH_ENGINE_OWN_HOSTS = {
+  google: /(^|\.)(google\.[a-z.]+|googleusercontent\.com|gstatic\.com)$/,
+  bing: /(^|\.)(bing\.com|bing\.net)$/,
+  duckduckgo: /(^|\.)duckduckgo\.com$/,
+  brave: /(^|\.)search\.brave\.com$/,
+  yahoo: /(^|\.)(search\.yahoo\.com|r\.search\.yahoo\.com)$/,
+  yandex: /(^|\.)yandex\.[a-z.]+$/
+};
+
+/**
+ * The site an address line spells out ("www.aspca.org › pet-care", with or
+ * without its scheme, or "en.wikipedia.org/wiki/Cat"), without "www.", or ''.
+ */
+function hostFromAddressText(text) {
+  const first = String(text || '').trim().split(/\s|›/)[0] || '';
+  const bare = first.replace(/^[a-z][a-z0-9+.-]*:\/\//i, '').replace(/^www\./i, '').split(/[/?#:]/)[0].toLowerCase();
+  return /^[a-z0-9-]+(\.[a-z0-9-]+)+$/.test(bare) && /[a-z]/.test(bare.slice(bare.lastIndexOf('.') + 1)) ? bare : '';
+}
+
+/** The site a search result leads to, without "www.", or ''. */
+function searchResultHost(container, engine) {
+  if (!container || typeof container.querySelectorAll !== 'function') return '';
+  const own = SEARCH_ENGINE_OWN_HOSTS[engine] || null;
+  const anchors = container.querySelectorAll('a[href]');
+  for (let i = 0; i < anchors.length; i++) {
+    const target = unwrapSearchRedirect(anchors[i].getAttribute('data-expanded-url') || anchors[i].href);
+    if (!target) continue;
+    let host = '';
+    try { host = new URL(target).hostname.toLowerCase().replace(/^www\./, ''); } catch (_) { continue; }
+    if (!host || (own && own.test(host))) continue;
+    return host;
+  }
+  // No link names it: Google has begun sending results through an encrypted
+  // /goto?url=… in some browsers. The address line still shows the site.
+  const selectors = SEARCH_SELECTORS[engine];
+  const line = selectors && selectors.urlLine && typeof container.querySelector === 'function'
+    ? container.querySelector(selectors.urlLine)
+    : null;
+  const shown = line ? hostFromAddressText(line.textContent) : '';
+  return shown && !(own && own.test(shown)) ? shown : '';
+}
+
+/**
+ * Where the button goes: { node, place }. 'after' puts it after the node:
+ * the engine's control at the end of the address line when there is one
+ * (urlLineEnd), else the address line, or the link holding it. 'float' puts it
+ * first in the line's own row, floated right (urlLinePlace).
+ */
+function quickBlockSlot(container, engine) {
+  const selectors = SEARCH_SELECTORS[engine];
+  if (!selectors || !selectors.urlLine || typeof container.querySelector !== 'function') return null;
+  const inLink = (el) => !!(el.closest && el.closest('a'));
+  if (selectors.urlLineEnd) {
+    const end = container.querySelector(selectors.urlLineEnd);
+    if (end && !inLink(end)) return { node: end, place: 'after' };
+  }
+  const line = container.querySelector(selectors.urlLine);
+  if (!line) return null;
+  // Never inside a link: a click there would follow it as well.
+  const node = (line.closest && line.closest('a')) || line;
+  if (selectors.urlLinePlace === 'float') {
+    return node.parentElement && !inLink(node.parentElement) ? { node, place: 'float' } : null;
+  }
+  return { node, place: 'after' };
+}
+
+function addQuickBlockButtons() {
+  try {
+    if (!IS_TOP_FRAME || !isEnabled || !quickBlockButtons) return;
+    const engine = getSearchEngine();
+    const selectors = engine ? SEARCH_SELECTORS[engine] : null;
+    if (!selectors || !selectors.urlLine || isImagesSearchContext()) return;
+
+    const matches = document.querySelectorAll(searchContainerSelector(selectors));
+    for (let i = 0; i < matches.length; i++) {
+      const match = matches[i];
+      const container = selectors.resultRoot ? (match.closest(selectors.resultRoot) || match) : match;
+      // Judged first, and only results still showing.
+      if (container.dataset.pblockerProcessed !== 'true' || container.dataset.pblockerHidden === 'true') continue;
+      if (container.closest && container.closest('li[data-layout="images"], li[data-layout="videos"]')) continue;
+      const slot = quickBlockSlot(container, engine);
+      // Google nests result containers; both share one address line.
+      if (!slot || slot.node.dataset.pblockerQuickBlock === 'true') continue;
+      const host = searchResultHost(container, engine);
+      if (!host) continue;
+      slot.node.dataset.pblockerQuickBlock = 'true';
+      const button = buildQuickBlockButton(host, slot.place);
+      if (slot.place === 'float') slot.node.parentElement.insertBefore(button, slot.node.parentElement.firstChild);
+      else slot.node.after(button);
+    }
+  } catch (error) {
+    log('Error adding quick block buttons:', error);
+  }
+}
+
+function removeQuickBlockButtons() {
+  closeQuickBlock(false);
+  document.querySelectorAll('[data-pblocker-qb]').forEach((node) => node.remove());
+  document.querySelectorAll('[data-pblocker-quick-block]').forEach((node) => {
+    delete node.dataset.pblockerQuickBlock;
+  });
+}
+
+// The page would otherwise see these on the result (DuckDuckGo opens a result
+// from a press anywhere on it).
+const QUICK_BLOCK_SWALLOWED = ['pointerdown', 'pointerup', 'mousedown', 'mouseup', 'touchstart', 'touchend', 'keydown'];
+
+function swallowForPage(el) {
+  for (const type of QUICK_BLOCK_SWALLOWED) {
+    el.addEventListener(type, (event) => {
+      if (type === 'keydown' && event.key !== 'Enter' && event.key !== ' ' && event.key !== 'Escape') return;
+      event.stopPropagation();
+    });
+  }
+}
+
+function buildQuickBlockButton(host, place) {
+  const holder = document.createElement('span');
+  holder.setAttribute('data-pblocker-qb', '');
+  // color: inherit, so the button takes the page's own text colour, light or
+  // dark. align-self: in a flex row (Google's, beside the "⋮") it lines up
+  // with the top of the line rather than being centred on a zero-height one.
+  setHeldHostStyle(holder, 'display: inline-block; vertical-align: middle; margin: 0 0 0 8px; color: inherit; line-height: 1; align-self: flex-start;' +
+    (place === 'float' ? ' float: right;' : ''));
+  const ui = openHeldUi(holder);
+  const button = heldNode(ui, 'button', 'bn-qb', 'Block');
+  button.type = 'button';
+  setHeldAttrs(button, {
+    title: `Block ${host} with BlockNSFW`,
+    'aria-label': `Block ${host} with BlockNSFW`,
+    'aria-haspopup': 'dialog'
+  });
+  swallowForPage(button);
+  button.addEventListener('click', (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    // Only a real press: a page cannot reach into the closed root, and must
+    // not be able to fake one either.
+    if (!event.isTrusted) return;
+    openQuickBlock(host, holder, button);
+  });
+  ui.mount.appendChild(button);
+  return holder;
+}
+
+function closeQuickBlock(refocus) {
+  if (!quickBlockPopover) return;
+  const { holder, button, onOutside } = quickBlockPopover;
+  quickBlockPopover = null;
+  document.removeEventListener('mousedown', onOutside, true);
+  if (holder && holder.parentNode) holder.parentNode.removeChild(holder);
+  if (refocus && button) {
+    try { button.focus(); } catch (_) {}
+  }
+}
+
+function openQuickBlock(host, anchorHolder, anchorButton) {
+  closeQuickBlock(false);
+  if (!document.body) return;
+
+  const holder = document.createElement('div');
+  holder.id = QUICK_BLOCK_POPOVER_ID;
+  const rect = anchorHolder.getBoundingClientRect();
+  const width = Math.min(320, window.innerWidth - 32);
+  const left = Math.max(window.scrollX + 16, Math.min(rect.left + window.scrollX, window.scrollX + window.innerWidth - width - 16));
+  const top = rect.bottom + window.scrollY + 6;
+  setHeldHostStyle(holder, `display: block; position: absolute; left: ${Math.round(left)}px; top: ${Math.round(top)}px; z-index: 2147483646;`);
+
+  const ui = openHeldUi(holder);
+  const panel = heldNode(ui, 'div', 'bn bn-qb-pop');
+  setHeldAttrs(panel, { role: 'dialog', 'aria-label': 'Block this site' });
+  panel.appendChild(heldNode(ui, 'div', 'bn-meta bn-qb-head', 'Block this site'));
+  const input = heldNode(ui, 'input', 'bn-qb-input');
+  input.type = 'text';
+  input.value = host;
+  setHeldAttrs(input, { 'aria-label': 'Site to block', spellcheck: 'false', autocomplete: 'off' });
+  panel.appendChild(input);
+  panel.appendChild(heldNode(ui, 'p', 'bn-qb-hint',
+    'Its subdomains are blocked too. Shorten it to block more of a site.'));
+  const actions = heldNode(ui, 'div', 'bn-qb-actions');
+  const go = heldNode(ui, 'button', 'bn-qb-go', 'Block');
+  go.type = 'button';
+  const cancel = heldNode(ui, 'button', 'bn-qb-cancel', 'Cancel');
+  cancel.type = 'button';
+  actions.appendChild(go);
+  actions.appendChild(cancel);
+  panel.appendChild(actions);
+  const message = heldNode(ui, 'p', 'bn-qb-msg');
+  setHeldAttrs(message, { role: 'status', 'aria-live': 'polite' });
+  message.hidden = true;
+  panel.appendChild(message);
+  swallowForPage(panel);
+
+  const submit = async (event) => {
+    if (event && !event.isTrusted) return;
+    if (go.disabled) return;
+    go.disabled = true;
+    let reply = null;
+    try {
+      reply = await sendRuntimeMessageForResponse({ type: 'quick_block_site', host: input.value });
+    } catch (_) {
+      reply = null;
+    }
+    message.hidden = false;
+    if (reply && reply.ok) {
+      message.textContent = reply.already ? 'It’s already on your blocklist.' : 'Blocked. It’s on your blocklist now.';
+      holdQuickBlockedResults(reply.host);
+      setTimeout(() => closeQuickBlock(false), 1400);
+      return;
+    }
+    go.disabled = false;
+    message.textContent = reply && reply.reason === 'whitelisted'
+      ? 'This site is on your whitelist, which overrides blocking. Remove it from the whitelist in Settings first.'
+      : reply && reply.reason === 'invalid'
+        ? 'That isn’t a site address.'
+        : 'It couldn’t be added. Try again from Settings.';
+  };
+
+  go.addEventListener('click', (event) => { event.preventDefault(); event.stopPropagation(); submit(event); });
+  cancel.addEventListener('click', (event) => { event.preventDefault(); event.stopPropagation(); closeQuickBlock(true); });
+  input.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') { event.preventDefault(); submit(event); }
+  });
+  panel.addEventListener('keydown', (event) => {
+    if (event.key !== 'Escape') return;
+    event.preventDefault();
+    closeQuickBlock(true);
+  });
+
+  ui.mount.appendChild(panel);
+  document.body.appendChild(holder);
+
+  const onOutside = (event) => {
+    const path = typeof event.composedPath === 'function' ? event.composedPath() : [];
+    if (path.indexOf(holder) !== -1 || path.indexOf(anchorHolder) !== -1) return;
+    closeQuickBlock(false);
+  };
+  document.addEventListener('mousedown', onOutside, true);
+  quickBlockPopover = { holder, button: anchorButton, onOutside };
+
+  try {
+    input.focus();
+    input.select();
+  } catch (_) {}
+}
+
+/** Hold every result on the page from the site just blocked. */
+function holdQuickBlockedResults(entry) {
+  try {
+    const engine = getSearchEngine();
+    const selectors = engine ? SEARCH_SELECTORS[engine] : null;
+    const blocked = String(entry || '').toLowerCase();
+    if (!selectors || !blocked) return;
+    let held = 0;
+    document.querySelectorAll(searchContainerSelector(selectors)).forEach((match) => {
+      const container = selectors.resultRoot ? (match.closest(selectors.resultRoot) || match) : match;
+      if (container.dataset.pblockerHidden === 'true') return;
+      // An outer container already held takes its nested one with it.
+      if (container.parentElement && container.parentElement.closest('[data-pblocker-hidden="true"]')) return;
+      const host = searchResultHost(container, engine);
+      if (!host || (host !== blocked && !host.endsWith('.' + blocked))) return;
+      hideElement(container, 'search-result');
+      held++;
+    });
+    if (held > 0) {
+      notifyBackground('search_result_filtered', { count: held });
+      addBlockedResultCount(held);
+      updateBlockedResultsNotice();
+    }
+  } catch (error) {
+    log('Error holding quick-blocked results:', error);
+  }
 }
 
 // Image filtering
@@ -3785,6 +4148,13 @@ function blockedEntryHost(element, type) {
     let candidate = '';
 
     if (type === 'search-result') {
+      // The result's own site, past the engine's links and redirects. The
+      // first link is not it everywhere: in every DuckDuckGo result it is the
+      // "Search domain …" icon, which credited each held result to
+      // duckduckgo.com, and Google can hide the link behind an encrypted /goto.
+      const engine = getSearchEngine();
+      const site = engine ? searchResultHost(element, engine) : '';
+      if (site) return site;
       const anchor = element.querySelector?.('a[href]');
       candidate = anchor ? (anchor.getAttribute('data-expanded-url') || anchor.href || '') : '';
     } else if (type === 'image') {
@@ -4229,7 +4599,20 @@ const HELD_UI_RULES = {
   'bn-host-count': `flex: none; font-family: ${HELD_UI_MONO}; font-size: 12px; font-variant-numeric: tabular-nums; color: var(--bn-ink-2);`,
   'bn-host-kinds': 'margin-top: 2px; font-size: 12px; line-height: 1.4; color: var(--bn-ink-2);',
   'bn-panel-more': 'margin: 0; padding-top: 8px; border-top: 1px solid var(--bn-rule-2); color: var(--bn-ink-3);',
-  'bn-panel-empty': 'padding: 8px 0; border-top: 1px solid var(--bn-rule); color: var(--bn-ink-2);'
+  'bn-panel-empty': 'padding: 8px 0; border-top: 1px solid var(--bn-rule); color: var(--bn-ink-2);',
+
+  // Quick block: the button beside a result's address takes the page's own
+  // text colour (its host is `color: inherit`), so it reads on light and dark
+  // results alike; the box it opens is a held surface like the counter's panel.
+  'bn-qb': `margin: 0; padding: 1px 6px; font-family: ${HELD_UI_SANS}; font-size: 12px; font-weight: 400; font-style: normal; font-variant: normal; line-height: 1.4; letter-spacing: normal; text-transform: none; white-space: nowrap; color: inherit; background: transparent; border: 1px solid currentColor; border-radius: 2px; opacity: 0.6; cursor: pointer; -webkit-appearance: none; appearance: none; transition: opacity 180ms cubic-bezier(0.22, 1, 0.36, 1);`,
+  'bn-qb-pop': 'width: min(320px, calc(100vw - 32px)); padding: 12px 16px; background: var(--bn-sheet); color: var(--bn-ink); border: 1px solid var(--bn-rule-2); border-radius: 0;',
+  'bn-qb-head': 'margin: 0 0 8px; color: var(--bn-ink-3);',
+  'bn-qb-input': `display: block; width: 100%; margin: 0; padding: 6px 8px; font-family: ${HELD_UI_MONO}; font-size: 13px; line-height: 1.4; color: var(--bn-ink); background: var(--bn-paper); border: 1px solid var(--bn-rule-2); border-radius: 2px;`,
+  'bn-qb-hint': 'margin: 6px 0 0; font-size: 12px; line-height: 1.4; color: var(--bn-ink-2);',
+  'bn-qb-actions': 'display: flex; gap: 8px; margin-top: 12px;',
+  'bn-qb-go': 'margin: 0; padding: 6px 12px; font: inherit; font-size: 13px; font-weight: 500; line-height: 1.2; color: var(--bn-paper); background: var(--bn-pine); border: 1px solid var(--bn-pine); border-radius: 2px; cursor: pointer; -webkit-appearance: none; appearance: none;',
+  'bn-qb-cancel': 'margin: 0; padding: 6px 12px; font: inherit; font-size: 13px; line-height: 1.2; color: var(--bn-ink); background: transparent; border: 1px solid var(--bn-rule-2); border-radius: 2px; cursor: pointer; -webkit-appearance: none; appearance: none;',
+  'bn-qb-msg': 'margin: 8px 0 0; font-size: 12px; line-height: 1.4; color: var(--bn-ink-2);'
 };
 
 // The Held icon on its 16 grid: a stroke stopped above a 1.5-weight bar.
@@ -4279,6 +4662,11 @@ function heldUiCss() {
     rules,
     '.bn-toggle:hover, .bn-toggle[aria-expanded="true"] { border-color: var(--bn-ink); }',
     '.bn-toggle:focus-visible, .bn-panel-list:focus-visible { outline: 2px solid var(--bn-pine-2); outline-offset: 3px; }',
+    '.bn-qb:hover, .bn-qb:focus-visible { opacity: 1; }',
+    '.bn-qb:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }',
+    '.bn-qb-go:focus-visible, .bn-qb-cancel:focus-visible, .bn-qb-input:focus-visible { outline: 2px solid var(--bn-pine-2); outline-offset: 2px; }',
+    '.bn-qb-go:disabled { opacity: 0.6; cursor: default; }',
+    '.bn-qb-cancel:hover { border-color: var(--bn-ink); }',
     '@media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition: none !important; } }'
   ].join('\n');
   return heldUiCssText;
@@ -5520,6 +5908,9 @@ async function processPendingResults() {
   // is the only thing that redraws the summary after the engine re-renders its
   // result list and discards the node.
   updateBlockedResultsNotice();
+  // Same for the Block buttons: DuckDuckGo draws its results after the page
+  // loads, so every one of them arrives here rather than in the full pass.
+  addQuickBlockButtons();
 }
 
 const debouncedProcessResults = debounce(processPendingResults, DEBOUNCE_DELAY);
@@ -5922,6 +6313,9 @@ function setupEventListeners() {
         // the pill when the count moves to or from the toolbar.
         updateBlockedResultsNotice();
         updateFloatingCounter();
+        // The Block buttons follow their switch on the results already shown.
+        if (quickBlockButtons && isEnabled) addQuickBlockButtons();
+        else removeQuickBlockButtons();
       });
     }
 

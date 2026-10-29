@@ -50,6 +50,19 @@ All notable project changes should be documented here going forward.
   all 24 sites" beneath it while there is more below: Windows 11 and macOS
   hide scroll bars until you scroll, so a long list looked like it simply
   ended. Site names are still plain text, never links. Requested by a user.
+- **A Block button beside each search result**, as uBlacklist has. It sits by
+  the result's address on Google, Bing, DuckDuckGo, Brave, Yahoo and Yandex.
+  Pressing it opens a small box with the site's name (the real site, read
+  through Bing's and Yahoo's redirect links, or off the address line where
+  Google hides the link behind an encrypted /goto), to confirm or shorten. On
+  Google it sits after the "⋮" menu, on DuckDuckGo at the right of the
+  address line; "Block"
+  adds it to your blocklist and holds every result from it on the page.
+  Adding only ever tightens protection, so it asks for no PIN; a whitelisted
+  site is refused with a word on why. Not on image or video results, and on a
+  layout BlockNSFW doesn't recognise there is simply no button. A switch
+  under Settings › Customization › Blocked search results turns it off.
+  Requested by a user.
 
 - **A page that asks why, after BlockNSFW is removed.** The browser opens
   monolab.dev/blocknsfw/goodbye, which asks for the reason in one tap and
@@ -78,6 +91,22 @@ All notable project changes should be documented here going forward.
   the like) now opens, on every search engine BlockNSFW knows. SafeSearch
   and the result filter still apply to the page. A search that is also
   looking for it ("quit free porn", "stop porn hd") is still held.
+- **On Bing, results from blocked sites were not held.** Bing sends every
+  result through bing.com/ck/a, so the link BlockNSFW checked always named
+  Bing: with wikipedia.org and britannica.com on the blocklist, a Bing search
+  that listed both held neither. Only words in a result, and SafeSearch, were
+  still filtering there; your blocklist and the built-in one were not.
+  Result links are now read through the engine's redirect (Bing's, Yahoo's,
+  Google's /url), and where Google hides the link behind an encrypted /goto,
+  the site is read off the address line under the title. The same search
+  now holds all three results.
+- **The in-page "held" list credited search results to the search engine.**
+  A supporter's Held sources list showed "duckduckgo.com" for a site they
+  never blocked: in every DuckDuckGo result the first link is DuckDuckGo's own
+  "Search domain …" icon, and the list took the first link. Bing's results
+  all link through bing.com, and Google's sometimes through an encrypted
+  google.com address, so the same thing happened there. A held result is now
+  credited to the site it leads to.
 - **A page held by one of your blocked words was described as explicit page
   text** ("the words on the page were explicit, again and again"), and one
   held by a `title/…/` rule as "Protection rules". They now read "Your
@@ -159,6 +188,15 @@ All notable project changes should be documented here going forward.
   `updateHeldMoreCue` draw the panel, whose list is now its own scroll box
   (`.bn-panel-list`, focusable) rather than the whole panel. Tests:
   `tests/search-result-treatment.test.js`.
+- Quick block: `SEARCH_SELECTORS[engine].urlLine` names each engine's
+  address line; `addQuickBlockButtons` (after every `filterSearchResults`
+  pass, and on a settings change) puts the button after it, or after the
+  link holding it, once per line. `unwrapSearchRedirect` and
+  `searchResultHost` read the destination; the box sends
+  `quick_block_site`, which the background's `quickBlockSite` validates
+  (`DomainValidate`, whitelist, already covered) before appending to
+  `customPatterns`. Presses must be `isTrusted`. New setting
+  `quickBlockButtons` (default on). Tests: `tests/quick-block.test.js`.
 - Blocklist curation (`scripts/curation`) took in almost nothing: the scorer
   judged the first label of any three-part host (`ads.alphaporno.com` as
   "ads"), and the run of 2026-10-25 merged none of 875,004 candidates. It now

@@ -26,6 +26,7 @@ const DEFAULT_SETTINGS = {
   blockedPageTheme: 'classic', // design of the built-in page; see blocked-themes.js
   searchResultTreatment: 'hide', // 'hide' | 'overlay' — web/text results only
   searchSummaryEnabled: true, // the "N results blocked" line on search pages
+  quickBlockButtons: true, // a "Block" button beside each search result's address
   blockCountDisplay: 'badge', // 'badge' (toolbar icon) | 'floating' (in-page pill)
   customBlockedPageUrl: '',
   plainBlockedPageHtml: '',
@@ -2414,6 +2415,9 @@ function renderSearchResultTreatment(settings) {
   const summary = $('search-summary-enabled');
   if (summary) summary.checked = settings.searchSummaryEnabled !== false;
 
+  const quickBlock = $('quick-block-buttons');
+  if (quickBlock) quickBlock.checked = settings.quickBlockButtons !== false;
+
   const display = normalizeBlockCountDisplay(settings.blockCountDisplay);
   const displaySelect = $('block-count-display');
   if (displaySelect) displaySelect.value = display;
@@ -4148,6 +4152,14 @@ async function init() {
     settings.searchSummaryEnabled = !!e.target.checked;
     await setSettings(settings);
     showToast(settings.searchSummaryEnabled ? 'Summary line enabled' : 'Summary line hidden', 'success');
+  });
+
+  // Only adds a way to block more, so turning it off weakens nothing.
+  $('quick-block-buttons').addEventListener('change', async (e) => {
+    const settings = await getSettings();
+    settings.quickBlockButtons = !!e.target.checked;
+    await setSettings(settings);
+    showToast(settings.quickBlockButtons ? 'Block buttons shown on results' : 'Block buttons hidden', 'success');
   });
 
   $('block-count-display').addEventListener('change', async (e) => {

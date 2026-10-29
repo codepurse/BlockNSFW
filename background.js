@@ -470,6 +470,7 @@ const DEFAULT_SETTINGS = {
   debugMode: false,
   searchResultTreatment: 'hide', // 'hide' | 'overlay' — web/text results only
   searchSummaryEnabled: true, // draw the "N results blocked" line on search pages
+  quickBlockButtons: true, // a "Block" button beside each search result's address
   blockCountDisplay: 'badge', // 'badge' (toolbar icon) | 'floating' (in-page pill)
   dnsFilterEnabled: false,
   dnsProvider: 'cloudflare', // see shared/dns-providers.js for the roster
@@ -2004,6 +2005,37 @@ async function setSettings(newSettings) {
   await browserAPI.storage.local.set({ [SETTINGS_KEY]: newSettings });
 }
 
+// Whether a plain host entry on the user's blocklist already covers this host.
+// Path entries, /patterns/, title rules and notes are not host entries.
+function blocklistCoversHost(host, patterns) {
+  const h = String(host || '').toLowerCase().replace(/^www\./, '');
+  return (Array.isArray(patterns) ? patterns : []).some((raw) => {
+    const p = String(raw || '').trim().toLowerCase();
+    if (!p || p[0] === '#' || p[0] === '!' || p.indexOf('/') !== -1) return false;
+    const base = p.replace(/^\*\./, '').replace(/^\.+/, '');
+    return !!base && (h === base || h.endsWith('.' + base));
+  });
+}
+
+/**
+ * The "Block" button beside a search result (content.js): add the site the
+ * user confirmed to their blocklist. Adding only ever tightens protection, so
+ * no PIN or Pact is asked; a whitelisted site is refused rather than silently
+ * left open, since the whitelist would override the new entry anyway.
+ */
+async function quickBlockSite(rawHost) {
+  const validate = self.DomainValidate && self.DomainValidate.validateDomain;
+  const host = validate ? validate(String(rawHost || '')) : null;
+  if (!host || host.indexOf('.') === -1) return { ok: false, reason: 'invalid' };
+  if (await isWhitelisted(`https://${host}/`)) return { ok: false, reason: 'whitelisted', host };
+  const settings = await getSettings();
+  const patterns = Array.isArray(settings.customPatterns) ? settings.customPatterns.slice() : [];
+  if (blocklistCoversHost(host, patterns)) return { ok: true, host, already: true };
+  patterns.push(host);
+  await setSettings({ ...settings, customPatterns: patterns });
+  return { ok: true, host };
+}
+
 /**
  * Persist any missing defaults, but ONLY when something is actually missing.
  *
@@ -3195,6 +3227,16 @@ browserAPI.runtime.onMessage.addListener((message, sender, sendResponse) => {
         sendResponse({ blocked: blocked === true });
       } catch (_) {
         sendResponse({ blocked: false });
+      }
+    })();
+    return true;
+  } else if (message.type === 'quick_block_site' && typeof message.host === 'string') {
+    (async () => {
+      try {
+        sendResponse(await quickBlockSite(message.host));
+      } catch (error) {
+        console.error('BlockNSFW: quick_block_site failed', error);
+        sendResponse({ ok: false, reason: 'error' });
       }
     })();
     return true;
