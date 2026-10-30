@@ -348,8 +348,22 @@
       color: var(--color-ink);
     }
 
-    .block-section {
+    /* One box per section, which a supporter's chosen shape may move or
+       hide (extras/sections.js). Each brings its own rule, and one with
+       nothing to show here (this site on a browser page) takes no room. */
+    .pop-sec {
       border-top: 1px solid var(--color-rule);
+    }
+    .pop-sec > .counts,
+    .pop-sec > .whitelist,
+    .pop-sec > .row + .row {
+      border-top: 0;
+    }
+    .pop-sec > .row-link + .row-link {
+      border-top: 1px solid var(--color-rule);
+    }
+    .pop-sec.is-empty {
+      display: none;
     }
 
     .whitelist {
@@ -537,6 +551,18 @@
   </div>
 
 
+  <p class="notice popup-notice" id="popup-notice" role="alert"></p>
+
+  <section class="pact-waiting hidden" id="pact-waiting" aria-labelledby="pact-waiting-head">
+    <h2 class="meta" id="pact-waiting-head">waiting</h2>
+    <div class="domain-list" id="pact-waiting-list" aria-live="polite"></div>
+  </section>
+
+  <!-- The popup's sections, one box each, in this order unless a supporter
+       chose another shape (extras/sections.js moves and hides the boxes).
+       The band above and Settings below always stay. -->
+  <div class="popup-sections" id="popup-sections">
+  <div class="pop-sec" data-section="counts">
   <dl class="counts" aria-label="What BlockNSFW has blocked">
     <div class="count">
       <dt class="meta">today</dt>
@@ -551,8 +577,9 @@
       <dd id="images-filtered">0</dd>
     </div>
   </dl>
+  </div>
 
-  <div class="block-section">
+  <div class="pop-sec" data-section="site">
     <!-- This-site rows: shown only when the tab is a website. -->
     <div class="row" id="unblock-row" style="display: none;">
       <div class="row-text">
@@ -575,7 +602,9 @@
       </div>
       <button type="button" class="btn btn-ghost btn-sm" id="block-site-btn" aria-describedby="block-desc">Block</button>
     </div>
+  </div>
 
+  <div class="pop-sec" data-section="safesearch">
     <div class="row">
       <div class="row-text">
         <span class="row-label" id="safesearch-label">Enhanced SafeSearch</span>
@@ -588,8 +617,10 @@
         <span class="switch-state" aria-hidden="true"></span>
       </button>
     </div>
+  </div>
 
-    <!-- For a hard moment: everything at its strongest, nothing loosened. -->
+  <!-- For a hard moment: everything at its strongest, nothing loosened. -->
+  <div class="pop-sec" data-section="storm">
     <div class="row" id="storm-row">
       <div class="row-text">
         <span class="row-label" id="storm-label">Storm Mode</span>
@@ -599,13 +630,7 @@
     </div>
   </div>
 
-  <p class="notice popup-notice" id="popup-notice" role="alert"></p>
-
-  <section class="pact-waiting hidden" id="pact-waiting" aria-labelledby="pact-waiting-head">
-    <h2 class="meta" id="pact-waiting-head">waiting</h2>
-    <div class="domain-list" id="pact-waiting-list" aria-live="polite"></div>
-  </section>
-
+  <div class="pop-sec" data-section="whitelist">
   <section class="whitelist" aria-labelledby="whitelist-head">
     <h2 class="meta" id="whitelist-head">whitelist</h2>
     <div class="field">
@@ -624,8 +649,9 @@
       <p class="domain-empty">No sites are whitelisted.</p>
     </div>
   </section>
+  </div>
 
-  <nav class="links" aria-label="More">
+  <div class="pop-sec" data-section="path">
     <a href="#" class="row-link" id="path-link">
       <span class="row-link-text">
         <span>The path <span class="meta meta-brass row-tag" id="path-tag" hidden>Supporter</span></span>
@@ -633,6 +659,8 @@
       </span>
       <svg class="icon icon-right" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M2.5 8h11M9.5 4l4 4-4 4" /></svg>
     </a>
+  </div>
+  <div class="pop-sec" data-section="checkin">
     <a href="#" class="row-link" id="checkin-link">
       <span class="row-link-text">
         <span>How was today? <span class="meta meta-brass row-tag" id="checkin-tag" hidden>Supporter</span></span>
@@ -640,10 +668,14 @@
       </span>
       <svg class="icon icon-right" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M2.5 8h11M9.5 4l4 4-4 4" /></svg>
     </a>
+  </div>
+  <div class="pop-sec" data-section="stats">
     <a href="#" class="row-link" id="stats-btn">
       Statistics
       <svg class="icon icon-right" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M2.5 8h11M9.5 4l4 4-4 4" /></svg>
     </a>
+  </div>
+  <div class="pop-sec" data-section="week">
     <a href="#" class="row-link" id="week-link">
       <span>Your week <span class="meta meta-pine week-new" id="week-new" hidden>New</span></span>
       <svg class="icon icon-right" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M2.5 8h11M9.5 4l4 4-4 4" /></svg>
@@ -653,18 +685,28 @@
       <span>Your month <span class="meta meta-pine week-new">New</span></span>
       <svg class="icon icon-right" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M2.5 8h11M9.5 4l4 4-4 4" /></svg>
     </a>
+  </div>
+  <div class="pop-sec" data-section="slip">
     <a href="#" class="row-link" id="slip-link">
       After a slip
       <svg class="icon icon-right" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M2.5 8h11M9.5 4l4 4-4 4" /></svg>
     </a>
+  </div>
+  <div class="pop-sec" data-section="report">
     <a href="#" class="row-link" id="contact-btn">
       Report a problem or an idea
       <svg class="icon icon-right" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M2.5 8h11M9.5 4l4 4-4 4" /></svg>
     </a>
+  </div>
+  <div class="pop-sec" data-section="coffee">
     <a href="https://buymeacoffee.com/monolab.co" target="_blank" rel="noopener noreferrer" class="row-link" id="coffee-btn">
       Buy me a coffee
       <svg class="icon icon-up-right" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M4.5 11.5l7-7M6 4.5h5.5V10" /></svg>
     </a>
+  </div>
+  </div>
+
+  <nav class="links" aria-label="More">
     <a href="#" class="row-link" id="settings">
       Settings
       <svg class="icon icon-right" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M2.5 8h11M9.5 4l4 4-4 4" /></svg>
@@ -844,6 +886,7 @@
   <script src="extras/sync.js"></script>
   <script src="extras/storm.js"></script>
   <script src="extras/face.js"></script>
+  <script src="extras/sections.js"></script>
   <script src="popup.js"></script>
 </body>
 </html>

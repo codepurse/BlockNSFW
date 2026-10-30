@@ -1760,6 +1760,334 @@
 
     /* ── Blocked page design picker ──────────────────────────────────────── */
 
+    /* Popup sections (extras/sections.js): the shapes, drawn at a quarter
+       size, then Your own as a list beside the popup at half size. The
+       brass line is the fold: 600px, the most a toolbar popup opens to. */
+    .shapes {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr));
+      gap: var(--space-3);
+      margin-top: var(--space-4);
+    }
+    .shape {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-1);
+      padding: var(--space-3);
+      border: 1px solid var(--color-rule);
+      cursor: pointer;
+      transition: border-color var(--dur-state) var(--ease-out-quint);
+    }
+    .shape:hover {
+      border-color: var(--color-rule-3);
+    }
+    .shape.is-selected {
+      border-color: var(--color-pine);
+    }
+    .shape input {
+      position: absolute;
+      opacity: 0;
+      pointer-events: none;
+    }
+    .shape input:focus-visible ~ .shape-stage .mini {
+      outline: var(--focus-width) solid var(--color-pine-2);
+      outline-offset: var(--focus-offset);
+    }
+    .shape-stage {
+      position: relative;
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      height: 310px;
+      padding-top: 4px;
+    }
+    .mini {
+      position: relative;
+      display: block;
+      width: 90px;
+      border: 1px solid var(--color-rule-2);
+      background: var(--color-sheet);
+      overflow: hidden;
+    }
+    .mini-band {
+      display: block;
+      height: 49px;
+      background: var(--color-pine);
+    }
+    .mini-band i,
+    .mini-sec i {
+      display: block;
+      height: 2px;
+    }
+    .mini-band i {
+      margin: 6px 6px 0;
+      width: 26px;
+      background: var(--color-on-band-2);
+    }
+    .mini-band i:nth-child(2) {
+      width: 44px;
+      height: 5px;
+      background: var(--color-on-band);
+    }
+    .mini-band i:nth-child(3) {
+      width: auto;
+      height: 1px;
+      margin-top: 16px;
+      background: var(--color-band-rule);
+    }
+    .mini-sec {
+      display: block;
+      box-sizing: border-box;
+      padding: 4px 6px 0;
+      border-top: 1px solid var(--color-rule);
+    }
+    .mini-sec i {
+      width: 60%;
+      background: var(--color-recess-2);
+    }
+    .mini-sec i + i {
+      margin-top: 3px;
+      width: 38%;
+    }
+    .mini-below,
+    .scale-below {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: color-mix(in srgb, var(--color-paper) 58%, transparent);
+      pointer-events: none;
+    }
+    .mini-below {
+      top: 150px;
+    }
+    .mini-fold {
+      position: absolute;
+      left: calc(50% - 53px);
+      width: 106px;
+      top: 154px;
+      border-top: 1px solid var(--color-brass);
+    }
+    .shape-name {
+      margin-top: var(--space-2);
+      font-size: 14px;
+      font-weight: 500;
+    }
+    .shape.is-selected .shape-name::after {
+      content: "chosen";
+      margin-left: var(--space-2);
+      font-family: var(--font-mono);
+      font-size: var(--text-meta);
+      font-weight: 500;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: var(--color-pine);
+    }
+    .shape-blurb {
+      font-size: 12px;
+      line-height: 1.45;
+      color: var(--color-ink-2);
+    }
+    .shape-fit {
+      margin-top: auto;
+      padding-top: var(--space-2);
+    }
+    .shape-fit.is-fits {
+      color: var(--color-pine);
+    }
+    .sections-own {
+      margin-top: var(--space-6);
+    }
+    .sections-body {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 17.5rem;
+      column-gap: var(--space-7);
+      align-items: start;
+      margin-top: var(--space-4);
+    }
+    @media (max-width: 47.99rem) {
+      .sections-body {
+        grid-template-columns: minmax(0, 1fr);
+        row-gap: var(--space-5);
+      }
+    }
+    .sec-list {
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+    .sec-row {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr) auto auto;
+      align-items: center;
+      column-gap: var(--space-3);
+      min-height: 44px;
+      padding: 4px 0;
+      border-bottom: 1px solid var(--color-rule);
+    }
+    .sec-moves {
+      display: flex;
+      gap: 4px;
+    }
+    .move-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 28px;
+      height: 28px;
+      padding: 0;
+      border: 1px solid var(--color-rule-2);
+      border-radius: var(--radius-xs);
+      background: transparent;
+      color: var(--color-ink-2);
+      cursor: pointer;
+    }
+    .move-btn:hover {
+      border-color: var(--color-ink);
+      background: var(--color-sheet);
+      color: var(--color-ink);
+    }
+    .move-btn:disabled {
+      visibility: hidden;
+    }
+    .move-btn .icon {
+      width: 14px;
+      height: 14px;
+    }
+    .sec-name {
+      font-size: 14px;
+    }
+    .sec-row.is-hidden .sec-name {
+      color: var(--color-ink-3);
+    }
+    .sec-px {
+      min-width: 3ch;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-variant-numeric: tabular-nums;
+      text-align: right;
+      color: var(--color-ink-3);
+    }
+    .sec-fixed {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      min-height: 40px;
+      border-bottom: 1px solid var(--color-rule);
+      font-size: 14px;
+      color: var(--color-ink-2);
+    }
+    .fold-mark {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--space-3);
+      margin-top: -1px;
+      padding: 6px 0 5px;
+      border-bottom: 1px solid var(--color-brass);
+    }
+    .fold-mark .meta {
+      color: var(--color-brass);
+    }
+    .sections-reset {
+      margin-top: var(--space-3);
+    }
+    .sections-figure {
+      margin: 0;
+    }
+    .sections-figure > .meta {
+      margin-bottom: var(--space-2);
+    }
+    .scale {
+      position: relative;
+      width: 180px;
+    }
+    .scale-plate {
+      position: relative;
+      border: 1px solid var(--color-rule-2);
+      background: var(--color-sheet);
+      overflow: hidden;
+    }
+    .scale-band {
+      height: 98px;
+      box-sizing: border-box;
+      padding: 7px 8px;
+      background: var(--color-pine);
+      color: var(--color-on-band);
+      font-family: var(--font-display);
+    }
+    .scale-band .scale-word {
+      font-size: 10px;
+    }
+    .scale-band .scale-status {
+      margin-top: 12px;
+      font-size: 17px;
+      line-height: 1;
+    }
+    .scale-sec,
+    .scale-end {
+      box-sizing: border-box;
+      padding: 4px 8px 0;
+      border-top: 1px solid var(--color-rule);
+      overflow: hidden;
+      font-size: 11px;
+      line-height: 1.3;
+      color: var(--color-ink-2);
+    }
+    .scale-end {
+      height: 38px;
+      color: var(--color-ink-3);
+    }
+    .scale-bar {
+      display: block;
+      width: 70%;
+      height: 3px;
+      margin-top: 4px;
+      background: var(--color-recess-2);
+    }
+    .scale-bar + .scale-bar {
+      width: 45%;
+    }
+    .scale-below {
+      top: 300px;
+    }
+    .scale-fold {
+      position: absolute;
+      left: -8px;
+      right: -8px;
+      top: 300px;
+      border-top: 1px solid var(--color-brass);
+    }
+    .scale-fold-label {
+      position: absolute;
+      left: calc(100% + 14px);
+      top: 293px;
+      white-space: nowrap;
+    }
+    .scale-fold-label .meta {
+      display: block;
+      color: var(--color-brass);
+    }
+    .scale-fold-label .meta + .meta {
+      margin-top: 2px;
+      color: var(--color-ink-3);
+    }
+    .sections-sum {
+      margin-top: var(--space-4);
+    }
+    .sum-value {
+      margin-top: 2px;
+      font-family: var(--font-display);
+      font-size: 22px;
+      line-height: 1.15;
+    }
+    .sum-was {
+      margin-top: 2px;
+      font-size: 13px;
+      color: var(--color-ink-3);
+    }
+
     .design-picker {
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(9.5rem, 1fr));
@@ -3077,6 +3405,39 @@
           </div>
         </div>
 
+        <!-- Popup sections: shown and run by extras/sections.js, which the
+             open-source build doesn't carry (extras/README.md). The shapes,
+             the list and the drawing are built there. -->
+        <div class="group" id="sections-group" hidden>
+          <h3 class="group-title" id="sections-title">Popup sections <span class="meta meta-brass row-tag" data-sections-tag hidden>Supporter</span></h3>
+          <p class="group-desc">What the toolbar popup shows, and in what order. Each shape is drawn at a quarter of its size, with a brass line where the popup stops opening: what's above it shows without scrolling. The band, the Protection switch and Settings are always there, and hiding a section never changes what's blocked.</p>
+          <a class="arrow-link small" href="#supporter" data-door="sections" data-sections-upsell hidden>See Supporter</a>
+          <div data-sections-control hidden>
+            <div class="shapes" id="sections-shapes" role="radiogroup" aria-labelledby="sections-title"></div>
+            <div class="sections-own">
+              <h4 class="row-label">Your own</h4>
+              <p class="row-desc">Show, hide or move any section. A change here makes the shape Your own; the other shapes stay as they are.</p>
+              <div class="sections-body">
+                <div>
+                  <div class="sec-fixed"><span>The band and the switch</span><span class="meta">always first</span></div>
+                  <ol class="sec-list" id="sections-list" aria-label="Popup sections, in order"></ol>
+                  <div class="sec-fixed"><span>Settings</span><span class="meta">always last</span></div>
+                  <button type="button" class="btn-text sections-reset" id="sections-reset">Show everything, in the usual order</button>
+                </div>
+                <figure class="sections-figure">
+                  <p class="meta">the popup, half size</p>
+                  <div id="sections-scale"></div>
+                  <div class="sections-sum" aria-live="polite">
+                    <p class="meta">opens showing</p>
+                    <p class="sum-value" id="sections-sum-lead"></p>
+                    <p class="sum-was" id="sections-sum-scroll"></p>
+                  </div>
+                </figure>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <div class="group">
           <h3 class="group-title">Blocked page</h3>
           <p class="group-desc">Choose what you see when a page is held: one of these designs, or a page of your own.</p>
@@ -4198,6 +4559,7 @@ title/Example Domain/"></textarea>
   <script src="extras/proof.js"></script>
   <script src="extras/storm.js"></script>
   <script src="extras/face.js"></script>
+  <script src="extras/sections.js"></script>
   <script src="extras/sync.js"></script>
   <script src="options-supporter.js"></script>
   <script src="options-backup.js"></script>

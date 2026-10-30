@@ -15,6 +15,19 @@ All notable project changes should be documented here going forward.
   note steps down a size and stops at six lines, with "Read it all" opening
   it in Settings. A face with nothing to show yet stays Plain, and so does
   the popup while protection is off. Privacy policy: What We Store Locally.
+- **Popup sections, for supporters.** A supporter's popup ran to about
+  1,200 pixels in a window that opens to 600, so most of it was a scroll
+  away. Settings › Customization › Popup sections offers it in shapes:
+  Everything (as it comes), Quiet (today's counts, Storm Mode, the path,
+  your week), Hard nights (Storm Mode first, then After a slip, the path,
+  the check-in), Just the switch, or Your own. Each is drawn at a quarter of
+  its size with a brass line at the fold, so what opens without scrolling is
+  plain to see, and says whether it fits or how far it scrolls. Your own is
+  a list (show, hide or move each section) beside the popup at half size,
+  and the fold moves as you change it. The band, the Protection switch and
+  Settings are always there, as are the Storm warning and a change waiting
+  on the Pact when they apply. Hiding a section never changes what's
+  blocked. Privacy policy: What We Store Locally.
 
 ### Changed
 
@@ -52,6 +65,14 @@ All notable project changes should be documented here going forward.
   and keeps `#status` as the live status, visually hidden, under a face.
   The choice is `pblocker_popup_face`, carried in a backup like the look.
   `Moments.daysKept` also returns `days`, each day oldest first.
+- Popup sections is a Supporter extra, `extras/sections.js` (an empty
+  stand-in here). `popup.html` now keeps each section in its own box,
+  `.pop-sec[data-section]`, inside `#popup-sections`, in the usual order;
+  the extra moves and hides the boxes. The notice and the Pact's waiting
+  list moved above the sections, so they show without scrolling.
+  `popup.js` `tidySections()` folds away a box with nothing to show here
+  (this site on a browser page). The choice is `pblocker_popup_sections`,
+  carried in a backup. Tests: `tests/popup-sections.test.js`.
 - The PIN boxes in `popup.html` and `options.js` have no `maxlength`; the
   PIN is a salted hash (`shared/pin-hash.js`), so its length costs nothing.
   `onboarding.js` `trySavePin` trims. Tests: `tests/pin-entry-length.test.js`

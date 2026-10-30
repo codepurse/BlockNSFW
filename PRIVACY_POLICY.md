@@ -118,6 +118,8 @@ BlockNSFW stores data locally in your browser extension storage on your device. 
 - Which popup face you chose (Plain, your words, days kept, your photo or
   the path), if you choose one. The face is drawn from the records above
   each time the popup opens, and nothing else is kept for it
+- Which sections the popup shows and in what order, if you change them: the
+  shape you chose, and your own order and the sections you hid
 - Your supporter code, if you enter one
 - A random identifier for this computer, made on the device, used only to
   tell your computers apart in a backup or in sync

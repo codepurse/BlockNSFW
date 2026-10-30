@@ -764,6 +764,26 @@ async function renderFace(settings) {
   if (desc) desc.hidden = shown;
 }
 
+// A section box whose rows are all hidden here (this site on a browser page,
+// the check-in in the open-source build) takes no room, so it leaves no
+// stray rule. Hiding a box by choice is the sections extra's, with `hidden`.
+function tidySections() {
+  document.querySelectorAll('.pop-sec').forEach((box) => {
+    const showing = Array.from(box.children).some((el) => !el.hidden && el.style.display !== 'none');
+    box.classList.toggle('is-empty', !showing);
+  });
+}
+
+// A supporter's chosen shape for the popup (extras/sections.js): which
+// sections show, and in what order. The band and Settings always stay.
+async function renderSections() {
+  const extra = self.PopupSections;
+  if (!extra || !isSupporter || !self.SupporterExtras || !self.SupporterExtras.sections) return;
+  try {
+    await extra.apply({ doc: document });
+  } catch (_) {}
+}
+
 async function startStorm() {
   showNotice('');
   const hours = await showStormDialog();
@@ -1561,6 +1581,7 @@ async function updateUI() {
       unblockRow.style.display = 'none';
       if (blockRow) blockRow.style.display = 'none';
     }
+    tidySections();
 
     // Update main toggle
     setSwitch($('toggle'), settings.enabled);
@@ -1920,9 +1941,11 @@ document.addEventListener('DOMContentLoaded', async () => {
   isSupporter = await readSupporter();
   renderPathRow();
   renderCheckinRow();
+  tidySections();
   renderMonthRow();
   renderStormWarning();
   renderFace();
+  renderSections();
 
   // Anything whose wait is over is applied as the popup opens.
   if (Pact) Pact.ask({ type: 'pact_process' });
