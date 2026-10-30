@@ -16,6 +16,7 @@ extras**:
 | `looks.js` | Supporter looks (true black, an accent), in Settings |
 | `proof.js` | Proof it passes: the dial of urges you've waited out, on the blocked page, and its switch in Settings |
 | `storm.js` | Storm warning: on an evening that looks like a hard one, the popup offers Storm Mode through your hard hours; its switch in Settings |
+| `face.js` | Popup face: what the toolbar popup leads with (your words, days kept, your photo, or today on the path); its picker in Settings |
 | `extras.js` | Which extras a build carries (here: none) |
 
 The extras themselves are not open source. They live in a separate, private

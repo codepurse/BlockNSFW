@@ -4,6 +4,18 @@ All notable project changes should be documented here going forward.
 
 ## [2.0.4] - 2026-10-30
 
+### Added
+
+- **Popup face, for supporters.** Choose what the toolbar popup leads with
+  while protection is on, in Settings › Customization › Appearance: your
+  words (the note to yourself from Your own words, or your plan for a hard
+  moment if there's no note), days kept (how many of your last 30, a mark
+  for each), your photo, or today on the path. "Protected" steps up beside
+  the name as a word, and the Protection switch stays where it is. A long
+  note steps down a size and stops at six lines, with "Read it all" opening
+  it in Settings. A face with nothing to show yet stays Plain, and so does
+  the popup while protection is off. Privacy policy: What We Store Locally.
+
 ### Changed
 
 - **Weakening the access code takes a code twice as long** (issue #48).
@@ -33,6 +45,13 @@ All notable project changes should be documented here going forward.
 
 ### For contributors
 
+- Popup face is a Supporter extra, `extras/face.js` (an empty stand-in
+  here): it fills `#popup-face` in `popup.html`, whose styles are public,
+  and runs the picker in `options.html` (`#face-row`). `popup.js`
+  `renderFace()` asks for it only for a supporter while protection is on,
+  and keeps `#status` as the live status, visually hidden, under a face.
+  The choice is `pblocker_popup_face`, carried in a backup like the look.
+  `Moments.daysKept` also returns `days`, each day oldest first.
 - The PIN boxes in `popup.html` and `options.js` have no `maxlength`; the
   PIN is a salted hash (`shared/pin-hash.js`), so its length costs nothing.
   `onboarding.js` `trySavePin` trims. Tests: `tests/pin-entry-length.test.js`

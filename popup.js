@@ -738,6 +738,32 @@ async function renderStormWarning() {
   } catch (_) {}
 }
 
+// A Supporter's popup face (extras/face.js): what the band leads with, chosen
+// in Settings › Customization. Only while protection is on: off, the band
+// says so plainly. The extra fills #popup-face and says whether it showed
+// anything; until it does, the popup is Plain. "Protected" stays the live
+// status for screen readers either way.
+async function renderFace(settings) {
+  const extra = self.PopupFace;
+  let shown = false;
+  if (extra && isSupporter && self.SupporterExtras && self.SupporterExtras.face) {
+    try {
+      const s = settings || await getSettings();
+      if (s.enabled) shown = await extra.mount({ doc: document, now: Date.now(), open: openPage }) === true;
+    } catch (_) {
+      shown = false;
+    }
+  }
+  const face = $('popup-face');
+  if (face) face.hidden = !shown;
+  const state = $('face-state');
+  if (state) state.hidden = !shown;
+  const status = $('status');
+  if (status) status.classList.toggle('visually-hidden', shown);
+  const desc = $('toggle-desc');
+  if (desc) desc.hidden = shown;
+}
+
 async function startStorm() {
   showNotice('');
   const hours = await showStormDialog();
@@ -1552,7 +1578,8 @@ async function updateUI() {
     await updateLockNotes();
     await renderPactWaiting();
     await renderBoost(settings);
-    
+    await renderFace(settings);
+
     document.body.classList.remove('loading');
   } catch (error) {
     console.error('BlockNSFW popup: Error updating UI', error);
@@ -1895,6 +1922,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   renderCheckinRow();
   renderMonthRow();
   renderStormWarning();
+  renderFace();
 
   // Anything whose wait is over is applied as the popup opens.
   if (Pact) Pact.ask({ type: 'pact_process' });

@@ -28,6 +28,7 @@ function oldComputer() {
     pblocker_whitelist: ['example.org'],
     pblocker_risk_hours: { enabled: true, start: 1380, end: 120 },
     pblocker_color_scheme: 'dark',
+    pblocker_popup_face: 'words',
     pblocker_pin: { hash: 'secret', salt: 'x' },
     pblocker_pact: { active: true, witness: { secret: 'TOTPSECRET' } },
     pblocker_access_code: { code: 'abc' },
@@ -99,6 +100,7 @@ test('onto a new computer: history beside its own, everything else back, and the
   assert.equal(writes.pblocker_longest_streak, 55);
   assert.deepEqual(writes.pblocker_whitelist, ['example.org']);
   assert.equal(writes.pblocker_color_scheme, 'dark');
+  assert.equal(writes.pblocker_popup_face, 'words', 'the popup face comes back');
   for (const k of Backup.NEVER_KEYS) assert.ok(!(k in writes), `${k} is never written`);
 });
 

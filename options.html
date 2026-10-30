@@ -3056,6 +3056,23 @@
               <div class="look-swatches" id="look-accent" role="radiogroup" aria-labelledby="look-accent-label" aria-describedby="look-accent-desc" data-look-control></div>
               <a class="arrow-link small" href="#supporter" data-door="looks" data-look-upsell hidden>See Supporter</a>
             </div>
+            <!-- Popup face: shown and run by extras/face.js, which the
+                 open-source build doesn't carry (extras/README.md). -->
+            <div class="row row-stack" id="face-row" hidden>
+              <div class="row-text">
+                <span class="row-label" id="face-label">Popup face <span class="meta meta-brass row-tag" data-face-tag hidden>Supporter</span></span>
+                <p class="row-desc" id="face-desc">What the toolbar popup leads with while protection is on. The Protection switch stays right under it.</p>
+              </div>
+              <div class="segmented" id="face-picker" role="radiogroup" aria-labelledby="face-label" aria-describedby="face-desc face-note" data-face-control hidden>
+                <label class="segment"><input type="radio" class="segment-input" name="popup-face" value="plain" checked /><span class="segment-label">Plain</span></label>
+                <label class="segment"><input type="radio" class="segment-input" name="popup-face" value="words" /><span class="segment-label">Your words</span></label>
+                <label class="segment"><input type="radio" class="segment-input" name="popup-face" value="days" /><span class="segment-label">Days kept</span></label>
+                <label class="segment"><input type="radio" class="segment-input" name="popup-face" value="photo" /><span class="segment-label">Your photo</span></label>
+                <label class="segment"><input type="radio" class="segment-input" name="popup-face" value="path" /><span class="segment-label">The path</span></label>
+              </div>
+              <p class="field-hint" id="face-note" data-face-control hidden>Your words shows your note to yourself, or your plan for a hard moment if there's no note. Until there's something to show, the popup stays Plain.</p>
+              <a class="arrow-link small" href="#supporter" data-door="face" data-face-upsell hidden>See Supporter</a>
+            </div>
           </div>
           </div>
         </div>
@@ -4180,6 +4197,7 @@ title/Example Domain/"></textarea>
   <script src="extras/voice.js"></script>
   <script src="extras/proof.js"></script>
   <script src="extras/storm.js"></script>
+  <script src="extras/face.js"></script>
   <script src="extras/sync.js"></script>
   <script src="options-supporter.js"></script>
   <script src="options-backup.js"></script>

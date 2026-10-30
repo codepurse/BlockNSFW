@@ -94,6 +94,151 @@
       color: var(--color-ink);
     }
 
+    /* A Supporter's popup face (extras/face.js): what the band leads with
+       while protection is on. With one, "Protected" steps up beside the name
+       as a word, and the face takes its place; the switch stays put. */
+    .popup-top {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: var(--space-3);
+    }
+    .band-pine .face-state {
+      color: var(--color-on-band);
+    }
+    .popup-face {
+      margin-top: 22px;
+    }
+    .popup-face > .meta + * {
+      margin-top: var(--space-2);
+    }
+    .face-quote {
+      margin: 0;
+      font-family: var(--font-display);
+      font-weight: 400;
+      font-size: 23px;
+      line-height: 1.28;
+      letter-spacing: -0.01em;
+      color: var(--color-on-band);
+      text-wrap: pretty;
+      overflow-wrap: anywhere;
+    }
+    .face-quote .q-mark {
+      margin-right: 2px;
+      color: var(--color-brass-2);
+    }
+    /* A note runs to 600 characters: a long one steps down a size and stops
+       at six lines, with the whole of it a click away. */
+    .face-quote.is-long {
+      display: -webkit-box;
+      -webkit-box-orient: vertical;
+      -webkit-line-clamp: 6;
+      overflow: hidden;
+      font-size: 18px;
+      line-height: 1.4;
+      letter-spacing: 0;
+    }
+    .face-figure {
+      display: flex;
+      align-items: baseline;
+      gap: var(--space-2);
+    }
+    .face-num {
+      font-family: var(--font-display);
+      font-weight: 400;
+      font-size: 56px;
+      line-height: 1;
+      letter-spacing: -0.02em;
+      color: var(--color-on-band);
+    }
+    .face-of {
+      font-family: var(--font-display);
+      font-size: 20px;
+      line-height: 1;
+      color: var(--color-on-band-2);
+    }
+    /* One mark a day, oldest first: a short one for a day not kept. */
+    .face-tally {
+      display: flex;
+      align-items: flex-end;
+      gap: 8px;
+      height: 14px;
+      margin-top: var(--space-3);
+    }
+    .face-tally span {
+      width: 1px;
+      height: 14px;
+      background: var(--color-on-band);
+    }
+    .face-tally .is-missed {
+      height: 5px;
+      background: var(--color-on-band-2);
+    }
+    .face-tally .is-today {
+      width: 2px;
+    }
+    .face-sub {
+      margin-top: var(--space-3);
+      font-size: 13px;
+      line-height: 1.45;
+      color: var(--color-on-band-2);
+    }
+    .face-photo {
+      display: block;
+      width: 100%;
+      height: 172px;
+      object-fit: cover;
+      border: 1px solid var(--color-band-rule);
+    }
+    .face-title {
+      font-family: var(--font-display);
+      font-weight: 400;
+      font-size: 30px;
+      line-height: 1.12;
+      letter-spacing: -0.02em;
+      color: var(--color-on-band);
+      text-wrap: balance;
+    }
+    /* The thirty days of the path: read ones solid, today in brass. */
+    .face-line {
+      display: flex;
+      align-items: center;
+      gap: 3px;
+      height: 8px;
+      margin-top: var(--space-3);
+    }
+    .face-line span {
+      flex: 1 1 0;
+      height: 1px;
+      background: var(--color-band-rule);
+    }
+    .face-line .is-done {
+      height: 2px;
+      background: var(--color-on-band);
+    }
+    .face-line .is-today {
+      height: 8px;
+      background: var(--color-brass-2);
+    }
+    .face-go {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--space-2);
+      margin-top: var(--space-3);
+      font-size: 13px;
+      color: var(--color-on-band);
+      text-decoration: underline;
+      text-underline-offset: 3px;
+      text-decoration-color: var(--color-band-rule);
+    }
+    .face-go:hover {
+      text-decoration-color: currentColor;
+    }
+    .face-go .icon {
+      width: 14px;
+      height: 14px;
+    }
+
     /* Storm warning (extras/storm.js): on an evening that looks hard, one
        quiet line, tonight drawn as a line, and the offer. Full width like
        the band, on sheet, with a brass rule on top because it is a signal. */
@@ -343,10 +488,16 @@
 </head>
 <body>
   <header class="popup-band band-sheet" id="popup-band">
-    <h1 class="title popup-wordmark">BlockNSFW</h1>
+    <div class="popup-top">
+      <h1 class="title popup-wordmark">BlockNSFW</h1>
+      <p class="meta face-state" id="face-state" aria-hidden="true" hidden>protected</p>
+    </div>
     <p class="title status" id="status" role="status" aria-live="polite"></p>
     <p class="meta status-note" id="status-note" hidden></p>
     <p class="status-desc" id="toggle-desc">Blocks adult sites and explicit content as pages load.</p>
+    <!-- A Supporter's popup face: extras/face.js fills it while protection is
+         on. Hidden otherwise, and in the open-source build. -->
+    <div class="popup-face" id="popup-face" hidden></div>
     <div class="row">
       <div class="row-text">
         <span class="row-label" id="toggle-label">Protection</span>
@@ -692,6 +843,7 @@
   <script src="extras/extras.js"></script>
   <script src="extras/sync.js"></script>
   <script src="extras/storm.js"></script>
+  <script src="extras/face.js"></script>
   <script src="popup.js"></script>
 </body>
 </html>

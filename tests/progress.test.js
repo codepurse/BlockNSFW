@@ -104,7 +104,9 @@ test('days kept in the last 30 count a slip or time unprotected on another compu
   const other = Progress.snapshot(storeFor({ slips: [{ day: key(2), hour: 1, at: at(2, 1) }], off: [[at(5, 9), at(5, 10)]], firstSeen: at(200) }), ID_B, NOW);
   const others = Progress.others({ [ID_B]: other });
   const here = { now: NOW, firstSeen: at(10), slips: [], disabledLog: [], currentlyEnabled: true };
-  assert.deepEqual(Moments.daysKept(here), { kept: 11, counted: 11 });
+  const alone = Moments.daysKept(here);
+  assert.equal(alone.kept, 11);
+  assert.equal(alone.counted, 11);
   const both = Moments.daysKept({ ...here, others });
   assert.equal(both.counted, 30, 'the earliest first day counts');
   assert.equal(both.kept, 28, 'two days lost elsewhere are lost here too');

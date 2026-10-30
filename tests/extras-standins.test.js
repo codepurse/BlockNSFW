@@ -13,7 +13,7 @@ const DIR = path.join(ROOT, 'extras');
 const STANDINS = fs.readdirSync(DIR).filter((f) => !f.endsWith('.md')).sort();
 
 test('the stand-ins are the extras and the list of them', () => {
-  assert.deepEqual(STANDINS, ['checkin.js', 'extras.js', 'gooddays.js', 'hardest.js', 'looks.js', 'month.js', 'path-days.js', 'photo.js', 'proof.js', 'storm.js', 'sync.js', 'voice.js']);
+  assert.deepEqual(STANDINS, ['checkin.js', 'extras.js', 'face.js', 'gooddays.js', 'hardest.js', 'looks.js', 'month.js', 'path-days.js', 'photo.js', 'proof.js', 'storm.js', 'sync.js', 'voice.js']);
   const readme = fs.readFileSync(path.join(DIR, 'README.md'), 'utf8');
   for (const f of STANDINS) assert.ok(readme.includes('`' + f + '`'), `extras/README.md names ${f}`);
 });
@@ -42,12 +42,12 @@ test('the private repository can never be committed here', () => {
 
 test('the pages load the extras they use, and nothing of the extras is left outside extras/', () => {
   const uses = {
-    'popup.html': ['extras/checkin.js', 'extras/extras.js', 'extras/storm.js'],
+    'popup.html': ['extras/checkin.js', 'extras/extras.js', 'extras/storm.js', 'extras/face.js'],
     'path.html': ['extras/path-days.js'],
     'gooddays.html': ['extras/checkin.js', 'extras/gooddays.js'],
     'month.html': ['extras/month.js'],
     'hardest.html': ['extras/hardest.js'],
-    'options.html': ['extras/extras.js', 'extras/looks.js', 'extras/photo.js', 'extras/proof.js', 'extras/storm.js'],
+    'options.html': ['extras/extras.js', 'extras/looks.js', 'extras/photo.js', 'extras/proof.js', 'extras/storm.js', 'extras/face.js'],
     'blocked.html': ['extras/proof.js']
   };
   for (const [page, files] of Object.entries(uses)) {

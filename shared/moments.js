@@ -341,8 +341,9 @@
     return intervals;
   }
 
-  // { kept, counted }: of the last `counted` days (up to 30, fewer for a new
-  // install, today included), how many had no slip and no time unprotected.
+  // { kept, counted, days }: of the last `counted` days (up to 30, fewer for a
+  // new install, today included), how many had no slip and no time
+  // unprotected; `days` is each of them, oldest first, true when kept.
   // `others` (shared/progress.js others()) adds your other computers: a day
   // is kept only if it was kept on every one.
   function daysKept(opts) {
@@ -360,6 +361,7 @@
     var off = offIntervals(opts.disabledLog, now, opts.currentlyEnabled).concat(o ? o.off : []);
 
     var kept = 0;
+    var days = [];
     for (var i = 0; i < counted; i++) {
       var start = new Date(today);
       start.setDate(start.getDate() - i);
@@ -371,8 +373,9 @@
         return iv[0] < dayEnd && iv[1] > dayStart;
       });
       if (!broken) kept++;
+      days.unshift(!broken);
     }
-    return { kept: kept, counted: counted };
+    return { kept: kept, counted: counted, days: days };
   }
 
   var exported = {

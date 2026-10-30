@@ -115,6 +115,9 @@ BlockNSFW stores data locally in your browser extension storage on your device. 
   The warning itself is worked out on your device each time the popup
   opens, from the records above, and is not kept
 - The colours of a Supporter look, if you choose one
+- Which popup face you chose (Plain, your words, days kept, your photo or
+  the path), if you choose one. The face is drawn from the records above
+  each time the popup opens, and nothing else is kept for it
 - Your supporter code, if you enter one
 - A random identifier for this computer, made on the device, used only to
   tell your computers apart in a backup or in sync

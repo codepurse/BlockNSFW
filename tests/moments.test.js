@@ -52,13 +52,24 @@ test('suggestedRiskHours: an hour before the slip to two after, across midnight'
 });
 
 test('days kept: a new install counts only its own days', () => {
-  assert.deepEqual(Moments.daysKept({ now: NOW, firstSeen: at(2026, 10, 7), slips: [], disabledLog: [], currentlyEnabled: true }), { kept: 3, counted: 3 });
+  assert.deepEqual(Moments.daysKept({ now: NOW, firstSeen: at(2026, 10, 7), slips: [], disabledLog: [], currentlyEnabled: true }), { kept: 3, counted: 3, days: [true, true, true] });
 });
 
 test('days kept: one slip costs one day, not the month', () => {
   const slips = Moments.addSlip([], { tags: ['late'] }, at(2026, 10, 5, 23));
   const result = Moments.daysKept({ now: NOW, firstSeen: at(2026, 8, 1), slips, disabledLog: [], currentlyEnabled: true });
-  assert.deepEqual(result, { kept: 29, counted: 30 });
+  assert.equal(result.kept, 29);
+  assert.equal(result.counted, 30);
+});
+
+test('days kept: each day, oldest first, with the slip on its own day', () => {
+  // NOW is October 9; the slip, the night of October 5, is four days back.
+  const slips = Moments.addSlip([], { tags: ['late'] }, at(2026, 10, 5, 23));
+  const result = Moments.daysKept({ now: NOW, firstSeen: at(2026, 8, 1), slips, disabledLog: [], currentlyEnabled: true });
+  assert.equal(result.days.length, result.counted);
+  assert.equal(result.days.filter(Boolean).length, result.kept);
+  assert.equal(result.days.indexOf(false), result.counted - 1 - 4, 'the slip is four days before today');
+  assert.equal(result.days[result.days.length - 1], true, 'today is last');
 });
 
 test('days kept: protection off overnight breaks both days it touched', () => {
