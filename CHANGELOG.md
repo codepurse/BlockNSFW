@@ -13,6 +13,10 @@ All notable project changes should be documented here going forward.
   was cheaper than typing it for two or three changes, and every change
   after that was free. Those three now ask for a code twice the chosen
   length (128 characters for a 64-character code), and the box says why.
+  It never goes past 256 characters, the longest there is: one wrong
+  character means a fresh code, and 512 would be a wall, not a pause, for
+  the people likeliest to need a way out of a mistake. So a 128-character
+  code asks for 256, and a 256-character code asks for 256 as before.
   Turning the code on, asking for it more often and lengthening it stay
   free. Under a Pact nothing changes: the wait stands in for the code.
 
@@ -33,14 +37,15 @@ All notable project changes should be documented here going forward.
   PIN is a salted hash (`shared/pin-hash.js`), so its length costs nothing.
   `onboarding.js` `trySavePin` trims. Tests: `tests/pin-entry-length.test.js`
   (no password box carries a `maxlength`, and setup trims).
-- `AccessCode.lengthFor(config, aboutCode)` and `AccessCode.SELF_FACTOR` (2)
-  in `shared/access-code.js`. In `options.js`, `{ aboutCode: true }` rides
+- `AccessCode.lengthFor(config, aboutCode)`, `AccessCode.SELF_FACTOR` (2)
+  and `AccessCode.SELF_MAX` (256, the longest of `LENGTHS`) in
+  `shared/access-code.js`. In `options.js`, `{ aboutCode: true }` rides
   along with `{ critical: true }` through `guardWeakening`, `requirePIN` /
   `requirePINIfSet` and `requireAccessCodeIfEnabled` to
   `showAccessCodeModal`; the three access-code switches pass it. Tests:
   `tests/access-code.test.js` (`lengthFor`) and
-  `tests/access-code-self.test.js` (the modal's length, and the three
-  switches).
+  `tests/access-code-self.test.js` (the modal's length, the cap, and the
+  three switches).
 
 ## [2.0.3] - 2026-10-26
 

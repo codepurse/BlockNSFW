@@ -62,6 +62,17 @@ test('a change to the code itself shows a code twice as long', async () => {
   assert.match(modals[0].description, /twice as long/);
 });
 
+test('at the longest length the code stays 256, and the box says nothing about it growing', async () => {
+  const { context, modals, shownCode } = loadOptions({
+    pblocker_access_code: { enabled: true, length: 256, scope: 'all' },
+  });
+  await context.guardWeakening('turn off the access code',
+    { critical: true, aboutCode: true }, { kind: 'access-code', payload: {} });
+  assert.equal(modals.length, 1);
+  assert.equal(shownCode().length, 256);
+  assert.doesNotMatch(modals[0].description, /twice as long/);
+});
+
 test('any other change shows the chosen length', async () => {
   for (const opts of [{ critical: true }, {}]) {
     const { context, modals, shownCode } = loadOptions({ ...CODE_ON });

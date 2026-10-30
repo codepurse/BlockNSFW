@@ -787,10 +787,13 @@ async function setAccessCodeConfig(config) {
 }
 
 // `opts.aboutCode`: the change is to the access code itself, so the code is
-// longer (AccessCode.SELF_FACTOR).
+// longer (AccessCode.SELF_FACTOR), up to the longest there is
+// (AccessCode.SELF_MAX).
 async function showAccessCodeModal(actionLabel = 'this action', opts) {
-  const aboutCode = !!(opts && opts.aboutCode);
-  const length = AccessCode.lengthFor(await getAccessCodeConfig(), aboutCode);
+  const config = await getAccessCodeConfig();
+  const length = AccessCode.lengthFor(config, !!(opts && opts.aboutCode));
+  // Only said when it's true: at the longest length the code doesn't grow.
+  const longer = length > config.length;
   let expected = generateAccessCode(length);
 
   // The code goes in as text after the dialog exists. Written into the markup
@@ -798,7 +801,7 @@ async function showAccessCodeModal(actionLabel = 'this action', opts) {
   // show as a different character from the one being checked.
   const modalPromise = createModal({
     title: 'Type the access code',
-    description: aboutCode
+    description: longer
       ? `Type the code below exactly to ${actionLabel}. It changes the code itself, so the code is twice as long.`
       : `Type the code below exactly to ${actionLabel}.`,
     bodyHTML: `
@@ -5274,8 +5277,9 @@ async function init() {
       const config = await getAccessCodeConfig();
       // Turning it ON tightens protection, so it's free. Turning it OFF
       // removes a deterrent, so it has to survive the deterrent itself, at
-      // twice the length: otherwise switching it off once is cheaper than
-      // the changes it guards (issue #48). The same goes for the two below.
+      // twice the length up to 256: otherwise switching it off once is
+      // cheaper than the changes it guards (issue #48). The same goes for the
+      // two below.
       if (config.enabled && !e.target.checked) {
         const ok = await guardWeakening('turn off the access code', { critical: true, aboutCode: true },
           { kind: 'access-code', payload: { config: { ...config, enabled: false } } });

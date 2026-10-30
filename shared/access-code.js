@@ -35,7 +35,7 @@
   //   'critical' (default) — only the master switches that would unlock
   //     everything at once: disabling blocking, whitelisting a whole site,
   //     clearing the PIN, and weakening the access code itself (with a longer
-  //     code, see SELF_FACTOR).
+  //     code, see SELF_FACTOR and SELF_MAX).
   //   'all' — every change that weakens protection.
   // 'critical' is the default because a code on every small edit trains people
   // to resent the feature and switch it off, which protects nobody. The rare,
@@ -91,11 +91,19 @@
   // it for two or three changes, so the code was its own quickest way round.
   var SELF_FACTOR = 2;
 
+  // ...but never longer than the longest code there is. One wrong character
+  // means a fresh code, and 512 random characters is a wall rather than a
+  // pause, faced by the people who chose the longest code and are the likeliest
+  // to need a way out of a mistake (a student who blocked google.com, with a
+  // 256-character code, lost Gmail and Classroom). At 256 the code to weaken it
+  // stays what it always was.
+  var SELF_MAX = LENGTHS[LENGTHS.length - 1];
+
   // How long the code to type is. `aboutCode` is true for a change to the
   // code itself.
   function lengthFor(config, aboutCode) {
     var length = normalizeConfig(config).length;
-    return aboutCode === true ? length * SELF_FACTOR : length;
+    return aboutCode === true ? Math.max(length, Math.min(length * SELF_FACTOR, SELF_MAX)) : length;
   }
 
   // Rejection sampling so every character is equally likely — modulo would
@@ -159,6 +167,7 @@
     SCOPES: SCOPES,
     TIERS: TIERS,
     SELF_FACTOR: SELF_FACTOR,
+    SELF_MAX: SELF_MAX,
     normalizeTier: normalizeTier,
     normalizeConfig: normalizeConfig,
     requiredFor: requiredFor,

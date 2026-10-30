@@ -102,20 +102,33 @@ test('lengthFor: an ordinary change faces the chosen length', () => {
 test('lengthFor: a change to the code itself faces a longer one', () => {
   // Issue #48: at the same length, switching the code off once was cheaper
   // than typing it for two or three changes.
-  assert.ok(AccessCode.SELF_FACTOR > 1);
-  for (const length of [32, 64, 128, 256]) {
-    assert.equal(AccessCode.lengthFor({ enabled: true, length }, true), length * AccessCode.SELF_FACTOR);
+  assert.equal(AccessCode.SELF_FACTOR, 2);
+  assert.equal(AccessCode.lengthFor({ enabled: true, length: 32 }, true), 64);
+  assert.equal(AccessCode.lengthFor({ enabled: true, length: 64 }, true), 128);
+  assert.equal(AccessCode.lengthFor({ enabled: true, length: 128 }, true), 256);
+});
+
+test('lengthFor: never past the longest code there is', () => {
+  // 512 random characters, with a fresh code on every slip, is a wall, faced
+  // by the people likeliest to need a way out of a mistake.
+  assert.equal(AccessCode.SELF_MAX, 256);
+  assert.equal(AccessCode.SELF_MAX, Math.max(...AccessCode.LENGTHS));
+  assert.equal(AccessCode.lengthFor({ enabled: true, length: 256 }, true), 256);
+  for (const length of AccessCode.LENGTHS) {
+    const self = AccessCode.lengthFor({ enabled: true, length }, true);
+    assert.ok(self <= AccessCode.SELF_MAX, `${length} asks for ${self}`);
+    assert.ok(self >= length, `${length} asks for less: ${self}`);
   }
 });
 
 test('lengthFor: only a real true lengthens it, and a bad length is still normalized', () => {
   assert.equal(AccessCode.lengthFor({ length: 64 }, 'yes'), 64);
-  assert.equal(AccessCode.lengthFor({ length: 1 }, true), 64 * AccessCode.SELF_FACTOR);
-  assert.equal(AccessCode.lengthFor(undefined, true), 64 * AccessCode.SELF_FACTOR);
+  assert.equal(AccessCode.lengthFor({ length: 1 }, true), 128);
+  assert.equal(AccessCode.lengthFor(undefined, true), 128);
 });
 
 test('generate: returns exactly the requested length', () => {
-  for (const length of [32, 64, 128, 256, 512]) {
+  for (const length of [32, 64, 128, 256]) {
     assert.equal(AccessCode.generate(length).length, length);
   }
 });
