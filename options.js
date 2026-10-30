@@ -786,8 +786,11 @@ async function setAccessCodeConfig(config) {
   await AccessCode.writeConfig(browserAPI.storage.local, config);
 }
 
-async function showAccessCodeModal(actionLabel = 'this action') {
-  const { length } = await getAccessCodeConfig();
+// `opts.aboutCode`: the change is to the access code itself, so the code is
+// longer (AccessCode.SELF_FACTOR).
+async function showAccessCodeModal(actionLabel = 'this action', opts) {
+  const aboutCode = !!(opts && opts.aboutCode);
+  const length = AccessCode.lengthFor(await getAccessCodeConfig(), aboutCode);
   let expected = generateAccessCode(length);
 
   // The code goes in as text after the dialog exists. Written into the markup
@@ -795,7 +798,9 @@ async function showAccessCodeModal(actionLabel = 'this action') {
   // show as a different character from the one being checked.
   const modalPromise = createModal({
     title: 'Type the access code',
-    description: `Type the code below exactly to ${actionLabel}.`,
+    description: aboutCode
+      ? `Type the code below exactly to ${actionLabel}. It changes the code itself, so the code is twice as long.`
+      : `Type the code below exactly to ${actionLabel}.`,
     bodyHTML: `
       <div class="access-code-display" id="modal-access-code"></div>
       <div class="field">
@@ -852,10 +857,10 @@ async function showAccessCodeModal(actionLabel = 'this action') {
 // Runs after the PIN check, so the two layers stack rather than replace.
 // `tier` says how much the action gives away — see TIERS in
 // shared/access-code.js.
-async function requireAccessCodeIfEnabled(actionLabel = 'this action', tier = 'normal') {
+async function requireAccessCodeIfEnabled(actionLabel = 'this action', tier = 'normal', opts) {
   const config = await getAccessCodeConfig();
   if (!accessCodeRequiredFor(config, tier)) return true;
-  return await showAccessCodeModal(actionLabel);
+  return await showAccessCodeModal(actionLabel, opts);
 }
 
 async function requirePIN(actionLabel = 'this action', opts) {
@@ -863,7 +868,7 @@ async function requirePIN(actionLabel = 'this action', opts) {
   if (!hasPin) return false;
   const verified = await showVerifyPINModal(actionLabel);
   if (!verified) return false;
-  return await requireAccessCodeIfEnabled(actionLabel, accessCodeTier(opts));
+  return await requireAccessCodeIfEnabled(actionLabel, accessCodeTier(opts), opts);
 }
 
 // Only require PIN if one is already set (doesn't prompt to create one).
@@ -875,7 +880,7 @@ async function requirePINIfSet(actionLabel = 'this action', opts) {
     const verified = await showVerifyPINModal(actionLabel);
     if (!verified) return false;
   }
-  return await requireAccessCodeIfEnabled(actionLabel, accessCodeTier(opts));
+  return await requireAccessCodeIfEnabled(actionLabel, accessCodeTier(opts), opts);
 }
 
 // --- The Pact ----------------------------------------------------------------
@@ -5268,9 +5273,11 @@ async function init() {
     accessCodeToggleEl.addEventListener('change', async (e) => {
       const config = await getAccessCodeConfig();
       // Turning it ON tightens protection, so it's free. Turning it OFF
-      // removes a deterrent, so it has to survive the deterrent itself.
+      // removes a deterrent, so it has to survive the deterrent itself, at
+      // twice the length: otherwise switching it off once is cheaper than
+      // the changes it guards (issue #48). The same goes for the two below.
       if (config.enabled && !e.target.checked) {
-        const ok = await guardWeakening('turn off the access code', { critical: true },
+        const ok = await guardWeakening('turn off the access code', { critical: true, aboutCode: true },
           { kind: 'access-code', payload: { config: { ...config, enabled: false } } });
         if (!ok) {
           e.target.checked = true;
@@ -5289,7 +5296,7 @@ async function init() {
       // Narrowing the scope means fewer moments guarded, so it's gated as a
       // critical change. Widening it is free.
       if (config.scope === 'all' && !e.target.checked) {
-        const ok = await guardWeakening('ask for the access code less often', { critical: true },
+        const ok = await guardWeakening('ask for the access code less often', { critical: true, aboutCode: true },
           { kind: 'access-code', payload: { config: { ...config, scope: 'critical' } } });
         if (!ok) {
           e.target.checked = true;
@@ -5314,7 +5321,7 @@ async function init() {
       // A shorter code is a weaker deterrent, so shortening is gated. Only
       // matters while the feature is on — otherwise there's nothing to weaken.
       if (config.enabled && nextLength < config.length) {
-        const ok = await guardWeakening('shorten the access code', { critical: true },
+        const ok = await guardWeakening('shorten the access code', { critical: true, aboutCode: true },
           { kind: 'access-code', payload: { config: { ...config, length: nextLength } } });
         if (!ok) {
           e.target.value = String(config.length);

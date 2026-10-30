@@ -4,6 +4,18 @@ All notable project changes should be documented here going forward.
 
 ## [2.0.4] - 2026-10-30
 
+### Changed
+
+- **Weakening the access code takes a code twice as long** (issue #48).
+  Turning the code off, asking for it less often and shortening it each
+  asked for one code at its usual length, the same as any other big change.
+  So with the code asked for on every change, typing it once to switch it off
+  was cheaper than typing it for two or three changes, and every change
+  after that was free. Those three now ask for a code twice the chosen
+  length (128 characters for a 64-character code), and the box says why.
+  Turning the code on, asking for it more often and lengthening it stay
+  free. Under a Pact nothing changes: the wait stands in for the code.
+
 ### Fixed
 
 - **A PIN longer than 8 characters was always wrong in the popup.** Setup
@@ -21,6 +33,14 @@ All notable project changes should be documented here going forward.
   PIN is a salted hash (`shared/pin-hash.js`), so its length costs nothing.
   `onboarding.js` `trySavePin` trims. Tests: `tests/pin-entry-length.test.js`
   (no password box carries a `maxlength`, and setup trims).
+- `AccessCode.lengthFor(config, aboutCode)` and `AccessCode.SELF_FACTOR` (2)
+  in `shared/access-code.js`. In `options.js`, `{ aboutCode: true }` rides
+  along with `{ critical: true }` through `guardWeakening`, `requirePIN` /
+  `requirePINIfSet` and `requireAccessCodeIfEnabled` to
+  `showAccessCodeModal`; the three access-code switches pass it. Tests:
+  `tests/access-code.test.js` (`lengthFor`) and
+  `tests/access-code-self.test.js` (the modal's length, and the three
+  switches).
 
 ## [2.0.3] - 2026-10-26
 

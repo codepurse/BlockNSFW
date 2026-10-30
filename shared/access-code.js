@@ -34,7 +34,8 @@
   // Scope: which changes have to face the code.
   //   'critical' (default) — only the master switches that would unlock
   //     everything at once: disabling blocking, whitelisting a whole site,
-  //     clearing the PIN, and weakening the access code itself.
+  //     clearing the PIN, and weakening the access code itself (with a longer
+  //     code, see SELF_FACTOR).
   //   'all' — every change that weakens protection.
   // 'critical' is the default because a code on every small edit trains people
   // to resent the feature and switch it off, which protects nobody. The rare,
@@ -82,6 +83,19 @@
     if (level === 'tuning') return false;
     if (normalized.scope === 'all') return true;
     return level === 'critical';
+  }
+
+  // A change to the code itself — turning it off, asking for it less often,
+  // shortening it — faces a code this many times as long. At the same length
+  // (issue #48), typing the code once to switch it off was cheaper than typing
+  // it for two or three changes, so the code was its own quickest way round.
+  var SELF_FACTOR = 2;
+
+  // How long the code to type is. `aboutCode` is true for a change to the
+  // code itself.
+  function lengthFor(config, aboutCode) {
+    var length = normalizeConfig(config).length;
+    return aboutCode === true ? length * SELF_FACTOR : length;
   }
 
   // Rejection sampling so every character is equally likely — modulo would
@@ -144,9 +158,11 @@
     LENGTHS: LENGTHS,
     SCOPES: SCOPES,
     TIERS: TIERS,
+    SELF_FACTOR: SELF_FACTOR,
     normalizeTier: normalizeTier,
     normalizeConfig: normalizeConfig,
     requiredFor: requiredFor,
+    lengthFor: lengthFor,
     generate: generate,
     readConfig: readConfig,
     writeConfig: writeConfig,
