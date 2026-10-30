@@ -130,6 +130,19 @@ All notable project changes should be documented here going forward.
   story's title, length, date and a short passage (privacy policy, What We
   Store Locally and section 7). Until the first copy arrives, or offline, it
   says "You're not alone" and links to the stories.
+- **A thank-you for supporters.** Settings › Supporter used to show a
+  supporter the same pitch as everyone else ("Protection was never for
+  sale", what other blockers charge), with only the plans taken away. Now
+  the band is a short letter, "Thank you.", signed by hand, and beside it a
+  heart woven of many threads, every supporter one of them and the gold one
+  theirs. The letter rises line by line and the signature writes itself;
+  the heart's rows open, its outline closes and the gold thread is drawn
+  last; then the rows keep drifting past each other, with a spark along the
+  gold now and then. With reduced motion it's all there, still. The section
+  line becomes "Your extras, and what your support keeps going.", and
+  "You're a supporter" becomes "Your plan", with where the plan came from
+  and since when. The signature's typeface (Mrs Saint Delafield, SIL Open
+  Font License) is bundled in `fonts/`, so nothing is fetched.
 
 ### Removed
 

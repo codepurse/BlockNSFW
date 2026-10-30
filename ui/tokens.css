@@ -44,6 +44,15 @@
   font-style: normal;
   font-display: swap;
 }
+/* One word only: the author's signature under the thank-you a supporter
+   sees in Settings › Supporter. A page that never sets it never loads it. */
+@font-face {
+  font-family: "Mrs Saint Delafield";
+  src: url("../fonts/MrsSaintDelafield-latin.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
 
 :root {
   color-scheme: light;
@@ -104,6 +113,7 @@
   --font-display: Newsreader, Georgia, "Times New Roman", serif;
   --font-sans: "Instrument Sans", ui-sans-serif, system-ui, -apple-system, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --font-signature: "Mrs Saint Delafield", "Brush Script MT", cursive;
 
   /* Fixed sizes. Pages read 15px body text; the popup sets 14px. */
   --text-meta: 11px;

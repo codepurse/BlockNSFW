@@ -1,6 +1,7 @@
 // options-supporter.js
 // Settings › Supporter: the author's note and the price, what it opens, and
-// the code. shared/supporter.js checks codes; nothing here touches blocking.
+// the code; for a supporter, a thank-you in place of the price. shared/
+// supporter.js checks codes; nothing here touches blocking.
 
 (function () {
   'use strict';
@@ -61,6 +62,48 @@
     });
   }
 
+  // The heart beside the thank-you: rows of stitches cut to a heart, and
+  // across its middle the reader's own thread, unbroken and gold, with a
+  // spark that runs along it. Each row opens from the middle, top to
+  // bottom, then drifts the other way from the row above it (options.html
+  // has the motion).
+  const HEART = 'M120 200C60 160 22 122 22 80C22 50 44 30 72 30C94 30 110 44 120 60C130 44 146 30 168 30C196 30 218 50 218 80C218 122 180 160 120 200Z';
+  const HEART_GOLD = 112;
+  function weaveHeart() {
+    const box = $('thanks-heart');
+    if (!box || box.firstChild) return;
+    const NS = 'http://www.w3.org/2000/svg';
+    const make = (name, attrs) => {
+      const el = document.createElementNS(NS, name);
+      Object.entries(attrs).forEach(([key, value]) => el.setAttribute(key, String(value)));
+      return el;
+    };
+    const svg = make('svg', { viewBox: '0 0 240 230', 'aria-hidden': 'true', focusable: 'false' });
+    const defs = make('defs', {});
+    const clip = make('clipPath', { id: 'thanks-heart-clip' });
+    clip.appendChild(make('path', { d: HEART }));
+    defs.appendChild(clip);
+    const rows = make('g', { 'clip-path': 'url(#thanks-heart-clip)' });
+    let n = 0;
+    for (let y = 34; y <= 196; y += 6) {
+      if (y === HEART_GOLD) continue;
+      const row = make('line', {
+        class: `heart-row stitch-${(n % 3) + 1}${n % 2 ? ' drift-back' : ''}`,
+        x1: 0, x2: 240, y1: y, y2: y
+      });
+      row.style.animationDelay = `${900 + ((y - 34) / 6) * 40}ms, 0ms`;
+      rows.appendChild(row);
+      n++;
+    }
+    const thread = make('g', { 'clip-path': 'url(#thanks-heart-clip)' });
+    thread.append(
+      make('line', { class: 'heart-you', x1: 0, x2: 240, y1: HEART_GOLD, y2: HEART_GOLD }),
+      make('line', { class: 'heart-spark', x1: 0, x2: 240, y1: HEART_GOLD, y2: HEART_GOLD })
+    );
+    svg.append(defs, rows, thread, make('path', { class: 'heart-edge', d: HEART }));
+    box.appendChild(svg);
+  }
+
   function formatDay(ms) {
     try {
       return new Date(ms).toLocaleDateString([], { day: 'numeric', month: 'long', year: 'numeric' });
@@ -98,6 +141,9 @@
       : (offer || 'The path, your month and more');
     mark.hidden = !s.supporter;
   }
+
+  // The section line for everyone who hasn't supported, as options.html has it.
+  let salesDesc = '';
 
   // The door that led here (Supporter.door): a page outside Settings says so
   // in the address (options.html?from=release#section-supporter); a "See
@@ -234,6 +280,13 @@
     $('supporter-manage-hint').hidden = !(s.supporter && s.kind === 'store');
     $('supporter-code-form').hidden = s.supporter;
     $('supporter-thanks').hidden = !s.supporter;
+    // A supporter is thanked, not sold to: the letter and the heart take the
+    // band's place, and the section line says what the page is for now.
+    const thanked = s.supporter === true;
+    if (thanked) weaveHeart();
+    $('supporter-band').hidden = thanked;
+    $('supporter-thanks-band').hidden = !thanked;
+    $('supporter-desc').textContent = thanked ? 'Your extras, and what your support keeps going.' : salesDesc;
     // The open-source build carries no extras (extras/README.md), so it
     // says so, and sells nothing it can't open.
     const openBuild = !self.SupporterExtras;
@@ -254,8 +307,10 @@
     $('supporter-release').textContent = 'Remove it from this browser';
     $('supporter-release-result').textContent = '';
     if (s.supporter) {
-      $('supporter-code-title').textContent = 'You’re a supporter';
-      $('supporter-code-desc').textContent = 'Thank you. It keeps this going.';
+      // The band says thank you; this group is the plan itself.
+      const since = s.since ? `, since ${formatDay(s.since)}` : '';
+      $('supporter-code-title').textContent = 'Your plan';
+      $('supporter-code-desc').textContent = s.kind === 'store' ? `From the store${since}.` : `From a supporter code${since}.`;
       $('supporter-thanks').textContent = s.since ? `Thank you. Supporter since ${formatDay(s.since)}.` : 'Thank you.';
     } else if (s.unchecked) {
       $('supporter-code-title').textContent = 'Your plan is waiting for a check';
@@ -336,12 +391,14 @@
     }
     input.value = '';
     await renderStatus();
-    $('supporter-thanks').setAttribute('tabindex', '-1');
-    $('supporter-thanks').focus();
+    // The thank-you plays as it appears; the reader is taken to it.
+    $('thanks-head').focus({ preventScroll: true });
+    $('supporter-thanks-band').scrollIntoView({ block: 'center', behavior: 'smooth' });
   }
 
   document.addEventListener('DOMContentLoaded', () => {
     if (typeof Supporter === 'undefined' || !$('section-supporter')) return;
+    salesDesc = $('supporter-desc').textContent;
     fillCompare();
     $('supporter-portal').href = Supporter.portalUrl();
     $('supporter-manage').href = Supporter.portalUrl();

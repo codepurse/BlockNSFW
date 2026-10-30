@@ -173,12 +173,13 @@ test('ui tokens (light): Threshold colours are unchanged', () => {
   for (const [key, value] of Object.entries(threshold)) assert.equal(tokens[key], value, key);
 });
 
-test('ui tokens: the four bundled fonts exist and no stylesheet reaches the network', () => {
+test('ui tokens: the bundled fonts exist and no stylesheet reaches the network', () => {
   for (const file of [
     'Newsreader-latin.woff2',
     'Newsreader-Italic-latin.woff2',
     'InstrumentSans-latin.woff2',
-    'JetBrainsMono-latin.woff2'
+    'JetBrainsMono-latin.woff2',
+    'MrsSaintDelafield-latin.woff2'
   ]) {
     assert.ok(fs.existsSync(path.join(ROOT, 'fonts', file)), `fonts/${file} is missing`);
     assert.ok(TOKENS.includes(`../fonts/${file}`), `ui/tokens.css does not load ${file}`);

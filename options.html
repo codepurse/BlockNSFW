@@ -596,10 +596,172 @@
       flex: 1 1 18rem;
       min-width: 0;
     }
-    .supporter-thanks {
+    /* A supporter is thanked, not sold to. The band holds a letter, signed
+       by hand, and a heart woven of many threads: every supporter is one of
+       them, and the gold one, unbroken, is theirs. The letter rises line by
+       line and the signature writes itself; the heart's rows open from the
+       middle, its outline closes and the gold thread is drawn last. From
+       then on the rows drift past each other, one row one way and the next
+       the other, and a spark runs along the gold now and then. It starts
+       over each time the section opens. Reduced motion gets the finished
+       band, still. */
+    .supporter-thanks-band {
+      align-items: center;
+    }
+    .thanks-note {
+      flex: 1 1 22rem;
+      min-width: 0;
+    }
+    .supporter-thanks-band .thanks-eyebrow {
+      color: var(--color-band-signal);
+    }
+    .thanks-head {
+      margin-top: 14px;
       font-family: var(--font-display);
-      font-size: 20px;
-      color: var(--color-pine);
+      font-size: 48px;
+      font-weight: 400;
+      line-height: 1.05;
+      letter-spacing: -0.02em;
+      color: var(--color-on-band);
+    }
+    .thanks-head:focus {
+      outline: none;
+    }
+    .thanks-lead {
+      max-width: 31rem;
+      margin-top: 16px;
+      font-family: var(--font-display);
+      font-size: 21px;
+      line-height: 1.45;
+      letter-spacing: -0.005em;
+      color: var(--color-on-band);
+      text-wrap: pretty;
+    }
+    .thanks-text {
+      max-width: 31rem;
+      margin-top: 14px;
+      color: var(--color-on-band-2);
+      text-wrap: pretty;
+    }
+    /* Room around the word for the script's swashes, which run past it. */
+    .thanks-sign {
+      display: inline-block;
+      margin-top: 8px;
+      padding: 4px 18px 2px 2px;
+      font-family: var(--font-signature);
+      font-size: 60px;
+      line-height: 1.1;
+      color: var(--color-on-band);
+      animation: thanks-write 1.7s cubic-bezier(0.55, 0.1, 0.35, 0.95) 900ms backwards;
+    }
+    .thanks-rise {
+      animation: thanks-rise 700ms var(--ease-out-quint) backwards;
+    }
+    .thanks-head.thanks-rise {
+      animation-delay: 80ms;
+    }
+    .thanks-lead.thanks-rise {
+      animation-delay: 240ms;
+    }
+    .thanks-text.thanks-rise {
+      animation-delay: 400ms;
+    }
+    .thanks-heart {
+      flex: none;
+      width: 240px;
+      height: 230px;
+      margin-inline: auto;
+    }
+    .thanks-heart svg {
+      display: block;
+      width: 100%;
+      height: 100%;
+      overflow: visible;
+    }
+    /* Three lengths of stitch at three speeds; each drift moves its row by
+       exactly one stitch and gap, so the loop has no seam. */
+    .heart-row,
+    .heart-you {
+      transform-box: fill-box;
+    }
+    .heart-row {
+      transform-origin: center;
+      stroke: var(--color-on-band-2);
+      stroke-width: 1;
+      opacity: 0.8;
+    }
+    .heart-row.stitch-1 {
+      stroke-dasharray: 24 6;
+      animation: heart-open 700ms var(--ease-out-quint) backwards, heart-drift-1 7s linear infinite;
+    }
+    .heart-row.stitch-2 {
+      stroke-dasharray: 34 8;
+      animation: heart-open 700ms var(--ease-out-quint) backwards, heart-drift-2 9s linear infinite;
+    }
+    .heart-row.stitch-3 {
+      stroke-dasharray: 16 5;
+      animation: heart-open 700ms var(--ease-out-quint) backwards, heart-drift-3 6s linear infinite;
+    }
+    .heart-row.drift-back {
+      animation-direction: normal, reverse;
+    }
+    .heart-you {
+      transform-origin: left center;
+      stroke: var(--color-band-signal);
+      stroke-width: 2;
+      animation: heart-open 900ms var(--ease-in-out-quart) 2700ms backwards;
+    }
+    .heart-spark {
+      stroke: var(--color-on-band);
+      stroke-width: 2.4;
+      stroke-linecap: round;
+      stroke-dasharray: 22 460;
+      stroke-dashoffset: 22;
+      animation: heart-spark 4.2s cubic-bezier(0.45, 0.05, 0.55, 0.95) 3600ms infinite backwards;
+    }
+    .heart-edge {
+      fill: none;
+      stroke: var(--color-on-band);
+      stroke-width: 1.25;
+      stroke-linejoin: round;
+      stroke-dasharray: 600;
+      animation: heart-edge 1.4s cubic-bezier(0.45, 0.05, 0.3, 1) 1900ms backwards;
+    }
+    @keyframes thanks-rise {
+      from { opacity: 0; transform: translateY(10px); }
+    }
+    @keyframes thanks-write {
+      from { clip-path: inset(0 100% 0 0); }
+      to { clip-path: inset(0 0 0 0); }
+    }
+    @keyframes heart-open {
+      from { transform: scaleX(0); }
+    }
+    @keyframes heart-edge {
+      from { stroke-dashoffset: 600; }
+      to { stroke-dashoffset: 0; }
+    }
+    @keyframes heart-drift-1 {
+      to { stroke-dashoffset: -30; }
+    }
+    @keyframes heart-drift-2 {
+      to { stroke-dashoffset: -42; }
+    }
+    @keyframes heart-drift-3 {
+      to { stroke-dashoffset: -21; }
+    }
+    @keyframes heart-spark {
+      from { stroke-dashoffset: 22; }
+      to { stroke-dashoffset: -460; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .supporter-thanks-band,
+      .supporter-thanks-band * {
+        animation: none !important;
+      }
+      .heart-spark {
+        display: none;
+      }
     }
     /* Free and Supporter, side by side: protection is the same in both
        columns; only the last rows differ. */
@@ -3696,7 +3858,7 @@ title/Example Domain/"></textarea>
           </svg>
           <p class="section-eyebrow" aria-hidden="true"><span class="index">06</span><span>Settings</span></p>
           <h2 class="section-head" id="h-supporter">Supporter</h2>
-          <p class="section-desc">Extras that help you go further, and keep this project going. Blocking is the same for everyone: paying never makes it stronger or weaker.</p>
+          <p class="section-desc" id="supporter-desc">Extras that help you go further, and keep this project going. Blocking is the same for everyone: paying never makes it stronger or weaker.</p>
           <p class="section-desc supporter-open-build" id="supporter-open-build" hidden>This is the open-source build of BlockNSFW. It has every protection and the path&rsquo;s first week, but not the Supporter extras: they come with BlockNSFW from the Chrome Web Store, Microsoft Edge Add-ons and Firefox Add-ons.</p>
         </header>
 
@@ -3720,6 +3882,20 @@ title/Example Domain/"></textarea>
             <p class="supporter-buy-hint" id="supporter-buy-hint"></p>
             <p class="supporter-buy-hint">For this browser extension, on up to three of your browsers at once. BlockNSFW for Android has its own Supporter, in the app. Cancel any time, and if you bought it by mistake, we’ll refund it.</p>
           </div>
+        </div>
+
+        <!-- A supporter sees this band in place of the one above
+             (options-supporter.js): a letter, signed, and a heart woven of
+             many threads, drawn in #thanks-heart. -->
+        <div class="supporter-band supporter-thanks-band band-pine" id="supporter-thanks-band" hidden>
+          <div class="thanks-note">
+            <p class="meta thanks-eyebrow thanks-rise">A note for you</p>
+            <h3 class="thanks-head thanks-rise" id="thanks-head" tabindex="-1">Thank you.</h3>
+            <p class="thanks-lead thanks-rise">You didn’t have to. Blocking is free, and it stays free for everyone. You chose to keep it going anyway.</p>
+            <p class="thanks-text thanks-rise">What you give pays for the time to keep making BlockNSFW better, and for whatever comes next. It’s also one more reason it can stay free for the person who needs it tonight.</p>
+            <p class="thanks-sign">Monolab</p>
+          </div>
+          <div class="thanks-heart" id="thanks-heart" role="img" aria-label="A heart woven from many threads, one of them gold: yours"></div>
         </div>
 
         <div class="group group-split" id="supporter-compare">
@@ -3794,7 +3970,8 @@ title/Example Domain/"></textarea>
                   <p class="field-hint" id="supporter-code-hint">Your code is on your purchases page; Polar’s receipt email links to it as “Access my purchase”. It’s checked with the store when you enter it, then about once a day, so a plan that ends can close. Only the code is sent, with this browser’s name (such as “Chrome on Windows”) so your plan can count its browsers. Never anything about your browsing.</p>
                 </div>
               </div>
-              <p class="supporter-thanks" id="supporter-thanks" role="status" hidden></p>
+              <!-- Said to screen readers only: the band above thanks everyone else. -->
+              <p class="visually-hidden" id="supporter-thanks" role="status" hidden></p>
               <p class="supporter-portal-row" id="supporter-manage-row" hidden><a class="arrow-link" id="supporter-manage" target="_blank" rel="noopener noreferrer">Manage or cancel your plan <svg class="icon icon-12 icon-up-right" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M4.5 11.5l7-7M6 4.5h5.5V10" /></svg></a></p>
               <p class="field-hint" id="supporter-manage-hint" hidden>A cancelled plan runs to the end of the time you paid for, then closes.</p>
               <!-- A plan with Polar's limit: give this browser's place back, so the plan can move. -->
