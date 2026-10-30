@@ -119,6 +119,17 @@ All notable project changes should be documented here going forward.
   code, as Safe Search does, and Storm Mode and Risk Hours turn it on. A
   whitelist entry opens an engine. If you search with one of these today,
   it's blocked after the update.
+- **Community stories, on a shelf in the Settings sidebar.** The stories
+  were a small link at the bottom, among Statistics and Changelog, and few
+  found them. They now sit under the sections: a shelf with a spine for each
+  of the newest 50 stories, as tall as the story is long, this week's in
+  brass ("5 new this week"), and under it a few words from one story, a
+  different one each visit, signed Anonymous, with the count. Hovering the
+  shelf reads each story's title and date; anywhere on it opens the stories.
+  Settings fetches the feed at most every six hours and keeps only each
+  story's title, length, date and a short passage (privacy policy, What We
+  Store Locally and section 7). Until the first copy arrives, or offline, it
+  says "You're not alone" and links to the stories.
 
 ### Removed
 

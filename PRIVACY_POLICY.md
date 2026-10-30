@@ -1,6 +1,6 @@
 # Privacy Policy for BlockNSFW
 
-**Last Updated:** October 25, 2026
+**Last Updated:** October 30, 2026
 
 ## Overview
 
@@ -85,6 +85,10 @@ BlockNSFW stores data locally in your browser extension storage on your device. 
 - Manual report and community story cooldown data, daily limits, report keys,
   a cached copy of the community stories you have viewed, which stories you
   have liked, and a locally generated device identifier
+- For the stories shelf in the Settings sidebar: the title, length and
+  publication date of the newest published stories, a few short passages
+  from them, and when they were fetched. These are other people's published
+  stories, not anything about you
 - Your progress on the path (which days you have read and finished), and the
   one-line answers you write there
 - Your evening check-ins (how you slept, your stress, time alone, mood and
@@ -242,8 +246,10 @@ The Community page shows recovery stories other people have chosen to share,
 and lets you write one.
 
 - **Reading:** opening the Community page fetches the published stories from
-  our Appwrite-hosted backend. That request carries standard network metadata,
-  including your IP address. No request is made unless you open the page
+  our Appwrite-hosted backend. So does opening Settings, for the stories shelf
+  in its sidebar, at most once every six hours. That request carries standard
+  network metadata, including your IP address, and nothing else. No request
+  is made unless you open one of those pages
 - **Writing:** if you submit a story, its title and text are sent to and stored
   in that backend, together with a generated device identifier, the extension
   version and your browser type. Stories are submitted under the name

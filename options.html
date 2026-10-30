@@ -210,6 +210,120 @@
       color: var(--color-ink-2);
     }
 
+    /* Community stories, under the nav and not among the small links: the
+       one page in BlockNSFW written by the people who use it. A shelf with
+       a spine for each story, as tall as the story is long, the newest on
+       the right and this week's in brass; hovering it reads each one's title
+       and date. Under it, a few words from one story in the serif, with the
+       quote mark hung in the margin. The whole block is one link. */
+    .stories-shelf {
+      display: block;
+      color: var(--color-ink);
+    }
+    .shelf {
+      display: block;
+      margin-top: var(--space-3);
+    }
+    .shelf[hidden] {
+      display: none;
+    }
+    .shelf-spines {
+      display: block;
+      width: 100%;
+      height: 40px;
+      border-bottom: 1px solid var(--color-ink);
+    }
+    .shelf-spines rect {
+      fill: var(--color-rule-3);
+      transition: fill 120ms var(--ease-out-quint);
+    }
+    .shelf-spines rect.is-new {
+      fill: var(--color-brass);
+    }
+    .shelf-spines rect.is-on {
+      fill: var(--color-pine-2);
+    }
+    .shelf-caption {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      min-height: 15px;
+      margin-top: var(--space-2);
+    }
+    .shelf-caption .is-new {
+      color: var(--color-brass);
+    }
+    .shelf-caption .shelf-new-mark {
+      flex: none;
+      width: 6px;
+      height: 6px;
+      background: var(--color-brass);
+    }
+    .shelf-caption .shelf-title {
+      min-width: 0;
+      overflow: hidden;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+      color: var(--color-ink-2);
+    }
+    .shelf-caption .shelf-day {
+      flex: none;
+      margin-left: auto;
+    }
+    .shelf-voice {
+      position: relative;
+      display: block;
+      margin-top: var(--space-4);
+    }
+    .shelf-mark {
+      position: absolute;
+      top: -2px;
+      left: -16px;
+      font-family: var(--font-display);
+      font-size: 34px;
+      line-height: 1;
+      color: var(--color-brass);
+    }
+    /* The sentence in the markup is ours, not someone's words: no mark. */
+    .stories-shelf:not(.has-voice) .shelf-mark {
+      display: none;
+    }
+    .shelf-quote {
+      display: block;
+      font-family: var(--font-display);
+      font-size: 17px;
+      font-style: italic;
+      line-height: 1.4;
+      letter-spacing: -0.005em;
+      text-wrap: pretty;
+      overflow-wrap: anywhere;
+      transition: color var(--dur-state) var(--ease-out-quint);
+    }
+    .stories-shelf:hover .shelf-quote {
+      color: var(--color-pine-2);
+    }
+    .shelf-cite {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--space-2);
+      margin-top: var(--space-3);
+    }
+    .shelf-count {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--color-pine-2);
+    }
+    .shelf-count .icon {
+      width: 12px;
+      height: 12px;
+      transition: transform var(--dur-state) var(--ease-out-quint);
+    }
+    .stories-shelf:hover .shelf-count .icon {
+      transform: translateX(3px);
+    }
+
     /* ── Main column ─────────────────────────────────────────────────────── */
 
     /* The column sits in the middle of the space beside the sidebar, 960px
@@ -1805,6 +1919,14 @@
       .nav-supporter-sub {
         display: none;
       }
+      /* The shelf keeps a sidebar's width, its mark inside the narrower
+         gutter. */
+      .stories-shelf {
+        max-width: 24rem;
+      }
+      .shelf-mark {
+        left: -14px;
+      }
       /* Every link stays; the promos keep their names and drop their lines. */
       .sidebar-footer {
         grid-template-columns: repeat(auto-fill, minmax(12rem, 1fr));
@@ -2114,11 +2236,29 @@
         <a class="nav-link" href="#section-about" data-target="section-about"><span class="nav-index">07</span><span>About</span></a>
       </nav>
 
+      <!-- The stories as a shelf, and a few words from one of them
+           (options-stories.js). The sentence here stands until the feed
+           arrives, and whenever it can't be reached; the shelf stays hidden. -->
+      <a class="stories-shelf" href="community.html" id="stories-shelf">
+        <span class="meta">Community stories</span>
+        <span class="shelf" id="shelf" hidden>
+          <svg class="shelf-spines" id="shelf-spines" viewBox="0 0 1 40" preserveAspectRatio="none" aria-hidden="true" focusable="false"></svg>
+          <span class="shelf-caption" id="shelf-caption"></span>
+        </span>
+        <span class="shelf-voice">
+          <span class="shelf-mark" aria-hidden="true">“</span>
+          <span class="shelf-quote" id="shelf-quote">You’re not alone. These are stories from people who have been where you are.</span>
+        </span>
+        <span class="shelf-cite">
+          <span class="meta" id="shelf-by"></span>
+          <span class="meta shelf-count"><span id="shelf-count">Read them</span> <svg class="icon icon-right" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M2.5 8h11M9.5 4l4 4-4 4" /></svg></span>
+        </span>
+      </a>
+
       <div class="sidebar-footer">
         <div class="sidebar-links">
           <a href="stats.html" class="row-link">Statistics <svg class="icon icon-right" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M2.5 8h11M9.5 4l4 4-4 4" /></svg></a>
           <a href="changelog.html" class="row-link">Changelog <svg class="icon icon-right" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M2.5 8h11M9.5 4l4 4-4 4" /></svg></a>
-          <a href="community.html" class="row-link">Community stories <svg class="icon icon-right" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M2.5 8h11M9.5 4l4 4-4 4" /></svg></a>
         </div>
 
         <div class="promos">
@@ -3849,6 +3989,7 @@ title/Example Domain/"></textarea>
   <script src="shared/keyword-pattern.js"></script>
   <script src="shared/dns-providers.js"></script>
   <script src="shared/ai-image-models.js"></script>
+  <script src="shared/stories.js"></script>
   <!-- Loaded for its design registry only, so the design picker and the
        blocked page itself can never drift out of sync. -->
   <script src="blocked-themes.js"></script>
@@ -3865,5 +4006,6 @@ title/Example Domain/"></textarea>
   <script src="extras/sync.js"></script>
   <script src="options-supporter.js"></script>
   <script src="options-backup.js"></script>
+  <script src="options-stories.js"></script>
 </body>
 </html>

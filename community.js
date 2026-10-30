@@ -138,28 +138,11 @@
   let voices = [];
   let voiceAt = 0;
 
-  function flatten(text) {
-    return String(text || '').replace(/\s+/g, ' ').trim();
-  }
-
   // The story whole if it is short enough, else its closing sentences, as
-  // many as fit. Null when even the last sentence is too long, or what fits
-  // is too short to stand alone.
+  // many as fit (shared/stories.js). Null when even the last sentence is too
+  // long, or what fits is too short to stand alone.
   function voicePassage(story) {
-    const whole = flatten(story && story.content);
-    if (whole.length <= VOICE_MAX) {
-      return whole.length >= VOICE_MIN ? { text: whole, excerpt: false } : null;
-    }
-    // A closing "PS" is an afterthought, not what the story came to say.
-    const sentences = whole.split(/(?<=[.!?])\s+/);
-    while (sentences.length > 1 && /^p\.?\s?s\b/i.test(sentences[sentences.length - 1])) sentences.pop();
-    let text = '';
-    for (let i = sentences.length - 1; i >= 0; i--) {
-      const next = text ? `${sentences[i]} ${text}` : sentences[i];
-      if (next.length > VOICE_MAX) break;
-      text = next;
-    }
-    return text.length >= VOICE_MIN ? { text, excerpt: true } : null;
+    return Stories.passage(story && story.content, VOICE_MIN, VOICE_MAX);
   }
 
   function showVoice() {
