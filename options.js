@@ -402,7 +402,7 @@ async function showSetPINModal() {
     bodyHTML: `
       <div class="field pin-input-group">
         <label class="field-label pin-input-label" for="modal-pin-input">New PIN</label>
-        <input type="password" class="input pin-input" id="modal-pin-input" maxlength="20" autocomplete="off" aria-describedby="modal-hint">
+        <input type="password" class="input pin-input" id="modal-pin-input" autocomplete="off" aria-describedby="modal-hint">
         <div class="pin-strength-indicator" hidden>
           <div class="pin-strength-bar" id="modal-strength-bar"></div>
         </div>
@@ -410,7 +410,7 @@ async function showSetPINModal() {
       </div>
       <div class="field pin-input-group">
         <label class="field-label pin-input-label" for="modal-confirm-input">Type it again</label>
-        <input type="password" class="input pin-input" id="modal-confirm-input" maxlength="20" autocomplete="off" aria-describedby="modal-hint">
+        <input type="password" class="input pin-input" id="modal-confirm-input" autocomplete="off" aria-describedby="modal-hint">
       </div>
     `,
     buttons: [
@@ -563,7 +563,7 @@ async function showVerifyPINModal(actionLabel = 'this action', opts) {
     bodyHTML: `
       <div class="field pin-input-group">
         <label class="field-label pin-input-label" for="modal-verify-input">PIN</label>
-        <input type="password" class="input pin-input" id="modal-verify-input" maxlength="20" autocomplete="off" aria-describedby="modal-verify-hint">
+        <input type="password" class="input pin-input" id="modal-verify-input" autocomplete="off" aria-describedby="modal-verify-hint">
         <p class="field-hint pin-hint" id="modal-verify-hint" aria-live="polite"></p>
       </div>
     `,

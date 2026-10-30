@@ -203,8 +203,10 @@
 
   // Returns true if the PIN step is satisfied (valid PIN saved, or nothing entered).
   async function trySavePin() {
-    const a = els.pin.value || '';
-    const b = els.pin2.value || '';
+    // Trimmed, as the popup and Settings trim what they're given: a space
+    // kept here would never be typed past there.
+    const a = (els.pin.value || '').trim();
+    const b = (els.pin2.value || '').trim();
     if (!a && !b) { clearPinError(); return true; } // treated as "no PIN"
     if (a.length < 4) {
       showPinError(els.pin, 'Your PIN is too short. Use at least four characters.');

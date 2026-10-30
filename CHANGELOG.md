@@ -2,6 +2,26 @@
 
 All notable project changes should be documented here going forward.
 
+## [2.0.4] - 2026-10-30
+
+### Fixed
+
+- **A PIN longer than 8 characters was always wrong in the popup.** Setup
+  took a PIN of any length, but the popup's PIN box stopped taking letters
+  after the 8th and Settings' after the 20th, so the PIN was cut short where
+  it was asked for and never matched. A 9 to 20 character PIN failed in the
+  popup only; a longer one failed in Settings too, leaving no way to make a
+  protected change. Every PIN box now takes the whole PIN. Setup also drops
+  spaces at either end, as the popup and Settings always did, so a PIN with
+  a stray space can't be saved one way and checked another.
+
+### For contributors
+
+- The PIN boxes in `popup.html` and `options.js` have no `maxlength`; the
+  PIN is a salted hash (`shared/pin-hash.js`), so its length costs nothing.
+  `onboarding.js` `trySavePin` trims. Tests: `tests/pin-entry-length.test.js`
+  (no password box carries a `maxlength`, and setup trims).
+
 ## [2.0.3] - 2026-10-26
 
 ### Added
