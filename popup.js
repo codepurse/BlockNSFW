@@ -20,8 +20,9 @@ const Weekly = self.Weekly || null;
 // The path, the evening check-in and Supporter (shared/path.js,
 // extras/checkin.js, shared/supporter.js). Nothing here touches blocking.
 // The check-in is a Supporter extra: the open-source build has none, and its
-// row stays hidden there.
-const Supporter = self.Supporter || null;
+// row stays hidden there. Supporter itself is read where it's used: its page
+// global can't be redefined, so a top-level `const Supporter` here would stop
+// this whole file from running.
 const Path = self.Path || null;
 const PathDays = self.PathDays || null;
 const Checkin = self.Checkin || null;
@@ -567,6 +568,7 @@ function openPage(file) {
 }
 
 async function readSupporter() {
+  const Supporter = self.Supporter;
   if (!Supporter) return false;
   try {
     const s = await Supporter.status(browserAPI.storage.local);

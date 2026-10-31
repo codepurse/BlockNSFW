@@ -374,6 +374,26 @@ test('on a page, the Supporter global can be neither replaced nor removed', () =
   assert.throws(() => vm.runInContext("'use strict'; Supporter = {};", ctx));
 });
 
+test('no page script declares its own Supporter at the top: the locked global would stop it running', () => {
+  // A top-level const/let/class with the name of a global that can't be
+  // redefined is a SyntaxError for the whole file (the popup went dead this way).
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const root = path.join(__dirname, '..');
+  const dirs = ['.', 'shared', 'extras', 'ui', path.join('extras-private', 'extras')];
+  let looked = 0;
+  for (const dir of dirs) {
+    if (!fs.existsSync(path.join(root, dir))) continue;
+    for (const f of fs.readdirSync(path.join(root, dir))) {
+      if (!f.endsWith('.js')) continue;
+      looked++;
+      const src = fs.readFileSync(path.join(root, dir, f), 'utf8');
+      assert.doesNotMatch(src, /^(?:const|let|class)\s+Supporter\b/m, path.join(dir, f));
+    }
+  }
+  assert.ok(looked > 20, 'it looked at the page scripts');
+});
+
 test('a Console that makes crypto say yes after the page loaded changes nothing', async () => {
   const other = generateKeyPairSync('ec', { namedCurve: 'P-256' });
   const storage = memoryStorage();
