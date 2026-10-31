@@ -116,10 +116,12 @@ test('a store code is checked with the store: only the code and organization go'
   assert.deepEqual(JSON.parse(fetch.calls[0].init.body), { key: code, organization_id: STORE.organizationId });
   assert.equal(fetch.calls[0].init.credentials, 'omit');
   assert.deepEqual(storage.data[Supporter.KEY], { kind: 'store', code, since: 7000, checkedAt: 7000 });
-  // Within the month it doesn't ask again.
+  // Within the day, a cached read doesn't ask again; a plain one does.
   const later = 7000 + Supporter.RECHECK_MS - 1;
-  assert.deepEqual(await Supporter.status(storage, { store: STORE, fetch, now: later }), { supporter: true, kind: 'store', since: 7000 });
+  assert.deepEqual(await Supporter.status(storage, { store: STORE, fetch, now: later, cached: true }), { supporter: true, kind: 'store', since: 7000 });
   assert.equal(fetch.calls.length, 1);
+  assert.deepEqual(await Supporter.status(storage, { store: STORE, fetch, now: later }), { supporter: true, kind: 'store', since: 7000 });
+  assert.equal(fetch.calls.length, 2);
 });
 
 const CODE = 'BLOCKNSFW-6F2D1A90-0A4B-4E5C-9D7E-1234567890AB';
@@ -147,15 +149,91 @@ test('a plan that has ended closes the extras, and says when', async () => {
   }
 });
 
-test('the check runs about daily, and at once when forced', async () => {
+test('the store is asked every time; only a cached read takes an answer from the last day', async () => {
   assert.equal(Supporter.RECHECK_MS, 24 * 60 * 60 * 1000);
   const storage = memoryStorage();
   storage.data[Supporter.KEY] = { kind: 'store', code: CODE, since: 7000, checkedAt: 7000 };
   const revoked = fakeFetch(200, { id: 'x', status: 'revoked' });
-  assert.equal((await Supporter.status(storage, { store: STORE, fetch: revoked, now: 8000 })).supporter, true);
+  assert.equal((await Supporter.status(storage, { store: STORE, fetch: revoked, now: 8000, cached: true })).supporter, true);
   assert.equal(revoked.calls.length, 0);
-  assert.equal((await Supporter.status(storage, { store: STORE, fetch: revoked, now: 8000, force: true })).supporter, false);
+  assert.equal((await Supporter.status(storage, { store: STORE, fetch: revoked, now: 8000, cached: true, force: true })).supporter, false);
   assert.equal(revoked.calls.length, 1);
+  storage.data[Supporter.KEY] = { kind: 'store', code: CODE, since: 7000, checkedAt: 7000 };
+  assert.equal((await Supporter.status(storage, { store: STORE, fetch: revoked, now: 8000 })).supporter, false);
+  assert.equal(revoked.calls.length, 2);
+});
+
+test('a record typed into storage by hand lasts no longer than the next ask', async () => {
+  // Written from the console with today's date, to look checked.
+  const typed = () => ({ kind: 'store', code: 'MADEUPCODE123', since: 8000, checkedAt: 8000 });
+  const storage = memoryStorage();
+  storage.data[Supporter.KEY] = typed();
+  const store = fakeFetch(404, { error: 'ResourceNotFound' });
+  assert.deepEqual(await Supporter.status(storage, { store: STORE, fetch: store, now: 8001 }), { supporter: false, kind: 'store', ended: 8001 });
+  assert.equal(store.calls.length, 1);
+  // Typed in again, it's turned down again.
+  storage.data[Supporter.KEY] = typed();
+  assert.equal((await Supporter.status(storage, { store: STORE, fetch: store, now: 8002 })).supporter, false);
+  assert.equal(store.calls.length, 2);
+});
+
+test('still paid within the hour writes nothing, so a page listening for the record isn’t sent round again', async () => {
+  assert.equal(Supporter.KEEP_MS, 60 * 60 * 1000);
+  const storage = memoryStorage();
+  let writes = 0;
+  const set = storage.set.bind(storage);
+  storage.set = (v) => { writes++; return set(v); };
+  storage.data[Supporter.KEY] = { kind: 'store', code: CODE, since: 7000, checkedAt: 7000, limit: 3, activationId: 'act_1' };
+  const ok = fakeFetch(200, { id: 'lk_1', status: 'granted', limit_activations: 3 });
+  for (const now of [7001, 7000 + Supporter.KEEP_MS - 1]) {
+    assert.equal((await Supporter.status(storage, { store: STORE, fetch: ok, now })).supporter, true);
+  }
+  assert.equal(writes, 0);
+  assert.equal(ok.calls.length, 2);
+  // Past the hour, the answer is written down once.
+  assert.equal((await Supporter.status(storage, { store: STORE, fetch: ok, now: 7000 + Supporter.KEEP_MS })).supporter, true);
+  assert.equal(writes, 1);
+  assert.equal(storage.data[Supporter.KEY].checkedAt, 7000 + Supporter.KEEP_MS);
+  // A new limit is written down at once.
+  const more = fakeFetch(200, { id: 'lk_1', status: 'granted', limit_activations: 5 });
+  await Supporter.status(storage, { store: STORE, fetch: more, now: 7000 + Supporter.KEEP_MS + 1 });
+  assert.equal(writes, 2);
+  assert.equal(storage.data[Supporter.KEY].limit, 5);
+});
+
+test('a store that doesn’t answer in time counts as no answer: the last one stands', async () => {
+  assert.equal(Supporter.ANSWER_MS, 6000);
+  const storage = memoryStorage();
+  storage.data[Supporter.KEY] = { kind: 'store', code: CODE, since: 7000, checkedAt: 7000 };
+  const stuck = () => new Promise(() => {});
+  const started = Date.now();
+  assert.equal((await Supporter.status(storage, { store: STORE, fetch: stuck, now: month(1), answerMs: 20 })).supporter, true);
+  assert.ok(Date.now() - started < 1000);
+  assert.equal(storage.data[Supporter.KEY].ended, undefined);
+  // Past the grace, it pauses as any unanswered check does.
+  assert.deepEqual(await Supporter.status(storage, { store: STORE, fetch: stuck, now: month(15), answerMs: 20 }), { supporter: false, kind: 'store', unchecked: true });
+});
+
+test('only the popup’s first draw takes a cached answer, and it asks the store straight after', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const root = path.join(__dirname, '..');
+  const popup = fs.readFileSync(path.join(root, 'popup.js'), 'utf8');
+  assert.match(popup, /isSupporter = await readSupporter\(fresh \? undefined : \{ cached: true \}\);/);
+  assert.match(popup, /if \(isSupporter && !fresh\) recheckSupporter\(\);/);
+  assert.match(popup, /if \(s\.supporter !== true\) location\.replace\(`\$\{location\.pathname\}\?fresh`\);/);
+  // Everywhere else asks the store (Settings' recheck reads the answer it just got).
+  const seen = [];
+  const walk = (dir) => {
+    for (const name of fs.readdirSync(dir, { withFileTypes: true })) {
+      if (['node_modules', 'dist', 'tests', '.verify', '.git', 'store-assets', 'trailer'].includes(name.name)) continue;
+      const full = path.join(dir, name.name);
+      if (name.isDirectory()) walk(full);
+      else if (name.name.endsWith('.js') && /cached: true/.test(fs.readFileSync(full, 'utf8'))) seen.push(path.relative(root, full).replace(/\\/g, '/'));
+    }
+  };
+  walk(root);
+  assert.deepEqual(seen.filter((f) => f !== 'background.js').sort(), ['options-supporter.js', 'popup.js']);
 });
 
 test('offline at the monthly check, a supporter stays a supporter', async () => {

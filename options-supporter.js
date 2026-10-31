@@ -417,7 +417,7 @@
     hidePlaceholders();
     $('supporter-recheck').addEventListener('click', async () => {
       $('supporter-recheck-result').textContent = 'Asking the store…';
-      const s = await renderStatus({ force: true }).then(() => Supporter.status(browserAPI.storage.local));
+      const s = await renderStatus({ force: true }).then(() => Supporter.status(browserAPI.storage.local, { cached: true }));
       $('supporter-recheck-result').textContent = s.supporter ? 'Still active.' : 'The plan has ended.';
     });
     $('supporter-release').addEventListener('click', releaseHere);

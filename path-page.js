@@ -20,15 +20,18 @@
   let editing = false;
   let shown = null;
 
-  async function load() {
+  // `askStore` false: only the path changed, and the store isn't asked again.
+  async function load(askStore = true) {
     try {
       const store = await browserAPI.storage.local.get(Path.KEY);
       state = Path.normalize(store[Path.KEY]);
     } catch (_) {}
-    try {
-      supporter = (await Supporter.status(browserAPI.storage.local)).supporter;
-    } catch (_) {
-      supporter = false;
+    if (askStore) {
+      try {
+        supporter = (await Supporter.status(browserAPI.storage.local)).supporter;
+      } catch (_) {
+        supporter = false;
+      }
     }
     try {
       showPlaceholders = (await browserAPI.management.getSelf()).installType === 'development';
@@ -325,7 +328,7 @@
     browserAPI.storage.onChanged.addListener(async (changes, area) => {
       if (area !== 'local' || !(changes[Path.KEY] || changes[Supporter.KEY])) return;
       if (document.activeElement === $('line-input')) return;
-      await load();
+      await load(!!changes[Supporter.KEY]);
       render();
     });
     await load();

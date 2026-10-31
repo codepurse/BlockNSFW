@@ -101,11 +101,21 @@
     prices: { yearly: '$20.99', lifetime: '$62.99' }
   };
 
-  // A store code is asked about again after this long, so a monthly or yearly
-  // plan that has ended closes the extras. A cancelled plan runs to the end
-  // of the period paid for; Polar turns the code off then, and the extras
-  // close within this long after. Offline, it stays as it was.
+  // A store code is asked about every time a page asks (status), so a record
+  // typed into storage by hand, or a plan that has ended, closes the extras on
+  // the next page that opens. Only a page that draws at once and asks again
+  // straight after (the popup, opts.cached) takes an answer this recent
+  // without asking. Offline, the last answer stands (OFFLINE_GRACE_MS).
   var RECHECK_MS = 24 * 60 * 60 * 1000;
+
+  // A store that hasn't answered in this long counts as no answer, so a page
+  // waiting on it isn't held up by a slow connection.
+  var ANSWER_MS = 6000;
+
+  // "Still paid" is written down at most this often. Every page asks, and a
+  // page that listens for the record (path-page.js) would otherwise ask again
+  // at every write, for ever.
+  var KEEP_MS = 60 * 60 * 1000;
 
   // Offline, the last answer stands, but not for ever: a store code the store
   // hasn't confirmed for this long pauses the extras until it can (they come
@@ -240,7 +250,7 @@
   function storeCall(path, payload, opts) {
     var doFetch = (opts && opts.fetch) || (typeof fetch === 'function' ? fetch.bind(root) : null);
     if (!doFetch) return Promise.resolve({ offline: true, reason: 'this browser can’t check it' });
-    return doFetch(storeApi(opts).base + path, {
+    var call = doFetch(storeApi(opts).base + path, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'omit',
@@ -254,6 +264,14 @@
       });
     }, function () {
       return { offline: true };
+    });
+    var timer = null;
+    var late = new Promise(function (resolve) {
+      timer = setTimeout(function () { resolve({ offline: true }); }, (opts && opts.answerMs) || ANSWER_MS);
+    });
+    return Promise.race([call, late]).then(function (r) {
+      clearTimeout(timer);
+      return r;
     });
   }
 
@@ -329,10 +347,10 @@
 
   // { supporter, kind?, number?, since?, limit?, ended?, removed?, unchecked? }.
   // `storage` is a storage.local area. A signed code is checked again here,
-  // on the device. A store code is asked about again once RECHECK_MS has
-  // passed since the last answer (or at once with opts.force): still paid
-  // keeps it, a definite no closes the extras (and says when), and no answer
-  // leaves it as it was for up to OFFLINE_GRACE_MS since the last answer;
+  // on the device. A store code is asked about again every time (with
+  // opts.cached, only once RECHECK_MS has passed since the last answer): still
+  // paid keeps it, a definite no closes the extras (and says when), and no
+  // answer leaves it as it was for up to OFFLINE_GRACE_MS since the last answer;
   // after that, `unchecked` until the store answers. `removed` says this
   // browser lost its place on the plan (taken
   // back on the purchases page, or every place taken by the time Polar's
@@ -368,7 +386,7 @@
         var unanswered = function () {
           return age < OFFLINE_GRACE_MS ? yes(Number(rec.limit) || 0) : { supporter: false, kind: 'store', unchecked: true };
         };
-        if (!(opts && opts.force) && age < RECHECK_MS) return yes(Number(rec.limit) || 0);
+        if (opts && opts.cached && !opts.force && age < RECHECK_MS) return yes(Number(rec.limit) || 0);
         return verifyStore(rec.code, opts, now, held).then(function (r) {
           if (r.ok && r.limit && !held) {
             // Polar's limit came in after this code was entered here.
@@ -380,9 +398,11 @@
             });
           }
           if (r.ok) {
-            var more = { checkedAt: now };
-            if (r.limit) more.limit = r.limit;
-            return save(more).then(function () { return yes(r.limit); });
+            var more = {};
+            if (age >= KEEP_MS) more.checkedAt = now;
+            if (r.limit && r.limit !== Number(rec.limit)) more.limit = r.limit;
+            var kept = Object.keys(more).length ? save(more) : Promise.resolve();
+            return kept.then(function () { return yes(r.limit); });
           }
           if (r.definite && held) {
             // Either the plan is over, or this browser's place was taken back.
@@ -575,6 +595,8 @@
     STORE: STORE,
     PLANS: PLANS,
     RECHECK_MS: RECHECK_MS,
+    ANSWER_MS: ANSWER_MS,
+    KEEP_MS: KEEP_MS,
     OFFLINE_GRACE_MS: OFFLINE_GRACE_MS,
     PUBLIC_KEY: PUBLIC_KEY,
     buyable: buyable,
