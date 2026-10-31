@@ -1372,11 +1372,13 @@
       padding: var(--space-3) 0;
     }
     html[data-release-read] #release-card > :not(.welcome-strip),
+    html[data-pass-read] #pass-card > :not(.welcome-strip),
     html[data-dev-message-read] #dev-message-card > :not(.welcome-strip),
     html[data-whats-new-read] #whats-new-card > :not(.welcome-strip) {
       display: none;
     }
     html[data-release-read] #release-card > .welcome-strip,
+    html[data-pass-read] #pass-card > .welcome-strip,
     html[data-dev-message-read] #dev-message-card > .welcome-strip,
     html[data-whats-new-read] #whats-new-card > .welcome-strip {
       display: flex;
@@ -1417,9 +1419,6 @@
     }
     html[data-release-read] #release-card::before {
       display: none;
-    }
-    #release-card + #dev-message-card {
-      margin-top: var(--space-4);
     }
     #release-card .welcome-strip {
       color: var(--color-on-band);
@@ -1647,6 +1646,258 @@
       position: absolute;
       top: var(--space-2);
       right: var(--space-2);
+    }
+
+    /* Pass It On, once BlockNSFW has had two weeks to help: an ask to tell
+       someone who's still looking. Its picture is that person's search, a
+       question typed at 2:14 AM, two results that say nothing, and one honest
+       post let through. It sits on the 2.0 band's ink, not the pine, which
+       stays Warden's. options-layout.js decides when it shows. */
+    #pass-card {
+      margin-top: var(--space-4);
+      padding: 30px 32px;
+      border-top: 0;
+      background: var(--color-ink);
+      container-type: inline-size;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-scheme="light"]) #pass-card {
+        background: var(--color-recess-2);
+      }
+    }
+    :root[data-scheme="dark"] #pass-card {
+      background: var(--color-recess-2);
+    }
+    html[data-pass-read] #pass-card {
+      padding: 14px var(--space-5);
+    }
+    html[data-pass-gone] #pass-card {
+      display: none;
+    }
+    #pass-card + #dev-message-card {
+      margin-top: var(--space-4);
+    }
+    #pass-card .welcome-strip {
+      color: var(--color-on-band);
+    }
+    #pass-card .welcome-strip-title {
+      font-family: var(--font-display);
+      font-size: 18px;
+      font-weight: 400;
+      letter-spacing: -0.01em;
+    }
+    #pass-card .welcome-strip-meta {
+      color: var(--color-on-band-2);
+    }
+    #pass-card .welcome-strip-open {
+      color: var(--color-on-band);
+    }
+    .pass-strip-caret {
+      display: inline-block;
+      width: 2px;
+      height: 0.9em;
+      margin-left: 3px;
+      vertical-align: -0.1em;
+      background: var(--color-band-signal);
+      animation: pass-blink 1.2s steps(1, end) infinite;
+    }
+    .pass-band {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 22rem;
+      column-gap: 40px;
+      align-items: center;
+      padding-right: var(--space-5);
+    }
+    .pass-kicker .pass-name {
+      color: var(--color-band-signal);
+    }
+    .pass-title {
+      margin-top: var(--space-3);
+      font-family: var(--font-display);
+      font-size: 30px;
+      font-weight: 400;
+      line-height: 1.12;
+      letter-spacing: -0.02em;
+      color: var(--color-on-band);
+      text-wrap: balance;
+    }
+    .pass-title em {
+      font-style: italic;
+    }
+    .pass-title:focus {
+      outline: none;
+    }
+    .pass-lede {
+      margin-top: var(--space-3);
+      max-width: 31rem;
+      font-size: 14px;
+      color: var(--color-on-band-2);
+      text-wrap: pretty;
+    }
+    .pass-actions {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      column-gap: 18px;
+      row-gap: var(--space-2);
+      margin-top: var(--space-4);
+    }
+    .pass-actions .btn {
+      min-height: 36px;
+      padding-inline: var(--space-4);
+      font-size: 14px;
+    }
+    .pass-actions .arrow-link {
+      font-size: 14px;
+    }
+    .pass-dismiss {
+      position: absolute;
+      top: var(--space-2);
+      right: var(--space-2);
+      z-index: 1;
+    }
+    /* The search, on the page's own sheet, so it reads as a screen inside the
+       band. The two results that say nothing are bars, as on monolab.dev. */
+    .pass-plate {
+      padding: 14px 16px 10px;
+      border: 1px solid var(--color-band-rule);
+      background: var(--color-sheet);
+      color: var(--color-ink);
+    }
+    .pass-plate .meta {
+      color: var(--color-ink-3);
+    }
+    .pass-plate-head,
+    .pass-yours-head {
+      display: flex;
+      justify-content: space-between;
+      gap: var(--space-3);
+    }
+    .pass-search {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      height: 40px;
+      margin-top: 10px;
+      padding: 0 12px;
+      border: 1px solid var(--color-rule-3);
+      border-radius: var(--radius-xs);
+      background: var(--color-paper);
+    }
+    .pass-search .icon {
+      flex: none;
+      color: var(--color-ink-3);
+    }
+    .pass-query {
+      display: inline-block;
+      width: 25ch;
+      overflow: hidden;
+      white-space: nowrap;
+      font-family: var(--font-mono);
+      font-size: 13px;
+      line-height: 20px;
+      color: var(--color-ink);
+      animation: pass-type 10s steps(25, end) infinite;
+    }
+    .pass-caret {
+      display: inline-block;
+      width: 2px;
+      height: 17px;
+      margin-left: 1px;
+      background: var(--color-ink);
+      animation: pass-blink 1s steps(1, end) infinite;
+    }
+    .pass-result {
+      padding: 11px 0;
+      border-bottom: 1px solid var(--color-rule);
+    }
+    .pass-result::before,
+    .pass-result::after {
+      content: "";
+      display: block;
+      height: 8px;
+      background: var(--color-recess-2);
+    }
+    .pass-result::after {
+      height: 6px;
+      margin-top: 7px;
+      opacity: 0.6;
+    }
+    .pass-result-1 { animation: pass-r1 10s ease-out infinite; }
+    .pass-result-1::before { width: 64%; }
+    .pass-result-1::after { width: 92%; }
+    .pass-result-2 { animation: pass-r2 10s ease-out infinite; }
+    .pass-result-2::before { width: 46%; }
+    .pass-result-2::after { width: 78%; }
+    .pass-yours {
+      margin: 8px -10px 0;
+      padding: 11px 10px 12px;
+      background: var(--color-pine-3);
+      animation: pass-r3 10s var(--ease-out-quint) infinite;
+    }
+    .pass-plate .pass-yours .meta {
+      color: var(--color-pine);
+    }
+    .pass-yours-title {
+      margin-top: 6px;
+      font-family: var(--font-display);
+      font-size: 17px;
+      line-height: 1.25;
+      color: var(--color-ink);
+    }
+    .pass-yours-text {
+      margin-top: 3px;
+      font-size: 13px;
+      line-height: 1.45;
+      color: var(--color-ink-2);
+    }
+    @keyframes pass-type {
+      0% { width: 0; }
+      26% { width: 25ch; }
+      90% { width: 25ch; }
+      100% { width: 0; }
+    }
+    @keyframes pass-blink {
+      50% { opacity: 0; }
+    }
+    @keyframes pass-r1 {
+      0%, 28% { opacity: 0; }
+      33%, 88% { opacity: 1; }
+      94%, 100% { opacity: 0; }
+    }
+    @keyframes pass-r2 {
+      0%, 32% { opacity: 0; }
+      37%, 88% { opacity: 1; }
+      94%, 100% { opacity: 0; }
+    }
+    @keyframes pass-r3 {
+      0%, 40% { opacity: 0; }
+      50%, 88% { opacity: 1; }
+      94%, 100% { opacity: 0; }
+    }
+    /* Still, the search shows what it found: the whole question, the results
+       and the post. */
+    @media (prefers-reduced-motion: reduce) {
+      .pass-strip-caret,
+      .pass-query,
+      .pass-caret,
+      .pass-result,
+      .pass-yours {
+        animation: none;
+      }
+    }
+    /* Too narrow for the search beside the words: it goes under them. */
+    @container (max-width: 44rem) {
+      .pass-band {
+        grid-template-columns: minmax(0, 1fr);
+        row-gap: var(--space-5);
+        padding-right: 0;
+      }
+    }
+    @media (max-width: 640px) {
+      #pass-card {
+        padding: var(--space-5);
+      }
     }
 
     .wn-head {
@@ -2871,6 +3122,46 @@
             <p class="release-numeral" aria-hidden="true"><span>2</span><span class="release-point"></span><span>0</span></p>
           </div>
           <button type="button" class="icon-btn release-dismiss" data-welcome="ack" aria-label="Hide this message">
+            <svg class="icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M3.5 3.5l9 9M12.5 3.5l-9 9" /></svg>
+          </button>
+        </div>
+
+        <!-- Pass It On, from two weeks after BlockNSFW was first seen
+             (options-layout.js). Its × folds it for good. It promises
+             nothing for a post: see store-assets/pass-it-on.md. -->
+        <div class="welcome-card band-pine" id="pass-card">
+          <button type="button" class="welcome-strip" data-welcome="open">
+            <span class="welcome-strip-title">Pass it on<span class="pass-strip-caret" aria-hidden="true"></span></span>
+            <span class="welcome-strip-meta">someone typed this tonight · tell them what helped</span>
+            <span class="welcome-strip-open">Show <svg class="icon icon-12" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M4 6l4 4 4-4" /></svg></span>
+          </button>
+          <div class="pass-band">
+            <div class="pass-text">
+              <p class="meta pass-kicker"><span class="pass-name">Pass it on</span> · tell someone who’s looking</p>
+              <h3 class="pass-title" data-welcome="heading" tabindex="-1">Someone typed this tonight. <em>Be what they find.</em></h3>
+              <p class="pass-lede">Post honestly about BlockNSFW, in public, wherever people go looking for help. The good and the bad. If you post something, send me the link. I’d love to read it.</p>
+              <div class="pass-actions">
+                <a class="btn btn-primary btn-sm" href="mailto:support@monolab.dev?subject=Pass%20it%20on&amp;body=Link%20to%20my%20post%3A%0A%0AOK%20to%20share%20it%20without%20my%20name%3F%20%28yes%2Fno%29%3A">Send me the link</a>
+                <a class="arrow-link" href="https://monolab.dev/blocknsfw/pass-it-on" target="_blank" rel="noopener noreferrer">What to write <svg class="icon icon-up-right" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M4.5 11.5l7-7M6 4.5h5.5V10" /></svg></a>
+                <span class="meta">no name or face needed</span>
+              </div>
+            </div>
+            <div class="pass-plate" role="img" aria-label="Someone searching how to actually quit porn at 2:14 AM, and an honest post about BlockNSFW among what they find">
+              <p class="pass-plate-head"><span class="meta">Someone, somewhere</span><span class="meta tnum">2:14 AM</span></p>
+              <div class="pass-search">
+                <svg class="icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><circle cx="7" cy="7" r="4.5" /><path d="M10.5 10.5l3 3" /></svg>
+                <span><span class="pass-query">how to actually quit porn</span><span class="pass-caret"></span></span>
+              </div>
+              <div class="pass-result pass-result-1"></div>
+              <div class="pass-result pass-result-2"></div>
+              <div class="pass-yours">
+                <p class="pass-yours-head"><span class="meta">Your post</span><span class="meta">let through</span></p>
+                <p class="pass-yours-title">What finally helped me quit, the good and the bad</p>
+                <p class="pass-yours-text">What worked, what didn’t, and what I’d tell you tonight.</p>
+              </div>
+            </div>
+          </div>
+          <button type="button" class="icon-btn pass-dismiss" data-welcome="ack" aria-label="Hide this message">
             <svg class="icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M3.5 3.5l9 9M12.5 3.5l-9 9" /></svg>
           </button>
         </div>
