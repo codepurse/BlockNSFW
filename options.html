@@ -1648,11 +1648,10 @@
       right: var(--space-2);
     }
 
-    /* Pass It On, once BlockNSFW has had two weeks to help: an ask to tell
-       someone who's still looking. Its picture is that person's search, a
-       question typed at 2:14 AM, two results that say nothing, and one honest
-       post let through. It sits on the 2.0 band's ink, not the pine, which
-       stays Warden's. options-layout.js decides when it shows. */
+    /* Pass It On: an ask to tell someone who's still looking. Its picture is
+       that person's search, a question typed at 2:14 AM, two results that say
+       nothing, and one honest post let through. It sits on the 2.0 band's ink,
+       not the pine, which stays Warden's. options-layout.js folds it. */
     #pass-card {
       margin-top: var(--space-4);
       padding: 30px 32px;
@@ -1670,9 +1669,6 @@
     }
     html[data-pass-read] #pass-card {
       padding: 14px var(--space-5);
-    }
-    html[data-pass-gone] #pass-card {
-      display: none;
     }
     #pass-card + #dev-message-card {
       margin-top: var(--space-4);
@@ -3126,9 +3122,8 @@
           </button>
         </div>
 
-        <!-- Pass It On, from two weeks after BlockNSFW was first seen
-             (options-layout.js). Its × folds it for good. It promises
-             nothing for a post: see store-assets/pass-it-on.md. -->
+        <!-- Pass It On. Its × folds it for good (options-layout.js). It
+             promises nothing for a post: see store-assets/pass-it-on.md. -->
         <div class="welcome-card band-pine" id="pass-card">
           <button type="button" class="welcome-strip" data-welcome="open">
             <span class="welcome-strip-title">Pass it on<span class="pass-strip-caret" aria-hidden="true"></span></span>

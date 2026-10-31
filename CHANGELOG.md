@@ -28,9 +28,9 @@ All notable project changes should be documented here going forward.
   Settings are always there, as are the Storm warning and a change waiting
   on the Pact when they apply. Hiding a section never changes what's
   blocked. Privacy policy: What We Store Locally.
-- **Pass It On.** Two weeks after BlockNSFW is installed, Settings › Welcome
-  asks, if it helped, to tell someone who's still looking: in public, in your
-  own words, the good and the bad. Its picture is the search that person
+- **Pass It On.** Settings › Welcome asks, if BlockNSFW helped, to tell
+  someone who's still looking: in public, in your own words, the good and
+  the bad. Its picture is the search that person
   makes at 2:14 AM. "Send me the link" opens an email you write and send
   yourself; the extension sends nothing. Its × folds it to one line for
   good, and it never shows on the blocked page or in the popup.
@@ -79,11 +79,9 @@ All notable project changes should be documented here going forward.
   `popup.js` `tidySections()` folds away a box with nothing to show here
   (this site on a browser page). The choice is `pblocker_popup_sections`,
   carried in a backup. Tests: `tests/popup-sections.test.js`.
-- Pass It On is `#pass-card` in `options.html`. `options-layout.js` keeps it
-  hidden (`data-pass-gone`) until 14 days after `pblocker_first_seen`, then
-  remembers that in localStorage (`pblocker_pass_it_on_due`) so later visits
-  paint it straight away; its × sets `pblocker_pass_it_on_read`. Tests:
-  `tests/options-welcome-cards.test.js`.
+- Pass It On is `#pass-card` in `options.html`. Its × folds it for good:
+  `options-layout.js` keeps `pblocker_pass_it_on_read` in localStorage, like
+  the 2.0 card. Tests: `tests/options-welcome-cards.test.js`.
 - The PIN boxes in `popup.html` and `options.js` have no `maxlength`; the
   PIN is a salted hash (`shared/pin-hash.js`), so its length costs nothing.
   `onboarding.js` `trySavePin` trims. Tests: `tests/pin-entry-length.test.js`

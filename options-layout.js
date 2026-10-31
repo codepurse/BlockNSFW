@@ -49,8 +49,8 @@
   } catch (_) {}
 
   // The cards at the top of Settings. The 2.0 band shows for 2.0.x only and
-  // stays folded once its × is pressed. Pass It On shows once it is due and
-  // stays folded the same way. What's New remembers the version it was
+  // stays folded once its × is pressed, and so does Pass It On. What's New
+  // remembers the version it was
   // showing when "Got it" was pressed, and opens in full again by itself on
   // the next one. The developer's banner remembers nothing: it opens on every
   // visit, and its × folds it for that visit only.
@@ -63,23 +63,6 @@
     }
   }
 
-  // Pass It On asks people to tell someone what helped, so it waits until
-  // BlockNSFW has had two weeks to help, counted from the day it was first
-  // seen (shared/moments.js keeps that in storage). Storage answers too late
-  // for the first paint, so the first time it is due the card appears a
-  // moment after the page; `due` remembers that here, and every later visit
-  // paints it straight away.
-  var FIRST_SEEN_KEY = 'pblocker_first_seen';
-  var PASS_WAIT = 14 * 24 * 60 * 60 * 1000;
-  var PASS_CARD = {
-    card: 'pass-card',
-    attr: 'data-pass-read',
-    key: 'pblocker_pass_it_on_read',
-    shows: '1',
-    gone: 'data-pass-gone',
-    due: 'pblocker_pass_it_on_due'
-  };
-
   var WELCOME_CARDS = [
     // 2.0, said on the welcome screen while a 2.0.x is installed. Its × folds
     // it for good; from 2.1 on it isn't shown at all.
@@ -91,7 +74,8 @@
       only: /^2\.0(\.|$)/,
       gone: 'data-release-gone'
     },
-    PASS_CARD,
+    // Pass It On. Its × folds it for good.
+    { card: 'pass-card', attr: 'data-pass-read', key: 'pblocker_pass_it_on_read', shows: '1' },
     // No key, so nothing is kept.
     { card: 'dev-message-card', attr: 'data-dev-message-read' },
     {
@@ -104,11 +88,6 @@
 
   WELCOME_CARDS.forEach(function (w) {
     if (w.only && !w.only.test(manifestVersion())) root.setAttribute(w.gone, '');
-    if (w.due) {
-      var due = false;
-      try { due = localStorage.getItem(w.due) === '1'; } catch (_) {}
-      if (!due) root.setAttribute(w.gone, '');
-    }
     try {
       if (w.key && w.shows && localStorage.getItem(w.key) === w.shows) root.setAttribute(w.attr, '');
     } catch (_) {}
@@ -147,19 +126,6 @@
       if (count) parts.push(count + (count === 1 ? ' change' : ' changes'));
       meta.textContent = parts.join(' · ');
     }
-  }
-
-  function initPassDue() {
-    if (!root.hasAttribute(PASS_CARD.gone)) return;
-    var api;
-    try { api = typeof browser !== 'undefined' ? browser : chrome; } catch (_) { return; }
-    if (!api || !api.storage || !api.storage.local) return;
-    Promise.resolve(api.storage.local.get(FIRST_SEEN_KEY)).then(function (store) {
-      var first = Number(store && store[FIRST_SEEN_KEY]);
-      if (!(first > 0) || Date.now() - first < PASS_WAIT) return;
-      root.removeAttribute(PASS_CARD.gone);
-      try { localStorage.setItem(PASS_CARD.due, '1'); } catch (_) {}
-    }, function () {});
   }
 
   // The Warden banner's dial counts a cool-down down, the way Warden makes a
@@ -279,7 +245,6 @@
   function init() {
     initWidthToggle();
     initWelcomeCards();
-    initPassDue();
     initWardenCooldown();
     initNav();
   }

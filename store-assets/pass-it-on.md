@@ -97,10 +97,8 @@ mailto:support@monolab.dev?subject=Pass%20it%20on&body=Link%20to%20my%20post%3A%
 
 ### Where it shows
 
-- **Settings › Welcome**, second after the 2.0 card. It shows from two weeks
-  after BlockNSFW was first seen (`pblocker_first_seen`); on day one there's
-  nothing to pass on yet. Its × folds it to its strip for good, like the
-  others.
+- **Settings › Welcome**, second after the 2.0 card, from the first visit.
+  Its × folds it to its strip for good, like the others.
 - **Not** on the blocked page, the popup's band, After a Slip or Your Week.
   Those are for the hard moment, and an ask there reads like an ad at the
   worst time.
@@ -132,8 +130,7 @@ Thank you for passing it on. I read it, and it means a lot.
 3. **Keep a list.** One line per link: the date, the email, the link, and
    whether they said yes to sharing.
 4. **Welcome holds three other cards** (the 2.0 card, Warden, What's New).
-   That's one more reason the card waits two weeks: by then most people have
-   folded the others to their strips.
+   Four is a lot on a first visit, so each folds to one line with its ×.
 5. **"I", not "we".** One person reads the links, and monolab's design system
    says the same: first person, never "we". The Community page still says
    "we".

@@ -1,7 +1,7 @@
 // The cards at the top of Settings (the 2.0 band, Pass It On, the developer's
 // banner, What's New) fold to one line when put away. What's New stays folded
 // until the next version and must then open in full again; the banner opens on
-// every visit. Pass It On waits until BlockNSFW has had two weeks to help.
+// every visit.
 //
 // options-layout.js decides this from <head>, before the page is parsed, so it
 // runs here against a stand-in for the few DOM pieces it touches.
@@ -34,15 +34,8 @@ function card() {
   return { parts, querySelector: (sel) => parts[sel] || null };
 }
 
-const DAY = 24 * 60 * 60 * 1000;
-
-// Lets the storage read Pass It On makes settle.
-const settle = () => new Promise((resolve) => setImmediate(resolve));
-
 // Runs options-layout.js once, as a page load would, and returns what it left.
-// `firstSeen` is what extension storage holds for the day BlockNSFW was first
-// seen; left out, there is no storage to ask.
-function load({ version = '1.8.0', stored = {}, firstSeen } = {}) {
+function load({ version = '1.8.0', stored = {} } = {}) {
   const attrs = {};
   const root = {
     getAttribute: (n) => (n in attrs ? attrs[n] : null),
@@ -76,11 +69,6 @@ function load({ version = '1.8.0', stored = {}, firstSeen } = {}) {
     },
     chrome: { runtime: { getManifest: () => ({ version }) } }
   };
-  if (firstSeen !== undefined) {
-    context.chrome.storage = {
-      local: { get: (key) => Promise.resolve(key === 'pblocker_first_seen' ? { pblocker_first_seen: firstSeen } : {}) }
-    };
-  }
   vm.runInNewContext(SOURCE, context);
   return { attrs, atFirstPaint, store, cards, meta };
 }
@@ -171,37 +159,13 @@ test('on 2.0.x the 2.0 band shows in full, and its × folds it for good', () => 
   assert.ok('data-release-read' in later.atFirstPaint, 'still folded on a 2.0.x patch');
 });
 
-test('Pass It On stays away on a fresh install', async () => {
-  const { atFirstPaint, attrs, store } = load({ firstSeen: Date.now() - 60000 });
-  assert.ok('data-pass-gone' in atFirstPaint);
-  await settle();
-  assert.ok('data-pass-gone' in attrs);
-  assert.ok(!('pblocker_pass_it_on_due' in store));
-});
-
-test('Pass It On waits the whole two weeks', async () => {
-  const { attrs } = load({ firstSeen: Date.now() - 13 * DAY });
-  await settle();
-  assert.ok('data-pass-gone' in attrs);
-});
-
-test('two weeks in, Pass It On appears and is remembered for the next visit', async () => {
-  const first = load({ firstSeen: Date.now() - 15 * DAY });
-  await settle();
-  assert.ok(!('data-pass-gone' in first.attrs));
-  assert.equal(first.store.pblocker_pass_it_on_due, '1');
-  const later = load({ stored: first.store });
-  assert.ok(!('data-pass-gone' in later.atFirstPaint), 'painted straight away once due');
-});
-
-test('with no day first seen, Pass It On stays away', async () => {
-  const { attrs } = load({ firstSeen: null });
-  await settle();
-  assert.ok('data-pass-gone' in attrs);
+test('Pass It On shows in full from the first visit', () => {
+  const { atFirstPaint } = load();
+  assert.ok(!('data-pass-read' in atFirstPaint));
 });
 
 test('Pass It On’s × folds it for good', () => {
-  const first = load({ stored: { pblocker_pass_it_on_due: '1' } });
+  const first = load();
   assert.ok(!('data-pass-read' in first.atFirstPaint));
   first.cards['pass-card'].parts['[data-welcome="ack"]'].click();
   assert.ok('data-pass-read' in first.attrs);
