@@ -90,22 +90,23 @@ test('a message: shown with its length, played only on a tap, paused on another'
   assert.equal(audio.currentTime, 0);
 });
 
-test('the blocked page and the gateway pause play it, and never ask about Supporter', () => {
+test('the blocked page and the gateway pause play it, once its proof checks on the device', () => {
   for (const [page, script] of [['blocked.html', 'blocked.js'], ['gateway.html', 'gateway.js']]) {
     const html = read(page);
     assert.match(html, /<script src="shared\/moment-voice\.js"><\/script>/, `${page} loads the player`);
     assert.match(html, /data-voice-play>Hear yourself</, `${page} has the button`);
-    assert.doesNotMatch(html, /supporter\.js/, `${page} loads no Supporter code`);
-    // The blocked page's one extra is the dial (extras/proof.js), which
-    // follows a switch and never asks about Supporter either.
-    assert.deepEqual([...html.matchAll(/"(extras\/[^"]+)"/g)].map((m) => m[1]), page === 'blocked.html' ? ['extras/proof.js'] : [], `${page}: no other extra`);
+    // Supporter only to check the message was chosen with it (keepsake), on
+    // the device; the list of extras says whether this build sells them.
+    assert.match(html, /<script src="shared\/supporter\.js"><\/script>/, `${page} loads the check`);
+    assert.deepEqual([...html.matchAll(/"(extras\/[^"]+)"/g)].map((m) => m[1]), page === 'blocked.html' ? ['extras/extras.js', 'extras/proof.js'] : ['extras/extras.js'], `${page}: no other extra`);
     assert.match(read(script), /Moments\.VOICE_KEY/, `${script} reads the message`);
+    assert.match(read(script), /Supporter\.keepsake\(browserAPI\.storage\.local, (Moments\.VOICE_KEY|key)\)/, `${script} checks it`);
   }
   assert.doesNotMatch(read('shared/moment-voice.js'), /pblocker_supporter|Supporter\./);
   // Nothing autoplays from the markup; only the blocked page may start it, and
   // only when the person asked (the record's `auto`).
   for (const f of ['blocked.html', 'gateway.html']) assert.doesNotMatch(read(f), /autoplay/i, f);
-  assert.match(read('blocked.js'), /MomentVoice\.wire\(document\.getElementById\('moment-voice'\), store\[Moments\.VOICE_KEY\], \{ autoplay: true \}\)/);
+  assert.match(read('blocked.js'), /MomentVoice\.wire\(document\.getElementById\('moment-voice'\), voice, \{ autoplay: true \}\)/);
   assert.doesNotMatch(read('gateway.js'), /autoplay/, 'the gateway pause never starts it by itself');
 });
 

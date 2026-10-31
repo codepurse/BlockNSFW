@@ -274,8 +274,7 @@
     if (answered && (s.supporter || !s.unchecked)) followProof(s.supporter === true);
     renderNav(s);
     // The extras with a place in Settings (extras/looks.js, extras/photo.js)
-    // follow the answer.
-    document.dispatchEvent(new CustomEvent('supporter-status', { detail: { supporter: s.supporter === true } }));
+    // and the design picker hear the answer from Supporter itself (onStatus).
     $('supporter-recheck-row').hidden = !((await isDev()) && s.kind === 'store');
     $('supporter-manage-hint').hidden = !(s.supporter && s.kind === 'store');
     $('supporter-code-form').hidden = s.supporter;

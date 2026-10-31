@@ -3,7 +3,9 @@
 //
 // Blocking is the same for everyone. Nothing that blocks, filters, waits or
 // guards reads this file; it only opens the extras: the path past its first
-// week, the evening check-in, and your good days.
+// week, the evening check-in, and your good days. The blocked page and the
+// gateway pause read it only to choose which extras to show (proof,
+// keepsake), on the device, and never wait on the network for it.
 //
 // Two kinds of code open them.
 //
@@ -34,6 +36,14 @@
 //
 // (The source is open, so anyone can change this file. That's fine: a code
 // is a thank-you, not a lock.)
+//
+// What it can do is keep the easy ways out shut. A page's Console runs in
+// the page, so this file freezes what it hands out, keeps the browser's
+// crypto as it was when the file loaded, and tells the extras its answers
+// itself (onStatus), never through an event anyone can send. The photo and
+// the voice message keep the proof they were chosen under (keepsake), and
+// the blocked page checks the plan on its own (proof), so something written
+// into storage by hand shows nothing there.
 //
 // Signed format: "BN1-" + base64url(payload + signature).
 //   payload, 7 bytes: [0] version 1, [1..4] number (uint32, big-endian),
@@ -213,10 +223,22 @@
 
   // --- Checking ------------------------------------------------------------------
 
+  // The browser's crypto, taken as this file loads: a Console that later
+  // sets crypto.subtle.verify to say yes doesn't reach these.
+  var SUBTLE = (function () {
+    var c = typeof crypto !== 'undefined' ? crypto : (root && root.crypto);
+    var s = c && c.subtle;
+    if (!s) return null;
+    return Object.freeze({
+      importKey: s.importKey.bind(s),
+      verify: s.verify.bind(s),
+      digest: s.digest.bind(s)
+    });
+  })();
+
   function cryptoSubtle(opts) {
     if (opts && opts.subtle) return opts.subtle;
-    var c = typeof crypto !== 'undefined' ? crypto : (root && root.crypto);
-    return c && c.subtle ? c.subtle : null;
+    return SUBTLE;
   }
 
   // { ok: true, number, issued } or { ok: false, reason }.
@@ -325,40 +347,47 @@
     });
   }
 
-  // A receipt, checked here: signed with monolab.dev's key, for this store's
-  // mode and this code, issued no later than a day from now (a clock a little
-  // off is fine), and not yet run out.
-  //   { ok: true, limit, issued, expires } or { ok: false }
-  function verifyReceipt(receipt, code, opts, now) {
-    var no = { ok: false };
-    if (typeof receipt !== 'string' || receipt.slice(0, RECEIPT_PREFIX.length) !== RECEIPT_PREFIX) return Promise.resolve(no);
+  // A receipt's note ({ m, h, l, i, e }) when monolab.dev's key signed it,
+  // else null. Nothing about whose it is or whether it has run out.
+  function receiptBody(receipt, opts) {
+    if (typeof receipt !== 'string' || receipt.slice(0, RECEIPT_PREFIX.length) !== RECEIPT_PREFIX) return Promise.resolve(null);
     var parts = receipt.slice(RECEIPT_PREFIX.length).split('.');
     var payload = parts.length === 2 ? fromB64url(parts[0]) : null;
     var sig = parts.length === 2 ? fromB64url(parts[1]) : null;
     var subtle = cryptoSubtle(opts);
-    if (!payload || !sig || sig.length !== SIG_BYTES || !subtle) return Promise.resolve(no);
-    var store = (opts && opts.store) || STORE;
+    if (!payload || !sig || sig.length !== SIG_BYTES || !subtle) return Promise.resolve(null);
     var jwk = (opts && opts.receiptKey) || RECEIPT_PUBLIC_KEY;
-    var body = null;
     return subtle.importKey('jwk', jwk, { name: 'ECDSA', namedCurve: 'P-256' }, false, ['verify'])
       .then(function (key) {
         return subtle.verify({ name: 'ECDSA', hash: 'SHA-256' }, key, sig, payload);
       })
       .then(function (good) {
         if (!good) return null;
-        body = JSON.parse(new TextDecoder().decode(payload));
-        return subtle.digest('SHA-256', new TextEncoder().encode(String(code)));
+        var body = JSON.parse(new TextDecoder().decode(payload));
+        return body && typeof body === 'object' ? body : null;
       })
-      .then(function (digest) {
-        if (!digest || !body || typeof body !== 'object') return no;
+      .catch(function () { return null; });
+  }
+
+  // A receipt, checked here: signed with monolab.dev's key, for this store's
+  // mode and this code, issued no later than a day from now (a clock a little
+  // off is fine), and not yet run out.
+  //   { ok: true, limit, issued, expires } or { ok: false }
+  function verifyReceipt(receipt, code, opts, now) {
+    var no = { ok: false };
+    var store = (opts && opts.store) || STORE;
+    var subtle = cryptoSubtle(opts);
+    return receiptBody(receipt, opts).then(function (body) {
+      if (!body || !subtle) return no;
+      return subtle.digest('SHA-256', new TextEncoder().encode(String(code))).then(function (digest) {
         var issued = Number(body.i) * 1000;
         var expires = Math.min(Number(body.e) * 1000, issued + OFFLINE_GRACE_MS);
         if (body.m !== store.mode) return no;
         if (body.h !== toB64url(new Uint8Array(digest).slice(0, 16))) return no;
         if (!(issued <= now + DAY) || !(expires > now)) return no;
         return { ok: true, limit: Math.max(0, Math.floor(Number(body.l) || 0)), issued: issued, expires: expires };
-      })
-      .catch(function () { return no; });
+      });
+    }).catch(function () { return no; });
   }
 
   // askServer, with a yes held to its receipt: a yes whose receipt doesn't
@@ -428,7 +457,15 @@
   // (taken back on the purchases page, or every place taken by the time
   // Polar's limit came in) while the plan itself goes on: the code entered
   // again takes a place back if there's one free.
+  // Every answer is also told to this page's onStatus listeners.
   function status(storage, opts) {
+    return check(storage, opts).then(function (s) {
+      tellAll(s);
+      return s;
+    });
+  }
+
+  function check(storage, opts) {
     var now = (opts && opts.now) || Date.now();
     return Promise.resolve(storage.get(KEY)).then(function (got) {
       var rec = got && got[KEY];
@@ -485,6 +522,89 @@
           : { supporter: false };
       });
     }, function () { return { supporter: false }; });
+  }
+
+  // The extras on a page hear the plan from here: onStatus(fn) calls fn with
+  // { supporter } for the first answer status() gives on this page and each
+  // one that differs from the last, and with the latest straight away if
+  // there is one. Only status() tells them, so a Console can't, as it could
+  // send the 'supporter-status' event they used to listen for.
+  var listeners = [];
+  var latest = null;
+
+  function tell(fn, answer) {
+    try { fn(answer); } catch (_) {}
+  }
+
+  function tellAll(s) {
+    var yes = !!(s && s.supporter === true);
+    if (latest && latest.supporter === yes) return;
+    latest = Object.freeze({ supporter: yes });
+    var answer = latest;
+    listeners.slice().forEach(function (fn) { tell(fn, answer); });
+  }
+
+  function onStatus(fn) {
+    if (typeof fn !== 'function') return;
+    listeners.push(fn);
+    if (latest) {
+      var answer = latest;
+      Promise.resolve().then(function () { tell(fn, answer); });
+    }
+  }
+
+  // --- Keepsakes -----------------------------------------------------------------
+
+  // The plan's proof on this browser now, checked here without asking
+  // anyone: its receipt while that hasn't run out, or its signed code. ''
+  // when there's none that checks. For a page that mustn't wait on the
+  // network (the blocked page), and for a keepsake to keep.
+  function proof(storage, opts) {
+    var now = (opts && opts.now) || Date.now();
+    return Promise.resolve(storage.get(KEY)).then(function (got) {
+      var rec = got && got[KEY];
+      if (!rec || typeof rec.code !== 'string') return '';
+      if (rec.kind === 'store') {
+        if (kindOf(rec.code) !== 'store' || Number(rec.removed) > 0 || Number(rec.ended) > 0) return '';
+        return verifyReceipt(rec.receipt, rec.code, opts, now).then(function (r) { return r.ok ? rec.receipt : ''; });
+      }
+      return verify(rec.code, opts).then(function (r) { return r.ok ? PREFIX + clean(rec.code) : ''; });
+    }).catch(function () { return ''; });
+  }
+
+  // Whether a keepsake's `paid` was a real proof when it was kept: a receipt
+  // monolab.dev signed for this store's mode (run out or not: a keepsake
+  // stays after a plan ends), or a signed code that hasn't been turned off.
+  function proves(paid, opts) {
+    if (typeof paid !== 'string' || !paid) return Promise.resolve(false);
+    var store = (opts && opts.store) || STORE;
+    if (paid.slice(0, RECEIPT_PREFIX.length) === RECEIPT_PREFIX) {
+      return receiptBody(paid, opts).then(function (body) { return !!body && body.m === store.mode; });
+    }
+    if (kindOf(paid) !== 'signed') return Promise.resolve(false);
+    return verify(paid, opts).then(function (r) { return r.ok; });
+  }
+
+  // The photo and the voice message for the hard moment (extras/photo.js,
+  // extras/voice.js) are chosen with Supporter and stay after the plan ends.
+  // Each keeps `paid`, the proof it was chosen under. Whether the one stored
+  // at `key` shows: when its proof checks, or while the plan is held here
+  // (which then keeps the proof with it, for one chosen before keepsakes
+  // kept one). One written into storage by hand shows nothing.
+  function keepsake(storage, key, opts) {
+    return Promise.resolve(storage.get(key)).then(function (got) {
+      var raw = got && got[key];
+      if (!raw || typeof raw !== 'object') return false;
+      return proves(raw.paid, opts).then(function (good) {
+        if (good) return true;
+        return proof(storage, opts).then(function (paid) {
+          if (!paid) return false;
+          var write = {};
+          write[key] = Object.assign({}, raw, { paid: paid });
+          return Promise.resolve(storage.set(write)).then(function () { return true; }, function () { return true; });
+        });
+      });
+    }).catch(function () { return false; });
   }
 
   // A store code: asked about, then given one of the plan's places when the
@@ -683,13 +803,25 @@
     parse: parse,
     verify: verify,
     status: status,
+    onStatus: onStatus,
+    proof: proof,
+    proves: proves,
+    keepsake: keepsake,
     unlock: unlock,
     release: release
   };
 
+  // Frozen through, so a Console can't swap status() for one that says yes,
+  // or a key for its own.
+  (function freeze(o) {
+    if (!o || typeof o !== 'object' || Object.isFrozen(o)) return;
+    Object.freeze(o);
+    Object.keys(o).forEach(function (k) { freeze(o[k]); });
+  })(exported);
+
   if (typeof module !== 'undefined' && module.exports) {
     module.exports = exported;
   } else if (root) {
-    root.Supporter = exported;
+    Object.defineProperty(root, 'Supporter', { value: exported, enumerable: true });
   }
 })(typeof self !== 'undefined' ? self : (typeof globalThis !== 'undefined' ? globalThis : this));

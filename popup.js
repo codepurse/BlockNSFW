@@ -577,6 +577,12 @@ async function readSupporter() {
       endDesign();
     }
     if (s.supporter || !s.unchecked) followProof(s.supporter === true);
+    // A photo or voice message chosen before they kept the plan's proof gets
+    // it now, so it stays after the plan ends (shared/supporter.js keepsake).
+    if (s.supporter && self.Moments) {
+      Supporter.keepsake(browserAPI.storage.local, Moments.PHOTO_KEY).catch(() => {});
+      Supporter.keepsake(browserAPI.storage.local, Moments.VOICE_KEY).catch(() => {});
+    }
     return s.supporter;
   } catch (_) {
     return false;

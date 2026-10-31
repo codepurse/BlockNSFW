@@ -75,6 +75,24 @@ test('a backup holds settings, lists, history, the path, check-ins, words, photo
   assert.equal(Backup.fileName(NOW), 'blocknsfw-backup-2026-10-11.json');
 });
 
+test('the photo and voice carry a receipt they were chosen under, never a Supporter code', () => {
+  const receipt = 'BNR1.eyJtIjoibGl2ZSJ9.' + 'A'.repeat(86);
+  const signed = 'BN1-' + 'A'.repeat(95);
+  const store = oldComputer();
+  store[Moments.PHOTO_KEY] = { ...PHOTO, paid: receipt };
+  store[Moments.VOICE_KEY] = { ...VOICE, paid: signed };
+  const b = JSON.parse(JSON.stringify(Backup.make(store, { now: NOW, id: ID_OLD, app: '2.0.4' })));
+  assert.equal(b.progress.photo.paid, receipt, 'the receipt goes with the photo');
+  assert.ok(!('paid' in b.progress.voice), 'a signed code is the Supporter code itself, so it stays out');
+  assert.ok(!JSON.stringify(b).includes(signed));
+
+  const { writes } = Backup.plan(Backup.parse(JSON.stringify(b)).backup, {}, { id: ID_NEW, now: NOW, withSettings: false });
+  assert.equal(writes[Moments.PHOTO_KEY].paid, receipt, 'and comes back with it');
+  b.progress.voice.paid = 'made up <script>';
+  const again = Backup.plan(Backup.parse(JSON.stringify(b)).backup, {}, { id: ID_NEW, now: NOW, withSettings: false });
+  assert.ok(!('paid' in again.writes[Moments.VOICE_KEY]), 'anything not shaped like a receipt is dropped');
+});
+
 test('only a BlockNSFW backup is accepted, and one from a newer version says so', () => {
   assert.equal(Backup.parse('').ok, false);
   assert.equal(Backup.parse('{nope').ok, false);

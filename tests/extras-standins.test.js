@@ -48,7 +48,8 @@ test('the pages load the extras they use, and nothing of the extras is left outs
     'month.html': ['extras/month.js'],
     'hardest.html': ['extras/hardest.js'],
     'options.html': ['extras/extras.js', 'extras/looks.js', 'extras/photo.js', 'extras/proof.js', 'extras/storm.js', 'extras/face.js', 'extras/sections.js'],
-    'blocked.html': ['extras/proof.js']
+    'blocked.html': ['extras/extras.js', 'extras/proof.js'],
+    'gateway.html': ['extras/extras.js']
   };
   for (const [page, files] of Object.entries(uses)) {
     const html = fs.readFileSync(path.join(ROOT, page), 'utf8');
@@ -57,14 +58,15 @@ test('the pages load the extras they use, and nothing of the extras is left outs
   for (const gone of ['shared/checkin.js', 'tools/supporter-codes.mjs']) {
     assert.ok(!fs.existsSync(path.join(ROOT, gone)), `${gone} belongs to the extras now`);
   }
-  // The blocked page loads one extra, Proof it passes, and only that: all
-  // five of its designs are free, here. The page works without it.
+  // The blocked page loads one extra, Proof it passes, and the list of what
+  // the build carries (whether its designs are sold). The page works without
+  // either.
   const blocked = fs.readFileSync(path.join(ROOT, 'blocked.html'), 'utf8');
-  assert.deepEqual([...blocked.matchAll(/"(extras\/[^"]+)"/g)].map((m) => m[1]), ['extras/proof.js']);
+  assert.deepEqual([...blocked.matchAll(/"(extras\/[^"]+)"/g)].map((m) => m[1]), ['extras/extras.js', 'extras/proof.js']);
   assert.ok(blocked.indexOf('"extras/proof.js"') < blocked.indexOf('"blocked.js"'), 'the extra loads before the page uses it');
   const page = fs.readFileSync(path.join(ROOT, 'blocked.js'), 'utf8');
   const mount = page.slice(page.indexOf('async function mountProof('), page.indexOf('function wireWaitTimer('));
-  assert.match(mount, /if \(!extra \|\| !Moments\.proofOn\(raw\)\) return null;/, 'no extra or the switch off: the plain timer');
+  assert.match(mount, /if \(!extra \|\| !Moments\.proofOn\(raw\) \|\| !\(await planHeld\(\)\)\) return null;/, 'no extra, the switch off, or no plan here: the plain timer');
   assert.match(mount, /try \{[\s\S]*\} catch/, 'a fault in the extra costs the dial, never the page');
   const themes = fs.readFileSync(path.join(ROOT, 'blocked-themes.js'), 'utf8');
   for (const name of ['renderCalm', 'renderVerse', 'renderMotivation', 'renderPlay']) assert.ok(themes.includes(`function ${name}(`), name);

@@ -525,10 +525,41 @@ function streakDays() {
   });
 }
 
-function applyTheme(settings) {
+// What comes with Supporter shows here only while the plan is held on this
+// browser, checked on the device with no network (shared/supporter.js
+// proof): a design, and the dial. The popup and Settings set them back when a
+// plan ends; this keeps one saved by hand from showing in the meantime. The
+// open-source build sells nothing, so there everything shows.
+let planHeldOnce = null;
+function planHeld() {
+  if (!globalThis.SupporterExtras) return Promise.resolve(true);
+  if (!globalThis.Supporter) return Promise.resolve(false);
+  if (!planHeldOnce) planHeldOnce = Supporter.proof(browserAPI.storage.local).then(Boolean, () => false);
+  return planHeldOnce;
+}
+
+// The photo and the voice message stay after a plan ends, but only ones
+// chosen with it: each keeps the proof it was chosen under
+// (shared/supporter.js keepsake).
+function keepsakeShows(key) {
+  if (!globalThis.SupporterExtras) return Promise.resolve(true);
+  if (!globalThis.Supporter) return Promise.resolve(false);
+  return Supporter.keepsake(browserAPI.storage.local, key).catch(() => false);
+}
+
+// Whether the saved design may show: Classic always, the others while the
+// plan is held. A preview shows any.
+async function designHeld(settings) {
+  const themes = globalThis.BlockedThemes;
+  if (previewTheme || !themes) return true;
+  if (themes.normalize(settings && settings.blockedPageTheme) === themes.DEFAULT_ID) return true;
+  return planHeld();
+}
+
+function applyTheme(settings, held) {
   const themes = globalThis.BlockedThemes;
   if (!themes) return;
-  const id = previewTheme || themes.normalize(settings && settings.blockedPageTheme);
+  const id = previewTheme || (held ? themes.normalize(settings && settings.blockedPageTheme) : themes.DEFAULT_ID);
   const theme = themes.get(id);
   const hero = document.getElementById('theme-hero');
   if (!theme || typeof theme.render !== 'function' || !hero) return;
@@ -578,8 +609,9 @@ const detailSettled = new Promise(done => { markDetailSettled = done; });
   try {
     if (renderPlainHtml(settings)) return;
   } catch (_) {}
+  const held = await designHeld(settings);
   try {
-    applyTheme(settings);
+    applyTheme(settings, held);
   } catch (error) {
     console.warn('BlockNSFW: could not apply the blocked-page design', error);
   }
@@ -603,8 +635,8 @@ const detailSettled = new Promise(done => { markDetailSettled = done; });
 // took, on this device only.
 //
 // Proof it passes (extras/proof.js, a Supporter extra) draws those waits as
-// a dial that becomes the timer, while its switch is on. The page reads only
-// the switch, never the plan; without the extra the wait is the plain line.
+// a dial that becomes the timer, while its switch is on and the plan is held
+// here (planHeld, on the device); without it the wait is the plain line.
 async function renderMoment() {
   const Moments = globalThis.Moments;
   const Boost = globalThis.Boost;
@@ -616,15 +648,19 @@ async function renderMoment() {
   const words = Moments.normalizeWords(store[Moments.WORDS_KEY]);
 
   // A photo chosen for this moment, above the words: kept on the device as a
-  // plain image (Moments.photoSrc turns away anything else).
+  // plain image (Moments.photoSrc turns away anything else), and chosen with
+  // Supporter (keepsakeShows).
   const photo = document.getElementById('moment-photo');
-  const src = Moments.photoSrc(store[Moments.PHOTO_KEY]);
+  let src = Moments.photoSrc(store[Moments.PHOTO_KEY]);
+  if (src && !(await keepsakeShows(Moments.PHOTO_KEY))) src = '';
   if (photo) {
     if (src) photo.src = src;
     photo.hidden = !src;
   }
   // And a message in their own voice: on a tap, or by itself if they asked.
-  if (globalThis.MomentVoice) globalThis.MomentVoice.wire(document.getElementById('moment-voice'), store[Moments.VOICE_KEY], { autoplay: true });
+  let voice = store[Moments.VOICE_KEY];
+  if (Moments.hasVoice(voice) && !(await keepsakeShows(Moments.VOICE_KEY))) voice = null;
+  if (globalThis.MomentVoice) globalThis.MomentVoice.wire(document.getElementById('moment-voice'), voice, { autoplay: true });
 
   const show = (id, text) => {
     const el = document.getElementById(id);
@@ -678,7 +714,7 @@ async function renderMoment() {
 // costs the dial, never the page.
 async function mountProof(Moments, raw) {
   const extra = globalThis.ProofItPasses;
-  if (!extra || !Moments.proofOn(raw)) return null;
+  if (!extra || !Moments.proofOn(raw) || !(await planHeld())) return null;
   try {
     const store = await browserAPI.storage.local.get([Moments.WAITS_KEY, Moments.KEPT_KEY]);
     const proof = extra.mount({

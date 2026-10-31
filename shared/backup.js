@@ -50,6 +50,22 @@
     return isFinite(n) && n > 0 ? n : 0;
   }
 
+  // The proof a photo or voice message was chosen under (shared/supporter.js
+  // keepsake), when it's a receipt from monolab.dev: it goes with them, so
+  // they still show on a new computer after the plan ends. A signed code
+  // stays out, since that is the Supporter code itself. The page that shows
+  // them checks it; here it's only carried.
+  function receiptOf(raw) {
+    var paid = raw && typeof raw === 'object' ? raw.paid : null;
+    return typeof paid === 'string' && paid.length <= 2048 && /^BNR1\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(paid) ? paid : '';
+  }
+
+  function withPaid(record, raw) {
+    var paid = receiptOf(raw);
+    if (paid) record.paid = paid;
+    return record;
+  }
+
   // Every key the backup is made from.
   function keys(deps) {
     var Moments = mod('Moments', deps);
@@ -88,8 +104,8 @@
         path: Path.normalize(s[Path.KEY]),
         checkins: Progress.mergeCheckins(s[CHECKINS_KEY], []),
         words: Moments.normalizeWords(s[Moments.WORDS_KEY]),
-        photo: photo ? { src: photo, at: num(s[Moments.PHOTO_KEY].at) } : null,
-        voice: voice ? { src: voice, at: num(s[Moments.VOICE_KEY].at), ms: Moments.voiceMs(s[Moments.VOICE_KEY]), auto: Moments.voiceAuto(s[Moments.VOICE_KEY]) } : null,
+        photo: photo ? withPaid({ src: photo, at: num(s[Moments.PHOTO_KEY].at) }, s[Moments.PHOTO_KEY]) : null,
+        voice: voice ? withPaid({ src: voice, at: num(s[Moments.VOICE_KEY].at), ms: Moments.voiceMs(s[Moments.VOICE_KEY]), auto: Moments.voiceAuto(s[Moments.VOICE_KEY]) }, s[Moments.VOICE_KEY]) : null,
         waits: Moments.normalizeWaits(s[Moments.WAITS_KEY]),
         run: { start: num(s[RUN_KEY]), longest: Math.floor(num(s[LONGEST_KEY])) }
       }
@@ -182,10 +198,10 @@
     if (p.words) put(Moments.WORDS_KEY, Progress.mergeWords(l[Moments.WORDS_KEY], p.words, deps));
     if (Array.isArray(p.waits) && p.waits.length) put(Moments.WAITS_KEY, Moments.mergeWaits(l[Moments.WAITS_KEY], p.waits));
     if (!Moments.photoSrc(l[Moments.PHOTO_KEY]) && Moments.photoSrc(p.photo)) {
-      writes[Moments.PHOTO_KEY] = { src: p.photo.src, at: num(p.photo.at) || opts.now };
+      writes[Moments.PHOTO_KEY] = withPaid({ src: p.photo.src, at: num(p.photo.at) || opts.now }, p.photo);
     }
     if (!Moments.hasVoice(l[Moments.VOICE_KEY]) && Moments.voiceSrc(p.voice)) {
-      writes[Moments.VOICE_KEY] = { src: p.voice.src, at: num(p.voice.at) || opts.now, ms: Moments.voiceMs(p.voice), auto: p.voice.auto === true };
+      writes[Moments.VOICE_KEY] = withPaid({ src: p.voice.src, at: num(p.voice.at) || opts.now, ms: Moments.voiceMs(p.voice), auto: p.voice.auto === true }, p.voice);
     }
 
     // Your run. The longest stays the longest. The current one comes back

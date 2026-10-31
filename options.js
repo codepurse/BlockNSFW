@@ -2716,10 +2716,10 @@ function buildDesignThumb(id) {
 
 // Classic is free; the other designs come with Supporter, in builds that carry
 // the Supporter extras (extras/extras.js). The open-source build sells
-// nothing, so every design is open there. The blocked page itself never asks:
-// it shows whichever design is saved (and any one when previewed), so nothing
-// about blocking waits on a Supporter answer. A plan that ends sets the design
-// back to Classic (options-supporter.js, popup.js).
+// nothing, so every design is open there. The blocked page checks the plan on
+// its own, on the device (Supporter.proof), so a design saved by hand shows
+// Classic there. A plan that ends sets the design back to Classic
+// (options-supporter.js, popup.js).
 let designSupporter = null;   // null until Settings › Supporter answers
 function designsGated() {
   return !!globalThis.SupporterExtras;
@@ -2729,9 +2729,13 @@ function designLocked(id) {
   const free = themes ? themes.DEFAULT_ID : 'classic';
   return designsGated() && designSupporter !== true && id !== free;
 }
-document.addEventListener('supporter-status', (e) => {
-  designSupporter = !!(e.detail && e.detail.supporter);
-  getSettings().then(renderDesignPicker).catch(() => {});
+// shared/supporter.js loads after this file, so this listens once the page has.
+document.addEventListener('DOMContentLoaded', () => {
+  if (!globalThis.Supporter) return;
+  Supporter.onStatus((s) => {
+    designSupporter = s.supporter === true;
+    getSettings().then(renderDesignPicker).catch(() => {});
+  });
 });
 
 function buildDesignPicker(picker) {

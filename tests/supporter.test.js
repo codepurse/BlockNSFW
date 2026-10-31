@@ -350,6 +350,143 @@ test('the shared vector: the receipt the site signed checks here, and only as it
   assert.equal((await Supporter.verifyReceipt(v.receipt, v.code, { ...live, receiptKey: RECEIPT_PUBLIC }, when)).ok, false);
 });
 
+// --- What a page's Console can't do ------------------------------------------------
+
+test('what Supporter hands out is frozen through: status() and the keys stay as shipped', () => {
+  assert.ok(Object.isFrozen(Supporter));
+  for (const part of [Supporter.STORE, Supporter.STORE.api, Supporter.PUBLIC_KEY, Supporter.RECEIPT_PUBLIC_KEY, Supporter.PLANS, Supporter.PLANS[0], Supporter.REVOKED]) {
+    assert.ok(Object.isFrozen(part));
+  }
+  assert.throws(() => { 'use strict'; Supporter.status = async () => ({ supporter: true }); }, TypeError);
+  assert.throws(() => { 'use strict'; Supporter.STORE.mode = 'sandbox'; }, TypeError);
+});
+
+test('on a page, the Supporter global can be neither replaced nor removed', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const vm = require('node:vm');
+  const ctx = vm.createContext({ crypto: webcrypto, TextEncoder, TextDecoder, URL, btoa, atob, setTimeout, clearTimeout });
+  vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'shared', 'supporter.js'), 'utf8'), ctx);
+  const real = ctx.Supporter;
+  assert.equal(typeof real.status, 'function');
+  vm.runInContext('Supporter = { status: async () => ({ supporter: true }) }; delete globalThis.Supporter;', ctx);
+  assert.equal(ctx.Supporter, real);
+  assert.throws(() => vm.runInContext("'use strict'; Supporter = {};", ctx));
+});
+
+test('a Console that makes crypto say yes after the page loaded changes nothing', async () => {
+  const other = generateKeyPairSync('ec', { namedCurve: 'P-256' });
+  const storage = memoryStorage();
+  storage.data[Supporter.KEY] = { kind: 'store', code: CODE, since: 7000, receipt: receiptFor(CODE, { issued: day(0), privateKey: other.privateKey }) };
+  const down = fakeStore();
+  down.down = true;
+  // Told outright to use a crypto that says yes, it would open: the test means something.
+  const yes = { importKey: subtle.importKey.bind(subtle), digest: subtle.digest.bind(subtle), verify: async () => true };
+  assert.equal((await Supporter.status(storage, at(down, day(0), { subtle: yes }))).supporter, true);
+  // The page's own crypto, changed after supporter.js loaded: it isn't fooled.
+  const proto = Object.getPrototypeOf(webcrypto.subtle);
+  const real = proto.verify;
+  proto.verify = async () => true;
+  try {
+    assert.deepEqual(await Supporter.status(storage, at(down, day(0))), PAUSED);
+    assert.equal(await Supporter.proof(storage, S(down, { now: day(0) })), '');
+  } finally {
+    proto.verify = real;
+  }
+});
+
+// A copy of supporter.js of its own, so what other tests told it doesn't count.
+function freshSupporter() {
+  const file = require.resolve('../shared/supporter.js');
+  delete require.cache[file];
+  try {
+    return require(file);
+  } finally {
+    delete require.cache[file];
+  }
+}
+
+test('the extras hear the plan only from status(): once per change, and a late one at once', async () => {
+  const S2 = freshSupporter();
+  const { privateKey, publicKey } = await keyPair();
+  const storage = memoryStorage();
+  const heard = [];
+  S2.onStatus((s) => heard.push(s));
+  await S2.status(storage);
+  await S2.status(storage);
+  assert.equal(heard.length, 1, 'the same answer again isn’t told again');
+  assert.deepEqual({ ...heard[0] }, { supporter: false });
+  assert.ok(Object.isFrozen(heard[0]), 'what they hear can’t be changed on its way to the next one');
+
+  S2.onStatus(() => { throw new Error('one extra failing'); });
+  await S2.unlock(storage, await makeCode(privateKey, 31), 1000, { subtle, publicKey });
+  await S2.status(storage, { subtle, publicKey });
+  assert.deepEqual(heard.map((s) => s.supporter), [false, true], 'the rest still hear it');
+
+  const late = [];
+  S2.onStatus((s) => late.push(s.supporter));
+  assert.deepEqual(late, [], 'not from inside onStatus itself');
+  await Promise.resolve();
+  assert.deepEqual(late, [true], 'the latest, straight after');
+});
+
+test('proof: the receipt while it stands, or the signed code, else nothing; it asks no one', async () => {
+  const never = () => { throw new Error('proof never asks'); };
+  const storage = memoryStorage();
+  const receipt = receiptFor(CODE, { issued: day(0) });
+  storage.data[Supporter.KEY] = { kind: 'store', code: CODE, since: 7000, receipt };
+  assert.equal(await Supporter.proof(storage, S(never, { now: day(3) })), receipt);
+  assert.equal(await Supporter.proof(storage, S(never, { now: day(15) })), '', 'run out');
+  storage.data[Supporter.KEY] = { kind: 'store', code: CODE, since: 7000, receipt, ended: day(1) };
+  assert.equal(await Supporter.proof(storage, S(never, { now: day(3) })), '', 'ended');
+  storage.data[Supporter.KEY] = { kind: 'store', code: 'BLOCKNSFW-6F2D1A90-0A4B-4E5C-9D7E-OTHERCODE001', since: 7000, receipt };
+  assert.equal(await Supporter.proof(storage, S(never, { now: day(3) })), '', 'another code’s receipt');
+  storage.data[Supporter.KEY] = { kind: 'store', code: CODE, since: 7000, checkedAt: day(3) };
+  assert.equal(await Supporter.proof(storage, S(never, { now: day(3) })), '', 'typed in by hand');
+
+  const { privateKey, publicKey } = await keyPair();
+  const code = await makeCode(privateKey, 77);
+  storage.data[Supporter.KEY] = { kind: 'signed', code, since: 7000 };
+  assert.equal(await Supporter.proof(storage, { subtle, publicKey }), code);
+  assert.equal(await Supporter.proof(memoryStorage(), { subtle, publicKey }), '');
+});
+
+test('a keepsake’s proof stands after the plan ends, but only a real one, for this store', async () => {
+  const other = generateKeyPairSync('ec', { namedCurve: 'P-256' });
+  assert.equal(await Supporter.proves(receiptFor(CODE, { issued: day(0) }), S(null)), true, 'run out long ago, still a proof');
+  assert.equal(await Supporter.proves(receiptFor(CODE, { mode: 'live' }), S(null)), false, 'another store mode');
+  assert.equal(await Supporter.proves(receiptFor(CODE, { privateKey: other.privateKey }), S(null)), false, 'another key');
+  for (const junk of ['', 'BNR1.x.y', 'hello', null, 123, {}]) assert.equal(await Supporter.proves(junk, S(null)), false);
+
+  const { privateKey, publicKey } = await keyPair();
+  const code = await makeCode(privateKey, 88);
+  assert.equal(await Supporter.proves(code, { subtle, publicKey }), true);
+  assert.equal(await Supporter.proves(code, { subtle, publicKey, revoked: [88] }), false, 'a code turned off');
+});
+
+test('a photo shows on its proof, or while the plan is held, which then keeps the proof; one put in by hand never', async () => {
+  const PHOTO = 'pblocker_moment_photo';
+  const photo = { src: 'data:image/png;base64,AAAA', at: 5 };
+  const never = () => { throw new Error('a keepsake never asks'); };
+  const held = { kind: 'store', code: CODE, since: 7000, receipt: receiptFor(CODE, { issued: day(0) }) };
+  const other = generateKeyPairSync('ec', { namedCurve: 'P-256' });
+
+  const storage = memoryStorage();
+  storage.data[PHOTO] = { ...photo };
+  assert.equal(await Supporter.keepsake(storage, PHOTO, S(never, { now: day(1) })), false, 'by hand, with no plan');
+  storage.data[PHOTO] = { ...photo, paid: receiptFor(CODE, { privateKey: other.privateKey }) };
+  assert.equal(await Supporter.keepsake(storage, PHOTO, S(never, { now: day(1) })), false, 'with a made-up proof');
+
+  storage.data[Supporter.KEY] = held;
+  storage.data[PHOTO] = { ...photo };
+  assert.equal(await Supporter.keepsake(storage, PHOTO, S(never, { now: day(1) })), true, 'while the plan is held');
+  assert.equal(storage.data[PHOTO].paid, held.receipt, 'and it keeps the proof');
+
+  storage.data[Supporter.KEY] = { ...held, ended: day(2) };
+  assert.equal(await Supporter.keepsake(storage, PHOTO, S(never, { now: day(90) })), true, 'after the plan ends, on its proof');
+  assert.equal(await Supporter.keepsake(memoryStorage(), PHOTO, S(never, { now: day(1) })), false, 'none stored');
+});
+
 test('a look survives a pause for want of an answer, but not a plan that ended', () => {
   const fs = require('node:fs');
   const path = require('node:path');
@@ -367,7 +504,7 @@ test('the design picker locks every design but Classic, only where the extras ar
   const vm = require('node:vm');
   const src = fs.readFileSync(path.join(__dirname, '..', 'options.js'), 'utf8');
   const start = src.indexOf('let designSupporter = null;');
-  const end = src.indexOf("document.addEventListener('supporter-status'", start);
+  const end = src.indexOf('// shared/supporter.js loads after this file', start);
   assert.ok(start > 0 && end > start, 'options.js keeps designLocked beside designSupporter');
   const run = (extras, supporter) => {
     const ctx = { globalThis: {}, BlockedThemes: undefined };
@@ -735,22 +872,43 @@ test('the browser name says the browser and the system, and nothing else', () =>
   assert.equal(label(ua.android), 'BlockNSFW · Chrome on Android');
 });
 
-test('nothing that blocks reads the supporter state', () => {
+test('nothing that blocks reads the supporter state; the blocked page and the pause check it only on the device', () => {
   const fs = require('node:fs');
   const path = require('node:path');
   const root = path.join(__dirname, '..');
-  for (const file of ['background.js', 'content.js', 'blocked.js', 'blocked-themes.js', 'gateway.js', 'offscreen.js', 'ai-image-blocker.js']) {
+  for (const file of ['background.js', 'content.js', 'blocked-themes.js', 'offscreen.js', 'ai-image-blocker.js']) {
     const src = fs.readFileSync(path.join(root, file), 'utf8');
     assert.doesNotMatch(src, /pblocker_supporter|Supporter\./, `${file} must not depend on Supporter`);
   }
-  // Nor does the blocked page load it: every design there is free. Its one
-  // extra, Proof it passes, follows a switch the plan sets elsewhere, and
-  // never reads the plan itself.
+  // The blocked page and the gateway pause show what comes with Supporter
+  // (a design, the dial, the photo, the voice) only while it's held, checked
+  // on the device by proof and keepsake. Never status(), which may ask
+  // monolab.dev, so nothing there waits on the network.
+  for (const file of ['blocked.js', 'gateway.js']) {
+    const src = fs.readFileSync(path.join(root, file), 'utf8');
+    assert.doesNotMatch(src, /pblocker_supporter|Supporter\.status/, `${file} asks nobody`);
+    const asks = [...src.matchAll(/Supporter\.([A-Za-z]+)/g)].map((m) => m[1]);
+    assert.ok(asks.length && asks.every((name) => name === 'proof' || name === 'keepsake'), `${file}: only proof and keepsake, got ${asks}`);
+  }
+  // Its extras: the list of what this build carries, and the dial.
   const page = fs.readFileSync(path.join(root, 'blocked.html'), 'utf8');
-  assert.doesNotMatch(page, /supporter\.js/, 'blocked.html must not load Supporter');
-  assert.deepEqual([...page.matchAll(/"(extras\/[^"]+)"/g)].map((m) => m[1]), ['extras/proof.js'], 'blocked.html loads no other extra');
+  assert.deepEqual([...page.matchAll(/"(extras\/[^"]+)"/g)].map((m) => m[1]), ['extras/extras.js', 'extras/proof.js'], 'blocked.html loads no other extra');
   const stub = fs.readFileSync(path.join(root, 'extras', 'proof.js'), 'utf8');
   assert.doesNotMatch(stub, /pblocker_supporter|Supporter\./);
+});
+
+test('nothing listens for the old supporter-status event, which any Console could send', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const root = path.join(__dirname, '..');
+  const files = ['options.js', 'options-supporter.js', 'popup.js'];
+  for (const dir of ['extras', path.join('extras-private', 'extras')]) {
+    if (!fs.existsSync(path.join(root, dir))) continue;
+    for (const f of fs.readdirSync(path.join(root, dir))) if (f.endsWith('.js')) files.push(path.join(dir, f));
+  }
+  for (const file of files) {
+    assert.doesNotMatch(fs.readFileSync(path.join(root, file), 'utf8'), /supporter-status/, file);
+  }
 });
 
 test('Storm warning shows only for a supporter, only where it ships, and starts Storm Mode the usual way', () => {

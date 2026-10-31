@@ -340,7 +340,15 @@
     } catch (_) {}
     const settings = Gateways.normalizeSettings(store.pblocker_settings);
     const words = Moments.normalizeWords(store[Moments.WORDS_KEY]);
-    fillWords(words, store[Moments.VOICE_KEY]);
+    // The voice message stays after a plan ends, but only one chosen with it
+    // (shared/supporter.js keepsake). The open-source build gates nothing.
+    let voice = store[Moments.VOICE_KEY];
+    if (Moments.hasVoice(voice) && globalThis.SupporterExtras) {
+      let shows = false;
+      try { shows = !!globalThis.Supporter && await Supporter.keepsake(browserAPI.storage.local, Moments.VOICE_KEY); } catch (_) {}
+      if (!shows) voice = null;
+    }
+    fillWords(words, voice);
     $('wait-ok').addEventListener('click', waitedOut);
     const state = Boost.normalizeState(store[Boost.STATE_KEY]);
     if (state && (!state.until || state.until > Date.now())) runClosed(state, settings, words);
