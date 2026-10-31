@@ -566,10 +566,10 @@ function openPage(file) {
   window.close();
 }
 
-async function readSupporter(opts) {
+async function readSupporter() {
   if (!Supporter) return false;
   try {
-    const s = await Supporter.status(browserAPI.storage.local, opts);
+    const s = await Supporter.status(browserAPI.storage.local);
     // Not on a pause for want of an answer (shared/supporter.js `unchecked`):
     // the look comes back with the plan.
     if (!s.supporter && !s.unchecked) {
@@ -581,16 +581,6 @@ async function readSupporter(opts) {
   } catch (_) {
     return false;
   }
-}
-
-// The popup draws from the last answer, then asks the store. A record the
-// store turns down (one typed into storage by hand, or a plan that just
-// ended) opens the popup again, drawn from the store's answer this time.
-async function recheckSupporter() {
-  try {
-    const s = await Supporter.status(browserAPI.storage.local);
-    if (s.supporter !== true) location.replace(`${location.pathname}?fresh`);
-  } catch (_) {}
 }
 
 // A Supporter look (ui/scheme.js) ends with the plan; only on a clear answer.
@@ -1948,8 +1938,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
     holdFocusIn($('checkin-modal-overlay'), $('checkin-cancel'));
   }
-  const fresh = new URLSearchParams(location.search).has('fresh');
-  isSupporter = await readSupporter(fresh ? undefined : { cached: true });
+  isSupporter = await readSupporter();
   renderPathRow();
   renderCheckinRow();
   tidySections();
@@ -1957,7 +1946,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   renderStormWarning();
   renderFace();
   renderSections();
-  if (isSupporter && !fresh) recheckSupporter();
 
   // Anything whose wait is over is applied as the popup opens.
   if (Pact) Pact.ask({ type: 'pact_process' });

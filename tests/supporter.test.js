@@ -3,7 +3,7 @@
 // by another key.
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { webcrypto } = require('node:crypto');
+const { webcrypto, generateKeyPairSync, createHash, sign: nodeSign } = require('node:crypto');
 const Supporter = require('../shared/supporter.js');
 
 const subtle = webcrypto.subtle;
@@ -82,19 +82,81 @@ test('unlock keeps a good code and status reads it back; a bad one keeps nothing
   assert.deepEqual(await Supporter.status(storage, { subtle, publicKey }), { supporter: true, kind: 'signed', number: 12, since: 5000 });
 });
 
-// --- Store codes (Polar) -----------------------------------------------------------
+// --- Store codes: monolab.dev asks Polar, and signs a receipt ------------------------
 
-const STORE = { mode: 'sandbox', organizationId: '3f2b8c1e-5d4a-4b7e-9c2f-1a6e8d0b4c3a', api: { sandbox: 'https://sandbox.test', live: 'https://live.test' } };
+const RECEIPT_URL = 'https://receipt.test/api/blocknsfw/receipt';
+const STORE = { mode: 'sandbox', organizationId: '3f2b8c1e-5d4a-4b7e-9c2f-1a6e8d0b4c3a', api: { sandbox: 'https://sandbox.test', live: 'https://live.test' }, receipt: RECEIPT_URL };
+const CODE = 'BLOCKNSFW-6F2D1A90-0A4B-4E5C-9D7E-1234567890AB';
+const DAY = 24 * 60 * 60 * 1000;
+const day = (n) => 7000 + n * DAY;
 
-function fakeFetch(status, body) {
+// monolab.dev's key in these tests (the real one is only on the server).
+const RECEIPT_KEYS = generateKeyPairSync('ec', { namedCurve: 'P-256' });
+const RECEIPT_PUBLIC = (() => {
+  const j = RECEIPT_KEYS.publicKey.export({ format: 'jwk' });
+  return { kty: j.kty, crv: j.crv, x: j.x, y: j.y };
+})();
+
+// A receipt as lib/blocknsfw-receipt.ts signs one.
+function receiptFor(code, { mode = STORE.mode, limit = 0, issued = 7000, expires, privateKey = RECEIPT_KEYS.privateKey } = {}) {
+  const h = createHash('sha256').update(code).digest().subarray(0, 16).toString('base64url');
+  const i = Math.floor(issued / 1000);
+  const e = Math.floor((expires === undefined ? issued + Supporter.OFFLINE_GRACE_MS : expires) / 1000);
+  const payload = Buffer.from(JSON.stringify({ m: mode, h, l: limit, i, e }));
+  const sig = nodeSign('sha256', payload, { key: privateKey, dsaEncoding: 'ieee-p1363' });
+  return `BNR1.${payload.toString('base64url')}.${sig.toString('base64url')}`;
+}
+
+// monolab.dev and Polar together: one code, its plan's limit, the places
+// taken so far. The server signs at `fn.now`; `fn.down` takes both offline;
+// `fn.answer` makes the server give that [status, body] instead.
+function fakeStore({ code = CODE, limit = 0, taken = [], status = 'granted', reason = 'off', receiptOf } = {}) {
+  const places = taken.slice();
+  let next = 1;
   const calls = [];
   const fn = async (url, init) => {
-    calls.push({ url, init });
-    return { status, ok: status >= 200 && status < 300, json: async () => body };
+    if (fn.down) throw new TypeError('Failed to fetch');
+    const body = JSON.parse(init.body);
+    const route = url === RECEIPT_URL ? 'receipt' : url.slice(url.lastIndexOf('/') + 1);
+    calls.push({ url, route, body, init });
+    const reply = (s, json) => ({ status: s, ok: s >= 200 && s < 300, json: async () => json });
+    if (route === 'receipt') {
+      if (fn.answer) return reply(...fn.answer);
+      if (body.code !== code) return reply(403, { status: 'ended', reason: 'unknown' });
+      if (status !== 'granted') return reply(403, { status: 'ended', reason });
+      if (body.activation && !places.includes(body.activation)) return reply(403, { status: 'removed' });
+      const receipt = receiptOf ? receiptOf(body) : receiptFor(body.code, { mode: body.mode, limit, issued: fn.now });
+      return reply(200, { status: 'granted', limit, receipt });
+    }
+    if (body.key !== code || status !== 'granted') return reply(404, { error: 'ResourceNotFound' });
+    if (route === 'activate') {
+      if (!limit || places.length >= limit) return reply(403, { error: 'NotPermitted' });
+      const id = `act_${next++}`;
+      places.push(id);
+      return reply(200, { id, label: body.label, license_key: { limit_activations: limit } });
+    }
+    if (route === 'deactivate') {
+      const where = places.indexOf(body.activation_id);
+      if (where < 0) return reply(404, { error: 'ResourceNotFound' });
+      places.splice(where, 1);
+      return { status: 204, ok: true, json: async () => { throw new SyntaxError('no body'); } };
+    }
+    return reply(404, {});
   };
+  fn.now = 7000;
   fn.calls = calls;
+  fn.places = places;
   return fn;
 }
+
+// What status and unlock are given: this store, the test key, the fake.
+const S = (fetch, more = {}) => ({ store: STORE, receiptKey: RECEIPT_PUBLIC, fetch, ...more });
+// The same at a moment, with the server's clock set to it.
+const at = (fetch, now, more = {}) => {
+  fetch.now = now;
+  return S(fetch, { now, ...more });
+};
+const PAUSED = { supporter: false, kind: 'store', unchecked: true };
 
 test('kindOf tells a signed code from a store code from junk', () => {
   assert.equal(Supporter.kindOf('BN1-abc'), 'signed');
@@ -105,170 +167,187 @@ test('kindOf tells a signed code from a store code from junk', () => {
   assert.equal(Supporter.kindOf('has spaces <script>'), null);
 });
 
-test('a store code is checked with the store: only the code and organization go', async () => {
-  const fetch = fakeFetch(200, { id: 'lk_1', status: 'granted', expires_at: null });
+test('the shipped receipt key is a real P-256 key, not the gift-code one, and monolab.dev is asked', async () => {
+  await subtle.importKey('jwk', Supporter.RECEIPT_PUBLIC_KEY, { name: 'ECDSA', namedCurve: 'P-256' }, false, ['verify']);
+  assert.notEqual(Supporter.RECEIPT_PUBLIC_KEY.x, Supporter.PUBLIC_KEY.x);
+  assert.equal(Supporter.STORE.receipt, 'https://monolab.dev/api/blocknsfw/receipt');
+});
+
+test('a store code is asked about at monolab.dev: only the code, the mode and the store go', async () => {
+  const fetch = fakeStore();
   const storage = memoryStorage();
-  const code = 'BLOCKNSFW-6F2D1A90-0A4B-4E5C-9D7E-1234567890AB';
-  const r = await Supporter.unlock(storage, ` ${code}\n`, 7000, { store: STORE, fetch });
+  const r = await Supporter.unlock(storage, ` ${CODE}\n`, 7000, at(fetch, 7000));
   assert.equal(r.ok, true);
   assert.equal(fetch.calls.length, 1);
-  assert.equal(fetch.calls[0].url, 'https://sandbox.test/v1/customer-portal/license-keys/validate');
-  assert.deepEqual(JSON.parse(fetch.calls[0].init.body), { key: code, organization_id: STORE.organizationId });
+  assert.equal(fetch.calls[0].url, RECEIPT_URL);
+  assert.deepEqual(fetch.calls[0].body, { code: CODE, mode: 'sandbox', org: STORE.organizationId });
   assert.equal(fetch.calls[0].init.credentials, 'omit');
-  assert.deepEqual(storage.data[Supporter.KEY], { kind: 'store', code, since: 7000, checkedAt: 7000 });
-  // Within the day, a cached read doesn't ask again; a plain one does.
-  const later = 7000 + Supporter.RECHECK_MS - 1;
-  assert.deepEqual(await Supporter.status(storage, { store: STORE, fetch, now: later, cached: true }), { supporter: true, kind: 'store', since: 7000 });
+  const { receipt, ...rest } = storage.data[Supporter.KEY];
+  assert.deepEqual(rest, { kind: 'store', code: CODE, since: 7000, checkedAt: 7000 });
+  assert.match(receipt, /^BNR1\./);
+  // Within the day, the receipt stands without asking.
+  assert.deepEqual(await Supporter.status(storage, at(fetch, day(1) - 1)), { supporter: true, kind: 'store', since: 7000 });
   assert.equal(fetch.calls.length, 1);
-  assert.deepEqual(await Supporter.status(storage, { store: STORE, fetch, now: later }), { supporter: true, kind: 'store', since: 7000 });
-  assert.equal(fetch.calls.length, 2);
 });
 
-const CODE = 'BLOCKNSFW-6F2D1A90-0A4B-4E5C-9D7E-1234567890AB';
-const month = (n) => 7000 + n * Supporter.RECHECK_MS;
-
-test('after a month it asks again; still paid keeps it and resets the month', async () => {
+test('after a day it asks again: still paid brings a new receipt; forced, it asks at once', async () => {
+  assert.equal(Supporter.RECHECK_MS, DAY);
+  const fetch = fakeStore();
   const storage = memoryStorage();
-  storage.data[Supporter.KEY] = { kind: 'store', code: CODE, since: 7000, checkedAt: 7000 };
-  const fetch = fakeFetch(200, { id: 'lk_1', status: 'granted' });
-  assert.equal((await Supporter.status(storage, { store: STORE, fetch, now: month(1) })).supporter, true);
-  assert.equal(fetch.calls.length, 1);
-  assert.equal(storage.data[Supporter.KEY].checkedAt, month(1));
+  await Supporter.unlock(storage, CODE, 7000, at(fetch, 7000));
+  const first = storage.data[Supporter.KEY].receipt;
+  assert.equal((await Supporter.status(storage, at(fetch, day(1)))).supporter, true);
+  assert.equal(fetch.calls.length, 2);
+  assert.notEqual(storage.data[Supporter.KEY].receipt, first);
+  assert.equal(storage.data[Supporter.KEY].checkedAt, day(1));
+  await Supporter.status(storage, at(fetch, day(1) + 1000, { force: true }));
+  assert.equal(fetch.calls.length, 3);
 });
 
-test('a plan that has ended closes the extras, and says when', async () => {
-  for (const [status, body] of [[200, { id: 'x', status: 'revoked' }], [404, { error: 'ResourceNotFound' }]]) {
+test('a plan that has ended closes the extras, and says when; it stays ended without asking', async () => {
+  for (const reason of ['off', 'expired', 'unknown']) {
     const storage = memoryStorage();
-    storage.data[Supporter.KEY] = { kind: 'store', code: CODE, since: 7000, checkedAt: 7000 };
-    const s = await Supporter.status(storage, { store: STORE, fetch: fakeFetch(status, body), now: month(1) });
-    assert.deepEqual(s, { supporter: false, kind: 'store', ended: month(1) });
-    // It stays ended without asking again.
-    const again = fakeFetch(200, { status: 'granted' });
-    assert.equal((await Supporter.status(storage, { store: STORE, fetch: again, now: month(2) })).supporter, false);
+    await Supporter.unlock(storage, CODE, 7000, at(fakeStore(), 7000));
+    const over = fakeStore({ status: 'revoked', reason });
+    assert.deepEqual(await Supporter.status(storage, at(over, day(1))), { supporter: false, kind: 'store', ended: day(1) });
+    const again = fakeStore();
+    assert.equal((await Supporter.status(storage, at(again, day(2)))).supporter, false);
     assert.equal(again.calls.length, 0);
   }
 });
 
-test('the store is asked every time; only a cached read takes an answer from the last day', async () => {
-  assert.equal(Supporter.RECHECK_MS, 24 * 60 * 60 * 1000);
-  const storage = memoryStorage();
-  storage.data[Supporter.KEY] = { kind: 'store', code: CODE, since: 7000, checkedAt: 7000 };
-  const revoked = fakeFetch(200, { id: 'x', status: 'revoked' });
-  assert.equal((await Supporter.status(storage, { store: STORE, fetch: revoked, now: 8000, cached: true })).supporter, true);
-  assert.equal(revoked.calls.length, 0);
-  assert.equal((await Supporter.status(storage, { store: STORE, fetch: revoked, now: 8000, cached: true, force: true })).supporter, false);
-  assert.equal(revoked.calls.length, 1);
-  storage.data[Supporter.KEY] = { kind: 'store', code: CODE, since: 7000, checkedAt: 7000 };
-  assert.equal((await Supporter.status(storage, { store: STORE, fetch: revoked, now: 8000 })).supporter, false);
-  assert.equal(revoked.calls.length, 2);
-});
-
-test('a record typed into storage by hand lasts no longer than the next ask', async () => {
-  // Written from the console with today's date, to look checked.
-  const typed = () => ({ kind: 'store', code: 'MADEUPCODE123', since: 8000, checkedAt: 8000 });
-  const storage = memoryStorage();
-  storage.data[Supporter.KEY] = typed();
-  const store = fakeFetch(404, { error: 'ResourceNotFound' });
-  assert.deepEqual(await Supporter.status(storage, { store: STORE, fetch: store, now: 8001 }), { supporter: false, kind: 'store', ended: 8001 });
-  assert.equal(store.calls.length, 1);
-  // Typed in again, it's turned down again.
-  storage.data[Supporter.KEY] = typed();
-  assert.equal((await Supporter.status(storage, { store: STORE, fetch: store, now: 8002 })).supporter, false);
-  assert.equal(store.calls.length, 2);
-});
-
-test('still paid within the hour writes nothing, so a page listening for the record isn’t sent round again', async () => {
-  assert.equal(Supporter.KEEP_MS, 60 * 60 * 1000);
-  const storage = memoryStorage();
-  let writes = 0;
-  const set = storage.set.bind(storage);
-  storage.set = (v) => { writes++; return set(v); };
-  storage.data[Supporter.KEY] = { kind: 'store', code: CODE, since: 7000, checkedAt: 7000, limit: 3, activationId: 'act_1' };
-  const ok = fakeFetch(200, { id: 'lk_1', status: 'granted', limit_activations: 3 });
-  for (const now of [7001, 7000 + Supporter.KEEP_MS - 1]) {
-    assert.equal((await Supporter.status(storage, { store: STORE, fetch: ok, now })).supporter, true);
+test('a record typed into storage by hand opens nothing: online it’s turned down, offline it waits', async () => {
+  // Written from the console, dated today: no receipt, a made-up one, or one
+  // signed with some other key.
+  const other = generateKeyPairSync('ec', { namedCurve: 'P-256' }).privateKey;
+  for (const receipt of [undefined, 'BNR1.made.up', receiptFor('MADEUPCODE123', { issued: 8000, privateKey: other })]) {
+    const typed = () => ({ kind: 'store', code: 'MADEUPCODE123', since: 8000, checkedAt: 8000, limit: 3, receipt });
+    const storage = memoryStorage();
+    storage.data[Supporter.KEY] = typed();
+    assert.deepEqual(await Supporter.status(storage, at(fakeStore(), 8001)), { supporter: false, kind: 'store', ended: 8001 });
+    storage.data[Supporter.KEY] = typed();
+    const offline = fakeStore();
+    offline.down = true;
+    assert.deepEqual(await Supporter.status(storage, at(offline, 8001)), PAUSED);
   }
-  assert.equal(writes, 0);
-  assert.equal(ok.calls.length, 2);
-  // Past the hour, the answer is written down once.
-  assert.equal((await Supporter.status(storage, { store: STORE, fetch: ok, now: 7000 + Supporter.KEEP_MS })).supporter, true);
-  assert.equal(writes, 1);
-  assert.equal(storage.data[Supporter.KEY].checkedAt, 7000 + Supporter.KEEP_MS);
-  // A new limit is written down at once.
-  const more = fakeFetch(200, { id: 'lk_1', status: 'granted', limit_activations: 5 });
-  await Supporter.status(storage, { store: STORE, fetch: more, now: 7000 + Supporter.KEEP_MS + 1 });
-  assert.equal(writes, 2);
-  assert.equal(storage.data[Supporter.KEY].limit, 5);
 });
 
-test('a store that doesn’t answer in time counts as no answer: the last one stands', async () => {
+test('a receipt stands only for its own code, its own mode, unchanged, and until it runs out', async () => {
+  const storage = memoryStorage();
+  const keep = (receipt, code = CODE) => { storage.data[Supporter.KEY] = { kind: 'store', code, since: 7000, receipt }; };
+  const offline = fakeStore();
+  offline.down = true;
+  keep(receiptFor(CODE));
+  assert.equal((await Supporter.status(storage, at(offline, 8000))).supporter, true, 'the real thing');
+  keep(receiptFor(CODE), 'BLOCKNSFW-SOMEONE-ELSES-CODE-0000');
+  assert.deepEqual(await Supporter.status(storage, at(offline, 8000)), PAUSED, 'another code’s receipt');
+  keep(receiptFor(CODE, { mode: 'live' }));
+  assert.deepEqual(await Supporter.status(storage, at(offline, 8000)), PAUSED, 'the live store’s receipt in a sandbox build');
+  keep(receiptFor(CODE, { expires: 7000 + DAY }));
+  assert.deepEqual(await Supporter.status(storage, at(offline, 7000 + DAY + 1)), PAUSED, 'run out');
+  keep(receiptFor(CODE, { issued: day(5) }));
+  assert.deepEqual(await Supporter.status(storage, at(offline, 8000)), PAUSED, 'issued days from now');
+  keep(receiptFor(CODE, { expires: day(60) }));
+  assert.deepEqual(await Supporter.status(storage, at(offline, day(15))), PAUSED, 'claims longer than the grace');
+  const good = receiptFor(CODE);
+  keep(good.slice(0, -4) + (good.endsWith('AAAA') ? 'BBBB' : 'AAAA'));
+  assert.deepEqual(await Supporter.status(storage, at(offline, 8000)), PAUSED, 'a changed byte');
+});
+
+test('a yes whose receipt doesn’t check is no answer at all', async () => {
+  const other = generateKeyPairSync('ec', { namedCurve: 'P-256' }).privateKey;
+  for (const lying of [
+    fakeStore({ receiptOf: (body) => receiptFor(body.code, { privateKey: other }) }),
+    fakeStore({ receiptOf: () => 'BNR1.nope' }),
+    fakeStore({ receiptOf: () => receiptFor('BLOCKNSFW-SOMEONE-ELSES-CODE-0000') })
+  ]) {
+    const storage = memoryStorage();
+    const r = await Supporter.unlock(storage, CODE, 7000, at(lying, 7000));
+    assert.deepEqual([r.ok, r.offline], [false, true]);
+    assert.deepEqual(storage.data, {});
+    storage.data[Supporter.KEY] = { kind: 'store', code: CODE, since: 7000 };
+    assert.deepEqual(await Supporter.status(storage, at(lying, 8000)), PAUSED);
+  }
+});
+
+test('a fresh receipt answers without asking or writing, so a page listening for the record isn’t sent round again', async () => {
+  const fetch = fakeStore();
+  const storage = memoryStorage();
+  await Supporter.unlock(storage, CODE, 7000, at(fetch, 7000));
+  let writes = 0;
+  const set = storage.set;
+  storage.set = (v) => { writes++; return set(v); };
+  for (const now of [7001, 9000, day(1) - 1]) assert.equal((await Supporter.status(storage, at(fetch, now))).supporter, true);
+  assert.deepEqual([writes, fetch.calls.length], [0, 1]);
+  // A day on: one ask, one write, then quiet again.
+  await Supporter.status(storage, at(fetch, day(1)));
+  await Supporter.status(storage, at(fetch, day(1) + 5000));
+  assert.deepEqual([writes, fetch.calls.length], [1, 2]);
+});
+
+test('an answer that doesn’t come in time counts as no answer: the receipt stands', async () => {
   assert.equal(Supporter.ANSWER_MS, 6000);
   const storage = memoryStorage();
-  storage.data[Supporter.KEY] = { kind: 'store', code: CODE, since: 7000, checkedAt: 7000 };
+  await Supporter.unlock(storage, CODE, 7000, at(fakeStore(), 7000));
   const stuck = () => new Promise(() => {});
   const started = Date.now();
-  assert.equal((await Supporter.status(storage, { store: STORE, fetch: stuck, now: month(1), answerMs: 20 })).supporter, true);
+  assert.equal((await Supporter.status(storage, S(stuck, { now: day(2), answerMs: 20 }))).supporter, true);
   assert.ok(Date.now() - started < 1000);
   assert.equal(storage.data[Supporter.KEY].ended, undefined);
-  // Past the grace, it pauses as any unanswered check does.
-  assert.deepEqual(await Supporter.status(storage, { store: STORE, fetch: stuck, now: month(15), answerMs: 20 }), { supporter: false, kind: 'store', unchecked: true });
+  // With no receipt, it waits for one.
+  storage.data[Supporter.KEY] = { kind: 'store', code: CODE, since: 7000 };
+  assert.deepEqual(await Supporter.status(storage, S(stuck, { now: day(2), answerMs: 20 })), PAUSED);
 });
 
-test('only the popup’s first draw takes a cached answer, and it asks the store straight after', () => {
-  const fs = require('node:fs');
-  const path = require('node:path');
-  const root = path.join(__dirname, '..');
-  const popup = fs.readFileSync(path.join(root, 'popup.js'), 'utf8');
-  assert.match(popup, /isSupporter = await readSupporter\(fresh \? undefined : \{ cached: true \}\);/);
-  assert.match(popup, /if \(isSupporter && !fresh\) recheckSupporter\(\);/);
-  assert.match(popup, /if \(s\.supporter !== true\) location\.replace\(`\$\{location\.pathname\}\?fresh`\);/);
-  // Everywhere else asks the store (Settings' recheck reads the answer it just got).
-  const seen = [];
-  const walk = (dir) => {
-    for (const name of fs.readdirSync(dir, { withFileTypes: true })) {
-      if (['node_modules', 'dist', 'tests', '.verify', '.git', 'store-assets', 'trailer'].includes(name.name)) continue;
-      const full = path.join(dir, name.name);
-      if (name.isDirectory()) walk(full);
-      else if (name.name.endsWith('.js') && /cached: true/.test(fs.readFileSync(full, 'utf8'))) seen.push(path.relative(root, full).replace(/\\/g, '/'));
-    }
-  };
-  walk(root);
-  assert.deepEqual(seen.filter((f) => f !== 'background.js').sort(), ['options-supporter.js', 'popup.js']);
-});
-
-test('offline at the monthly check, a supporter stays a supporter', async () => {
+test('offline, busy, or a code the server can’t read at the daily check: a supporter stays a supporter', async () => {
+  const fetch = fakeStore();
   const storage = memoryStorage();
-  storage.data[Supporter.KEY] = { kind: 'store', code: CODE, since: 7000, checkedAt: 7000 };
-  const down = async () => { throw new TypeError('Failed to fetch'); };
-  assert.equal((await Supporter.status(storage, { store: STORE, fetch: down, now: month(3) })).supporter, true);
-  const busy = fakeFetch(503, {});
-  assert.equal((await Supporter.status(storage, { store: STORE, fetch: busy, now: month(3) })).supporter, true);
+  await Supporter.unlock(storage, CODE, 7000, at(fetch, 7000));
+  fetch.down = true;
+  assert.equal((await Supporter.status(storage, at(fetch, day(3)))).supporter, true);
+  fetch.down = false;
+  for (const answer of [[503, { error: 'unavailable' }], [429, { error: 'too many' }], [400, { error: 'bad code' }], [200, { status: 'granted' }]]) {
+    fetch.answer = answer;
+    assert.equal((await Supporter.status(storage, at(fetch, day(3)))).supporter, true);
+  }
   assert.equal(storage.data[Supporter.KEY].ended, undefined);
 });
 
-test('a check dated in the future counts for nothing: the store is asked now', async () => {
-  // A record written by hand to dodge the daily check.
+test('out of reach for two weeks, the receipt runs out and the extras pause until an answer; nothing is ended', async () => {
+  assert.equal(Supporter.OFFLINE_GRACE_MS, 14 * DAY);
+  const fetch = fakeStore();
   const storage = memoryStorage();
-  storage.data[Supporter.KEY] = { kind: 'store', code: 'MADEUPCODE123', since: 7000, checkedAt: 9e15 };
-  const store = fakeFetch(404, { error: 'ResourceNotFound' });
-  assert.deepEqual(await Supporter.status(storage, { store: STORE, fetch: store, now: 8000 }), { supporter: false, kind: 'store', ended: 8000 });
-  assert.equal(store.calls.length, 1);
-  // The same with no check at all and a start date in the future.
-  storage.data[Supporter.KEY] = { kind: 'store', code: 'MADEUPCODE123', since: 9e15 };
-  assert.equal((await Supporter.status(storage, { store: STORE, fetch: fakeFetch(404, {}), now: 8000 })).supporter, false);
-});
-
-test('out of reach of the store for two weeks, the extras pause until it answers; nothing is ended', async () => {
-  assert.equal(Supporter.OFFLINE_GRACE_MS, 14 * 24 * 60 * 60 * 1000);
-  const storage = memoryStorage();
-  storage.data[Supporter.KEY] = { kind: 'store', code: CODE, since: 7000, checkedAt: 7000 };
-  const down = async () => { throw new TypeError('Failed to fetch'); };
-  assert.equal((await Supporter.status(storage, { store: STORE, fetch: down, now: month(13) })).supporter, true);
-  assert.deepEqual(await Supporter.status(storage, { store: STORE, fetch: down, now: month(15) }), { supporter: false, kind: 'store', unchecked: true });
+  await Supporter.unlock(storage, CODE, 7000, at(fetch, 7000));
+  fetch.down = true;
+  assert.equal((await Supporter.status(storage, at(fetch, day(13)))).supporter, true);
+  assert.deepEqual(await Supporter.status(storage, at(fetch, day(15))), PAUSED);
   assert.equal(storage.data[Supporter.KEY].ended, undefined);
   // Back online: the store says it's paid, and the extras are back.
-  const ok = fakeFetch(200, { id: 'lk_1', status: 'granted' });
-  assert.deepEqual(await Supporter.status(storage, { store: STORE, fetch: ok, now: month(16) }), { supporter: true, kind: 'store', since: 7000 });
+  fetch.down = false;
+  assert.deepEqual(await Supporter.status(storage, at(fetch, day(16))), { supporter: true, kind: 'store', since: 7000 });
+});
+
+test('a record from before receipts gets one at the next answer, place and all', async () => {
+  const fetch = fakeStore({ limit: 3, taken: ['act_old'] });
+  const storage = memoryStorage();
+  storage.data[Supporter.KEY] = { kind: 'store', code: CODE, since: 7000, checkedAt: 7000, activationId: 'act_old', limit: 3 };
+  assert.deepEqual(await Supporter.status(storage, at(fetch, 8000)), { supporter: true, kind: 'store', since: 7000, limit: 3 });
+  assert.deepEqual(fetch.calls.map((c) => c.body), [{ code: CODE, mode: 'sandbox', org: STORE.organizationId, activation: 'act_old' }]);
+  assert.match(storage.data[Supporter.KEY].receipt, /^BNR1\./);
+  assert.equal(storage.data[Supporter.KEY].activationId, 'act_old');
+});
+
+test('the shared vector: the receipt the site signed checks here, and only as itself', async () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const v = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'supporter-receipt.vectors.json'), 'utf8'));
+  const live = { store: { ...STORE, mode: 'live' }, receiptKey: v.publicKey };
+  const when = v.payload.i * 1000 + 1000;
+  assert.deepEqual(await Supporter.verifyReceipt(v.receipt, v.code, live, when), { ok: true, limit: 3, issued: v.payload.i * 1000, expires: v.payload.e * 1000 });
+  assert.equal((await Supporter.verifyReceipt(v.receipt, v.code + 'X', live, when)).ok, false);
+  assert.equal((await Supporter.verifyReceipt(v.receipt, v.code, { ...live, store: STORE }, when)).ok, false);
+  assert.equal((await Supporter.verifyReceipt(v.receipt, v.code, live, v.payload.e * 1000)).ok, false);
+  assert.equal((await Supporter.verifyReceipt(v.receipt, v.code, { ...live, receiptKey: RECEIPT_PUBLIC }, when)).ok, false);
 });
 
 test('a look survives a pause for want of an answer, but not a plan that ended', () => {
@@ -318,11 +397,12 @@ test('a plan that ends sets the blocked page back to Classic, only where the des
 });
 
 test('entering a code again after a plan ended opens it again', async () => {
+  const fetch = fakeStore();
   const storage = memoryStorage();
-  storage.data[Supporter.KEY] = { kind: 'store', code: CODE, since: 7000, checkedAt: 7000, ended: month(1) };
-  const r = await Supporter.unlock(storage, CODE, month(2), { store: STORE, fetch: fakeFetch(200, { status: 'granted' }) });
+  storage.data[Supporter.KEY] = { kind: 'store', code: CODE, since: 7000, checkedAt: 7000, ended: day(1) };
+  const r = await Supporter.unlock(storage, CODE, day(2), at(fetch, day(2)));
   assert.equal(r.ok, true);
-  assert.equal((await Supporter.status(storage, { store: STORE, now: month(2) })).supporter, true);
+  assert.equal((await Supporter.status(storage, at(fetch, day(2)))).supporter, true);
 });
 
 test('plans: three, yearly chosen first', () => {
@@ -479,27 +559,27 @@ test('the store mode and its links agree: no sandbox link in live, no live link 
   }
 });
 
-test('a store code that is unknown, turned off, or run out keeps nothing', async () => {
-  const code = 'BLOCKNSFW-6F2D1A90-0A4B-4E5C-9D7E-1234567890AB';
-  for (const [status, body] of [
-    [404, { error: 'ResourceNotFound' }],
-    [200, { id: 'x', status: 'revoked' }],
-    [200, { id: 'x', status: 'granted', expires_at: '2020-01-01T00:00:00Z' }]
+test('a store code that is unknown, turned off, or run out keeps nothing, and says which', async () => {
+  for (const [store, words] of [
+    [fakeStore({ code: 'BLOCKNSFW-SOMETHING-ELSE-0000' }), /doesn’t match/],
+    [fakeStore({ status: 'revoked', reason: 'off' }), /turned off/],
+    [fakeStore({ status: 'revoked', reason: 'expired' }), /run out/]
   ]) {
     const storage = memoryStorage();
-    const r = await Supporter.unlock(storage, code, Date.parse('2026-10-10'), { store: STORE, fetch: fakeFetch(status, body) });
+    const r = await Supporter.unlock(storage, CODE, 7000, at(store, 7000));
     assert.equal(r.ok, false);
+    assert.match(r.reason, words);
     assert.deepEqual(storage.data, {});
   }
 });
 
 test('offline or before the store is switched on, it says so and keeps nothing', async () => {
-  const code = 'BLOCKNSFW-6F2D1A90-0A4B-4E5C-9D7E-1234567890AB';
   const storage = memoryStorage();
-  const down = async () => { throw new TypeError('Failed to fetch'); };
-  const r = await Supporter.unlock(storage, code, 1, { store: STORE, fetch: down });
+  const down = fakeStore();
+  down.down = true;
+  const r = await Supporter.unlock(storage, CODE, 1, at(down, 1));
   assert.deepEqual([r.ok, r.offline], [false, true]);
-  const off = await Supporter.unlock(storage, code, 1, { store: { ...STORE, organizationId: '' }, fetch: fakeFetch(200, { status: 'granted' }) });
+  const off = await Supporter.unlock(storage, CODE, 1, { ...at(fakeStore(), 1), store: { ...STORE, organizationId: '' } });
   assert.equal(off.ok, false);
   assert.match(off.reason, /switched on/);
   assert.deepEqual(storage.data, {});
@@ -535,62 +615,31 @@ test('a gift code whose number is revoked opens nothing, and closes where it was
 // --- Polar's limit: a plan works on a few browsers at once ---------------------------
 
 const LIMITED = 'BLOCKNSFW-6F2D1A90-0A4B-4E5C-9D7E-LIMITED00003';
-
-// A store with one key, a limit of `limit` places, and the places taken so far.
-function fakeStore({ limit = 3, taken = [], status = 'granted' } = {}) {
-  const places = taken.slice();
-  let next = 1;
-  const calls = [];
-  const fn = async (url, init) => {
-    const body = JSON.parse(init.body);
-    const route = url.slice(url.lastIndexOf('/') + 1);
-    calls.push({ route, body });
-    const reply = (code, json) => ({ status: code, ok: code >= 200 && code < 300, json: async () => json });
-    if (body.key !== LIMITED || status !== 'granted') return reply(404, { error: 'ResourceNotFound' });
-    if (route === 'validate') {
-      if (body.activation_id && !places.includes(body.activation_id)) return reply(404, { error: 'ResourceNotFound' });
-      return reply(200, { id: 'lk_1', status: 'granted', limit_activations: limit, expires_at: null });
-    }
-    if (route === 'activate') {
-      if (!limit) return reply(403, { error: 'NotPermitted' });
-      if (places.length >= limit) return reply(403, { error: 'NotPermitted' });
-      const id = `act_${next++}`;
-      places.push(id);
-      return reply(200, { id, label: body.label, license_key: { limit_activations: limit } });
-    }
-    if (route === 'deactivate') {
-      const at = places.indexOf(body.activation_id);
-      if (at < 0) return reply(404, { error: 'ResourceNotFound' });
-      places.splice(at, 1);
-      return { status: 204, ok: true, json: async () => { throw new SyntaxError('no body'); } };
-    }
-    return reply(404, {});
-  };
-  fn.calls = calls;
-  fn.places = places;
-  return fn;
-}
+const limited = (more = {}) => fakeStore({ code: LIMITED, limit: 3, ...more });
 
 test('with a limit, entering the code takes a place named for the browser', async () => {
-  const fetch = fakeStore({ limit: 3 });
+  const fetch = limited();
   const storage = memoryStorage();
-  const r = await Supporter.unlock(storage, LIMITED, 7000, { store: STORE, fetch, label: 'BlockNSFW · Chrome on Windows' });
+  const r = await Supporter.unlock(storage, LIMITED, 7000, at(fetch, 7000, { label: 'BlockNSFW · Chrome on Windows' }));
   assert.equal(r.ok, true);
-  assert.deepEqual(fetch.calls.map((c) => c.route), ['validate', 'activate']);
+  assert.deepEqual(fetch.calls.map((c) => c.route), ['receipt', 'activate']);
+  assert.equal(fetch.calls[1].url, 'https://sandbox.test/v1/customer-portal/license-keys/activate');
   assert.deepEqual(fetch.calls[1].body, { key: LIMITED, organization_id: STORE.organizationId, label: 'BlockNSFW · Chrome on Windows' });
-  assert.deepEqual(storage.data[Supporter.KEY], { kind: 'store', code: LIMITED, since: 7000, checkedAt: 7000, activationId: 'act_1', limit: 3 });
-  assert.deepEqual(await Supporter.status(storage, { store: STORE, fetch, now: 8000 }), { supporter: true, kind: 'store', since: 7000, limit: 3 });
+  const { receipt, ...rest } = storage.data[Supporter.KEY];
+  assert.deepEqual(rest, { kind: 'store', code: LIMITED, since: 7000, checkedAt: 7000, activationId: 'act_1', limit: 3 });
+  assert.match(receipt, /^BNR1\./);
+  assert.deepEqual(await Supporter.status(storage, at(fetch, 8000)), { supporter: true, kind: 'store', since: 7000, limit: 3 });
 
   // The daily check asks about this browser's place, not just the code.
-  await Supporter.status(storage, { store: STORE, fetch, now: 7000 + Supporter.RECHECK_MS + 1 });
+  await Supporter.status(storage, at(fetch, day(1) + 1000));
   const last = fetch.calls[fetch.calls.length - 1];
-  assert.deepEqual([last.route, last.body.activation_id], ['validate', 'act_1']);
+  assert.deepEqual([last.route, last.body.activation], ['receipt', 'act_1']);
 });
 
 test('every place taken: the code is refused, says why, and keeps nothing', async () => {
-  const fetch = fakeStore({ limit: 3, taken: ['a', 'b', 'c'] });
+  const fetch = limited({ taken: ['a', 'b', 'c'] });
   const storage = memoryStorage();
-  const r = await Supporter.unlock(storage, LIMITED, 7000, { store: STORE, fetch });
+  const r = await Supporter.unlock(storage, LIMITED, 7000, at(fetch, 7000));
   assert.deepEqual([r.ok, r.full], [false, true]);
   assert.match(r.reason, /already on 3 browsers/);
   assert.match(r.reason, /Remove it from one of them/);
@@ -598,73 +647,72 @@ test('every place taken: the code is refused, says why, and keeps nothing', asyn
 });
 
 test('the same code entered again here keeps its place instead of taking another', async () => {
-  const fetch = fakeStore({ limit: 2 });
+  const fetch = limited({ limit: 2 });
   const storage = memoryStorage();
-  await Supporter.unlock(storage, LIMITED, 7000, { store: STORE, fetch });
-  await Supporter.unlock(storage, LIMITED, 9000, { store: STORE, fetch });
+  await Supporter.unlock(storage, LIMITED, 7000, at(fetch, 7000));
+  await Supporter.unlock(storage, LIMITED, 9000, at(fetch, 9000));
   assert.deepEqual(fetch.places, ['act_1']);
   assert.equal(storage.data[Supporter.KEY].activationId, 'act_1');
 });
 
 test('removing it here gives the place back, so it can move to another browser', async () => {
-  const fetch = fakeStore({ limit: 1 });
+  const fetch = limited({ limit: 1 });
   const here = memoryStorage();
   const there = memoryStorage();
-  assert.equal((await Supporter.unlock(here, LIMITED, 7000, { store: STORE, fetch })).ok, true);
-  assert.equal((await Supporter.unlock(there, LIMITED, 7100, { store: STORE, fetch })).full, true);
+  assert.equal((await Supporter.unlock(here, LIMITED, 7000, at(fetch, 7000))).ok, true);
+  assert.equal((await Supporter.unlock(there, LIMITED, 7100, at(fetch, 7100))).full, true);
 
-  assert.deepEqual(await Supporter.release(here, { store: STORE, fetch }), { ok: true });
+  assert.deepEqual(await Supporter.release(here, S(fetch)), { ok: true });
+  assert.equal(fetch.calls[fetch.calls.length - 1].url, 'https://sandbox.test/v1/customer-portal/license-keys/deactivate');
   assert.deepEqual(fetch.places, []);
-  assert.deepEqual(await Supporter.status(here, { store: STORE, fetch }), { supporter: false });
-  assert.equal((await Supporter.unlock(there, LIMITED, 7200, { store: STORE, fetch })).ok, true);
+  assert.deepEqual(await Supporter.status(here, S(fetch)), { supporter: false });
+  assert.equal((await Supporter.unlock(there, LIMITED, 7200, at(fetch, 7200))).ok, true);
 });
 
 test('offline, removing it changes nothing: the place would stay taken', async () => {
-  const fetch = fakeStore({ limit: 3 });
+  const fetch = limited();
   const storage = memoryStorage();
-  await Supporter.unlock(storage, LIMITED, 7000, { store: STORE, fetch });
-  const down = async () => { throw new TypeError('Failed to fetch'); };
-  const r = await Supporter.release(storage, { store: STORE, fetch: down });
+  await Supporter.unlock(storage, LIMITED, 7000, at(fetch, 7000));
+  fetch.down = true;
+  const r = await Supporter.release(storage, S(fetch));
   assert.equal(r.ok, false);
   assert.match(r.reason, /still holds its place/);
   assert.equal(storage.data[Supporter.KEY].activationId, 'act_1');
 });
 
 test('a place taken back on the purchases page closes the extras here, and says so', async () => {
-  const fetch = fakeStore({ limit: 3 });
+  const fetch = limited();
   const storage = memoryStorage();
-  await Supporter.unlock(storage, LIMITED, 7000, { store: STORE, fetch });
+  await Supporter.unlock(storage, LIMITED, 7000, at(fetch, 7000));
   fetch.places.length = 0;   // the buyer removed this browser in Polar
-  const later = 7000 + Supporter.RECHECK_MS + 1;
-  assert.deepEqual(await Supporter.status(storage, { store: STORE, fetch, now: later }), { supporter: false, kind: 'store', removed: later });
+  const later = day(1) + 1000;
+  assert.deepEqual(await Supporter.status(storage, at(fetch, later)), { supporter: false, kind: 'store', removed: later });
   // Entering the code again takes a free place back.
-  assert.equal((await Supporter.unlock(storage, LIMITED, later + 1, { store: STORE, fetch })).ok, true);
-  assert.equal((await Supporter.status(storage, { store: STORE, fetch, now: later + 2 })).supporter, true);
+  assert.equal((await Supporter.unlock(storage, LIMITED, later + 1000, at(fetch, later + 1000))).ok, true);
+  assert.equal((await Supporter.status(storage, at(fetch, later + 2000))).supporter, true);
 });
 
 test('a plan that ends with a place held still reads as ended, not removed', async () => {
   const storage = memoryStorage();
-  await Supporter.unlock(storage, LIMITED, 7000, { store: STORE, fetch: fakeStore({ limit: 3 }) });
-  const later = 7000 + Supporter.RECHECK_MS + 1;
-  const s = await Supporter.status(storage, { store: STORE, fetch: fakeStore({ status: 'revoked' }), now: later });
+  await Supporter.unlock(storage, LIMITED, 7000, at(limited(), 7000));
+  const later = day(1) + 1000;
+  const s = await Supporter.status(storage, at(limited({ status: 'revoked' }), later));
   assert.deepEqual(s, { supporter: false, kind: 'store', ended: later });
 });
 
 test('a limit set in Polar after the code was entered: a free place is taken, a full plan closes here', async () => {
-  const later = 7000 + Supporter.RECHECK_MS + 1;
+  const later = day(1) + 1000;
   const old = () => {
     const storage = memoryStorage();
-    storage.data[Supporter.KEY] = { kind: 'store', code: LIMITED, since: 7000, checkedAt: 7000 };
+    storage.data[Supporter.KEY] = { kind: 'store', code: LIMITED, since: 7000, checkedAt: 7000, receipt: receiptFor(LIMITED) };
     return storage;
   };
-  const roomy = fakeStore({ limit: 3 });
   const a = old();
-  assert.deepEqual(await Supporter.status(a, { store: STORE, fetch: roomy, now: later }), { supporter: true, kind: 'store', since: 7000, limit: 3 });
+  assert.deepEqual(await Supporter.status(a, at(limited(), later)), { supporter: true, kind: 'store', since: 7000, limit: 3 });
   assert.equal(a.data[Supporter.KEY].activationId, 'act_1');
 
   const b = old();
-  const full = fakeStore({ limit: 3, taken: ['x', 'y', 'z'] });
-  assert.deepEqual(await Supporter.status(b, { store: STORE, fetch: full, now: later }), { supporter: false, kind: 'store', removed: later });
+  assert.deepEqual(await Supporter.status(b, at(limited({ taken: ['x', 'y', 'z'] }), later)), { supporter: false, kind: 'store', removed: later });
 });
 
 test('the browser name says the browser and the system, and nothing else', () => {

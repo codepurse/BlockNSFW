@@ -8,10 +8,14 @@
 // Two kinds of code open them.
 //
 // A store code comes from Polar, the payment site, by email after someone
-// pays, for a monthly, yearly or lifetime plan. The extension asks Polar
-// whether it is a real, paid code when it is entered, then about once a day,
-// so a plan that has ended closes the extras. Offline, the answer it has
-// stands.
+// pays, for a monthly, yearly or lifetime plan. The extension asks
+// monolab.dev whether it is a real, paid code when it is entered, then about
+// once a day, so a plan that has ended closes the extras. monolab.dev asks
+// Polar, and answers a yes with a receipt signed by a key only it holds
+// (Portfolio repo, lib/blocknsfw-receipt.ts, has the layout); the extension
+// checks it against RECEIPT_PUBLIC_KEY. A record typed into storage by hand
+// has no receipt that checks, so it opens nothing, online or off. Offline,
+// the receipt it has stands until it runs out (OFFLINE_GRACE_MS).
 //
 // A plan works on a few browsers at once: Polar's activation limit on the
 // license key, set in Polar (RELEASE_CHECKLIST.md, section 0). Entering the
@@ -41,7 +45,7 @@
 (function (root) {
   'use strict';
 
-  var KEY = 'pblocker_supporter';   // storage.local: { kind, code, number?, since, checkedAt?, activationId?, limit?, ended?, removed? }
+  var KEY = 'pblocker_supporter';   // storage.local: { kind, code, number?, since, checkedAt?, receipt?, activationId?, limit?, ended?, removed? }
   var PREFIX = 'BN1-';
   var VERSION = 1;
   var PAYLOAD_BYTES = 7;
@@ -56,6 +60,8 @@
     mode: 'live',
     organizationId: '354a2f6c-8ea7-46a7-87c5-f97645c12e29',
     api: { sandbox: 'https://sandbox-api.polar.sh', live: 'https://api.polar.sh' },
+    // Where a code is asked about, for either mode (the mode goes with it).
+    receipt: 'https://monolab.dev/api/blocknsfw/receipt',
     // Where buyers find their code and manage or cancel a plan.
     portal: { sandbox: 'https://sandbox.polar.sh/monolab/portal', live: 'https://polar.sh/monolab/portal' }
   };
@@ -101,27 +107,32 @@
     prices: { yearly: '$20.99', lifetime: '$62.99' }
   };
 
-  // A store code is asked about every time a page asks (status), so a record
-  // typed into storage by hand, or a plan that has ended, closes the extras on
-  // the next page that opens. Only a page that draws at once and asks again
-  // straight after (the popup, opts.cached) takes an answer this recent
-  // without asking. Offline, the last answer stands (OFFLINE_GRACE_MS).
+  // A store code is asked about again once its receipt is this old, so a
+  // monthly or yearly plan that has ended closes the extras. A cancelled plan
+  // runs to the end of the period paid for; Polar turns the code off then,
+  // and the extras close within this long after.
   var RECHECK_MS = 24 * 60 * 60 * 1000;
 
-  // A store that hasn't answered in this long counts as no answer, so a page
+  // An answer that hasn't come in this long counts as no answer, so a page
   // waiting on it isn't held up by a slow connection.
   var ANSWER_MS = 6000;
 
-  // "Still paid" is written down at most this often. Every page asks, and a
-  // page that listens for the record (path-page.js) would otherwise ask again
-  // at every write, for ever.
-  var KEEP_MS = 60 * 60 * 1000;
-
-  // Offline, the last answer stands, but not for ever: a store code the store
-  // hasn't confirmed for this long pauses the extras until it can (they come
-  // back with the next answer, nothing lost). Otherwise a code no store ever
-  // sold would stay open for as long as the store stayed out of reach.
+  // Offline, a receipt stands, but not for ever: monolab.dev signs it to run
+  // out this long after (sooner if the code does), and a receipt that claims
+  // longer is held to this. Then the extras pause until an answer comes (they
+  // come back with it, nothing lost).
   var OFFLINE_GRACE_MS = 14 * DAY;
+
+  // The public half of monolab.dev's receipt key (EXTENSION_PUBLIC_KEY in
+  // the Portfolio repo's lib/blocknsfw-receipt.ts). The private half is only
+  // on the server.
+  var RECEIPT_PREFIX = 'BNR1.';
+  var RECEIPT_PUBLIC_KEY = {
+    kty: 'EC',
+    crv: 'P-256',
+    x: 'mW_riN8pnLw6oOfXH857oUqRufcWuaz5oPWi7Mra_ms',
+    y: 'TKhvTK3kvrbLOBHC1MOF9bG7oz2Ou88TccohDsSuo-M'
+  };
 
   var PUBLIC_KEY = {
     kty: 'EC',
@@ -244,19 +255,19 @@
     return { base: store.api[store.mode] || store.api.live, organizationId: store.organizationId };
   }
 
-  // One request to the store. Resolves to { status, body } (body null when
-  // there's none to read, `garbled` when there was one but it wasn't JSON),
-  // or { offline, reason? } when the request never got an answer.
-  function storeCall(path, payload, opts) {
+  // One request, to the store or to monolab.dev. Resolves to { status, body }
+  // (body null when there's none to read, `garbled` when there was one but it
+  // wasn't JSON), or { offline, reason? } when the request never got an answer.
+  function storeCall(url, payload, opts) {
     var doFetch = (opts && opts.fetch) || (typeof fetch === 'function' ? fetch.bind(root) : null);
     if (!doFetch) return Promise.resolve({ offline: true, reason: 'this browser can’t check it' });
-    var call = doFetch(storeApi(opts).base + path, {
+    var call = doFetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'omit',
       body: JSON.stringify(payload)
     }).then(function (res) {
-      if (!res.ok || res.status === 204) return { status: res.status, body: null };
+      if (res.status === 204) return { status: res.status, body: null };
       return Promise.resolve(res.json()).then(function (body) {
         return { status: res.status, body: body };
       }, function () {
@@ -279,28 +290,89 @@
     return { ok: false, reason: r.reason || 'couldn’t reach the store. Check your connection and try again', offline: true };
   }
 
-  // Asks the store whether this is a real, paid code. One request to Polar,
-  // carrying the code, the store's organization id, and this browser's place
-  // on the plan when it has one.
-  //   { ok: true, id, limit } or { ok: false, reason, offline?, definite? }
+  // Why the store said no, in the words Settings shows.
+  var ENDED = {
+    unknown: 'that code doesn’t match',
+    off: 'that code has been turned off',
+    expired: 'that code has run out'
+  };
+
+  // Asks monolab.dev whether this is a real, paid code. It asks Polar, with
+  // the code, the store's organization id, and this browser's place on the
+  // plan when it has one, and answers a yes with a signed receipt (which the
+  // caller checks with verifyReceipt before trusting it).
+  //   { ok: true, limit, receipt } or { ok: false, reason, offline?, definite?, removed? }
   // `limit` is how many browsers the plan works on at once (0: no limit).
   // `definite` means the store said no (unknown, turned off, run out, or not
-  // this browser's place), as opposed to not answering or not being asked.
-  function verifyStore(code, opts, now, activationId) {
+  // this browser's place), as opposed to not answering or not being asked;
+  // `removed`, that the plan goes on but this browser's place was taken back.
+  function askServer(code, opts, activationId) {
     var key = String(code == null ? '' : code).replace(/\s+/g, '');
-    var api = storeApi(opts);
-    if (!api.organizationId) return Promise.resolve({ ok: false, reason: 'codes from the store aren’t switched on yet' });
-    var payload = { key: key, organization_id: api.organizationId };
-    if (activationId) payload.activation_id = activationId;
-    return storeCall('/v1/customer-portal/license-keys/validate', payload, opts).then(function (r) {
+    var store = (opts && opts.store) || STORE;
+    if (!store.organizationId) return Promise.resolve({ ok: false, reason: 'codes from the store aren’t switched on yet' });
+    var payload = { code: key, mode: store.mode, org: store.organizationId };
+    if (activationId) payload.activation = activationId;
+    return storeCall(store.receipt, payload, opts).then(function (r) {
       if (r.offline) return unanswered(r);
-      if (r.status === 404) return { ok: false, reason: 'that code doesn’t match', definite: true };
-      if (r.status === 422) return { ok: false, reason: 'that code doesn’t match' };
-      if (r.status < 200 || r.status >= 300 || r.garbled) return { ok: false, reason: 'the store didn’t answer. Try again in a minute', offline: true };
-      var body = r.body;
-      if (!body || body.status !== 'granted') return { ok: false, reason: 'that code has been turned off', definite: true };
-      if (body.expires_at && Date.parse(body.expires_at) < now) return { ok: false, reason: 'that code has run out', definite: true };
-      return { ok: true, id: String(body.id || ''), limit: Math.max(0, Math.floor(Number(body.limit_activations) || 0)) };
+      var body = r.body || {};
+      if (r.status === 200 && body.status === 'granted' && typeof body.receipt === 'string') {
+        return { ok: true, limit: Math.max(0, Math.floor(Number(body.limit) || 0)), receipt: body.receipt };
+      }
+      if (r.status === 403 && body.status === 'removed') return { ok: false, reason: 'this browser was removed from the plan', definite: true, removed: true };
+      if (r.status === 403 && body.status === 'ended') return { ok: false, reason: ENDED[body.reason] || ENDED.off, definite: true };
+      if (r.status === 400) return { ok: false, reason: ENDED.unknown };
+      return { ok: false, reason: 'the store didn’t answer. Try again in a minute', offline: true };
+    });
+  }
+
+  // A receipt, checked here: signed with monolab.dev's key, for this store's
+  // mode and this code, issued no later than a day from now (a clock a little
+  // off is fine), and not yet run out.
+  //   { ok: true, limit, issued, expires } or { ok: false }
+  function verifyReceipt(receipt, code, opts, now) {
+    var no = { ok: false };
+    if (typeof receipt !== 'string' || receipt.slice(0, RECEIPT_PREFIX.length) !== RECEIPT_PREFIX) return Promise.resolve(no);
+    var parts = receipt.slice(RECEIPT_PREFIX.length).split('.');
+    var payload = parts.length === 2 ? fromB64url(parts[0]) : null;
+    var sig = parts.length === 2 ? fromB64url(parts[1]) : null;
+    var subtle = cryptoSubtle(opts);
+    if (!payload || !sig || sig.length !== SIG_BYTES || !subtle) return Promise.resolve(no);
+    var store = (opts && opts.store) || STORE;
+    var jwk = (opts && opts.receiptKey) || RECEIPT_PUBLIC_KEY;
+    var body = null;
+    return subtle.importKey('jwk', jwk, { name: 'ECDSA', namedCurve: 'P-256' }, false, ['verify'])
+      .then(function (key) {
+        return subtle.verify({ name: 'ECDSA', hash: 'SHA-256' }, key, sig, payload);
+      })
+      .then(function (good) {
+        if (!good) return null;
+        body = JSON.parse(new TextDecoder().decode(payload));
+        return subtle.digest('SHA-256', new TextEncoder().encode(String(code)));
+      })
+      .then(function (digest) {
+        if (!digest || !body || typeof body !== 'object') return no;
+        var issued = Number(body.i) * 1000;
+        var expires = Math.min(Number(body.e) * 1000, issued + OFFLINE_GRACE_MS);
+        if (body.m !== store.mode) return no;
+        if (body.h !== toB64url(new Uint8Array(digest).slice(0, 16))) return no;
+        if (!(issued <= now + DAY) || !(expires > now)) return no;
+        return { ok: true, limit: Math.max(0, Math.floor(Number(body.l) || 0)), issued: issued, expires: expires };
+      })
+      .catch(function () { return no; });
+  }
+
+  // askServer, with a yes held to its receipt: a yes whose receipt doesn't
+  // check (another key, another code, run out) is no answer at all.
+  //   { ok: true, limit, receipt } or askServer's { ok: false, … }
+  function askChecked(code, opts, now, activationId) {
+    var key = String(code == null ? '' : code).replace(/\s+/g, '');
+    return askServer(key, opts, activationId).then(function (r) {
+      if (!r.ok) return r;
+      return verifyReceipt(r.receipt, key, opts, now).then(function (got) {
+        return got.ok
+          ? { ok: true, limit: got.limit, receipt: r.receipt }
+          : { ok: false, reason: 'the store didn’t answer. Try again in a minute', offline: true };
+      });
     });
   }
 
@@ -321,7 +393,7 @@
   function activateStore(code, opts, limit) {
     var api = storeApi(opts);
     var payload = { key: code, organization_id: api.organizationId, label: deviceLabel(opts) };
-    return storeCall('/v1/customer-portal/license-keys/activate', payload, opts).then(function (r) {
+    return storeCall(api.base + '/v1/customer-portal/license-keys/activate', payload, opts).then(function (r) {
       if (r.offline) return unanswered(r);
       if (r.status === 403) {
         var where = limit === 1 ? 'one browser' : (limit || 'as many') + ' browsers';
@@ -347,15 +419,15 @@
 
   // { supporter, kind?, number?, since?, limit?, ended?, removed?, unchecked? }.
   // `storage` is a storage.local area. A signed code is checked again here,
-  // on the device. A store code is asked about again every time (with
-  // opts.cached, only once RECHECK_MS has passed since the last answer): still
-  // paid keeps it, a definite no closes the extras (and says when), and no
-  // answer leaves it as it was for up to OFFLINE_GRACE_MS since the last answer;
-  // after that, `unchecked` until the store answers. `removed` says this
-  // browser lost its place on the plan (taken
-  // back on the purchases page, or every place taken by the time Polar's
-  // limit came in) while the plan itself goes on: the code entered again
-  // takes a place back if there's one free.
+  // on the device. A store code stands on its receipt: one from the last
+  // RECHECK_MS stands without asking (opts.force asks anyway). Otherwise
+  // monolab.dev is asked: still paid brings a new receipt, a definite no
+  // closes the extras (and says when), and no answer leaves the receipt it
+  // has standing until it runs out; with none that checks, `unchecked` until
+  // an answer comes. `removed` says this browser lost its place on the plan
+  // (taken back on the purchases page, or every place taken by the time
+  // Polar's limit came in) while the plan itself goes on: the code entered
+  // again takes a place back if there's one free.
   function status(storage, opts) {
     var now = (opts && opts.now) || Date.now();
     return Promise.resolve(storage.get(KEY)).then(function (got) {
@@ -379,41 +451,32 @@
         var removed = function () {
           return save({ removed: now }).then(function () { return { supporter: false, kind: 'store', removed: now }; });
         };
-        var checked = Number(rec.checkedAt) || since;
-        // A check dated later than now is no check at all: ask now.
-        var age = checked <= now ? now - checked : Infinity;
-        // No answer: the last one stands, within the grace.
-        var unanswered = function () {
-          return age < OFFLINE_GRACE_MS ? yes(Number(rec.limit) || 0) : { supporter: false, kind: 'store', unchecked: true };
-        };
-        if (opts && opts.cached && !opts.force && age < RECHECK_MS) return yes(Number(rec.limit) || 0);
-        return verifyStore(rec.code, opts, now, held).then(function (r) {
-          if (r.ok && r.limit && !held) {
+        return verifyReceipt(rec.receipt, rec.code, opts, now).then(function (kept) {
+          // No answer: a receipt that hasn't run out stands; a record without
+          // one (typed in by hand, or kept from before receipts) waits for one.
+          var unanswered = function () {
+            return kept.ok ? yes(kept.limit) : { supporter: false, kind: 'store', unchecked: true };
+          };
+          if (kept.ok && !(opts && opts.force) && now - kept.issued < RECHECK_MS) return yes(kept.limit);
+          // monolab.dev tells a place taken back (removed) from a plan that's over.
+          return askChecked(rec.code, opts, now, held).then(function (r) {
+            if (r.removed) return removed();
+            if (r.definite) return ended();
+            if (!r.ok) return unanswered();
+            var fresh = { checkedAt: now, receipt: r.receipt };
+            if (r.limit) fresh.limit = r.limit;
+            if (!r.limit || held) return save(fresh).then(function () { return yes(r.limit); });
             // Polar's limit came in after this code was entered here.
             return activateStore(rec.code, opts, r.limit).then(function (a) {
-              if (a.ok) return save({ checkedAt: now, activationId: a.activationId, limit: r.limit }).then(function () { return yes(r.limit); });
+              if (a.ok) {
+                fresh.activationId = a.activationId;
+                return save(fresh).then(function () { return yes(r.limit); });
+              }
               if (a.full) return removed();
               if (a.definite) return ended();
               return unanswered();
             });
-          }
-          if (r.ok) {
-            var more = {};
-            if (age >= KEEP_MS) more.checkedAt = now;
-            if (r.limit && r.limit !== Number(rec.limit)) more.limit = r.limit;
-            var kept = Object.keys(more).length ? save(more) : Promise.resolve();
-            return kept.then(function () { return yes(r.limit); });
-          }
-          if (r.definite && held) {
-            // Either the plan is over, or this browser's place was taken back.
-            return verifyStore(rec.code, opts, now).then(function (plain) {
-              if (plain.ok) return removed();
-              if (plain.definite) return ended();
-              return unanswered();
-            });
-          }
-          if (r.definite) return ended();
-          return unanswered();
+          });
         });
       }
       return verify(rec.code, opts).then(function (r) {
@@ -429,7 +492,7 @@
   function unlockStore(storage, code, now, opts) {
     var key = String(code).replace(/\s+/g, '');
     var save = function (r, activationId) {
-      var rec = { kind: 'store', code: key, since: now, checkedAt: now };
+      var rec = { kind: 'store', code: key, since: now, checkedAt: now, receipt: r.receipt };
       if (activationId) rec.activationId = activationId;
       if (r.limit) rec.limit = r.limit;
       return keep(storage, rec).then(function () { return r; });
@@ -437,9 +500,9 @@
     var old = Promise.resolve(storage.get(KEY)).then(function (got) { return got && got[KEY]; }, function () { return null; });
     return old.then(function (rec) {
       var held = rec && rec.kind === 'store' && rec.code === key && !rec.removed && typeof rec.activationId === 'string' ? rec.activationId : '';
-      return (held ? verifyStore(key, opts, now, held) : Promise.resolve(null)).then(function (h) {
+      return (held ? askChecked(key, opts, now, held) : Promise.resolve(null)).then(function (h) {
         if (h && h.ok) return save(h, held);
-        return verifyStore(key, opts, now).then(function (r) {
+        return askChecked(key, opts, now).then(function (r) {
           if (!r.ok) return r;
           if (!r.limit) return save(r, '');
           return activateStore(key, opts, r.limit).then(function (a) {
@@ -472,7 +535,7 @@
       var done = function () { return forget(storage).then(function () { return { ok: true }; }); };
       if (!held) return done();
       var payload = { key: rec.code, organization_id: storeApi(opts).organizationId, activation_id: held };
-      return storeCall('/v1/customer-portal/license-keys/deactivate', payload, opts).then(function (r) {
+      return storeCall(storeApi(opts).base + '/v1/customer-portal/license-keys/deactivate', payload, opts).then(function (r) {
         // 404: the store has no such place any more, which is what was asked.
         if (!r.offline && ((r.status >= 200 && r.status < 300) || r.status === 404)) return done();
         return { ok: false, reason: 'couldn’t reach the store, so this browser still holds its place. Try again when you’re online' };
@@ -596,9 +659,9 @@
     PLANS: PLANS,
     RECHECK_MS: RECHECK_MS,
     ANSWER_MS: ANSWER_MS,
-    KEEP_MS: KEEP_MS,
     OFFLINE_GRACE_MS: OFFLINE_GRACE_MS,
     PUBLIC_KEY: PUBLIC_KEY,
+    RECEIPT_PUBLIC_KEY: RECEIPT_PUBLIC_KEY,
     buyable: buyable,
     offered: offered,
     portalUrl: portalUrl,
@@ -610,7 +673,8 @@
     checkoutUrl: checkoutUrl,
     kindOf: kindOf,
     REVOKED: REVOKED,
-    verifyStore: verifyStore,
+    askServer: askServer,
+    verifyReceipt: verifyReceipt,
     deviceLabel: deviceLabel,
     dayNumber: dayNumber,
     payloadFor: payloadFor,

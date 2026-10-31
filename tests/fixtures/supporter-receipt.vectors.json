@@ -1,0 +1,18 @@
+{
+  "note": "A Supporter receipt signed once with a throwaway test key (not the real one). Kept in both the Portfolio repo (lib/blocknsfw-receipt.vectors.json) and BlockNSFW (tests/fixtures/supporter-receipt.vectors.json); both test suites read it.",
+  "publicKey": {
+    "kty": "EC",
+    "crv": "P-256",
+    "x": "r7aH4-Cz5z6ztvJkiQ3tTOPXYl8Z97GjUnILQjBiJ48",
+    "y": "PV3eAtUmk0chAdLTwcFcAaNqTldsyHp0D73XjSp523c"
+  },
+  "code": "BLOCKNSFW-VECTOR00-0000-4000-8000-000000000001",
+  "payload": {
+    "m": "live",
+    "h": "tFVHbEszuLuMJgq_S-GMJg",
+    "l": 3,
+    "i": 1793437200,
+    "e": 1794646800
+  },
+  "receipt": "BNR1.eyJtIjoibGl2ZSIsImgiOiJ0RlZIYkVzenVMdU1KZ3FfUy1HTUpnIiwibCI6MywiaSI6MTc5MzQzNzIwMCwiZSI6MTc5NDY0NjgwMH0.-puPi7c3XIORppTHNnEuWB5AOIc2ys7fviZUNH1N6jmd7jxN6CDRnW-oHl7yZzuDJOeMR9vCWLmrz3UU_BXWzw"
+}

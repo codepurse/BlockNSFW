@@ -52,6 +52,24 @@ In `shared/supporter.js`:
       comment about `mode`, and the `api:` and `portal:` lines. Any `mode:`
       or `url:` line in the result means a sandbox setting is still there
 
+On monolab.dev (the Portfolio repo), which store codes are checked through
+since 2.0.4. Do this **before** uploading: without it, a supporter on the new
+version can't unlock, and one who updates keeps their extras only until their
+next check.
+
+- [ ] `app/api/blocknsfw/receipt` is on the live site (`lib/blocknsfw-receipt.ts`)
+- [ ] In Vercel → Settings → Environment Variables, `BLOCKNSFW_RECEIPT_KEY`
+      (Production and Preview) holds the private key from
+      `~/.blocknsfw/receipt-signing-key.jwk`, the whole JSON on one line,
+      and the site was redeployed after setting it
+- [ ] A made-up code is turned down, not "unavailable":
+      `curl -s -X POST https://monolab.dev/api/blocknsfw/receipt -H "Content-Type: application/json" -d '{"code":"BLOCKNSFW-MADEUP-0000","mode":"live"}'`
+      answers `{"status":"ended","reason":"unknown"}`. A 503 means the key
+      isn't set, or isn't the one `RECEIPT_PUBLIC_KEY` in
+      `shared/supporter.js` belongs to
+- [ ] That key file is backed up off this computer. Without it no receipt
+      can be signed, and a new key means a new extension release
+
 Then:
 
 - [ ] `npm test` passes

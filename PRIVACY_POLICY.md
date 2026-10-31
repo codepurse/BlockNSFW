@@ -1,6 +1,6 @@
 # Privacy Policy for BlockNSFW
 
-**Last Updated:** October 30, 2026
+**Last Updated:** October 31, 2026
 
 ## Overview
 
@@ -305,17 +305,27 @@ sees your payment details.
   press Unlock, then at most about once a day, when you open the
   extension, so that a monthly or yearly plan that has ended closes the
   extras, and when you press "Remove it from this browser"
-- Where: `api.polar.sh` (or `sandbox-api.polar.sh` while we test with Polar's
-  test store)
-- Data involved: the code and our store's identifier, sent without cookies.
-  A plan works on a limited number of browsers at once, so entering the code
-  also sends a name for this browser, made from its kind and system (for
-  example "BlockNSFW · Chrome on Windows"), and Polar returns a number for
-  this browser's place on the plan, which later checks send back. That name
-  shows on your Polar purchases page, so you can tell your browsers apart.
-  Nothing about your browsing, your check-ins or your path is sent
-- The code and that number are kept on your device. If the check can't reach
-  the store, the extras simply stay as they were
+- Where: our own website, `https://monolab.dev/api/blocknsfw/receipt`, which
+  asks Polar (`api.polar.sh`, or `sandbox-api.polar.sh` while we test with
+  Polar's test store) and answers a paid code with a receipt it signs, so the
+  extension can tell a real answer from one typed in by hand. Taking a place
+  on your plan and giving it back go to Polar directly
+- Data involved: the code, whether it's from the real or the test store, and
+  our store's identifier, sent without cookies. A plan works on a limited
+  number of browsers at once, so entering the code also sends Polar a name
+  for this browser, made from its kind and system (for example "BlockNSFW ·
+  Chrome on Windows"), and Polar returns a number for this browser's place on
+  the plan, which later checks send back. That name shows on your Polar
+  purchases page, so you can tell your browsers apart. Nothing about your
+  browsing, your check-ins or your path is sent
+- monolab.dev passes the code and that number on to Polar and keeps neither.
+  Its logs say only whether a check passed, beside a short one-way stand-in
+  for the code that can't be turned back into it. Your internet address is
+  used to count checks for an hourly limit, as a one-way stand-in that is
+  forgotten when the hour ends
+- The code, that number and the receipt are kept on your device. If a check
+  can't get an answer, the extras stay as they were until the receipt runs
+  out, 14 days after the last answer
 - The "Open your purchases" and "Manage or cancel your plan" links open
   Polar's purchases page (`polar.sh`, or `sandbox.polar.sh` while testing) in
   a new tab, only when you click them
@@ -452,7 +462,8 @@ We share or transmit limited data only when needed to provide a feature or proce
 - **Our Appwrite-hosted backend**, when you manually submit a website report,
   when you open the Community page, and when you submit or like a story
 - **Our website, monolab.dev**, when you remove BlockNSFW and your browser
-  opens the page that asks why (section 14)
+  opens the page that asks why (section 14), and when a Supporter code from
+  the store is checked (section 10)
 
 Outside of the cases above, we do not share your data except if required by law, needed to protect security, or as part of a business transfer such as a merger or sale of assets.
 
