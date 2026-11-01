@@ -317,6 +317,51 @@ test('behaviour: the v3 regressions stay under the Strict block bar', () => {
   }
 });
 
+// A user was held on Fantasy Premier League. Every page of it carries the same
+// title and description ("Free to play fantasy football game ... site"), and a
+// team's history is a table whose thousands separators read as a run of "1"s:
+// v4 scored it 0.98 and held it at Strict on text alone. The first page is
+// that history as content.js reads it; the other two are harder, nothing but
+// a title and a table.
+const FPL_HEAD = 'Fantasy Premier League, Official Fantasy Football Game of the Premier League ' +
+  'Official Fantasy Premier League 2026/27. Free to play fantasy football game, set up your ' +
+  'fantasy football team at the Official Premier League site.';
+const FPL_TABLE = 'GW9 1,412,123 13% 557 1,347,173 49 2 3 0 102.2 GW8 1,833,723 16% 508 5,719,438 45 -1 2 0 102.2 ' +
+  'GW7 1,757,258 16% 463 2,550,245 69 6 0 0 101.8 GW6 1,922,109 18% 394 5,341,466 59 6 1 0 101.6 ' +
+  'GW5 1,514,974 14% 335 2,767,782 55 11 0 0 101.5';
+const FPL_HISTORY = {
+  head: FPL_HEAD + ' ' + FPL_HEAD,
+  body: 'Premier League Football & Community Fantasy Premier League Fantasy Challenge Games & Trivia ' +
+    'FPL Challenge Price Changes Entry History GW OR # % Rank OP GWR GWP PB TM TC ' + FPL_TABLE +
+    ' Date Name Active Sat 29 Aug 01:25 Bench Boost GW2 Sat 5 Sep 01:20 Wildcard GW3 ' +
+    'Previous Seasons Season Points Rank % Finish 2025/26 2,419 4,119 0.0% 2024/25 2,502 120,612 1% ' +
+    '2023/24 2,708 19 0.0% Career Average 2,256 591,566 15% Points & Rankings Gameweek History',
+};
+const TABLE_PAGES = [
+  { head: FPL_HEAD, body: 'Entry History This Season GW OR # % Rank OP GWR GWP PB TM TC ' + FPL_TABLE },
+  {
+    head: 'League table',
+    body: 'Pos Team P W D L GF GA GD Pts 1 Arsenal 10 8 1 1 21 6 15 25 2 Liverpool 10 7 2 1 18 9 9 23 ' +
+      '3 Man City 10 7 1 2 22 10 12 22 4 Chelsea 10 6 2 2 18 11 7 20 5 Brighton 10 5 3 2 16 12 4 18',
+  },
+];
+
+test('behaviour: a fantasy football history page stays under the Strict fuse bar', () => {
+  const { TC, model } = core();
+  const bar = TC.thresholdsFor(model, 'strict').fuse;
+  const p = pageProb(FPL_HISTORY);
+  assert.ok(p < bar, `FPL history scored ${p.toFixed(3)} (strict fuse bar ${bar.toFixed(3)})`);
+});
+
+test('behaviour: a title over a table of numbers stays under the Balanced fuse bar', () => {
+  const { TC, model } = core();
+  const bar = TC.thresholdsFor(model, 'balanced').fuse;
+  for (const page of TABLE_PAGES) {
+    const p = pageProb(page);
+    assert.ok(p < bar, `${JSON.stringify(page.head.slice(0, 40))} scored ${p.toFixed(3)} (balanced fuse bar ${bar.toFixed(3)})`);
+  }
+});
+
 test('behaviour: scores are graded, not saturated at 0 and 1', () => {
   // v3 returned exactly 0.0000 or 1.0000 for every real page, which made its
   // strictness setting and the blocked page's confidence meaningless.

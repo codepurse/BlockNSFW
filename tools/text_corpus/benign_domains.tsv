@@ -609,3 +609,108 @@ tv.naver.com	trap-video
 sohu.com	trap-video
 ixigua.com	trap-video
 dzen.ru/video*	trap-video
+
+# ---- trap-stats: tables of numbers (added after a Fantasy Premier League report) ----
+# v4 learned bare numbers as adult ("1", "0", "18": pagination, "18+", view
+# counts), so a team's points history read as a tube page. Sports stats,
+# league tables, rankings, results and other pages that are mostly figures
+# teach it a column of numbers is not adult.
+fbref.com	trap-stats
+basketball-reference.com	trap-stats
+baseball-reference.com	trap-stats
+pro-football-reference.com	trap-stats
+hockey-reference.com	trap-stats
+sports-reference.com	trap-stats
+transfermarkt.com	trap-stats
+worldfootball.net	trap-stats
+soccerway.com	trap-stats
+footystats.org	trap-stats
+fantasypros.com	trap-stats
+rotowire.com	trap-stats
+statmuse.com	trap-stats
+espncricinfo.com	trap-stats
+formula1.com	trap-stats
+premierleague.com	trap-stats
+bundesliga.com	trap-stats
+nhl.com	trap-stats
+mlb.com	trap-stats
+pgatour.com	trap-stats
+atptour.com	trap-stats
+wtatennis.com	trap-stats
+fantasyfootballscout.co.uk	trap-stats
+fantasyfootballhub.co.uk	trap-stats
+livefpl.net	trap-stats
+worldometers.info	trap-stats
+timeanddate.com	trap-stats
+boxofficemojo.com	trap-stats
+the-numbers.com	trap-stats
+x-rates.com	trap-stats
+ratings.fide.com	trap-stats
+speedrun.com	trap-stats
+en.wikipedia.org/wiki/Premier_League_records_and_statistics	trap-stats
+en.wikipedia.org/wiki/List_of_Premier_League_hat-tricks	trap-stats
+
+# the table pages themselves (a domain lookup returns about pages first)
+basketball-reference.com/players/*	trap-stats
+basketball-reference.com/teams/*	trap-stats
+baseball-reference.com/players/*	trap-stats
+hockey-reference.com/players/*	trap-stats
+pro-football-reference.com/players/*	trap-stats
+fbref.com/en/squads/*	trap-stats
+fbref.com/en/players/*	trap-stats
+fbref.com/en/comps/*	trap-stats
+footystats.org/england/*	trap-stats
+transfermarkt.com/premier-league/*	trap-stats
+espncricinfo.com/records/*	trap-stats
+atptour.com/en/rankings/*	trap-stats
+wtatennis.com/rankings/*	trap-stats
+espn.com/nba/stats/*	trap-stats
+espn.com/soccer/standings/*	trap-stats
+skysports.com/premier-league-table*	trap-stats
+bbc.com/sport/football/premier-league/table*	trap-stats
+fantasypros.com/nfl/rankings/*	trap-stats
+fantasypros.com/nfl/stats/*	trap-stats
+en.wikipedia.org/wiki/List_of_Premier_League_*	trap-stats
+en.wikipedia.org/wiki/List_of_NBA_*	trap-stats
+timeanddate.com/weather/*	trap-stats
+timeanddate.com/sun/*	trap-stats
+x-rates.com/table/*	trap-stats
+x-rates.com/historical/*	trap-stats
+worldometers.info/world-population/*	trap-stats
+worldometers.info/gdp/*	trap-stats
+boxofficemojo.com/year/*	trap-stats
+the-numbers.com/box-office-chart/*	trap-stats
+
+# Most stats sites draw their tables in JavaScript, so the crawl holds none of
+# their figures. These serve tables as plain HTML; the pages used are exact
+# URLs in topup_targets.tsv, picked because most of what content.js would read
+# on them (the first 48 lines of 12+ characters) is numbers.
+rsssf.org	trap-stats
+hockeydb.com	trap-stats
+stockanalysis.com	trap-stats
+calendar-365.com	trap-stats
+calendarpedia.co.uk	trap-stats
+
+# ---- trap-games: fantasy sports and free-to-play games ----
+# "Free to play fantasy football game ... set up your team at the official
+# site" is the title and description of every Fantasy Premier League page,
+# and "fantasy", "game", "site" and "set" all leaned adult in v4.
+fantasy.premierleague.com	trap-games
+draft.premierleague.com	trap-games
+fantasy.espn.com	trap-games
+fantasy.nfl.com	trap-games
+football.fantasysports.yahoo.com	trap-games
+fantasy.formula1.com	trap-games
+gaming.uefa.com	trap-games
+sleeper.com	trap-games
+sorare.com	trap-games
+superbru.com	trap-games
+freetogame.com	trap-games
+poki.com	trap-games
+crazygames.com	trap-games
+miniclip.com	trap-games
+kongregate.com	trap-games
+armorgames.com	trap-games
+coolmathgames.com	trap-games
+chess.com	trap-games
+lichess.org	trap-games

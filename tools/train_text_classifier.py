@@ -726,7 +726,11 @@ def main(argv=None):
     ap.add_argument("--grid", action="store_true")
     ap.add_argument("--trap-weight", type=float, default=8.0,
                     help="training weight of trap pages relative to other benign pages")
-    ap.add_argument("--counterfactual-weight", type=float, default=0.25,
+    # 0.25 until the trap-stats / trap-games round. Classes are balanced by
+    # total weight, so ~250 more trap pages at 8x thinned these copies out and
+    # "videos" crept back toward adult ("Funny Cat Videos" 0.22 -> 0.69).
+    # 0.30 holds the video probes where they were; 0.35 cost more recall.
+    ap.add_argument("--counterfactual-weight", type=float, default=0.30,
                     help="weight of explicit-words-removed copies of adult windows, "
                          "labelled benign (see explicit_terms.txt)")
     ap.add_argument("--dump", default=None,
@@ -956,11 +960,14 @@ def evaluate(test, val, thresholds, wm, fc, pbias, pweights, cfg, args):
     summary["dilution"] = {"pages": len(long_benign), "windowFound": round(hit_window / n, 3),
                            "pageBlocked": round(hit_page / n, 3)}
 
-    # ---- the regressions that put v3 behind a safety catch.
-    out("## Known regressions from v3")
+    # ---- the regressions that put v3 behind a safety catch, and the false
+    # positives found since. A page over the Strict fuse bar is held there as
+    # soon as the image filter blurs a share of its images.
+    out("## Known false positives, from v3 on")
     out("")
-    out("| Text | Page score | Blocked at Balanced |")
-    out("|---|---|---|")
+    out("| Text | Page score | Blocked at Balanced | Over the Strict fuse bar |")
+    out("|---|---|---|---|")
+    strict_fuse = thresholds["strict"]["fuse"]
     probes = [
         ("YouTube", "Home Shorts Subscriptions You History Playlists Your videos Watch later Liked videos Trending Music Gaming News Sports"),
         ("", "videos"),
@@ -976,12 +983,19 @@ def evaluate(test, val, thresholds, wm, fc, pbias, pweights, cfg, args):
         ("Hot Wheels Videos", "Watch Hot Wheels videos, car videos for kids, monster truck videos and toy unboxing videos. New episodes and videos every Friday."),
         ("Workout videos", "Free full body workout videos at home. Yoga videos, HIIT video workouts, pilates videos and stretching videos for all levels."),
         ("CNN Videos", "Latest news videos from around the world. Watch video reports on politics, business, health, entertainment, travel and sports. Live video and breaking news clips."),
+        # Tables of numbers and fantasy sports: v4 held a Fantasy Premier League
+        # team's history at Strict (0.98) over "fantasy ... free to play ...
+        # game ... site" in its title and "1", "0", "18" in its points table.
+        ("Fantasy Premier League, Official Fantasy Football Game of the Premier League. Free to play fantasy football game, set up your fantasy football team at the Official Premier League site.",
+         "Entry History This Season GW OR # % Rank OP GWR GWP PB TM TC GW9 1,412,123 13% 557 1,347,173 49 2 3 0 102.2 GW8 1,833,723 16% 508 5,719,438 45 -1 2 0 102.2 GW7 1,757,258 16% 463 2,550,245 69 6 0 0 101.8 GW6 1,922,109 18% 394 5,341,466 59 6 1 0 101.6 GW5 1,514,974 14% 335 2,767,782 55 11 0 0 101.5"),
+        ("League table", "Pos Team P W D L GF GA GD Pts 1 Arsenal 10 8 1 1 21 6 15 25 2 Liverpool 10 7 2 1 18 9 9 23 3 Man City 10 7 1 2 22 10 12 22 4 Chelsea 10 6 2 2 18 11 7 20 5 Brighton 10 5 3 2 16 12 4 18"),
     ]
     for head, body in probes:
         hz, bz = wm.page_z(truncate_parts(head, body), fc)
         prob = page_prob(page_features(hz, bz), pbias, pweights) if (hz or bz) else 0.0
         label = (head + " / " if head else "") + body
-        out(f"| {label[:70]}{'...' if len(label) > 70 else ''} | {prob:.3f} | {'**yes**' if prob >= bal else 'no'} |")
+        out(f"| {label[:70]}{'...' if len(label) > 70 else ''} | {prob:.3f} | {'**yes**' if prob >= bal else 'no'} "
+            f"| {'**yes**' if prob >= strict_fuse else 'no'} |")
     out("")
     out("## Thresholds shipped in the model (chosen on validation + out-of-fold train)")
     out("")

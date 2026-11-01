@@ -65,6 +65,18 @@ All notable project changes should be documented here going forward.
   its details, its words or the AI text scan was reported once by the check
   and again on the way to the blocked page, so "websites blocked" and the
   total went up by two and the audit log listed it twice. It counts once.
+- **The AI Text Blocker held Fantasy Premier League.** Every FPL page opens
+  with "Free to play fantasy football game … set up your team at the
+  Official Premier League site", and a team's points history is a table of
+  numbers: the model read "fantasy", "game" and "site", and a run of 1s and
+  0s, as adult. A team's history scored 0.98 and was held at Strict, and at
+  any level FPL was held once the AI Image Blocker blurred a few of its
+  pictures. The model has relearned from fantasy-sports and free-to-play
+  game sites and from pages that are mostly tables of figures (results,
+  standings, population, prices, calendars): that history now scores 0.32
+  and every FPL page opens at Strict. Adult pages caught on held-out sites:
+  59% at Relaxed (was 57%), 61% at Balanced (was 62%), 67% at Strict (the
+  same), still with no ordinary page blocked at Relaxed or Balanced.
 
 ### For contributors
 
@@ -103,6 +115,18 @@ All notable project changes should be documented here going forward.
   `tests/access-code.test.js` (`lengthFor`) and
   `tests/access-code-self.test.js` (the modal's length, the cap, and the
   three switches).
+- The text model's corpus has two new trap categories, `trap-stats` and
+  `trap-games`, in `tools/text_corpus/benign_domains.tsv`, fetched by three
+  top-up rounds in `topup_targets.tsv`. The last round is exact URLs: most
+  stats sites draw their tables in JavaScript, so the crawl holds none of
+  their figures. Exact targets carry no trailing `/` (the index key has
+  none). `tools/train_text_classifier.py` now defaults to
+  `--counterfactual-weight 0.30` (was 0.25): classes are balanced by total
+  weight, and the new trap pages had thinned the counterfactual copies until
+  "Funny Cat Videos" went from 0.22 to 0.69. `EVAL.md`'s probe table gains
+  the FPL page and a league table, and a column for the Strict fuse bar.
+  Tests: `tests/text-classifier-core.test.js` (an FPL history under the
+  Strict fuse bar; a title over a table under the Balanced fuse bar).
 
 ## [2.0.3] - 2026-10-26
 
