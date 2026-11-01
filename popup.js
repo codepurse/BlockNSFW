@@ -1617,7 +1617,10 @@ async function updateUI() {
     // Counts, in mono with separators
     $('blocked-today').textContent = formatCount(dailyStats.blockedToday);
     $('blocked-total').textContent = formatCount(stats.blockedCount);
-    $('images-filtered').textContent = formatCount(dailyStats.imageBlocked);
+    // Images the on-device AI blurred are counted apart from the ones the
+    // keyword filter hid, and both are images held today.
+    $('images-filtered').textContent = formatCount(
+      (Number(dailyStats.imageBlocked) || 0) + (Number(dailyStats.imageAiBlocked) || 0));
 
     // Update whitelist display
     await updateWhitelistDisplay();

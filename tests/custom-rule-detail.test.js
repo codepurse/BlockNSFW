@@ -102,7 +102,7 @@ test('every block by the user\'s own rules carries the rule', () => {
   assert.match(contentSource, /localReasonKey === 'custom_blocklist'[\s\S]{0,200}customPatternMatchingHost\(urlStr, normalizedHost, customPatterns\)/);
   assert.match(contentSource, /redirectNow\(localReasonKey, getBlockedReasonLabel\(localReasonKey\), rule \? \{ rule \} : undefined\)/);
   // Title, page details, page text.
-  assert.match(contentSource, /redirectToBlockedPage\('custom_title_pattern', \{ rule \}\)/);
+  assert.match(contentSource, /redirectToBlockedPage\('custom_title_pattern', \{ rule \}[,)]/);
   assert.match(contentSource, /redirectToBlockedPage\('custom_keyword', \{ rule: analysis\.customRule \}\)/);
   assert.match(contentSource, /redirectToBlockedPage\('custom_keyword', \{ rule: customRule \}\)/);
   assert.match(contentSource, /matchedKeywords: \['Custom Blocked Word'\], customRule \}/);

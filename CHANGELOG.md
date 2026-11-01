@@ -56,6 +56,15 @@ All notable project changes should be documented here going forward.
   protected change. Every PIN box now takes the whole PIN. Setup also drops
   spaces at either end, as the popup and Settings always did, so a PIN with
   a stray space can't be saved one way and checked another.
+- **Images the on-device AI blurred were missing from the image count.**
+  The popup's "images today" and the stats page's "Images blocked" counted
+  only the images the keyword filter hid, so someone with the AI Image
+  Blocker on could watch images blur and still read 0. Both now count the
+  AI's blurs too.
+- **A page held by reading it counted twice.** A page held for its title,
+  its details, its words or the AI text scan was reported once by the check
+  and again on the way to the blocked page, so "websites blocked" and the
+  total went up by two and the audit log listed it twice. It counts once.
 
 ### For contributors
 

@@ -221,7 +221,8 @@ function renderStreak(streakData, kept) {
 function renderStats(stats) {
   $('total-blocked').textContent = formatNumber(stats.blockedCount || 0);
   $('websites-blocked').textContent = formatNumber(stats.websiteBlockedCount || 0);
-  $('images-filtered').textContent = formatNumber(stats.imageBlockedCount || 0);
+  // The on-device AI's blurs are counted apart from the keyword filter's.
+  $('images-filtered').textContent = formatNumber((stats.imageBlockedCount || 0) + (stats.aiImageBlockedCount || 0));
   $('search-filtered').textContent = formatNumber(stats.searchResultBlockedCount || 0);
 
   const timeSavedMinutes = (stats.blockedCount || 0) * AVG_TIME_PER_BLOCK_MINUTES;

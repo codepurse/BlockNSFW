@@ -199,6 +199,18 @@
               Setup took a PIN of any length, but the popup&rsquo;s PIN box stopped after the 8th character and Settings&rsquo; after the 20th, so a longer PIN was cut short and never matched. Every PIN box now takes the whole PIN. Setup also drops spaces at either end, as the popup and Settings always did.
             </p>
           </li>
+          <li class="entry">
+            <h4 class="entry-title">Images the on-device AI blurred were missing from the image count</h4>
+            <p class="entry-body">
+              The popup&rsquo;s &ldquo;images today&rdquo; and the stats page&rsquo;s &ldquo;Images blocked&rdquo; counted only the images the keyword filter hid, so with the AI Image Blocker on you could watch images blur and still read 0. Both now count the AI&rsquo;s blurs too.
+            </p>
+          </li>
+          <li class="entry">
+            <h4 class="entry-title">A page held by reading it counted twice</h4>
+            <p class="entry-body">
+              A page held for its title, its details, its words or the AI text scan was reported twice, so &ldquo;websites blocked&rdquo; went up by two and the audit log listed it twice. It counts once.
+            </p>
+          </li>
         </ul>
       </div>
       </div>

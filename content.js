@@ -2459,7 +2459,6 @@ function checkUnsafeSearchPage() {
   const rule = UnsafeSearch.matchPage(document, window.location.href, unsafeSearchRules);
   if (!rule) return false;
   log(`Search engine SafeSearch can't reach: ${rule.name}`);
-  notifyBackground('website_blocked', { reason: getBlockedReasonLabel('unsafe_search'), title: document.title });
   redirectToBlockedPage('unsafe_search');
   return true;
 }
@@ -2472,8 +2471,7 @@ function checkCustomTitlePatterns() {
   if (rule === null) return false;
   const reason = `Page title matched one of your blocked-site patterns: "${document.title}"`;
   log(reason);
-  notifyBackground('website_blocked', { reason, title: document.title });
-  redirectToBlockedPage('custom_title_pattern', { rule });
+  redirectToBlockedPage('custom_title_pattern', { rule }, reason);
   return true;
 }
 
@@ -2509,23 +2507,17 @@ function checkPageMetadata() {
   const neutralMatches = analysis.totalMatches - analysis.safeMatches;
   if (neutralMatches >= METADATA_BLOCK_THRESHOLD && analysis.customRule) {
     // One of the user's own blocked words: say so, and name which one.
-    notifyBackground('website_blocked', { reason: getBlockedReasonLabel('custom_keyword'), title: document.title });
     redirectToBlockedPage('custom_keyword', { rule: analysis.customRule });
     return true;
   }
   if (neutralMatches >= METADATA_BLOCK_THRESHOLD) {
     const reason = `Page metadata contained explicit content: ${analysis.matchedKeywords.join(', ')}`;
     log(reason);
-    
-    notifyBackground('website_blocked', { 
-      reason: reason,
-      title: document.title
-    });
-    
+
     // Name the keyword that fired. Without it this block was undiagnosable:
     // the page says only "its title or metadata matched", and unlike the body
     // scan below it passed nothing for the blocked page to show.
-    redirectToBlockedPage('metadata_scan', { matched: analysis.matchedKeywords.slice(0, 5) });
+    redirectToBlockedPage('metadata_scan', { matched: analysis.matchedKeywords.slice(0, 5) }, reason);
     return true;
   }
   
@@ -2632,7 +2624,6 @@ function checkPageBodyText() {
 
     if (matchedLines >= PAGE_TEXT_SCAN_MATCH_THRESHOLD && customRule !== null) {
       // One of the user's own blocked words was among them: name which one.
-      notifyBackground('website_blocked', { reason: getBlockedReasonLabel('custom_keyword'), title: document.title });
       redirectToBlockedPage('custom_keyword', { rule: customRule });
       return true;
     }
@@ -2643,11 +2634,7 @@ function checkPageBodyText() {
         : 'Page body contained repeated explicit content signals';
 
       log(reason);
-      notifyBackground('website_blocked', {
-        reason,
-        title: document.title
-      });
-      redirectToBlockedPage('page_text_scan', { matched: keywordSummary });
+      redirectToBlockedPage('page_text_scan', { matched: keywordSummary }, reason);
       return true;
     }
   }
@@ -2789,8 +2776,7 @@ function checkPageTextWithModel() {
       ? `AI text+image classifier flagged this page (text score ${prob.toFixed(2)}, ${imageEvidence.blocked} of ${imageEvidence.checked} image(s) blocked)${triggerNote}`
       : `AI text classifier flagged this page (score ${prob.toFixed(2)})${triggerNote}`;
     log(reason);
-    notifyBackground('website_blocked', { reason, title: document.title });
-    redirectToBlockedPage('ai_text_scan', { matched: triggers, score: prob });
+    redirectToBlockedPage('ai_text_scan', { matched: triggers, score: prob }, reason);
     return true;
   }
   return false;
@@ -5864,7 +5850,10 @@ async function processContent() {
   }
 }
 
-function redirectToBlockedPage(reason = 'content', detail) {
+// The one report of this block. `auditReason` is the longer account the audit
+// log keeps (which words, what score); callers that also reported the block
+// themselves counted every page they read twice.
+function redirectToBlockedPage(reason = 'content', detail, auditReason) {
   if (blockedTriggered) return;
   blockedTriggered = true;
   try { window.stop(); } catch (_) {}
@@ -5878,9 +5867,9 @@ function redirectToBlockedPage(reason = 'content', detail) {
   notifyBackground('website_blocked', {
     url: window.location.href,
     title: document.title,
-    reason: getBlockedReasonLabel(reason)
+    reason: auditReason || getBlockedReasonLabel(reason)
   });
-  
+
   window.location.replace(blockedUrl);
 }
 
