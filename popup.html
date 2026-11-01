@@ -21,6 +21,12 @@
     body {
       padding: var(--space-4);
     }
+    /* In Settings' live preview (popup.html?preview) the frame grows to fit
+       the page, so nothing ever scrolls inside it. */
+    .is-preview,
+    .is-preview body {
+      overflow: hidden;
+    }
 
     /* The band: the popup's one deep ground while protection is on. It says
        so in the serif and holds the switch. Off, it drops to plain sheet, so

@@ -10,6 +10,11 @@ const STREAK_START_KEY = 'pblocker_streak_start';
 const UPDATE_INFO_KEY = 'pblocker_update_info';
 const UPDATE_DISMISSED_KEY = 'pblocker_update_dismissed';
 
+// Settings › Customization › Your popup shows this page in a frame, live, as
+// popup.html?preview (extras/face.js). There it speaks about the web page
+// used last, since the tab it's in is Settings, and tells the frame its height.
+const PREVIEW = typeof location !== 'undefined' && new URLSearchParams(location.search).has('preview');
+
 const AccessCode = self.AccessCode;
 // shared/pact.js and shared/pin-hash.js; either may be missing in a test
 // context, and the gates then work exactly as they did before the Pact.
@@ -1291,9 +1296,21 @@ function resolveTabTargetCached(rawUrl) {
   return tabTargetCache.promise;
 }
 
+// The tab this popup speaks about: the one it opened over, or in the preview
+// the web page used last.
+async function currentTab() {
+  if (!PREVIEW) {
+    const [tab] = await browserAPI.tabs.query({ active: true, currentWindow: true });
+    return tab || null;
+  }
+  const tabs = (await browserAPI.tabs.query({})).filter((t) => /^https?:/.test(t.url || ''));
+  tabs.sort((a, b) => (b.lastAccessed || 0) - (a.lastAccessed || 0));
+  return tabs[0] || null;
+}
+
 async function getCurrentTabDomain() {
   try {
-    const [tab] = await browserAPI.tabs.query({ active: true, currentWindow: true });
+    const tab = await currentTab();
     if (tab && tab.url) {
       const url = await resolveTabTargetCached(tab.url);
       if (url) return url.hostname.replace(/^www\./, '');
@@ -1828,10 +1845,29 @@ function requestUpdateCheck() {
   } catch (_) {}
 }
 
+// The preview in Settings is a frame as wide as the popup; it grows to fit
+// whatever this page holds, so it's told the height whenever that changes,
+// and which site the popup speaks about.
+function setupPreview() {
+  document.documentElement.classList.add('is-preview');
+  let last = 0;
+  const tell = () => {
+    const height = Math.ceil(document.body.getBoundingClientRect().height);
+    if (height === last) return;
+    last = height;
+    parent.postMessage({ type: 'blocknsfw:popup-preview', height }, location.origin);
+  };
+  new ResizeObserver(tell).observe(document.body);
+  getCurrentTabDomain().then((host) => {
+    parent.postMessage({ type: 'blocknsfw:popup-preview', host: host || '' }, location.origin);
+  });
+}
+
 // Initialize popup
 document.addEventListener('DOMContentLoaded', async () => {
   document.body.classList.add('loading');
-  
+  if (PREVIEW) setupPreview();
+
   // Set up event listeners
   $('toggle').addEventListener('click', toggleBlocking);
   $('unblock-toggle').addEventListener('click', toggleUnblockSite);
@@ -1990,6 +2026,16 @@ document.addEventListener('DOMContentLoaded', async () => {
       updateLockNotes();
     }
     if (area === 'local' && Boost && changes[Boost.STATE_KEY]) updateUI();
+    // What the band leads with and the order below it, chosen in Settings
+    // (the live preview there is this page).
+    const M = self.Moments;
+    if (area === 'local' && self.PopupFace && M &&
+        (changes[self.PopupFace.KEY] || changes[M.WORDS_KEY] || changes[M.PHOTO_KEY])) {
+      renderFace();
+    }
+    if (area === 'local' && self.PopupSections && changes[self.PopupSections.KEY]) {
+      renderSections().then(tidySections);
+    }
   });
 });
 

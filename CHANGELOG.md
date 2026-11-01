@@ -6,28 +6,23 @@ All notable project changes should be documented here going forward.
 
 ### Added
 
-- **Popup face, for supporters.** Choose what the toolbar popup leads with
-  while protection is on, in Settings › Customization › Appearance: your
-  words (the note to yourself from Your own words, or your plan for a hard
-  moment if there's no note), days kept (how many of your last 30, a mark
-  for each), your photo, or today on the path. "Protected" steps up beside
-  the name as a word, and the Protection switch stays where it is. A long
-  note steps down a size and stops at six lines, with "Read it all" opening
-  it in Settings. A face with nothing to show yet stays Plain, and so does
-  the popup while protection is off. Privacy policy: What We Store Locally.
-- **Popup sections, for supporters.** A supporter's popup ran to about
-  1,200 pixels in a window that opens to 600, so most of it was a scroll
-  away. Settings › Customization › Popup sections offers it in shapes:
-  Everything (as it comes), Quiet (today's counts, Storm Mode, the path,
-  your week), Hard nights (Storm Mode first, then After a slip, the path,
-  the check-in), Just the switch, or Your own. Each is drawn at a quarter of
-  its size with a brass line at the fold, so what opens without scrolling is
-  plain to see, and says whether it fits or how far it scrolls. Your own is
-  a list (show, hide or move each section) beside the popup at half size,
-  and the fold moves as you change it. The band, the Protection switch and
-  Settings are always there, as are the Storm warning and a change waiting
-  on the Pact when they apply. Hiding a section never changes what's
-  blocked. Privacy policy: What We Store Locally.
+- **Your popup, for supporters.** Choose what the toolbar popup leads with
+  while protection is on, and the order of everything under it, in
+  Settings › Customization › Your popup, beside the popup itself, live: it
+  changes as you do. At the top, each choice is a small picture of the
+  band: your words (the note to yourself from Your own words, or your plan
+  for a hard moment if there's no note), days kept (how many of your last
+  30, a mark for each), your photo, or today on the path. "Protected" steps
+  up beside the name as a word, and the Protection switch stays where it
+  is. A long note steps down a size and stops at six lines, with "Read it
+  all" opening it in Settings. A face with nothing to show yet stays Plain
+  and says what it waits on, and the popup is Plain while protection is
+  off. Below the band, drag any section by its handle (or move it with the
+  arrow keys) and show or hide it; "Back to how BlockNSFW sets it" puts the
+  popup back as it comes. The band, the Protection switch and Settings are
+  always there, as are the Storm warning and a change waiting on the Pact
+  when they apply. Hiding a section never changes what's blocked. Privacy
+  policy: What We Store Locally.
 - **Pass It On.** Settings › Welcome asks, if BlockNSFW helped, to tell
   someone who's still looking: in public, in your own words, the good and
   the bad. Its picture is the search that person
@@ -66,7 +61,10 @@ All notable project changes should be documented here going forward.
 
 - Popup face is a Supporter extra, `extras/face.js` (an empty stand-in
   here): it fills `#popup-face` in `popup.html`, whose styles are public,
-  and runs the picker in `options.html` (`#face-row`). `popup.js`
+  and in `options.html` `#popup-card` (Your popup) draws At the top and
+  the live preview: `popup.html?preview` in an inert frame, which speaks
+  about the web page used last and tells the frame its height. `popup.js`
+  redraws the face and the sections when their choices change. `popup.js`
   `renderFace()` asks for it only for a supporter while protection is on,
   and keeps `#status` as the live status, visually hidden, under a face.
   The choice is `pblocker_popup_face`, carried in a backup like the look.
@@ -77,8 +75,9 @@ All notable project changes should be documented here going forward.
   the extra moves and hides the boxes. The notice and the Pact's waiting
   list moved above the sections, so they show without scrolling.
   `popup.js` `tidySections()` folds away a box with nothing to show here
-  (this site on a browser page). The choice is `pblocker_popup_sections`,
-  carried in a backup. Tests: `tests/popup-sections.test.js`.
+  (this site on a browser page). The extra also fills Below the band in
+  `#popup-card`. The choice is `pblocker_popup_sections`, carried in a
+  backup. Tests: `tests/popup-sections.test.js`.
 - Pass It On is `#pass-card` in `options.html`. Its × folds it for good:
   `options-layout.js` keeps `pblocker_pass_it_on_read` in localStorage, like
   the 2.0 card. Tests: `tests/options-welcome-cards.test.js`.

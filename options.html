@@ -2007,332 +2007,531 @@
 
     /* ── Blocked page design picker ──────────────────────────────────────── */
 
-    /* Popup sections (extras/sections.js): the shapes, drawn at a quarter
-       size, then Your own as a list beside the popup at half size. The
-       brass line is the fold: 600px, the most a toolbar popup opens to. */
-    .shapes {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr));
-      gap: var(--space-3);
-      margin-top: var(--space-4);
+    /* Your popup (extras/face.js, extras/sections.js), laid out as Sieve's:
+       the real popup in a frame beside what it leads with and the order of
+       what's under it. Wide enough, the aside is as wide as the popup and
+       stays in view while the list scrolls past; narrower, it stacks and the
+       preview leads. */
+    @media (min-width: 75rem) {
+      #popup-card.group-split {
+        grid-template-columns: 360px minmax(0, 1fr);
+        column-gap: var(--space-7);
+      }
+      #popup-card > .group-aside {
+        position: sticky;
+        top: var(--space-6);
+      }
     }
-    .shape {
-      position: relative;
+    @media (min-width: 60rem) and (max-width: 74.99rem) {
+      #popup-card.group-split {
+        display: block;
+      }
+      #popup-card > .group-body {
+        margin-top: var(--space-6);
+      }
+    }
+    .popup-preview {
+      max-width: 360px;
+      margin-top: var(--space-5);
+    }
+    .pp {
+      margin: 0;
+    }
+    /* A sketch of the toolbar the popup hangs from: the address bar, then
+       BlockNSFW's own icon, pressed. */
+    .pp-toolbar {
       display: flex;
-      flex-direction: column;
-      gap: var(--space-1);
-      padding: var(--space-3);
-      border: 1px solid var(--color-rule);
-      cursor: pointer;
-      transition: border-color var(--dur-state) var(--ease-out-quint);
+      align-items: center;
+      gap: var(--space-2);
+      height: 34px;
+      padding: 0 4px 0 6px;
+      border-bottom: 1px solid var(--color-rule);
     }
-    .shape:hover {
-      border-color: var(--color-rule-3);
+    .pp-omnibox {
+      flex: 1;
+      height: 20px;
+      background: var(--color-recess);
     }
-    .shape.is-selected {
-      border-color: var(--color-pine);
+    .pp-ext {
+      width: 12px;
+      height: 12px;
+      border: 1.5px solid var(--color-ink-3);
+      opacity: 0.6;
     }
-    .shape input {
-      position: absolute;
-      opacity: 0;
-      pointer-events: none;
+    .pp-icon {
+      box-sizing: content-box;
+      width: 16px;
+      height: 16px;
+      padding: 4px;
+      background: var(--color-recess);
     }
-    .shape input:focus-visible ~ .shape-stage .mini {
-      outline: var(--focus-width) solid var(--color-pine-2);
-      outline-offset: var(--focus-offset);
-    }
-    .shape-stage {
-      position: relative;
-      display: flex;
-      justify-content: center;
-      align-items: flex-start;
-      height: 310px;
-      padding-top: 4px;
-    }
-    .mini {
-      position: relative;
-      display: block;
-      width: 90px;
-      border: 1px solid var(--color-rule-2);
-      background: var(--color-sheet);
+    /* The popup itself, at its own 360 pixels. It fades in once it has said
+       how tall it is. */
+    .pp-frame {
+      margin-top: var(--space-2);
       overflow: hidden;
+      outline: 1px solid var(--color-rule-2);
+      background: var(--color-paper);
     }
-    .mini-band {
+    .pp-popup {
       display: block;
-      height: 49px;
+      width: 100%;
+      height: 520px;
+      border: 0;
+      opacity: 0;
+      transition: height var(--dur-state) var(--ease-out-quint), opacity var(--dur-state) var(--ease-out-quint);
+    }
+    .pp.is-ready .pp-popup {
+      opacity: 1;
+    }
+    .pp-caption {
+      display: flex;
+      align-items: baseline;
+      gap: 10px;
+      margin-top: var(--space-4);
+      font-family: var(--font-mono);
+      font-size: 11px;
+      line-height: 1.4;
+      color: var(--color-ink-3);
+    }
+    .pp-live {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      flex-shrink: 0;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: var(--color-ink);
+    }
+    .pp-live::before {
+      content: "";
+      width: 6px;
+      height: 6px;
       background: var(--color-pine);
     }
-    .mini-band i,
-    .mini-sec i {
-      display: block;
-      height: 2px;
+    .pp-where {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
-    .mini-band i {
-      margin: 6px 6px 0;
-      width: 26px;
-      background: var(--color-on-band-2);
-    }
-    .mini-band i:nth-child(2) {
-      width: 44px;
-      height: 5px;
-      background: var(--color-on-band);
-    }
-    .mini-band i:nth-child(3) {
-      width: auto;
-      height: 1px;
-      margin-top: 16px;
-      background: var(--color-band-rule);
-    }
-    .mini-sec {
-      display: block;
-      box-sizing: border-box;
-      padding: 4px 6px 0;
-      border-top: 1px solid var(--color-rule);
-    }
-    .mini-sec i {
-      width: 60%;
-      background: var(--color-recess-2);
-    }
-    .mini-sec i + i {
-      margin-top: 3px;
-      width: 38%;
-    }
-    .mini-below,
-    .scale-below {
-      position: absolute;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      background: color-mix(in srgb, var(--color-paper) 58%, transparent);
-      pointer-events: none;
-    }
-    .mini-below {
-      top: 150px;
-    }
-    .mini-fold {
-      position: absolute;
-      left: calc(50% - 53px);
-      width: 106px;
-      top: 154px;
-      border-top: 1px solid var(--color-brass);
-    }
-    .shape-name {
-      margin-top: var(--space-2);
-      font-size: 14px;
-      font-weight: 500;
-    }
-    .shape.is-selected .shape-name::after {
-      content: "chosen";
-      margin-left: var(--space-2);
+
+    /* Each part's name, as the popup names its own: small capitals. */
+    .popup-field .field-title {
+      margin-bottom: var(--space-4);
       font-family: var(--font-mono);
       font-size: var(--text-meta);
       font-weight: 500;
       letter-spacing: 0.15em;
       text-transform: uppercase;
-      color: var(--color-pine);
-    }
-    .shape-blurb {
-      font-size: 12px;
-      line-height: 1.45;
       color: var(--color-ink-2);
     }
-    .shape-fit {
-      margin-top: auto;
-      padding-top: var(--space-2);
-    }
-    .shape-fit.is-fits {
-      color: var(--color-pine);
-    }
-    .sections-own {
+    #popup-arrange-field {
+      container-type: inline-size;
       margin-top: var(--space-6);
+      padding-top: var(--space-5);
+      border-top: 1px solid var(--color-rule);
     }
-    .sections-body {
+
+    /* At the top: each face as a picture of the band. */
+    #popup-lead-field {
+      container-type: inline-size;
+    }
+    .lead-tiles {
       display: grid;
-      grid-template-columns: minmax(0, 1fr) 17.5rem;
-      column-gap: var(--space-7);
-      align-items: start;
-      margin-top: var(--space-4);
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 22px 14px;
+      max-width: 36rem;
     }
-    @media (max-width: 47.99rem) {
-      .sections-body {
-        grid-template-columns: minmax(0, 1fr);
-        row-gap: var(--space-5);
+    @container (min-width: 420px) {
+      .lead-tiles {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
       }
     }
-    .sec-list {
-      margin: 0;
-      padding: 0;
-      list-style: none;
-    }
-    .sec-row {
-      display: grid;
-      grid-template-columns: auto minmax(0, 1fr) auto auto;
-      align-items: center;
-      column-gap: var(--space-3);
-      min-height: 44px;
-      padding: 4px 0;
-      border-bottom: 1px solid var(--color-rule);
-    }
-    .sec-moves {
-      display: flex;
-      gap: 4px;
-    }
-    .move-btn {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      width: 28px;
-      height: 28px;
-      padding: 0;
-      border: 1px solid var(--color-rule-2);
-      border-radius: var(--radius-xs);
-      background: transparent;
-      color: var(--color-ink-2);
+    .lead-tile {
+      position: relative;
+      display: block;
+      min-width: 0;
       cursor: pointer;
     }
-    .move-btn:hover {
-      border-color: var(--color-ink);
-      background: var(--color-sheet);
-      color: var(--color-ink);
+    .lead-tile:has(input:disabled) {
+      cursor: default;
     }
-    .move-btn:disabled {
-      visibility: hidden;
+    /* The radio stays in the page for keys and screen readers; the picture
+       shows its state. */
+    .lead-tile input {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 1px;
+      height: 1px;
+      margin: 0;
+      opacity: 0;
     }
-    .move-btn .icon {
-      width: 14px;
-      height: 14px;
-    }
-    .sec-name {
-      font-size: 14px;
-    }
-    .sec-row.is-hidden .sec-name {
-      color: var(--color-ink-3);
-    }
-    .sec-px {
-      min-width: 3ch;
-      font-family: var(--font-mono);
-      font-size: 11px;
-      font-variant-numeric: tabular-nums;
-      text-align: right;
-      color: var(--color-ink-3);
-    }
-    .sec-fixed {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      min-height: 40px;
-      border-bottom: 1px solid var(--color-rule);
-      font-size: 14px;
+    .lead-tile-name {
+      display: block;
+      margin-top: 11px;
+      font-size: 13px;
+      line-height: 1.35;
       color: var(--color-ink-2);
     }
-    .fold-mark {
+    .lead-tile:has(input:checked) .lead-tile-name {
+      font-weight: 500;
+      color: var(--color-ink);
+    }
+    .lead-tile input:focus-visible ~ .lead-tile-name {
+      text-decoration: underline;
+      text-underline-offset: 3px;
+    }
+    .lead-tile-note {
+      display: block;
+      margin-top: 2px;
+      font-family: var(--font-mono);
+      font-size: 10.5px;
+      line-height: 1.4;
+      color: var(--color-ink-3);
+    }
+    /* The picture: the popup's band in miniature, in the band's own colours
+       (a Supporter look recolours it as it does the popup), then its paper. */
+    .lead-pic {
       display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: var(--space-3);
-      margin-top: -1px;
-      padding: 6px 0 5px;
-      border-bottom: 1px solid var(--color-brass);
-    }
-    .fold-mark .meta {
-      color: var(--color-brass);
-    }
-    .sections-reset {
-      margin-top: var(--space-3);
-    }
-    .sections-figure {
-      margin: 0;
-    }
-    .sections-figure > .meta {
-      margin-bottom: var(--space-2);
-    }
-    .scale {
-      position: relative;
-      width: 180px;
-    }
-    .scale-plate {
-      position: relative;
+      flex-direction: column;
+      aspect-ratio: 4 / 3;
+      overflow: hidden;
       border: 1px solid var(--color-rule-2);
       background: var(--color-sheet);
-      overflow: hidden;
+      outline: 2px solid transparent;
+      outline-offset: 3px;
+      transition: outline-color var(--dur-state) var(--ease-out-quint), border-color var(--dur-state) var(--ease-out-quint);
     }
-    .scale-band {
-      height: 98px;
-      box-sizing: border-box;
-      padding: 7px 8px;
-      background: var(--color-pine);
+    .lead-tile:hover .lead-pic {
+      border-color: var(--color-rule-3);
+    }
+    .lead-tile:has(input:disabled):hover .lead-pic {
+      border-color: var(--color-rule-2);
+    }
+    .lead-tile input:checked + .lead-pic {
+      outline-color: var(--color-ink);
+    }
+    .lead-pic i,
+    .lead-pic b {
+      display: block;
+    }
+    .lp-band {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      padding: 8px 9px 0;
+      background: var(--color-band);
       color: var(--color-on-band);
+    }
+    .lp-mark {
       font-family: var(--font-display);
+      font-size: 8.5px;
+      line-height: 1;
     }
-    .scale-band .scale-word {
-      font-size: 10px;
+    .lp-body {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      min-height: 30px;
     }
-    .scale-band .scale-status {
-      margin-top: 12px;
+    .lp-status {
+      font-family: var(--font-display);
       font-size: 17px;
       line-height: 1;
     }
-    .scale-sec,
-    .scale-end {
-      box-sizing: border-box;
-      padding: 4px 8px 0;
-      border-top: 1px solid var(--color-rule);
-      overflow: hidden;
-      font-size: 11px;
-      line-height: 1.3;
-      color: var(--color-ink-2);
+    .lp-kicker {
+      width: 34px;
+      height: 2px;
+      background: var(--color-on-band-2);
     }
-    .scale-end {
-      height: 38px;
-      color: var(--color-ink-3);
-    }
-    .scale-bar {
-      display: block;
-      width: 70%;
+    .lp-line {
+      width: 74%;
       height: 3px;
-      margin-top: 4px;
-      background: var(--color-recess-2);
+      background: var(--color-on-band-2);
     }
-    .scale-bar + .scale-bar {
-      width: 45%;
+    .lp-quote {
+      display: -webkit-box;
+      overflow: hidden;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      font-family: var(--font-display);
+      font-size: 12px;
+      line-height: 1.2;
+      text-indent: -0.35em;
+      overflow-wrap: anywhere;
     }
-    .scale-below {
-      top: 300px;
+    .lp-figure {
+      display: flex;
+      align-items: baseline;
+      gap: 4px;
     }
-    .scale-fold {
-      position: absolute;
-      left: -8px;
-      right: -8px;
-      top: 300px;
-      border-top: 1px solid var(--color-brass);
+    .lead-pic .lp-num {
+      font-family: var(--font-display);
+      font-size: 18px;
+      font-weight: 400;
+      line-height: 1;
     }
-    .scale-fold-label {
-      position: absolute;
-      left: calc(100% + 14px);
-      top: 293px;
-      white-space: nowrap;
+    .lp-unit {
+      font-family: var(--font-display);
+      font-size: 9.5px;
+      color: var(--color-on-band-2);
     }
-    .scale-fold-label .meta {
+    .lp-tally,
+    .lp-days {
+      display: grid;
+      grid-template-columns: repeat(30, minmax(0, 1fr));
+      align-items: end;
+      gap: 1px;
+    }
+    .lp-tally i {
+      height: 6px;
+      background: var(--color-on-band);
+    }
+    .lp-tally .is-missed {
+      height: 3px;
+      background: var(--color-on-band-2);
+    }
+    .lp-days i {
+      height: 3px;
+      background: var(--color-band-rule);
+    }
+    .lp-days .is-done {
+      background: var(--color-on-band-2);
+    }
+    .lp-tally .is-today,
+    .lp-days .is-today {
+      background: var(--color-band-signal);
+    }
+    .lp-photo {
+      position: relative;
+      height: 32px;
+      overflow: hidden;
+      background: var(--color-band-rule);
+    }
+    .lp-photo img {
       display: block;
-      color: var(--color-brass);
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
     }
-    .scale-fold-label .meta + .meta {
-      margin-top: 2px;
+    .lp-sun {
+      position: absolute;
+      top: 6px;
+      right: 12px;
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--color-on-band-2);
+    }
+    .lp-hill {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      height: 18px;
+      background: var(--color-on-band-2);
+      opacity: 0.45;
+      clip-path: polygon(0 100%, 0 70%, 28% 20%, 52% 62%, 70% 38%, 100% 80%, 100% 100%);
+    }
+    /* The Protection switch, which always sits under the face. */
+    .lp-switch {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-top: auto;
+      padding: 5px 0 6px;
+      border-top: 1px solid var(--color-band-rule);
+    }
+    .lp-word {
+      width: 30px;
+      height: 3px;
+      background: var(--color-on-band);
+    }
+    .lp-toggle {
+      width: 15px;
+      height: 8px;
+      box-sizing: border-box;
+      border: 1px solid var(--color-on-band);
+    }
+    .lp-rest {
+      display: flex;
+      flex: 1;
+      flex-direction: column;
+      gap: 6px;
+      padding: 8px 9px 0;
+    }
+    .lp-row {
+      width: 72%;
+      height: 3px;
+      background: var(--color-rule-2);
+    }
+    .lp-row:nth-child(2) {
+      width: 56%;
+    }
+    .lp-row:nth-child(3) {
+      width: 64%;
+    }
+    .lead-blurb {
+      max-width: var(--measure);
+      margin-top: var(--space-5);
+    }
+    /* A face with nothing to show yet: what it waits on, and where. */
+    .lead-waiting {
+      max-width: var(--measure);
+      margin-top: var(--space-3);
+      font-size: 13px;
+      color: var(--color-ink);
+    }
+    .lead-waiting::before {
+      content: "";
+      display: inline-block;
+      width: 6px;
+      height: 6px;
+      margin-right: var(--space-2);
+      background: var(--color-brass);
+      vertical-align: 1px;
+    }
+
+    /* Below the band: rows to carry by their handle. */
+    .arrange-list {
+      margin: 0;
+      padding: 0;
+      list-style: none;
+      border-top: 1px solid var(--color-rule);
+    }
+    .arrange-item {
+      position: relative;
+      border-bottom: 1px solid var(--color-rule);
+      transition: transform var(--dur-state) var(--ease-out-quint), background-color var(--dur-state) var(--ease-out-quint);
+    }
+    .arrange-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-height: 56px;
+      padding: 8px 0;
+    }
+    .arrange-grip {
+      display: grid;
+      place-items: center;
+      flex-shrink: 0;
+      width: 28px;
+      height: 38px;
+      margin-left: -6px;
+      padding: 0;
+      color: var(--color-ink-3);
+      background: none;
+      border: 0;
+      cursor: grab;
+      touch-action: none;
+      transition: color var(--dur-state) var(--ease-out-quint), background-color var(--dur-state) var(--ease-out-quint);
+    }
+    .arrange-grip:hover:not(:disabled) {
+      color: var(--color-ink);
+      background: var(--color-recess);
+    }
+    .arrange-grip:disabled {
+      cursor: default;
+    }
+    .arrange-grip-icon {
+      width: 10px;
+      height: 16px;
+      fill: currentColor;
+    }
+    .arrange-text {
+      display: flex;
+      flex: 1;
+      flex-direction: column;
+      gap: 1px;
+      min-width: 0;
+    }
+    .arrange-name {
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--color-ink);
+    }
+    .arrange-note {
+      font-size: 12.5px;
+      line-height: 1.4;
       color: var(--color-ink-3);
     }
-    .sections-sum {
+    /* Shown or hidden: an eye, open or shut, and the word. Hidden, the row
+       quietens and the button's edge breaks into dashes: still there, out of
+       the way. */
+    .arrange-eye {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      flex-shrink: 0;
+      min-width: 104px;
+      height: 30px;
+      padding: 0 11px 0 9px;
+      font-family: var(--font-sans);
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--color-ink);
+      background: none;
+      border: 1px solid var(--color-rule-2);
+      cursor: pointer;
+      transition: color var(--dur-state) var(--ease-out-quint), border-color var(--dur-state) var(--ease-out-quint),
+        background-color var(--dur-state) var(--ease-out-quint);
+    }
+    .arrange-eye:hover:not(:disabled) {
+      border-color: var(--color-ink);
+      background: var(--color-recess);
+    }
+    .arrange-eye:disabled {
+      cursor: default;
+    }
+    .arrange-eye-icon {
+      width: 16px;
+      height: 16px;
+      flex-shrink: 0;
+    }
+    .arrange-eye .eye-shut,
+    .arrange-eye[aria-pressed="false"] .eye-open {
+      display: none;
+    }
+    .arrange-eye[aria-pressed="false"] .eye-shut {
+      display: inline;
+    }
+    .arrange-eye[aria-pressed="false"] {
+      color: var(--color-ink-3);
+      border-style: dashed;
+    }
+    .is-set-aside > .arrange-row .arrange-name {
+      color: var(--color-ink-3);
+    }
+    /* Carried: lifted off the page while the rest make room. */
+    .arrange-list.is-sorting {
+      user-select: none;
+    }
+    .arrange-item.is-dragging {
+      z-index: 2;
+      background: var(--color-sheet);
+      outline: 1px solid var(--color-rule-2);
+      transition: background-color var(--dur-state) var(--ease-out-quint);
+    }
+    .arrange-item.is-dragging .arrange-grip {
+      color: var(--color-ink);
+      cursor: grabbing;
+    }
+    .arrange-reset {
       margin-top: var(--space-4);
     }
-    .sum-value {
-      margin-top: 2px;
-      font-family: var(--font-display);
-      font-size: 22px;
-      line-height: 1.15;
-    }
-    .sum-was {
-      margin-top: 2px;
-      font-size: 13px;
-      color: var(--color-ink-3);
+    @container (max-width: 440px) {
+      .arrange-eye {
+        min-width: 0;
+      }
+      .arrange-eye-word {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+      }
     }
 
     .design-picker {
@@ -3670,57 +3869,25 @@
               <div class="look-swatches" id="look-accent" role="radiogroup" aria-labelledby="look-accent-label" aria-describedby="look-accent-desc" data-look-control></div>
               <a class="arrow-link small" href="#supporter" data-door="looks" data-look-upsell hidden>See Supporter</a>
             </div>
-            <!-- Popup face: shown and run by extras/face.js, which the
-                 open-source build doesn't carry (extras/README.md). -->
-            <div class="row row-stack" id="face-row" hidden>
-              <div class="row-text">
-                <span class="row-label" id="face-label">Popup face <span class="meta meta-brass row-tag" data-face-tag hidden>Supporter</span></span>
-                <p class="row-desc" id="face-desc">What the toolbar popup leads with while protection is on. The Protection switch stays right under it.</p>
-              </div>
-              <div class="segmented" id="face-picker" role="radiogroup" aria-labelledby="face-label" aria-describedby="face-desc face-note" data-face-control hidden>
-                <label class="segment"><input type="radio" class="segment-input" name="popup-face" value="plain" checked /><span class="segment-label">Plain</span></label>
-                <label class="segment"><input type="radio" class="segment-input" name="popup-face" value="words" /><span class="segment-label">Your words</span></label>
-                <label class="segment"><input type="radio" class="segment-input" name="popup-face" value="days" /><span class="segment-label">Days kept</span></label>
-                <label class="segment"><input type="radio" class="segment-input" name="popup-face" value="photo" /><span class="segment-label">Your photo</span></label>
-                <label class="segment"><input type="radio" class="segment-input" name="popup-face" value="path" /><span class="segment-label">The path</span></label>
-              </div>
-              <p class="field-hint" id="face-note" data-face-control hidden>Your words shows your note to yourself, or your plan for a hard moment if there's no note. Until there's something to show, the popup stays Plain.</p>
-              <a class="arrow-link small" href="#supporter" data-door="face" data-face-upsell hidden>See Supporter</a>
-            </div>
           </div>
           </div>
         </div>
 
-        <!-- Popup sections: shown and run by extras/sections.js, which the
-             open-source build doesn't carry (extras/README.md). The shapes,
-             the list and the drawing are built there. -->
-        <div class="group" id="sections-group" hidden>
-          <h3 class="group-title" id="sections-title">Popup sections <span class="meta meta-brass row-tag" data-sections-tag hidden>Supporter</span></h3>
-          <p class="group-desc">What the toolbar popup shows, and in what order. Each shape is drawn at a quarter of its size, with a brass line where the popup stops opening: what's above it shows without scrolling. The band, the Protection switch and Settings are always there, and hiding a section never changes what's blocked.</p>
-          <a class="arrow-link small" href="#supporter" data-door="sections" data-sections-upsell hidden>See Supporter</a>
-          <div data-sections-control hidden>
-            <div class="shapes" id="sections-shapes" role="radiogroup" aria-labelledby="sections-title"></div>
-            <div class="sections-own">
-              <h4 class="row-label">Your own</h4>
-              <p class="row-desc">Show, hide or move any section. A change here makes the shape Your own; the other shapes stay as they are.</p>
-              <div class="sections-body">
-                <div>
-                  <div class="sec-fixed"><span>The band and the switch</span><span class="meta">always first</span></div>
-                  <ol class="sec-list" id="sections-list" aria-label="Popup sections, in order"></ol>
-                  <div class="sec-fixed"><span>Settings</span><span class="meta">always last</span></div>
-                  <button type="button" class="btn-text sections-reset" id="sections-reset">Show everything, in the usual order</button>
-                </div>
-                <figure class="sections-figure">
-                  <p class="meta">the popup, half size</p>
-                  <div id="sections-scale"></div>
-                  <div class="sections-sum" aria-live="polite">
-                    <p class="meta">opens showing</p>
-                    <p class="sum-value" id="sections-sum-lead"></p>
-                    <p class="sum-was" id="sections-sum-scroll"></p>
-                  </div>
-                </figure>
-              </div>
-            </div>
+        <!-- Your popup, laid out as Sieve's: the real popup in a frame beside
+             what it leads with and the order of what's under it. Shown and run
+             by extras/face.js (the frame and At the top) and extras/sections.js
+             (Below the band), which the open-source build doesn't carry
+             (extras/README.md). -->
+        <div class="group group-split" id="popup-card" hidden>
+          <div class="group-aside">
+            <h3 class="group-title">Your popup <span class="meta meta-brass row-tag" data-popup-tag hidden>Supporter</span></h3>
+            <p class="group-desc">Choose what the band at the top of the popup leads with, and put the sections under it in your own order. The Protection switch stays right under the band.</p>
+            <a class="arrow-link small" href="#supporter" data-door="face" data-popup-upsell hidden>See Supporter</a>
+            <div class="popup-preview" id="popup-preview"></div>
+          </div>
+          <div class="group-body">
+            <div class="field popup-field" id="popup-lead-field"></div>
+            <div class="field popup-field" id="popup-arrange-field"></div>
           </div>
         </div>
 
