@@ -714,3 +714,124 @@ armorgames.com	trap-games
 coolmathgames.com	trap-games
 chess.com	trap-games
 lichess.org	trap-games
+
+# ---- trap-lyrics: song lyrics and poems (added after a review: "it won't let me listen to one of my favorite songs") ----
+# v4 had no lyrics among its benign pages and read first-person love language
+# ("her", "she", "me", "girl", "love") as adult: "Girls Like Girls" scored 0.987
+# and "We Fell in Love in October" 0.976, held at Strict on text alone, and
+# most love songs crossed the fuse bar. Explicit words in these pages are
+# dropped before training (train_text_classifier.py CLEANED_CATEGORIES), so the
+# model learns the love song, not that sexual words are benign.
+genius.com	trap-lyrics
+azlyrics.com/lyrics/*	trap-lyrics
+lyrics.com/lyric/*	trap-lyrics
+songlyrics.com	trap-lyrics
+lyricsfreak.com	trap-lyrics
+lyricstranslate.com	trap-lyrics
+songtexte.com/songtext/*	trap-lyrics
+letras.mus.br	trap-lyrics
+letras.com	trap-lyrics
+paroles.net	trap-lyrics
+lyricsondemand.com	trap-lyrics
+elyrics.net/read/*	trap-lyrics
+lyricsmode.com/lyrics/*	trap-lyrics
+colorcodedlyrics.com	trap-lyrics
+uta-net.com/song/*	trap-lyrics
+j-lyric.net	trap-lyrics
+musica.com	trap-lyrics
+poetryfoundation.org/poems/*	trap-lyrics
+poets.org/poem/*	trap-lyrics
+
+# ---- trap-music: music journalism, reviews and song histories ----
+pitchfork.com	trap-music
+nme.com	trap-music
+stereogum.com	trap-music
+consequence.net	trap-music
+songfacts.com	trap-music
+allmusic.com	trap-music
+last.fm	trap-music
+albumoftheyear.org	trap-music
+udiscovermusic.com	trap-music
+
+# ---- trap-lgbtq, second round (same review: "is the creator homophobic?") ----
+itgetsbetter.org	trap-lgbtq
+lambdalegal.org	trap-lgbtq
+glsen.org	trap-lgbtq
+outsports.com	trap-lgbtq
+en.wikipedia.org/wiki/LGBTQ	trap-lgbtq
+en.wikipedia.org/wiki/Lesbian	trap-lgbtq
+en.wikipedia.org/wiki/Gay	trap-lgbtq
+en.wikipedia.org/wiki/Bisexuality	trap-lgbtq
+en.wikipedia.org/wiki/Transgender	trap-lgbtq
+en.wikipedia.org/wiki/Same-sex_marriage	trap-lgbtq
+en.wikipedia.org/wiki/Pride_parade	trap-lgbtq
+en.wikipedia.org/wiki/Coming_out	trap-lgbtq
+en.wikipedia.org/wiki/Homosexuality	trap-lgbtq
+en.wikipedia.org/wiki/Sexual_orientation	trap-lgbtq
+
+# ---- trap-girls: girls and women in their ordinary senses ----
+# Porn titles say "girls" constantly, and v4 weighted the word adult: a love
+# song about girls loving girls stayed over the fuse bar after the lyrics
+# round. Girls' organisations, bands and shows teach it the ordinary word.
+girlscouts.org	trap-girls
+girlswhocode.com	trap-girls
+girlsinc.org	trap-girls
+girlsontherun.org	trap-girls
+girlguiding.org.uk	trap-girls
+wagggs.org	trap-girls
+plan-international.org	trap-girls
+girlup.org	trap-girls
+en.wikipedia.org/wiki/Spice_Girls	trap-girls
+en.wikipedia.org/wiki/Gilmore_Girls	trap-girls
+en.wikipedia.org/wiki/Mean_Girls	trap-girls
+en.wikipedia.org/wiki/The_Powerpuff_Girls	trap-girls
+en.wikipedia.org/wiki/Girls%27_Generation	trap-girls
+en.wikipedia.org/wiki/Girls_Aloud	trap-girls
+en.wikipedia.org/wiki/Little_Women	trap-girls
+en.wikipedia.org/wiki/Girls_(TV_series)	trap-girls
+en.wikipedia.org/wiki/Destiny%27s_Child	trap-girls
+en.wikipedia.org/wiki/Girl_Scouts_of_the_USA	trap-girls
+
+# ---- trap-lgbtq, third round: same-sex marriage, country by country ----
+en.wikipedia.org/wiki/Same-sex_marriage_in_*	trap-lgbtq
+en.wikipedia.org/wiki/Recognition_of_same-sex_unions*	trap-lgbtq
+en.wikipedia.org/wiki/Legal_status_of_same-sex_*	trap-lgbtq
+
+# ---- trap-lgbtq, fourth round: same-sex marriage off Wikipedia ----
+# Splits are by site, and en.wikipedia.org fell wholly into test, so the
+# same-sex marriage articles above never reached training; the model still
+# read the "sex" of "same-sex" as adult.
+freedomtomarry.org	trap-lgbtq
+lgbtmap.org	trap-lgbtq
+glad.org	trap-lgbtq
+lambdalegal.org/know-your-rights/*	trap-lgbtq
+hrc.org/resources/*	trap-lgbtq
+equalitynetwork.scot	trap-lgbtq
+australianmarriageequality.org	trap-lgbtq
+marriageequality.ie	trap-lgbtq
+www.uscis.gov/family/same-sex-marriages	trap-lgbtq
+pewresearch.org/religion/*	trap-lgbtq
+aclu.org/issues/lgbtq-rights/*	trap-lgbtq
+equalityfederation.org	trap-lgbtq
+ilga-europe.org	trap-lgbtq
+familyequality.org	trap-lgbtq
+
+# ---- trap-games, second round: fantasy football ----
+# The lyrics, LGBTQ and girls rounds at 8x outweighed the fantasy-sports
+# pages, and an FPL title over a points table went back over the Balanced
+# fuse bar.
+fantasy.premierleague.com/*	trap-games
+fantasyfootballscout.co.uk	trap-games
+fantasyfootballhub.co.uk	trap-games
+fantasyfootballfix.com	trap-games
+fplform.com	trap-games
+livefpl.net	trap-games
+fantasy.bundesliga.com	trap-games
+fantasy.laliga.com	trap-games
+fantasy.sky.com	trap-games
+football.fantasysports.yahoo.com	trap-games
+fantasy.cbssports.com	trap-games
+fantasy.espn.com/*	trap-games
+premierleague.com/news/*	trap-games
+fantasyfootballers.com	trap-games
+dreamteamfc.com	trap-games

@@ -120,6 +120,23 @@ All notable project changes should be documented here going forward.
   SafeSearch filters the results, any other word does that. "nude" or
   "xxx" alone is still held, and so is any "porn". Of 50 everyday and
   looking addresses and titles, 22 were judged wrong; none are now.
+- **The AI Text Blocker held love songs, songs about girls who love girls
+  most of all.** It had learned from no lyrics at all, and read a love
+  song's "her", "she", "girl" and "love" as adult: Hayley Kiyoko's "Girls
+  Like Girls" scored 0.99 and girl in red's "We Fell in Love in October"
+  0.98, held at Strict on their words alone, and most love songs crossed
+  the bar where a few blurred pictures hold the page. Wikipedia's article
+  on same-sex marriage did the same over the "sex" in "same-sex". The model
+  has relearned from song lyrics and poems in six languages (with their
+  explicit words taken out first, so a rap verse teaches nothing about
+  sexual words), music writing, LGBTQ organisations and articles, girls'
+  groups, bands and shows, and fantasy football again. "Girls Like Girls"
+  now scores 0.42, "We Fell in Love in October" 0.26 and same-sex marriage
+  0.34. Of 50 ordinary music, lyrics and LGBTQ pages, none is held at
+  Relaxed or Balanced (6 could be before) and 2 can be at Strict when
+  pictures corroborate (8 before). Adult pages caught on held-out sites:
+  61% at Relaxed (was 59%), 61% at Balanced (the same), 69% at Strict (was
+  67%), and still no ordinary page blocked at Relaxed or Balanced.
 - **A PIN longer than 8 characters was always wrong in the popup.** Setup
   took a PIN of any length, but the popup's PIN box stopped taking letters
   after the 8th and Settings' after the 20th, so the PIN was cut short where

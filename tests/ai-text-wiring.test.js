@@ -192,15 +192,17 @@ test('a YouTube watch page is not blocked over two misread thumbnails, even at S
   assert.equal(redirects.length, 0);
 });
 
-// A page whose text alone is borderline, so the images decide.
+// A page whose text alone is borderline, so the images decide. (A lingerie
+// try-on haul until the lyrics retrain, which scored it 0.37, under the
+// Strict fuse bar of 0.41: lingerie text reads less adult than it did.)
 const BORDERLINE = {
-  title: 'Sexy lingerie try on haul - hot models in lace',
-  metas: ['Watch our hottest models try on sexy see-through lingerie and tiny bikinis.'],
+  title: 'Sexy boudoir photo shoot - hot models in see-through lingerie',
+  metas: ['Our hottest models in sheer lingerie, tiny thongs and topless boudoir poses. Watch the full shoot.'],
   lines: [
-    'Sexy lingerie try on haul with our hottest models',
-    'See-through lace bodysuits, tiny thongs and sheer stockings',
-    'Watch the full video for more hot try on clips',
-    'Subscribe for new sexy try on hauls every week',
+    'Sexy boudoir photo shoot with our hottest models',
+    'Sheer see-through lingerie, tiny thongs and topless poses',
+    'Watch the full video for more hot boudoir clips',
+    'Subscribe for new sexy shoots every week',
   ],
 };
 
@@ -224,8 +226,15 @@ test('a borderline page is blocked when most of its own images are blurred', () 
   assert.equal(redirects[0].reason, 'ai_text_scan');
 });
 
+// The image filter blurs some ordinary pictures: measured on 870 images from
+// music, lyrics and LGBTQ pages in real Chrome (2026-11-02), 2-3% of page
+// pictures at Balanced, and a clothed couple kissing, a festival crowd or two
+// hands wearing rainbow rings among them. The most a real page drew at Strict
+// was 3 of 31 (the Genius page for "I Kissed a Girl") and 2 of 20 (a YouTube
+// search for "gay pride parade"). Those must never corroborate.
 test('a borderline page with only a stray blurred image or two is not', () => {
-  for (const images of [{ checked: 40, blocked: 1 }, { checked: 40, blocked: 2 }, { checked: 2, blocked: 2 }]) {
+  for (const images of [{ checked: 40, blocked: 1 }, { checked: 40, blocked: 2 }, { checked: 2, blocked: 2 },
+    { checked: 31, blocked: 3 }, { checked: 20, blocked: 2 }]) {
     const { blocked } = runScan({ ...BORDERLINE, strictness: 'strict', images });
     assert.equal(blocked, false, JSON.stringify(images));
   }

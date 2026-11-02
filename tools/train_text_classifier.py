@@ -333,6 +333,11 @@ def fold_of(site, k):
 
 TRAP_WEIGHT = 1.0  # set from --trap-weight in main()
 CF_WEIGHT = 0.0    # set from --counterfactual-weight in main()
+# Benign pages whose explicit words (explicit_terms.txt) are dropped before
+# they are learned. A love song must teach that "her", "she", "girl" and "love"
+# are not adult; a rap verse on the same lyrics site must not teach that its
+# sexual words are benign.
+CLEANED_CATEGORIES = {"trap-lyrics"}
 EXPLICIT_PATH = os.path.join(HERE, "text_corpus", "explicit_terms.txt")
 _LEXICON = None
 _EXPLICIT_CACHE = {}
@@ -429,12 +434,17 @@ def build_matrix(pages, fc, alpha, chars, max_windows, seed):
         per = lang_mult[(lang_of(p), p["label"])] / len(wins)
         if p["label"] == 0 and p["category"].startswith("trap-"):
             per *= TRAP_WEIGHT
+        cleaned = p["label"] == 0 and p["category"] in CLEANED_CATEGORIES
         for tokens, a, b in wins:
             counts = Counter()
             for i in range(a, b):
+                if cleaned and is_explicit(tokens[i]):
+                    continue
                 counts.update(fc.token(tokens[i]))
-                if i + 1 < b:
+                if i + 1 < b and not (cleaned and is_explicit(tokens[i + 1])):
                     counts[fc.bigram(tokens[i], tokens[i + 1])] += 1
+            if cleaned and not counts:
+                continue
             total = sum(counts.values())
             norm = math.pow(total, alpha)
             for bkt, c in counts.items():
@@ -730,7 +740,12 @@ def main(argv=None):
     # total weight, so ~250 more trap pages at 8x thinned these copies out and
     # "videos" crept back toward adult ("Funny Cat Videos" 0.22 -> 0.69).
     # 0.30 holds the video probes where they were; 0.35 cost more recall.
-    ap.add_argument("--counterfactual-weight", type=float, default=0.30,
+    # 0.55 since the lyrics / LGBTQ / girls / fantasy-football rounds (~410
+    # more trap pages): at 0.30 "Funny Cat Videos" went back to 0.67, and
+    # below 0.55 "Girls Like Girls" stayed over the Balanced fuse bar. 0.55
+    # holds both, every guard in text-classifier-core.test.js, and recall at
+    # or over the previous model's at every level.
+    ap.add_argument("--counterfactual-weight", type=float, default=0.55,
                     help="weight of explicit-words-removed copies of adult windows, "
                          "labelled benign (see explicit_terms.txt)")
     ap.add_argument("--dump", default=None,
@@ -989,6 +1004,12 @@ def evaluate(test, val, thresholds, wm, fc, pbias, pweights, cfg, args):
         ("Fantasy Premier League, Official Fantasy Football Game of the Premier League. Free to play fantasy football game, set up your fantasy football team at the Official Premier League site.",
          "Entry History This Season GW OR # % Rank OP GWR GWP PB TM TC GW9 1,412,123 13% 557 1,347,173 49 2 3 0 102.2 GW8 1,833,723 16% 508 5,719,438 45 -1 2 0 102.2 GW7 1,757,258 16% 463 2,550,245 69 6 0 0 101.8 GW6 1,922,109 18% 394 5,341,466 59 6 1 0 101.6 GW5 1,514,974 14% 335 2,767,782 55 11 0 0 101.5"),
         ("League table", "Pos Team P W D L GF GA GD Pts 1 Arsenal 10 8 1 1 21 6 15 25 2 Liverpool 10 7 2 1 18 9 9 23 3 Man City 10 7 1 2 22 10 12 22 4 Chelsea 10 6 2 2 18 11 7 20 5 Brighton 10 5 3 2 16 12 4 18"),
+        # Love songs, queer ones above all: v4 held "Girls Like Girls" (0.987)
+        # and "We Fell in Love in October" (0.976) at Strict, over "her",
+        # "she", "girl" and "love". Written for this table, not quoted.
+        ("Love song lyrics", "I knew it the first time she smiled at me. She likes girls the way I like girls, and I told her so. Hold my hand, girl, we are dancing in your kitchen till the morning light."),
+        ("Pride playlist | queer love songs", "Our favourite LGBTQ love songs for Pride month: songs about girls who love girls, boys who love boys, coming out and finding your people."),
+        ("Same-sex marriage", "Same-sex marriage is the marriage of two people of the same sex or gender. It is legal in more than thirty countries, and civil unions are recognised in others."),
     ]
     for head, body in probes:
         hz, bz = wm.page_z(truncate_parts(head, body), fc)

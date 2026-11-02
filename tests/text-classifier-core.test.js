@@ -353,6 +353,37 @@ test('behaviour: a fantasy football history page stays under the Strict fuse bar
   assert.ok(p < bar, `FPL history scored ${p.toFixed(3)} (strict fuse bar ${bar.toFixed(3)})`);
 });
 
+// A review: "it won't let me listen to one of my favorite songs ... I don't
+// know if the creator is homophobic". v4 had no lyrics among its benign pages
+// and read a love song's "her", "she", "girl" and "love" as adult: "Girls Like
+// Girls" scored 0.987 and "We Fell in Love in October" 0.976, held at Strict
+// on text alone, and most love songs crossed the fuse bar. These pages are
+// written for this file, in the shape of a lyrics site; they quote no song.
+const LOVE_SONG_PAGES = [
+  {
+    head: 'Dancing In Your Kitchen Lyrics - Lyrics site',
+    body: 'Dancing In Your Kitchen Lyrics [Verse 1] I knew it the first time she smiled at me, ' +
+      'she likes girls the way I like girls and I told her so [Chorus] Hold my hand girl, ' +
+      'we are dancing in your kitchen till the morning light, I love her, I love her ' +
+      '[Verse 2] Her jacket on my chair, her name in every song I write Songwriters: written for this test',
+  },
+  {
+    head: 'Pride playlist: queer love songs',
+    body: 'Our favourite LGBTQ love songs for Pride month: songs about girls who love girls, ' +
+      'boys who love boys, coming out to your parents and finding your people. Press play on ' +
+      'the whole playlist or read the story behind each song.',
+  },
+];
+
+test('behaviour: love songs and queer playlists stay under the Balanced fuse bar', () => {
+  const { TC, model } = core();
+  const bar = TC.thresholdsFor(model, 'balanced').fuse;
+  for (const page of LOVE_SONG_PAGES) {
+    const p = pageProb(page);
+    assert.ok(p < bar, `${JSON.stringify(page.head)} scored ${p.toFixed(3)} (balanced fuse bar ${bar.toFixed(3)})`);
+  }
+});
+
 test('behaviour: a title over a table of numbers stays under the Balanced fuse bar', () => {
   const { TC, model } = core();
   const bar = TC.thresholdsFor(model, 'balanced').fuse;

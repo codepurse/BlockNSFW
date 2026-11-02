@@ -5,16 +5,16 @@ the **test** split: sites the model never saw in training, and never used to pic
 a threshold or a hyper-parameter. Thresholds come from the validation split plus
 the training pages' out-of-fold scores -- never from test.
 
-- Model: format v4, window 200 chars / stride 100, alpha 0.5, C 3.0, trap weight 8.0, counterfactual weight 0.3, size 157 KB
-- Test pages: 168 adult (44 sites), 371 benign (102 sites)
+- Model: format v4, window 200 chars / stride 100, alpha 0.5, C 3.0, trap weight 8.0, counterfactual weight 0.55, size 157 KB
+- Test pages: 168 adult (44 sites), 452 benign (110 sites)
 
 ## Page-level results
 
 | Level | Block at | Adult pages caught | Benign pages blocked | Trap pages blocked |
 |---|---|---|---|---|
-| relaxed | 0.9954 | 99/168 (58.9%) | 0/371 (0.00%) | 0/204 |
-| balanced | 0.9917 | 103/168 (61.3%) | 0/371 (0.00%) | 0/204 |
-| strict | 0.9680 | 113/168 (67.3%) | 1/371 (0.27%) | 0/204 |
+| relaxed | 0.9961 | 102/168 (60.7%) | 0/452 (0.00%) | 0/285 |
+| balanced | 0.9950 | 103/168 (61.3%) | 0/452 (0.00%) | 0/285 |
+| strict | 0.9558 | 116/168 (69.0%) | 1/452 (0.22%) | 0/285 |
 
 ## Benign pages blocked at Balanced
 
@@ -24,29 +24,32 @@ None.
 
 | Category | Pages | Max score | Blocked at Balanced |
 |---|---|---|---|
-| edu | 9 | 0.056 | 0 |
-| entertainment | 6 | 0.852 | 0 |
-| finance | 2 | 0.263 | 0 |
-| gov | 1 | 0.028 | 0 |
-| lifestyle | 12 | 0.257 | 0 |
-| news | 51 | 0.705 | 0 |
-| random | 38 | 0.988 | 0 |
+| edu | 9 | 0.075 | 0 |
+| entertainment | 6 | 0.891 | 0 |
+| finance | 2 | 0.225 | 0 |
+| gov | 1 | 0.032 | 0 |
+| lifestyle | 12 | 0.317 | 0 |
+| news | 51 | 0.775 | 0 |
+| random | 38 | 0.971 | 0 |
 | reference | 15 | 0.425 | 0 |
-| shopping | 12 | 0.121 | 0 |
-| tech | 21 | 0.278 | 0 |
-| trap-anatomy | 4 | 0.298 | 0 |
-| trap-art | 18 | 0.446 | 0 |
-| trap-dating | 12 | 0.352 | 0 |
-| trap-encyclopedic | 1 | 0.080 | 0 |
-| trap-games | 6 | 0.036 | 0 |
-| trap-health | 15 | 0.058 | 0 |
-| trap-lgbtq | 8 | 0.360 | 0 |
-| trap-lingerie | 21 | 0.416 | 0 |
-| trap-parenting | 3 | 0.137 | 0 |
-| trap-products | 9 | 0.478 | 0 |
-| trap-recovery | 12 | 0.451 | 0 |
-| trap-stats | 68 | 0.605 | 0 |
-| trap-video | 27 | 0.354 | 0 |
+| shopping | 12 | 0.214 | 0 |
+| tech | 21 | 0.372 | 0 |
+| trap-anatomy | 4 | 0.393 | 0 |
+| trap-art | 18 | 0.448 | 0 |
+| trap-dating | 12 | 0.314 | 0 |
+| trap-encyclopedic | 1 | 0.070 | 0 |
+| trap-games | 6 | 0.042 | 0 |
+| trap-girls | 12 | 0.224 | 0 |
+| trap-health | 15 | 0.063 | 0 |
+| trap-lgbtq | 44 | 0.516 | 0 |
+| trap-lingerie | 21 | 0.343 | 0 |
+| trap-lyrics | 20 | 0.696 | 0 |
+| trap-music | 13 | 0.167 | 0 |
+| trap-parenting | 3 | 0.113 | 0 |
+| trap-products | 9 | 0.497 | 0 |
+| trap-recovery | 12 | 0.478 | 0 |
+| trap-stats | 68 | 0.418 | 0 |
+| trap-video | 27 | 0.367 | 0 |
 
 ## Adult recall by language at Balanced (test)
 
@@ -70,35 +73,38 @@ v3 scored an explicit sentence inside ~700 words of ordinary text at 0.0000.
 Here each benign test page gets the single most explicit window of a random
 adult test page inserted into the middle of its text.
 
-- Pages tested: 171 (benign test pages over 2,000 characters)
-- The inserted passage is found (its window scores p >= 0.9): 140/171 (82%)
-- The whole page crosses the Balanced block threshold: 0/171 (0%)
+- Pages tested: 190 (benign test pages over 2,000 characters)
+- The inserted passage is found (its window scores p >= 0.9): 150/190 (79%)
+- The whole page crosses the Balanced block threshold: 0/190 (0%)
 
 ## Known false positives, from v3 on
 
 | Text | Page score | Blocked at Balanced | Over the Strict fuse bar |
 |---|---|---|---|
-| YouTube / Home Shorts Subscriptions You History Playlists Your videos ... | 0.005 | no | no |
-| videos | 0.091 | no | no |
-| video tutorials cooking video recipes video guide videos channel | 0.096 | no | no |
-| Navix Health / Revenue cycle management for hospitals and clinics. Pat... | 0.010 | no | no |
-| Sex education / Sex education teaches young people about puberty, cons... | 0.113 | no | no |
-| Quit porn for good / Our recovery program helps you stop watching porn... | 0.190 | no | no |
-| Cooking Videos | Easy Recipes / Watch our cooking videos and video rec... | 0.135 | no | no |
-| Funny Cat Videos / The funniest cat videos and kitten videos on the in... | 0.242 | no | no |
-| Stock Video Footage / Download royalty free stock videos and HD video ... | 0.192 | no | no |
-| Hot Wheels Videos / Watch Hot Wheels videos, car videos for kids, mons... | 0.768 | no | **yes** |
-| Workout videos / Free full body workout videos at home. Yoga videos, H... | 0.047 | no | no |
-| CNN Videos / Latest news videos from around the world. Watch video rep... | 0.073 | no | no |
-| Fantasy Premier League, Official Fantasy Football Game of the Premier ... | 0.378 | no | **yes** |
-| League table / Pos Team P W D L GF GA GD Pts 1 Arsenal 10 8 1 1 21 6 1... | 0.330 | no | no |
+| YouTube / Home Shorts Subscriptions You History Playlists Your videos ... | 0.004 | no | no |
+| videos | 0.087 | no | no |
+| video tutorials cooking video recipes video guide videos channel | 0.094 | no | no |
+| Navix Health / Revenue cycle management for hospitals and clinics. Pat... | 0.014 | no | no |
+| Sex education / Sex education teaches young people about puberty, cons... | 0.116 | no | no |
+| Quit porn for good / Our recovery program helps you stop watching porn... | 0.269 | no | no |
+| Cooking Videos | Easy Recipes / Watch our cooking videos and video rec... | 0.126 | no | no |
+| Funny Cat Videos / The funniest cat videos and kitten videos on the in... | 0.229 | no | no |
+| Stock Video Footage / Download royalty free stock videos and HD video ... | 0.195 | no | no |
+| Hot Wheels Videos / Watch Hot Wheels videos, car videos for kids, mons... | 0.234 | no | no |
+| Workout videos / Free full body workout videos at home. Yoga videos, H... | 0.038 | no | no |
+| CNN Videos / Latest news videos from around the world. Watch video rep... | 0.056 | no | no |
+| Fantasy Premier League, Official Fantasy Football Game of the Premier ... | 0.108 | no | no |
+| League table / Pos Team P W D L GF GA GD Pts 1 Arsenal 10 8 1 1 21 6 1... | 0.211 | no | no |
+| Love song lyrics / I knew it the first time she smiled at me. She like... | 0.073 | no | no |
+| Pride playlist | queer love songs / Our favourite LGBTQ love songs for... | 0.024 | no | no |
+| Same-sex marriage / Same-sex marriage is the marriage of two people of... | 0.410 | no | **yes** |
 
 ## Thresholds shipped in the model (chosen on validation + out-of-fold train)
 
 | Level | Block (text alone) | Fuse (with an image flagged) | Target benign FPR |
 |---|---|---|---|
-| relaxed | 0.9954 | 0.6378 | 0.2% |
-| balanced | 0.9917 | 0.5452 | 0.5% |
-| strict | 0.9680 | 0.3640 | 1.5% |
+| relaxed | 0.9961 | 0.6685 | 0.2% |
+| balanced | 0.9950 | 0.5158 | 0.5% |
+| strict | 0.9558 | 0.4086 | 1.5% |
 
-Validation: 190 adult / 337 benign pages.
+Validation: 190 adult / 412 benign pages.
