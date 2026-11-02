@@ -63,6 +63,10 @@ All notable project changes should be documented here going forward.
   code asks for 256, and a 256-character code asks for 256 as before.
   Turning the code on, asking for it more often and lengthening it stay
   free. Under a Pact nothing changes: the wait stands in for the code.
+- **Dark until you choose.** With no theme chosen in Settings › Customization ›
+  Appearance, every BlockNSFW page (and what it puts on websites, such as
+  the held-image placeholders) is now dark instead of light. A theme you
+  chose, Light, Dark or System, stays as it is.
 
 ### Fixed
 

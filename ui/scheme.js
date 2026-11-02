@@ -3,8 +3,8 @@
 // Loaded first in <head> on every extension page, before the stylesheets, so
 // the choice is on <html> at the first paint. ui/tokens.css reads it as
 // data-scheme="light" | "dark"; with no attribute a page follows the system.
-// Light until Settings says otherwise: nothing kept, or anything unknown,
-// means light, and only a kept "system" follows the computer.
+// Dark until Settings says otherwise: nothing kept, or anything unknown,
+// means dark, and only a kept "system" follows the computer.
 // (data-theme is taken: the blocked page names its design with it.)
 //
 // browserAPI.storage holds the choice, and content.js reads it there for the
@@ -23,7 +23,7 @@
   const KEY = 'pblocker_color_scheme';
   const LOOK_KEY = 'pblocker_look';
   const SCHEMES = ['system', 'light', 'dark'];
-  const DEFAULT = 'light';
+  const DEFAULT = 'dark';
   const html = document.documentElement;
   const listeners = [];
 

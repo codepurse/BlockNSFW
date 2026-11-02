@@ -4666,9 +4666,9 @@ let heldUiCssText = '';
 // undefined: not tried yet. null: constructable sheets do not work here.
 // Otherwise the one parsed sheet every shadow root in this frame shares.
 let heldUiSheet;
-// The theme chosen in Settings (pblocker_color_scheme): light (also when
-// nothing is chosen), dark, or system.
-let heldUiScheme = 'light';
+// The theme chosen in Settings (pblocker_color_scheme): dark (also when
+// nothing is chosen), light, or system.
+let heldUiScheme = 'dark';
 // The <style> fallbacks, held weakly so a theme change can reach them without
 // keeping removed placeholders alive. Collected entries are swept whenever the
 // list doubles, so adding one stays O(1) on average.
@@ -4687,7 +4687,7 @@ function heldUiCss() {
   heldUiCssText = [
     '*, *::before, *::after { box-sizing: border-box; }',
     '[hidden] { display: none !important; }',
-    // Light, or dark when Settings says so. Only "system" lets dark follow
+    // Dark, or light when Settings says so. Only "system" lets dark follow
     // the computer live.
     heldUiScheme === 'dark'
       ? `.bn { ${tokens(HELD_UI_PALETTES.dark)} color-scheme: dark; }`
@@ -4773,7 +4773,7 @@ function sweepHeldUiStyles(cssText) {
  * placeholder.
  */
 function setHeldUiScheme(value) {
-  const scheme = value === 'system' || value === 'dark' ? value : 'light';
+  const scheme = value === 'system' || value === 'light' ? value : 'dark';
   if (scheme === heldUiScheme) return;
   heldUiScheme = scheme;
   heldUiCssText = '';
