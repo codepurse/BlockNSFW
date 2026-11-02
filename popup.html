@@ -7,6 +7,8 @@
   <script src="ui/scheme.js"></script>
   <link rel="stylesheet" href="ui/tokens.css" />
   <link rel="stylesheet" href="ui/components.css" />
+  <script src="shared/season.js"></script>
+  <script src="ui/christmas.js"></script>
   <style>
     /* The popup: 360px, one column, the main state above the fold. */
     :root {
@@ -111,6 +113,22 @@
     }
     .band-pine .face-state {
       color: var(--color-on-band);
+    }
+
+    /* Christmas (ui/christmas.js), 1 December to 1 January: lights hang above
+       the name, so the band makes room for them, and the season's few words
+       sit beside it. A Supporter's "protected" keeps that place if both want it. */
+    .is-christmas .popup-band {
+      padding-top: 60px;
+    }
+    .season-line {
+      color: var(--color-brass);
+    }
+    .band-pine .season-line {
+      color: var(--color-band-signal);
+    }
+    .face-state:not([hidden]) ~ .season-line {
+      display: none;
     }
     .popup-face {
       margin-top: 22px;
@@ -511,6 +529,7 @@
     <div class="popup-top">
       <h1 class="title popup-wordmark">BlockNSFW</h1>
       <p class="meta face-state" id="face-state" aria-hidden="true" hidden>protected</p>
+      <p class="meta season-line" id="season-line" hidden></p>
     </div>
     <p class="title status" id="status" role="status" aria-live="polite"></p>
     <p class="meta status-note" id="status-note" hidden></p>

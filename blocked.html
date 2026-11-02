@@ -7,6 +7,8 @@
   <script src="ui/scheme.js"></script>
   <link rel="stylesheet" href="ui/tokens.css" />
   <link rel="stylesheet" href="ui/components.css" />
+  <script src="shared/season.js"></script>
+  <script src="ui/christmas.js"></script>
   <style>
     /* The held page: paper, one centred column, the first line says what
        happened. People often arrive here at a low moment, so it is calm and
@@ -53,6 +55,15 @@
     }
     html:not([data-theme]) .container {
       max-width: 69rem;
+    }
+    /* Christmas (ui/christmas.js), 1 December to 1 January: lights hang along
+       the top, so Classic starts lower, and the line arriving at the door is
+       drawn as a string of lights instead. */
+    html.is-christmas:not([data-theme]) body {
+      padding-top: clamp(104px, calc(11vh + 56px), 176px);
+    }
+    .has-christmas-line .doors-across .door-arrival {
+      stroke: transparent;
     }
     html:not([data-theme]) .blocked-card {
       display: grid;

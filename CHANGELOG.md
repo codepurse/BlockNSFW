@@ -6,6 +6,20 @@ All notable project changes should be documented here going forward.
 
 ### Added
 
+- **Christmas, from 1 December to 1 January.** Snow falls over the popup and
+  the Classic held page and settles where a real ledge would hold it: on the
+  hairlines, the tops of switches and buttons, and the tops of the letters in
+  the big words. It slides off an edge when it piles too steep and melts back
+  slowly, so nothing is ever covered; a tap knocks it off, and a hand moving
+  through it pushes the air. A string of old-style coloured bulbs hangs along
+  the top, and on the held page the line that arrives at the door is a
+  string of lights too, threaded through the doors it passed. Take hold of
+  the wire and let it go, and it swings. The popup counts down beside the
+  name ("4 days to Christmas", "Christmas Eve", "Happy New Year"). It all
+  goes away by itself on 2 January, and Settings › Customization › Christmas
+  turns it off sooner. With reduced motion it's a still picture. Only
+  BlockNSFW's own pages draw it, never a website, and the other held-page
+  designs are left as they are.
 - **Your popup, for supporters.** Choose what the toolbar popup leads with
   while protection is on, and the order of everything under it, in
   Settings › Customization › Your popup, beside the popup itself, live: it

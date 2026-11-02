@@ -120,6 +120,8 @@ BlockNSFW stores data locally in your browser extension storage on your device. 
   each time the popup opens, and nothing else is kept for it
 - Which sections the popup shows and in what order, if you change them: the
   shape you chose, and your own order and the sections you hid
+- Whether Christmas (snow and lights, 1 December to 1 January) is switched
+  on or off, if you change it
 - Your supporter code, if you enter one
 - A random identifier for this computer, made on the device, used only to
   tell your computers apart in a backup or in sync

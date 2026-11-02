@@ -34,7 +34,7 @@
   // Settings and lists: replaced on restore, when allowed.
   var SETTINGS_KEYS = ['pblocker_settings', 'pblocker_whitelist', 'pblocker_subscriptions',
     'pblocker_risk_hours', 'pblocker_color_scheme', 'pblocker_look', 'pblocker_popup_face',
-    'pblocker_popup_sections'];
+    'pblocker_popup_sections', 'pblocker_christmas'];
 
   // Never in a backup, whatever else changes: checked by the tests.
   var NEVER_KEYS = ['pblocker_pin', 'pblocker_pin_lock', 'pblocker_pact', 'pblocker_pact_queue',
@@ -171,6 +171,7 @@
     if (key === 'pblocker_color_scheme' || key === 'pblocker_popup_face') {
       return typeof v === 'string' && v.length < 20 ? v : undefined;
     }
+    if (key === 'pblocker_christmas') return typeof v === 'boolean' ? v : undefined;
     return undefined;
   }
 

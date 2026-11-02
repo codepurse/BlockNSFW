@@ -3847,6 +3847,18 @@
                 </div>
               </div>
             </div>
+            <!-- Christmas: shared/season.js says when, ui/christmas.js draws it. -->
+            <div class="row" id="christmas-row">
+              <div class="row-text">
+                <label class="row-label" for="christmas-toggle">Christmas</label>
+                <p class="row-desc" id="christmas-desc">From 1 December to 1 January, snow settles on the lines and lights hang along the top of the popup and the held page. It packs itself away on 2 January.</p>
+              </div>
+              <label class="switch">
+                <input type="checkbox" class="switch-input" role="switch" id="christmas-toggle" aria-describedby="christmas-desc" checked />
+                <span class="switch-track" aria-hidden="true"><span class="switch-thumb"></span></span>
+                <span class="switch-state" aria-hidden="true"></span>
+              </label>
+            </div>
             <!-- Supporter looks: shown and run by extras/looks.js, which the
                  open-source build doesn't carry (extras/README.md). -->
             <div class="row" id="look-black-row" hidden>
@@ -4994,6 +5006,7 @@ title/Example Domain/"></textarea>
   <script src="shared/progress.js"></script>
   <script src="shared/sound-store.js"></script>
   <script src="shared/backup.js"></script>
+  <script src="shared/season.js"></script>
   <script src="shared/keyword-pattern.js"></script>
   <script src="shared/dns-providers.js"></script>
   <script src="shared/ai-image-models.js"></script>

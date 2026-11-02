@@ -3458,6 +3458,27 @@ function setupColorSchemePicker() {
   });
 }
 
+// Christmas: snow and lights from 1 December to 1 January (shared/season.js;
+// ui/christmas.js draws them). Only how pages look, so it asks for nothing. The
+// localStorage copy lets the popup and the held page make room in their first
+// paint, as the theme's does.
+function setupChristmasSwitch() {
+  const toggle = $('christmas-toggle');
+  if (!toggle || typeof Season === 'undefined') return;
+  const show = (value) => { toggle.checked = Season.wanted(value); };
+  browserAPI.storage.local.get(Season.KEY).then((result) => show(result[Season.KEY])).catch(() => {});
+  browserAPI.storage.onChanged.addListener((changes, area) => {
+    if (area === 'local' && changes[Season.KEY]) show(changes[Season.KEY].newValue);
+  });
+  toggle.addEventListener('change', () => {
+    const on = toggle.checked;
+    try { localStorage.setItem(Season.KEY, on ? '1' : '0'); } catch (_) {}
+    browserAPI.storage.local.set({ [Season.KEY]: on }).catch(() => {
+      showToast('That couldn’t be saved. Try again in a moment.', 'error');
+    });
+  });
+}
+
 // --- Gateways ----------------------------------------------------------------
 //
 // The sites where it tends to start (shared/gateways.js). Turning one on, or
@@ -3665,6 +3686,7 @@ function initContact() {
 
 async function init() {
   setupColorSchemePicker();
+  setupChristmasSwitch();
   // Before the first render, so the boxes never show an unmigrated list.
   await migrateCommentSyntaxOnce();
   // Before render() too, so the first list painted is already highlighted.
