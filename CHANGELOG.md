@@ -107,6 +107,19 @@ All notable project changes should be documented here going forward.
   Peruvian network against child sexual abuse material were held at the
   second door. They are off the list and on the remote whitelist, so the
   daily list update won't add them back.
+- **Songs, films and make-up were held for a word that is adult only
+  sometimes.** The fourth door held any address with "nude", "naked" or
+  "xxx" in it: a YouTube search for Radiohead's "Nude", Kendrick Lamar's
+  "XXX." on Genius, nude lipstick at Sephora, Naked Juice, The Naked Gun.
+  The fifth door held a page whose title said "fetish", "xxx", "nsfw" or
+  "erotic" once: Selena Gomez's "Fetish" video, xXx on IMDb, the dictionary
+  entry for NSFW. Such a word now holds only beside one that is looking
+  ("nude pics", "xxx videos", "naked girls"), about minors, or another
+  adult word, and an address or title has to say what it is about
+  ("lyrics", "lipstick", "Wikipedia"); in a Google or YouTube search, where
+  SafeSearch filters the results, any other word does that. "nude" or
+  "xxx" alone is still held, and so is any "porn". Of 50 everyday and
+  looking addresses and titles, 22 were judged wrong; none are now.
 - **A PIN longer than 8 characters was always wrong in the popup.** Setup
   took a PIN of any length, but the popup's PIN box stopped taking letters
   after the 8th and Settings' after the 20th, so the PIN was cut short where

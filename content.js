@@ -1387,9 +1387,11 @@ function isLikelyAdultPathEarly(urlStr) {
     const path = buildUrlScanText(urlStr);
     if (!/\b(porn|porno|pornography|xxx|nsfw|hentai|nude|naked|erotic)\b/i.test(path)) return false;
     // "how to quit porn addiction", fightthenewdrug.org/how-porn-affects-the-brain,
-    // a NoFap thread "day-90-no-porn": about getting away from it, not looking
-    // for it (shared/url-scan.js isRecoveryAddress).
-    return !(typeof UrlScan !== 'undefined' && UrlScan.isRecoveryAddress && UrlScan.isRecoveryAddress(urlStr));
+    // a NoFap thread "day-90-no-porn": about getting away from it. Nude
+    // lipstick, Radiohead's "Nude", Kendrick Lamar's "XXX.": an ordinary
+    // mention of a word that is adult only sometimes (shared/url-scan.js
+    // isHarmlessAddress).
+    return !(typeof UrlScan !== 'undefined' && UrlScan.isHarmlessAddress && UrlScan.isHarmlessAddress(urlStr));
   } catch (_) {
     return false;
   }
@@ -2510,6 +2512,22 @@ function readsAsRecoveryText(text) {
   return UrlScan.readsAsRecovery(text);
 }
 
+// The words this scan counts that are adult only sometimes: Selena Gomez's
+// "Fetish", Kendrick Lamar's "XXX.", xXx on IMDb, "NSFW" in a dictionary,
+// "Erotic thriller" on Wikipedia.
+const WEAK_PAGE_WORDS = new Set(['xxx', 'nsfw', 'fetish', 'erotic']);
+
+// Did this text match only on those words, beside a plain word that says what
+// the page is and nothing that is looking (shared/url-scan.js
+// readsAsPlainMention)? "porn", a site name, the multilingual list and the
+// user's own words are never excused.
+function readsAsPlainMentionText(text, analysis) {
+  if (!text || typeof UrlScan === 'undefined' || !UrlScan.readsAsPlainMention) return false;
+  if (!analysis || analysis.customRule || !analysis.matchedKeywords.length) return false;
+  if (!analysis.matchedKeywords.every(keyword => WEAK_PAGE_WORDS.has(keyword))) return false;
+  return UrlScan.readsAsPlainMention(text);
+}
+
 // Scan page title and meta tags for adult content
 function checkPageMetadata() {
   // Skip search engines (users need to search)
@@ -2527,7 +2545,8 @@ function checkPageMetadata() {
     redirectToBlockedPage('custom_keyword', { rule: analysis.customRule });
     return true;
   }
-  if (neutralMatches >= METADATA_BLOCK_THRESHOLD && readsAsRecoveryText(textToCheck)) {
+  if (neutralMatches >= METADATA_BLOCK_THRESHOLD &&
+      (readsAsRecoveryText(textToCheck) || readsAsPlainMentionText(textToCheck, analysis))) {
     return false;
   }
   if (neutralMatches >= METADATA_BLOCK_THRESHOLD) {
@@ -2639,7 +2658,12 @@ function checkPageBodyText() {
   // counted line by line, nor is a line that says so itself. The user's own
   // words and the multilingual list still count; the on-device AI and the
   // image filters still read the page.
+  //
+  // The same goes for a line that matched only on a word that is adult only
+  // sometimes, on a page whose title is an ordinary mention of it (a lyrics
+  // page for Kendrick Lamar's "XXX.") or in a line that is one itself.
   let recoveryPage = null;
+  let plainPage = null;
 
   for (const line of lines) {
     const analysis = analyzeTextForAdultContent(line);
@@ -2647,6 +2671,13 @@ function checkPageBodyText() {
     if (!analysis.customRule && !containsMultilingualAdultKeyword(line.toLowerCase())) {
       if (recoveryPage === null) recoveryPage = readsAsRecoveryText(pageMetadataText());
       if (recoveryPage || readsAsRecoveryText(line)) continue;
+      if (analysis.matchedKeywords.every(keyword => WEAK_PAGE_WORDS.has(keyword))) {
+        if (plainPage === null) {
+          const metadata = pageMetadataText();
+          plainPage = readsAsPlainMentionText(metadata, analyzeTextForAdultContent(metadata));
+        }
+        if (plainPage || readsAsPlainMentionText(line, analysis)) continue;
+      }
     }
 
     matchedLines++;

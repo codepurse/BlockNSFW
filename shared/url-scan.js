@@ -149,8 +149,15 @@
   // "pornography" in one address are one subject, "porn" and "xxx" are two.
   var ADULT_KIND = {
     porn: 'porn', porno: 'porn', porns: 'porn', pornography: 'porn', pornographic: 'porn',
-    xxx: 'xxx', nsfw: 'nsfw', hentai: 'hentai', nude: 'nude', naked: 'nude', erotic: 'erotic'
+    xxx: 'xxx', nsfw: 'nsfw', hentai: 'hentai', nude: 'nude', naked: 'nude', erotic: 'erotic',
+    fetish: 'fetish', fetishes: 'fetish'
   };
+
+  // The adult words that also lead an ordinary life: nude lipstick, Naked
+  // Juice, Radiohead's "Nude", Kendrick Lamar's "XXX.", Vin Diesel's xXx,
+  // Selena Gomez's "Fetish", "NSFW" in a dictionary, the erotic thriller. One
+  // of these says nothing about a page by itself; "porn" and "hentai" do.
+  var WEAK_KINDS = { xxx: true, nsfw: true, nude: true, erotic: true, fetish: true };
 
   // Phrases that say "away from it", read before the words are split.
   // "porn-free" and "free from porn" are the opposite of looking; "porn free"
@@ -223,11 +230,55 @@
     'schoolboy schoolboys school schools babysitter'
   );
 
+  // Beside one of those weak words, these make it a search for exactly that:
+  // "nude pics", "xxx videos", "naked girls", "celebrity nude scenes", "erotic
+  // tiktok". Plural "videos" and "movies" only: a music video's title says
+  // "(Official Video)", a film's page "(2002 film)".
+  var WEAK_PARTNERS = wordSet(
+    'videos vids movies films clips clip pics pic pictures photos photo images image gallery galleries ' +
+    'tube tubes cam cams webcam webcams leak leaked leaks nudes selfie selfies scene scenes ' +
+    'snapchat snap onlyfans fansly tiktok instagram insta telegram discord tumblr twitter reddit patreon playboy ' +
+    'girl girls woman women boy boys guy guys man men wife wives gf bf girlfriend boyfriend mom moms ' +
+    'milf milfs babe babes model models body bodies celebrity celebrities celeb celebs ' +
+    'actress actresses star stars pornstar pornstars ' +
+    'hot hottest sexy horny busty boobs boob tits titties ass butt pussy cock dick penis vagina ' +
+    'fuck fucking amateur homemade hardcore softcore anal lesbian lesbians ebony ' +
+    'free hd 4k uncensored download downloads stream streaming chat sex sexual beach'
+  );
+
+  // Words that say what a page with one of those weak words is: make-up and
+  // clothes in a "nude" shade, food and drink, a song or its lyrics, a title
+  // ("The Naked Gun", "Naked and Afraid", "the naked eye"), a reference page.
+  // Words that double as a porn genre stay out: "audio" (erotic audio),
+  // "official" ("Official Site"), "cover", "film".
+  var PLAIN_CONTEXT = wordSet(
+    'lipstick lipsticks lip lips gloss liner lipliner makeup cosmetic cosmetics foundation concealer ' +
+    'blush bronzer eyeshadow eyeshadows eyeliner palette palettes shade shades color colour colors colours ' +
+    'tone tones nail nails polish manicure pedicure heel heels pump pumps shoe shoes sandal sandals flats ' +
+    'boot boots sneaker sneakers dress dresses skirt skirts blouse fashion beauty skincare cream lotion ' +
+    'perfume fragrance juice juices smoothie smoothies cake cakes chef recipe recipes wine wines ' +
+    'lyrics lyric song songs album albums single remix acoustic soundtrack ost feat ft ' +
+    'eye eyes truth gun afraid mole rat rats meaning definition dictionary wikipedia imdb'
+  );
+
+  // Words that carry nothing, for telling "nude" alone from "radiohead nude".
+  var FILLER_WORDS = wordSet(
+    'a an the of and or for to in on at by with from my your his her their our me i you ' +
+    'is are was be how what who when where vs'
+  );
+
   /**
    * What one piece of an address says: which kinds of adult word it carries,
    * whether it speaks for recovery, and whether anything vetoes that.
    * Hyphens and underscores join a slug's words ("living-porn-free"), so they
    * are read as phrase joins first and as word breaks after.
+   *
+   * A piece whose only adult word is a weak one is an ordinary mention when
+   * nothing beside it is looking, about minors, a way past a blocker or a
+   * second adult word, and it says what it is about: with a plain word
+   * ("nude lipstick", "Radiohead-nude-lyrics"), or, in a search SafeSearch
+   * filters, with any other word ("radiohead nude"), since the engine's own
+   * filter then decides what the results show.
    */
   function readPart(text) {
     var lower = String(text == null ? '' : text).toLowerCase().replace(/_/g, '-');
@@ -236,25 +287,42 @@
     AWAY_FROM.lastIndex = 0;
     var kinds = Object.create(null);
     var kindCount = 0;
+    var strong = false;
     var recovery = away;
-    var veto = false;
+    var danger = false;
+    var partner = false;
+    var plain = false;
+    var other = false;
     var words = lower.split(/[^\p{L}\p{N}]+/u);
     for (var i = 0; i < words.length; i++) {
-      var kind = ADULT_KIND[words[i]];
+      var word = words[i];
+      if (!word) continue;
+      var kind = ADULT_KIND[word];
       if (kind && !kinds[kind]) {
         kinds[kind] = true;
         kindCount++;
+        if (!WEAK_KINDS[kind]) strong = true;
       }
-      if (RECOVERY_WORDS[words[i]]) recovery = true;
-      if (BYPASS_WORDS[words[i]] || MINOR_WORDS[words[i]]) veto = true;
+      if (RECOVERY_WORDS[word]) recovery = true;
+      if (BYPASS_WORDS[word] || MINOR_WORDS[word]) danger = true;
+      if (WEAK_PARTNERS[word]) partner = true;
+      if (PLAIN_CONTEXT[word]) plain = true;
+      if (!kind && !FILLER_WORDS[word]) other = true;
     }
     // "free" counts against a part unless it is the free of "porn-free".
+    var veto = danger;
     var rest = away ? lower.replace(AWAY_FROM, ' ').split(/[^\p{L}\p{N}]+/u) : words;
     for (var j = 0; j < rest.length && !veto; j++) {
       if (SEEKING_WORDS[rest[j]]) veto = true;
     }
     if (kindCount > 1) veto = true;
-    return { adult: kindCount > 0, recovery: recovery && !veto };
+    var mention = kindCount === 1 && !strong && !danger && !partner;
+    return {
+      adult: kindCount > 0,
+      recovery: recovery && !veto,
+      plainMention: mention && plain,
+      searchMention: mention && other
+    };
   }
 
   // The pieces of an address that are read separately: the path, then each
@@ -314,6 +382,51 @@
   }
 
   /**
+   * True when every piece of the address that carries an adult word is either
+   * about getting away from it (isRecoveryAddress) or an ordinary mention of a
+   * weak one: "sephora.com/shop/nude-lipstick", "genius.com/Radiohead-nude-
+   * lyrics", a SafeSearch search for "kendrick lamar xxx". What the address
+   * door asks before it holds a page.
+   *
+   * @param {string|URL|Location} urlLike
+   * @returns {boolean}
+   */
+  function isHarmlessAddress(urlLike) {
+    var u = toUrl(urlLike);
+    if (!u) return false;
+    var parts;
+    try {
+      parts = addressParts(u);
+    } catch (_) {
+      return false;
+    }
+    var carried = false;
+    for (var i = 0; i < parts.length; i++) {
+      var read = readPart(parts[i].text);
+      if (!read.adult) continue;
+      carried = true;
+      var kind = parts[i].kind;
+      if (kind !== 'site-search' && read.recovery) continue;
+      if (kind === 'search' ? read.searchMention : read.plainMention) continue;
+      return false;
+    }
+    return carried;
+  }
+
+  /**
+   * The same for a page's own title and description: "Selena Gomez - Fetish
+   * (Official Video) ft. Gucci Mane", "XXX (2002 film) - Wikipedia". Its only
+   * adult word is a weak one, nothing beside it is looking, and a plain word
+   * says what the page is.
+   *
+   * @param {string} text
+   * @returns {boolean}
+   */
+  function readsAsPlainMention(text) {
+    return readPart(text).plainMention;
+  }
+
+  /**
    * The same reading for a page's own words: "How Porn Can Affect the Brain
    * Like a Drug" is about getting away from it; "Free Porn Videos" is not.
    * For a title or description, which the page's author wrote as plainly as a
@@ -357,8 +470,10 @@
     isFilterSwitchEngaged: isFilterSwitchEngaged,
     buildUrlScanText: buildUrlScanText,
     isRecoveryAddress: isRecoveryAddress,
+    isHarmlessAddress: isHarmlessAddress,
     isRecoverySearch: isRecoverySearch,
-    readsAsRecovery: readsAsRecovery
+    readsAsRecovery: readsAsRecovery,
+    readsAsPlainMention: readsAsPlainMention
   };
 
   if (typeof module !== 'undefined' && module.exports) {
