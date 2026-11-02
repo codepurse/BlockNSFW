@@ -234,6 +234,38 @@
     return false;
   }
 
+  // Recovery names written as one word: "quitporn", "yourbrainonporn",
+  // "pornaddictionhelp". content.js's early check reads a bare "porn" inside
+  // any label, and safeHostMatches only sees whole hyphen-delimited segments,
+  // so these were held as adult.
+  //
+  // A phrase earns a place only by never naming an adult site: each was looked
+  // for in all 205k hosts of data/HOSTS.txt (2026-11-02) and is in none but the
+  // recovery sites the list had by mistake. The near misses show why the bar
+  // is that high, and stay out:
+  //   pornaddict  49 adult hosts ("3dpornaddict", "blackpornaddict")
+  //   pornfree    270 ("hdpornfree", "watchpornfree")
+  //   noporn      130 ("africanoporn", "unoporno")
+  //   endporn     42 ("girlfriendporn")
+  //   fightporn   "catfightporn"
+  // "stop" may not follow an "n", so "nonstopporn" stays out.
+  var RECOVERY_HOST_PHRASE = /(quit|quitting|stopping|overcome|overcoming|freefrom|brainon|anti)porn|(^|[^n])stopporn|porn(ography)?(addiction|recovery|rehab|reboot|sobriety)/;
+  // A host that also names what it serves is not a recovery site, whatever
+  // else it says: "quitporn-tube", "quitpornhd".
+  var HOST_SEEKING_STEMS = /tube|video|vids|cams?(?!p)|sex|xxx|hd|free(?!dom)|teen|milf|pics|clip|gif|girl|nude|naked|erotic|hentai|fuck|cock|pussy|tits|boob|lesbian/;
+
+  /**
+   * Is this a recovery site whose name is written as one word? Only the
+   * phrases above count, and only when nothing else in the host names what
+   * it serves.
+   */
+  function recoveryHostMatches(hostname) {
+    var host = String(hostname == null ? '' : hostname).toLowerCase();
+    if (!RECOVERY_HOST_PHRASE.test(host)) return false;
+    var rest = host.replace(new RegExp(RECOVERY_HOST_PHRASE.source, 'g'), ' ');
+    return !HOST_SEEKING_STEMS.test(rest);
+  }
+
   // Internal: run the strict scan over one form of the hostname.
   function labelMatches(candidate) {
     if (!candidate) return false;
@@ -286,6 +318,7 @@
     ADULT_HOST_KEYWORDS: ADULT_HOST_KEYWORDS,
     SAFE_HOST_TOKENS: SAFE_HOST_TOKENS,
     safeHostMatches: safeHostMatches,
+    recoveryHostMatches: recoveryHostMatches,
     matchesAdultKeywordHost: matchesAdultKeywordHost
   };
 

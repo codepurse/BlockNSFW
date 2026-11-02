@@ -70,6 +70,43 @@ All notable project changes should be documented here going forward.
 
 ### Fixed
 
+- **Pages about quitting porn were held at the fourth door.** The address
+  check held any address with "porn" in it, whatever the words around it
+  said: every Fight the New Drug article, NoFap forum threads, Healthline
+  and WebMD pages, a recovery book on Amazon, a YouTube search for "how to
+  quit porn", and Google searches like "porn induced erectile dysfunction".
+  Of 56 real recovery addresses, 46 were held. It now reads the words
+  around the match, as the page-text check always has: an address about
+  quitting, recovery, the brain, research, faith or a relationship goes
+  through. Words for looking ("free", "hd", "videos", "stars"), for getting
+  past a blocker ("unblocked", "proxy"), about minors, or a second kind of
+  adult word still hold it, so "quit free porn" and "how to bypass porn
+  blocker" are held as before. A search box on a site without SafeSearch is
+  never read as recovery. Recovery sites named as one word ("quitporn",
+  "pornaddictionhelp") go through too, using only phrases that appear in
+  none of the 205,000 adult sites on the list. All 56 recovery addresses go
+  through now.
+- **The old search reading let some looking searches through.** "teen porn
+  addiction", "stepsister porn addiction" and "how to bypass porn blocker"
+  read as searches for help because one word ("addiction", "blocker")
+  matched. They are held now. The price is that a real help search with a
+  word about minors in it ("porn addiction in young men", "protect kids from
+  porn") is held too; "how to quit porn" and "porn blocker" still go
+  through.
+- **Fight the New Drug was held at the fifth door too.** The page-text
+  check held its articles on their own titles ("How Porn Can Affect the
+  Brain Like a Drug") and then on their prose, which names porn on nearly
+  every line. A page whose title and description say it is about getting
+  away from it isn't counted line by line any more, and neither is a line
+  that says so itself. Your own blocked words and the multilingual list
+  still count, and the on-device AI and the image filters still read the
+  page (the AI scores these pages between 0.04 and 0.15).
+- **Seven anti-porn sites were on the built-in adult list.** Your Brain On
+  Porn (and realyourbrainonporn.com, which now leads to it), XXXchurch,
+  stopporn.fr, We Fight Porn, the End Pornography Addiction blog and a
+  Peruvian network against child sexual abuse material were held at the
+  second door. They are off the list and on the remote whitelist, so the
+  daily list update won't add them back.
 - **A PIN longer than 8 characters was always wrong in the popup.** Setup
   took a PIN of any length, but the popup's PIN box stopped taking letters
   after the 8th and Settings' after the 20th, so the PIN was cut short where

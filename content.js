@@ -1374,18 +1374,22 @@ function isLikelyAdultHostEarly(host) {
           'protection', 'accountability'].some(t => padded.indexOf('-' + t + '-') !== -1);
       });
   if (safeMatch(h)) return false;
+  // "quitporn", "yourbrainonporn": a recovery name written as one word, which
+  // the segment rule above can't see into (shared/host-keywords.js).
+  if (typeof HostBlockKeywords !== 'undefined' && HostBlockKeywords.recoveryHostMatches &&
+      HostBlockKeywords.recoveryHostMatches(h)) return false;
   const adultHostTokens = ['porn', 'porno', 'pornography', 'xxx', 'nsfw', 'hentai'];
   return adultHostTokens.some(t => h.includes(t));
 }
 
 function isLikelyAdultPathEarly(urlStr) {
   try {
-    // "how to quit porn addiction" is a search for help, not for porn.
-    if (typeof UrlScan !== 'undefined' && UrlScan.isRecoverySearch && UrlScan.isRecoverySearch(urlStr)) {
-      return false;
-    }
     const path = buildUrlScanText(urlStr);
-    return /\b(porn|porno|pornography|xxx|nsfw|hentai|nude|naked|erotic)\b/i.test(path);
+    if (!/\b(porn|porno|pornography|xxx|nsfw|hentai|nude|naked|erotic)\b/i.test(path)) return false;
+    // "how to quit porn addiction", fightthenewdrug.org/how-porn-affects-the-brain,
+    // a NoFap thread "day-90-no-porn": about getting away from it, not looking
+    // for it (shared/url-scan.js isRecoveryAddress).
+    return !(typeof UrlScan !== 'undefined' && UrlScan.isRecoveryAddress && UrlScan.isRecoveryAddress(urlStr));
   } catch (_) {
     return false;
   }
@@ -2475,6 +2479,37 @@ function checkCustomTitlePatterns() {
   return true;
 }
 
+// The page's title and meta tags: what its author says it is.
+function pageMetadataText() {
+  let text = document.title || '';
+  const metaSelectors = [
+    'meta[name="title"]',
+    'meta[property="og:title"]',
+    'meta[name="twitter:title"]',
+    'meta[name="description"]',
+    'meta[property="og:description"]',
+    'meta[name="twitter:description"]',
+    'meta[name="keywords"]'
+  ];
+
+  const metaTags = document.querySelectorAll(metaSelectors.join(','));
+  metaTags.forEach(meta => {
+    const content = meta.getAttribute('content');
+    if (content) text += ' ' + content;
+  });
+  return text;
+}
+
+// Words about getting away from it ("How Porn Can Affect the Brain Like a
+// Drug", Fight the New Drug's own title), read the way the address door reads
+// an address (shared/url-scan.js). That reading knows English words, so a hit
+// from the multilingual list stands.
+function readsAsRecoveryText(text) {
+  if (!text || typeof UrlScan === 'undefined' || !UrlScan.readsAsRecovery) return false;
+  if (containsMultilingualAdultKeyword(text.toLowerCase())) return false;
+  return UrlScan.readsAsRecovery(text);
+}
+
 // Scan page title and meta tags for adult content
 function checkPageMetadata() {
   // Skip search engines (users need to search)
@@ -2483,32 +2518,17 @@ function checkPageMetadata() {
   if (isLocalPage()) return false;
   if (!pageTextScanOn) return false;
 
-  let textToCheck = document.title || '';
-  
-  // Collect text from meta tags
-  const metaSelectors = [
-    'meta[name="title"]', 
-    'meta[property="og:title"]', 
-    'meta[name="twitter:title"]',
-    'meta[name="description"]',
-    'meta[property="og:description"]',
-    'meta[name="twitter:description"]',
-    'meta[name="keywords"]'
-  ];
-  
-  const metaTags = document.querySelectorAll(metaSelectors.join(','));
-  metaTags.forEach(meta => {
-    const content = meta.getAttribute('content');
-    if (content) textToCheck += ' ' + content;
-  });
-  
+  const textToCheck = pageMetadataText();
   const analysis = analyzeTextForAdultContent(textToCheck);
-  
+
   const neutralMatches = analysis.totalMatches - analysis.safeMatches;
   if (neutralMatches >= METADATA_BLOCK_THRESHOLD && analysis.customRule) {
     // One of the user's own blocked words: say so, and name which one.
     redirectToBlockedPage('custom_keyword', { rule: analysis.customRule });
     return true;
+  }
+  if (neutralMatches >= METADATA_BLOCK_THRESHOLD && readsAsRecoveryText(textToCheck)) {
+    return false;
   }
   if (neutralMatches >= METADATA_BLOCK_THRESHOLD) {
     const reason = `Page metadata contained explicit content: ${analysis.matchedKeywords.join(', ')}`;
@@ -2613,10 +2633,21 @@ function checkPageBodyText() {
   let matchedLines = 0;
   const matchedKeywords = new Set();
   let customRule = null;
+  // Prose about porn names it on nearly every line, and counting lines can't
+  // tell an essay from a catalogue: Fight the New Drug's articles were held
+  // here. A page whose own title says it is about getting away from it isn't
+  // counted line by line, nor is a line that says so itself. The user's own
+  // words and the multilingual list still count; the on-device AI and the
+  // image filters still read the page.
+  let recoveryPage = null;
 
   for (const line of lines) {
     const analysis = analyzeTextForAdultContent(line);
     if (!analysis.isAdult) continue;
+    if (!analysis.customRule && !containsMultilingualAdultKeyword(line.toLowerCase())) {
+      if (recoveryPage === null) recoveryPage = readsAsRecoveryText(pageMetadataText());
+      if (recoveryPage || readsAsRecoveryText(line)) continue;
+    }
 
     matchedLines++;
     analysis.matchedKeywords.forEach(keyword => matchedKeywords.add(keyword));
