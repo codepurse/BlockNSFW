@@ -52,17 +52,49 @@
   let wanted = readCopy() !== '0';
   let laidOut = false;
   let scene = null;
+  let saying = false;   // the popup is saying it was turned off
 
   function decide() {
     const on = wanted && (previewing() || Season.inSeason(new Date()));
     html.classList.toggle('is-christmas', on);
     const words = document.getElementById('season-line');
     if (words) {
-      words.textContent = on ? Season.line(new Date()) : '';
+      const line = on ? Season.line(new Date()) : '';
+      words.textContent = line;
       words.hidden = !on;
+      if (on) words.setAttribute('aria-label', line + '. Christmas options');
     }
+    const off = document.getElementById('season-off');
+    if (off && !on && !saying) off.hidden = true;
     if (on && laidOut && !scene) scene = start();
     else if (!on && scene) { scene.stop(); scene = null; }
+  }
+
+  // The popup's quick way out: the countdown words open one line with a
+  // button that turns Christmas off. It is the same setting as the switch in
+  // Settings › Customization, which follows it.
+  function wireTurnOff() {
+    const words = document.getElementById('season-line');
+    const off = document.getElementById('season-off');
+    const button = document.getElementById('season-off-button');
+    if (!words || !off || !button) return;
+    words.addEventListener('click', function () {
+      const open = off.hidden;
+      off.hidden = !open;
+      words.setAttribute('aria-expanded', String(open));
+      if (open) button.focus();
+    });
+    button.addEventListener('click', function () {
+      wanted = false;
+      keepCopy(false);
+      if (store) {
+        try { Promise.resolve(store.local.set({ [Season.KEY]: false })).catch(function () {}); } catch (_) {}
+      }
+      saying = true;
+      off.textContent = 'Christmas is off. Settings › Customization turns it back on.';
+      decide();
+      setTimeout(function () { saying = false; off.hidden = true; }, 5000);
+    });
   }
 
   decide();
@@ -94,6 +126,7 @@
         setTimeout(go, 80);
         return;
       }
+      if (!laidOut) wireTurnOff();
       laidOut = true;
       decide();
     };
@@ -390,9 +423,11 @@
       reset(f, true);
       return f;
     }
+    // A light fall: about one flake to every 3,600 square pixels of window,
+    // never more than 180.
     function populate() {
-      const n = Math.round(Math.max(90, Math.min(480, (W * H) / 1500)));
-      if (Math.abs(flakes.length - n) < 12) return;
+      const n = Math.round(Math.max(40, Math.min(180, (W * H) / 3600)));
+      if (Math.abs(flakes.length - n) < 6) return;
       const zs = [];
       for (let i = 0; i < n; i++) zs.push(Math.pow(Math.random(), 1.55));
       zs.sort(function (a, b) { return a - b; });
@@ -642,9 +677,11 @@
       }
       return false;
     }
+    // What a flake leaves where it lands. The fall is light, so each leaves a
+    // little more, and the lines and drifts build up as they did before.
     function deposit(L, i, f) {
-      const vol = f.clump ? f.vol : (2.4 + f.size * 1.3) * 2;
-      const K = Math.max(2, Math.round(f.size * 1.3));
+      const vol = f.clump ? f.vol : (2.4 + f.size * 1.3) * 5;
+      const K = Math.max(2, Math.round(f.size * 1.6));
       let sum = 0;
       for (let k = -K; k <= K; k++) sum += K + 1 - Math.abs(k);
       for (let k = -K; k <= K; k++) {
@@ -1349,6 +1386,34 @@
     if (document.fonts && document.fonts.ready) document.fonts.ready.then(queueMeasure);
     timers.push(setTimeout(queueMeasure, 600));
 
+    // When the page changes under the snow (Settings opens another section, a
+    // banner folds, part of the popup appears), the snow is measured again and
+    // the page's layer wiped and redrawn at once, before that frame is
+    // painted. Otherwise the old section's lines showed over the new one until
+    // the next look, up to a second later.
+    function relayout() {
+      if (stopped) return;
+      measure();
+      groundCtx.setTransform(1, 0, 0, 1, 0, 0);
+      groundCtx.clearRect(0, 0, ground.width, ground.height);
+      drawnTop = 0;
+      drawnBottom = -1;
+      draw(true);
+    }
+    const watchers = [];
+    if (typeof MutationObserver === 'function') {
+      // Settings names the section it shows, and what is folded, on <html>
+      const changes = new MutationObserver(relayout);
+      changes.observe(html, { attributes: true });
+      watchers.push(changes);
+    }
+    if (typeof ResizeObserver === 'function') {
+      // and anything that moves the page's lines also changes its height
+      const sizes = new ResizeObserver(relayout);
+      sizes.observe(document.body);
+      watchers.push(sizes);
+    }
+
     return {
       stop: function () {
         stopped = true;
@@ -1361,6 +1426,7 @@
         window.removeEventListener('pointerout', onLeave);
         document.removeEventListener('scroll', queueMeasure, { capture: true });
         window.removeEventListener('resize', queueMeasure);
+        watchers.forEach(function (w) { w.disconnect(); });
         const figure = document.getElementById('doors');
         if (figure) figure.classList.remove('has-christmas-line');
         [ground, lamps, sky].forEach(function (c) { if (c.parentNode) c.parentNode.removeChild(c); });

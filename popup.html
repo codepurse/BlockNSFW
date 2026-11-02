@@ -117,18 +117,44 @@
 
     /* Christmas (ui/christmas.js), 1 December to 1 January: lights hang above
        the name, so the band makes room for them, and the season's few words
-       sit beside it. A Supporter's "protected" keeps that place if both want it. */
+       sit beside it. A Supporter's "protected" keeps that place if both want it.
+       The words are a button: they open one line with a way to turn it off. */
     .is-christmas .popup-band {
       padding-top: 60px;
     }
     .season-line {
+      padding: 0;
+      border: 0;
+      background: none;
       color: var(--color-brass);
+      cursor: pointer;
     }
     .band-pine .season-line {
       color: var(--color-band-signal);
     }
+    .season-line:hover,
+    .season-line[aria-expanded="true"] {
+      text-decoration: underline;
+      text-underline-offset: 0.25em;
+    }
     .face-state:not([hidden]) ~ .season-line {
       display: none;
+    }
+    .season-off {
+      margin-top: var(--space-2);
+      font-size: 13px;
+      line-height: 1.45;
+      color: var(--color-ink-2);
+    }
+    .band-pine .season-off {
+      color: var(--color-on-band-2);
+    }
+    .season-off .btn-text {
+      margin-left: var(--space-1);
+      padding: 0;
+    }
+    .band-pine .season-off .btn-text {
+      color: var(--color-on-band);
     }
     .popup-face {
       margin-top: 22px;
@@ -529,8 +555,9 @@
     <div class="popup-top">
       <h1 class="title popup-wordmark">BlockNSFW</h1>
       <p class="meta face-state" id="face-state" aria-hidden="true" hidden>protected</p>
-      <p class="meta season-line" id="season-line" hidden></p>
+      <button type="button" class="meta season-line" id="season-line" aria-expanded="false" aria-controls="season-off" hidden></button>
     </div>
+    <p class="season-off" id="season-off" aria-live="polite" hidden>Snow and lights until 1 January.<button type="button" class="btn-text" id="season-off-button">Turn off Christmas</button></p>
     <p class="title status" id="status" role="status" aria-live="polite"></p>
     <p class="meta status-note" id="status-note" hidden></p>
     <p class="status-desc" id="toggle-desc">Blocks adult sites and explicit content as pages load.</p>

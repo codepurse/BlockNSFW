@@ -17,12 +17,12 @@ All notable project changes should be documented here going forward.
   Settings, across the column from the sidebar's edge), and on the held
   page the line that arrives at the door is a string of lights too,
   threaded through the doors it passed. Take hold of the wire and let it
-  go, and it swings. The popup counts down beside the
-  name ("4 days to Christmas", "Christmas Eve", "Happy New Year"). It all
-  goes away by itself on 2 January, and Settings › Customization › Christmas
-  turns it off sooner. With reduced motion it's a still picture. Only
-  BlockNSFW's own pages draw it, never a website, and the other held-page
-  designs are left as they are.
+  go, and it swings. The popup counts down beside the name ("4 days to
+  Christmas", "Christmas Eve", "Happy New Year"). It all goes away by
+  itself on 2 January. To turn it off sooner, click the countdown in the
+  popup, or use Settings › Customization › Christmas. With reduced motion
+  it's a still picture. Only BlockNSFW's own pages draw it, never a
+  website, and the other held-page designs are left as they are.
 - **Your popup, for supporters.** Choose what the toolbar popup leads with
   while protection is on, and the order of everything under it, in
   Settings › Customization › Your popup, beside the popup itself, live: it

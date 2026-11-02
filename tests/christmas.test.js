@@ -78,6 +78,15 @@ test('no website ever runs it', () => {
   assert.ok(!/https?:\/\//.test(read('ui/christmas.js').replace(/^\s*\/\/.*$/gm, '')), 'and it reaches nothing on the network');
 });
 
+test('the popup has a quick way to turn it off, on the same setting', () => {
+  const popup = read('popup.html');
+  assert.match(popup, /<button type="button" class="meta season-line" id="season-line" aria-expanded="false" aria-controls="season-off" hidden><\/button>/, 'the countdown words are a button that opens the line');
+  assert.match(popup, /id="season-off"[^>]*hidden>[^<]*<button type="button" class="btn-text" id="season-off-button">Turn off Christmas<\/button>/);
+  const drawing = read('ui/christmas.js');
+  assert.match(drawing, /store\.local\.set\(\{ \[Season\.KEY\]: false \}\)/, 'it writes the switch Settings reads');
+  assert.match(drawing, /keepCopy\(false\)/, 'and the copy the first paint reads');
+});
+
 test('Settings has the switch, with the season check loaded before options.js', () => {
   const html = read('options.html');
   assert.match(html, /id="christmas-toggle"[^>]*checked/, 'a switch, on unless turned off');
