@@ -87,9 +87,25 @@ test('the popup has a quick way to turn it off, on the same setting', () => {
   assert.match(drawing, /keepCopy\(false\)/, 'and the copy the first paint reads');
 });
 
+test('Welcome’s two Santa hats show only at Christmas, and keep still for reduced motion', () => {
+  const html = read('options.html');
+  const hats = html.match(/class="xmas-hat [^"]*"/g) || [];
+  assert.deepEqual(hats, ['class="xmas-hat xmas-hat-title"', 'class="xmas-hat xmas-hat-dial"'], 'one on the headline, one on the dial');
+  assert.match(html, /<h3 class="pass-title"[^>]*><svg class="xmas-hat xmas-hat-title"[^>]*aria-hidden="true"/, 'the headline’s is decoration, first in it');
+  assert.match(html, /\.xmas-hat \{\s*display: none;\s*\}/, 'hidden unless it is Christmas');
+  assert.match(html, /\.is-christmas \.xmas-hat \{\s*display: block;/);
+  assert.match(html, /@media \(prefers-reduced-motion: reduce\) \{\s*\.xmas-hat-pom \{\s*animation: none;/);
+  const styles = (html.match(/<style>[\s\S]*?<\/style>/g) || []).join('\n');
+  const hatCss = styles.slice(styles.indexOf('.xmas-hat {'), styles.indexOf('@keyframes xmas-hat-sway'));
+  assert.ok(!/#[0-9a-f]{3,6}\b/i.test(hatCss), 'the hat’s colours live in its SVG, not in page CSS');
+  assert.ok(!/circles:/.test(read('ui/christmas.js')), 'the dial wears the hat, so no snow cap is drawn over it');
+});
+
 test('Settings has the switch, with the season check loaded before options.js', () => {
   const html = read('options.html');
   assert.match(html, /id="christmas-toggle"[^>]*checked/, 'a switch, on unless turned off');
+  assert.match(html, /<div class="row" id="christmas-row">/, 'shown all year, so it can be turned off before 1 December');
+  assert.ok(!/christmas-row/.test(read('options.js') + read('ui/christmas.js')), 'and nothing hides it out of season');
   const season = html.indexOf('<script src="shared/season.js"></script>');
   assert.ok(season > -1 && season < html.indexOf('<script src="options.js"></script>'));
   assert.match(read('options.js'), /setupChristmasSwitch\(\);/);

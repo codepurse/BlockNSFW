@@ -170,9 +170,9 @@
         text: '.section-header .section-head, .brand-name, .release-title, .release-numeral',
         lines: '.section-header, .group, .rows',
         boxes: '.switch-track, .btn, .design-option, .layout-toggle',
-        // The Welcome banners: deep snow on top, folded over the edge, icicles under it.
+        // The Welcome banners: deep snow on top, folded over the edge, icicles
+        // under it. Warden's dial wears a Santa hat (options.html), not snow.
         roofs: '#release-card, #pass-card, #dev-message-card',
-        circles: '.warden-dial-arc',
         festoon: {
           span: 250, top: 2, slack: 1.045, seg: 7, every: 4, scale: 0.85, drop: 26,
           region: function (W, H) {
@@ -312,12 +312,19 @@
       const g = a.getContext('2d');
       g.setTransform(S, 0, 0, S, px / 2, px / 2);
       paint(g, size / 2);
+      if (!dark) {
+        // Against a light page snow is seen by its shading, as against a
+        // bright sky: a cool body and a firm soft shadow, not pure white.
+        g.globalCompositeOperation = 'source-atop';
+        g.fillStyle = 'rgba(196,218,236,0.42)';
+        g.fillRect(-full, -full, full * 2, full * 2);
+        g.globalCompositeOperation = 'source-over';
+      }
       const c = document.createElement('canvas');
       c.width = c.height = px;
       const h = c.getContext('2d');
       if (blur) h.filter = 'blur(' + (blur * S) + 'px)';
-      // On paper white needs a shadow to be seen at all.
-      if (!dark) { h.shadowColor = 'rgba(24,34,44,0.42)'; h.shadowBlur = 2.4 * S; h.shadowOffsetY = 0.7 * S; }
+      if (!dark) { h.shadowColor = 'rgba(26,44,62,0.62)'; h.shadowBlur = 2.8 * S; h.shadowOffsetY = 0.9 * S; }
       h.drawImage(a, 0, 0);
       return { c: c, size: size, full: full };
     }
@@ -375,10 +382,12 @@
       for (let i = 0; i < 16; i++) sprites[1].push(sprite(12, crystal, 0));
       for (let i = 0; i < 10; i++) sprites[2].push(sprite(6, fluff, 0.25));
       sprites[3].push(sprite(4, dot, 0));
-      flakes.forEach(pickSprite);
+      flakes.forEach(function (f) { pickSprite(f); f.alpha = alphaFor(f.kind); });
       clumps.forEach(pickSprite);
     }
     function pickSprite(f) { const set = sprites[f.kind]; f.spr = set[(Math.random() * set.length) | 0]; }
+    // near and blurred, crystal, aggregate, far speck; a light page wants them firmer
+    function alphaFor(kind) { return (dark ? [0.5, 0.95, 0.92, 0.8] : [0.62, 1, 1, 0.95])[kind]; }
 
     function windNow(y) {
       const base = 10.5 * (0.62 + 0.28 * Math.sin(t * 0.13 + 0.7) + 0.16 * Math.sin(t * 0.047 + 2.1));
@@ -417,7 +426,7 @@
       const f = { z: z };
       f.kind = z > 0.88 ? 0 : z > 0.58 ? 1 : z > 0.3 ? 2 : 3;
       f.size = [11 + Math.random() * 7, 5.5 + Math.random() * 4.5, 3 + Math.random() * 2.6, 1.7 + Math.random() * 1.5][f.kind];
-      f.alpha = [0.5, 0.95, 0.92, 0.8][f.kind];
+      f.alpha = alphaFor(f.kind);
       f.land = z < 0.58;   // the ones nearest the page are the ones that settle on it
       pickSprite(f);
       reset(f, true);
@@ -734,7 +743,7 @@
     function drawLedges(onWindow, top, bottom) {
       const paper = dark
         ? { fill: '#e8edef', shade: 'rgba(120,140,155,0.35)', edge: 'rgba(255,255,255,0.9)' }
-        : { fill: '#ffffff', shade: 'rgba(150,168,182,0.32)', edge: 'rgba(58,74,88,0.42)' };
+        : { fill: '#ffffff', shade: 'rgba(128,152,175,0.5)', edge: 'rgba(46,64,82,0.62)' };
       const night = { fill: dark ? '#e8edef' : '#ffffff', shade: 'rgba(120,140,155,0.35)', edge: 'rgba(255,255,255,0.9)' };
       for (const L of ledges) {
         if (!!L.pinned !== onWindow) continue;
@@ -765,7 +774,7 @@
           for (let k = s; k < e; k++) ctx.lineTo(x + k + 0.5, b[k] - h[k]);
           ctx.lineTo(x + e, b[e - 1] - h[e - 1] + Math.min(h[e - 1], 1));
           ctx.strokeStyle = P.edge;
-          ctx.lineWidth = P === paper && !dark ? 0.75 : 0.6;
+          ctx.lineWidth = P === paper && !dark ? 0.9 : 0.6;
           ctx.stroke();
         }
       }
@@ -1171,17 +1180,27 @@
     }
     function drawRope(r, lit) {
       const P = r.P, s = r.o.scale;
-      // the light each lit bulb throws on what is behind it
-      const R = (lit ? 58 : 46) * s;
+      // the light each lit bulb throws on what is behind it: added to a dark
+      // ground, laid over a light one, where it has to be wider and stronger
+      // to read as light at all
+      const R = (lit ? 58 : 64) * s;
       ctx.globalCompositeOperation = lit ? 'lighter' : 'source-over';
       for (const b of r.B) {
         if (b.T < 0.02) continue;
         const c = centre(r, b);
-        ctx.globalAlpha = Math.pow(b.T, 1.8) * (lit ? 0.3 : 0.12);
+        ctx.globalAlpha = Math.pow(b.T, 1.8) * (lit ? 0.3 : 0.24);
         ctx.drawImage(pools[b.colour], c[0] - R, c[1] - R, R * 2, R * 2);
       }
       ctx.globalCompositeOperation = 'source-over';
       ctx.globalAlpha = 1;
+      // In daylight a string hung in front of a wall casts a soft shadow on it.
+      const shadow = function (on) {
+        ctx.shadowColor = on ? 'rgba(18,22,26,0.26)' : 'rgba(0,0,0,0)';
+        ctx.shadowBlur = on ? 5 * T.d : 0;
+        ctx.shadowOffsetX = on ? 2 * T.d : 0;
+        ctx.shadowOffsetY = on ? 6 * T.d : 0;
+      };
+      if (!lit) shadow(true);
       ctx.beginPath();
       ctx.moveTo(P[0].x, P[0].y);
       for (let i = 1; i < P.length - 1; i++) ctx.quadraticCurveTo(P[i].x, P[i].y, (P[i].x + P[i + 1].x) / 2, (P[i].y + P[i + 1].y) / 2);
@@ -1191,6 +1210,7 @@
       ctx.strokeStyle = lit ? '#08140f' : '#1d3326';
       ctx.lineWidth = 1.9 * s + 0.4;
       ctx.stroke();
+      if (!lit) shadow(false);
       // the twist of the two strands catching the light
       ctx.setLineDash([2.2, 2.6]);
       ctx.strokeStyle = lit ? 'rgba(170,210,190,0.26)' : 'rgba(210,230,215,0.5)';
@@ -1203,7 +1223,10 @@
         const d = T.d;
         ctx.setTransform(d * c * s, d * sn * s, -d * sn * s, d * c * s, d * (p.x - T.x), d * (p.y - T.y));
         ctx.globalAlpha = 1;
+        // the dark glass casts the shadow; its light on top casts none
+        if (!lit) shadow(true);
         ctx.drawImage(sp.off.c, -sp.off.ox, -sp.off.oy, sp.off.w, sp.off.h);
+        if (!lit) shadow(false);
         if (b.T > 0.01) {
           ctx.globalAlpha = Math.min(1, Math.pow(b.T, 1.3));
           ctx.drawImage(sp.on.c, -sp.on.ox, -sp.on.oy, sp.on.w, sp.on.h);

@@ -10,9 +10,10 @@ All notable project changes should be documented here going forward.
   the Classic held page and Settings and settles where a real ledge would
   hold it: on the hairlines, the tops of switches, buttons and the design
   cards, and the tops of the letters in the big words. On the Welcome
-  banners it piles deep, folds over the edge and grows icicles. It slides
-  off an edge when it piles too steep and melts back slowly, so nothing is
-  ever covered; a tap knocks it off, and a hand moving through it pushes
+  banners it piles deep, folds over the edge and grows icicles, and Pass it
+  on's headline and Warden's dial each wear a Santa hat. It slides off an
+  edge when it piles too steep and melts back slowly, so nothing is ever
+  covered; a tap knocks it off, and a hand moving through it pushes
   the air. A string of old-style coloured bulbs hangs along the top (in
   Settings, across the column from the sidebar's edge), and on the held
   page the line that arrives at the door is a string of lights too,

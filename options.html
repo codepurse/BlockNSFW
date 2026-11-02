@@ -351,6 +351,52 @@
     .is-christmas .main {
       padding-top: 104px;
     }
+    /* and on Welcome, Santa hats: one on the S of Pass it on's headline, one
+       on Warden's dial (drawn inside the dial, so it scales with it). Only
+       while it's Christmas; the bobbles swing unless motion is reduced. */
+    .xmas-hat {
+      display: none;
+    }
+    .is-christmas .xmas-hat {
+      display: block;
+    }
+    .is-christmas g.xmas-hat {
+      display: inline;
+    }
+    .pass-title {
+      position: relative;
+    }
+    .xmas-hat-title {
+      position: absolute;
+      left: -8px;
+      top: -15px;
+      width: 42px;
+      height: 30px;
+      overflow: visible;
+      transform: rotate(-14deg);
+      pointer-events: none;
+    }
+    .is-christmas .warden-dial {
+      overflow: visible;
+    }
+    .xmas-hat-title,
+    .xmas-hat-dial {
+      filter: drop-shadow(0 1px 1.5px rgba(0, 0, 0, 0.4));
+    }
+    .xmas-hat-pom {
+      transform-box: fill-box;
+      transform-origin: 40% 23%;
+      animation: xmas-hat-sway 3.4s ease-in-out infinite alternate;
+    }
+    @keyframes xmas-hat-sway {
+      from { transform: rotate(-8deg); }
+      to { transform: rotate(10deg); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .xmas-hat-pom {
+        animation: none;
+      }
+    }
     html[data-layout="full"] .main {
       max-width: none;
     }
@@ -3346,7 +3392,17 @@
           <div class="pass-band">
             <div class="pass-text">
               <p class="meta pass-kicker"><span class="pass-name">Pass it on</span> · tell someone who’s looking</p>
-              <h3 class="pass-title" data-welcome="heading" tabindex="-1">Someone typed this tonight. <em>Be what they find.</em></h3>
+              <h3 class="pass-title" data-welcome="heading" tabindex="-1"><svg class="xmas-hat xmas-hat-title" viewBox="0 0 140 100" aria-hidden="true" focusable="false">
+                  <defs>
+                    <linearGradient id="xmas-hat-red-t" x1="0.1" y1="0.1" x2="0.9" y2="0.9"><stop offset="0" stop-color="#e5523d" /><stop offset="0.55" stop-color="#c4352a" /><stop offset="1" stop-color="#8f2219" /></linearGradient>
+                    <radialGradient id="xmas-hat-fur-t" cx="0.4" cy="0.3" r="0.8"><stop offset="0" stop-color="#ffffff" /><stop offset="0.7" stop-color="#eef2f3" /><stop offset="1" stop-color="#c9d4da" /></radialGradient>
+                  </defs>
+                  <path d="M20 70 C24 44 46 18 80 16 C102 15 118 28 122 48 C115 43 106 41 98 43 C92 52 90 61 90 70 Z" fill="url(#xmas-hat-red-t)" />
+                  <path d="M98 43 C106 41 115 43 122 48 C113 46.5 105 47 99 50 Z" fill="#3c0806" fill-opacity="0.35" />
+                  <path d="M31 63 C35 46 50 29 69 23" fill="none" stroke="#ffffff" stroke-opacity="0.32" stroke-width="2.4" stroke-linecap="round" />
+                  <g class="xmas-hat-pom" fill="url(#xmas-hat-fur-t)"><circle cx="122" cy="54" r="9.5" /><circle cx="115.5" cy="50" r="3.6" /><circle cx="128.5" cy="50.5" r="3.6" /><circle cx="122" cy="45.5" r="3.6" /><circle cx="116.5" cy="59.5" r="3.4" /><circle cx="127.5" cy="60" r="3.4" /></g>
+                  <g fill="url(#xmas-hat-fur-t)"><path d="M10 66 Q55 57 100 66 Q103 73 100 80 Q55 72 10 80 Q7 73 10 66 Z" /><circle cx="14" cy="65" r="3.6" /><circle cx="26" cy="63" r="3.6" /><circle cx="38" cy="61.7" r="3.6" /><circle cx="50" cy="61.2" r="3.6" /><circle cx="62" cy="61.2" r="3.6" /><circle cx="74" cy="61.9" r="3.6" /><circle cx="86" cy="63.2" r="3.6" /><circle cx="98" cy="65.2" r="3.6" /><circle cx="14" cy="79.6" r="3.4" /><circle cx="26" cy="78" r="3.4" /><circle cx="38" cy="77" r="3.4" /><circle cx="50" cy="76.5" r="3.4" /><circle cx="62" cy="76.5" r="3.4" /><circle cx="74" cy="77.1" r="3.4" /><circle cx="86" cy="78.3" r="3.4" /><circle cx="98" cy="80" r="3.4" /></g>
+                </svg>Someone typed this tonight. <em>Be what they find.</em></h3>
               <p class="pass-lede">Post honestly about BlockNSFW, in public, wherever people go looking for help. The good and the bad. If you post something, send me the link. I’d love to read it.</p>
               <div class="pass-actions">
                 <a class="btn btn-primary btn-sm" href="mailto:support@monolab.dev?subject=Pass%20it%20on&amp;body=Link%20to%20my%20post%3A%0A%0AOK%20to%20share%20it%20without%20my%20name%3F%20%28yes%2Fno%29%3A">Send me the link</a>
@@ -3402,6 +3458,18 @@
               <circle class="warden-dial-arc" cx="64" cy="64" r="46" stroke-width="1.5" stroke-linecap="round" stroke-dasharray="289.03" stroke-dashoffset="91.53" transform="rotate(-90 64 64)"></circle>
               <text class="warden-dial-time" x="64" y="67" text-anchor="middle" data-cooldown>23:59:41</text>
               <text class="warden-dial-label" x="64" y="82" text-anchor="middle">COOL-DOWN</text>
+              <!-- Christmas: a Santa hat worn on the ring, at an angle. -->
+              <g class="xmas-hat xmas-hat-dial" transform="translate(70 12.5) rotate(16) translate(-48 -34.3) scale(0.6857)">
+                <defs>
+                  <linearGradient id="xmas-hat-red-d" x1="0.1" y1="0.1" x2="0.9" y2="0.9"><stop offset="0" stop-color="#e5523d" /><stop offset="0.55" stop-color="#c4352a" /><stop offset="1" stop-color="#8f2219" /></linearGradient>
+                  <radialGradient id="xmas-hat-fur-d" cx="0.4" cy="0.3" r="0.8"><stop offset="0" stop-color="#ffffff" /><stop offset="0.7" stop-color="#eef2f3" /><stop offset="1" stop-color="#c9d4da" /></radialGradient>
+                </defs>
+                <path d="M20 70 C24 44 46 18 80 16 C102 15 118 28 122 48 C115 43 106 41 98 43 C92 52 90 61 90 70 Z" fill="url(#xmas-hat-red-d)" />
+                <path d="M98 43 C106 41 115 43 122 48 C113 46.5 105 47 99 50 Z" fill="#3c0806" fill-opacity="0.35" />
+                <path d="M31 63 C35 46 50 29 69 23" fill="none" stroke="#ffffff" stroke-opacity="0.32" stroke-width="2.4" stroke-linecap="round" />
+                <g class="xmas-hat-pom" fill="url(#xmas-hat-fur-d)"><circle cx="122" cy="54" r="9.5" /><circle cx="115.5" cy="50" r="3.6" /><circle cx="128.5" cy="50.5" r="3.6" /><circle cx="122" cy="45.5" r="3.6" /><circle cx="116.5" cy="59.5" r="3.4" /><circle cx="127.5" cy="60" r="3.4" /></g>
+                <g fill="url(#xmas-hat-fur-d)"><path d="M10 66 Q55 57 100 66 Q103 73 100 80 Q55 72 10 80 Q7 73 10 66 Z" /><circle cx="14" cy="65" r="3.6" /><circle cx="26" cy="63" r="3.6" /><circle cx="38" cy="61.7" r="3.6" /><circle cx="50" cy="61.2" r="3.6" /><circle cx="62" cy="61.2" r="3.6" /><circle cx="74" cy="61.9" r="3.6" /><circle cx="86" cy="63.2" r="3.6" /><circle cx="98" cy="65.2" r="3.6" /><circle cx="14" cy="79.6" r="3.4" /><circle cx="26" cy="78" r="3.4" /><circle cx="38" cy="77" r="3.4" /><circle cx="50" cy="76.5" r="3.4" /><circle cx="62" cy="76.5" r="3.4" /><circle cx="74" cy="77.1" r="3.4" /><circle cx="86" cy="78.3" r="3.4" /><circle cx="98" cy="80" r="3.4" /></g>
+              </g>
             </svg>
           </div>
           <button type="button" class="icon-btn warden-dismiss" data-welcome="ack" aria-label="Hide this message">
