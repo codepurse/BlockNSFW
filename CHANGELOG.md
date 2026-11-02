@@ -6,13 +6,14 @@ All notable project changes should be documented here going forward.
 
 ### Added
 
-- **Christmas, from 1 December to 1 January.** Snow falls over the popup and
-  the Classic held page and settles where a real ledge would hold it: on the
-  hairlines, the tops of switches and buttons, and the tops of the letters in
-  the big words. It slides off an edge when it piles too steep and melts back
+- **Christmas, from 1 December to 1 January.** Snow falls over the popup,
+  the Classic held page and Settings and settles where a real ledge would
+  hold it: on the hairlines, the tops of switches, buttons and the design
+  cards, and the tops of the letters in the big words. It slides off an edge when it piles too steep and melts back
   slowly, so nothing is ever covered; a tap knocks it off, and a hand moving
   through it pushes the air. A string of old-style coloured bulbs hangs along
-  the top, and on the held page the line that arrives at the door is a
+  the top (in Settings, across the column from the sidebar's edge), and on
+  the held page the line that arrives at the door is a
   string of lights too, threaded through the doors it passed. Take hold of
   the wire and let it go, and it swings. The popup counts down beside the
   name ("4 days to Christmas", "Christmas Eve", "Happy New Year"). It all

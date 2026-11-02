@@ -7,6 +7,8 @@
   <script src="ui/scheme.js"></script>
   <link rel="stylesheet" href="ui/tokens.css" />
   <link rel="stylesheet" href="ui/components.css" />
+  <script src="shared/season.js"></script>
+  <script src="ui/christmas.js"></script>
   <style>
     /* Settings: a pinned sidebar, then one column of sections set as hairline
        rows. The column keeps to 40rem; the full-width button lets it run to
@@ -343,6 +345,11 @@
     }
     .main:focus {
       outline: none;
+    }
+    /* Christmas (ui/christmas.js), 1 December to 1 January: lights hang
+       across the top of the column, so it starts lower. */
+    .is-christmas .main {
+      padding-top: 104px;
     }
     html[data-layout="full"] .main {
       max-width: none;
@@ -2876,6 +2883,13 @@
         max-width: none;
         padding: var(--space-5) var(--space-4) var(--space-6);
       }
+      /* With the sidebar on top, the lights hang above it instead. */
+      .is-christmas .main {
+        padding-top: var(--space-5);
+      }
+      .is-christmas .sidebar {
+        padding-top: 88px;
+      }
     }
     /* Too narrow for the dial beside the words: it moves above them. */
     @media (max-width: 640px) {
@@ -3851,7 +3865,7 @@
             <div class="row" id="christmas-row">
               <div class="row-text">
                 <label class="row-label" for="christmas-toggle">Christmas</label>
-                <p class="row-desc" id="christmas-desc">From 1 December to 1 January, snow settles on the lines and lights hang along the top of the popup and the held page. It packs itself away on 2 January.</p>
+                <p class="row-desc" id="christmas-desc">From 1 December to 1 January, snow settles on the lines and lights hang along the top of the popup, the held page and this page. It packs itself away on 2 January.</p>
               </div>
               <label class="switch">
                 <input type="checkbox" class="switch-input" role="switch" id="christmas-toggle" aria-describedby="christmas-desc" checked />
@@ -5006,7 +5020,6 @@ title/Example Domain/"></textarea>
   <script src="shared/progress.js"></script>
   <script src="shared/sound-store.js"></script>
   <script src="shared/backup.js"></script>
-  <script src="shared/season.js"></script>
   <script src="shared/keyword-pattern.js"></script>
   <script src="shared/dns-providers.js"></script>
   <script src="shared/ai-image-models.js"></script>

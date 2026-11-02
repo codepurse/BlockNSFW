@@ -1,8 +1,8 @@
 // BlockNSFW — Christmas, from 1 December to 1 January.
 //
-// Snow falls over the popup and the held page and settles on what a real
-// ledge would hold: the hairlines, the tops of switches and buttons, the tops
-// of the letters in the big words. Past its angle of repose it slides off an
+// Snow falls over the popup, the held page and Settings and settles on what a
+// real ledge would hold: the hairlines, the tops of switches and buttons, the
+// tops of the letters in the big words. Past its angle of repose it slides off an
 // edge, and it melts back slowly, so nothing is ever buried. A string of
 // incandescent lights hangs along the top, and on the held page the line that
 // arrives at the door is a string of lights as well, threaded through the
@@ -126,6 +126,26 @@
         festoon: { span: 280, top: 2, slack: 1.045, seg: 7, every: 4, scale: 0.95, drop: 30 },
         festoonLit: function (dark) { return dark; },
         arrival: true
+      };
+    }
+    // Settings: the lights hang across the column, from a brass eye on the
+    // sidebar's edge; when a narrow window puts the sidebar on top, across
+    // the whole width above it.
+    const sidebar = document.querySelector('.sidebar');
+    if (sidebar && document.getElementById('section-customization')) {
+      return {
+        text: '.section-header .section-head, .brand-name',
+        lines: '.section-header, .group, .rows',
+        boxes: '.switch-track, .btn, .design-option, .layout-toggle',
+        festoon: {
+          span: 250, top: 2, slack: 1.045, seg: 7, every: 4, scale: 0.85, drop: 26,
+          region: function (W, H) {
+            const r = sidebar.getBoundingClientRect();
+            return r.height >= H * 0.9 && r.right < W / 2 ? [r.right - 4, W + 8] : [-8, W + 8];
+          }
+        },
+        festoonLit: function (dark) { return dark; },
+        arrival: false
       };
     }
     return null;
@@ -734,17 +754,25 @@
       if (o.kind === 'arrival') r.t0 = old ? old.t0 : 1.1 + B.length * 0.11 + 2.5;
       return r;
     }
-    function festoonHooks() {
+    // Where the string hangs, left and right: the whole width unless the page
+    // says otherwise.
+    function festoonRegion() {
+      return cfg.festoon.region ? cfg.festoon.region(W, H) : [-8, W + 8];
+    }
+    function festoonHooks(region) {
       const f = cfg.festoon;
-      const spans = Math.max(2, Math.round((W + 16) / f.span));
+      const x0 = region[0], span = region[1] - region[0];
+      const spans = Math.max(2, Math.round(span / f.span));
       const hooks = [];
-      for (let i = 0; i <= spans; i++) hooks.push([-8 + i * (W + 16) / spans, f.top + (i % 2 ? 4 : 0)]);
+      for (let i = 0; i <= spans; i++) hooks.push([x0 + i * span / spans, f.top + (i % 2 ? 4 : 0)]);
       return hooks;
     }
-    function buildFestoon() {
+    function syncFestoon() {
+      const region = festoonRegion();
+      if (festoon && Math.abs(festoon.region[0] - region[0]) <= 2 && Math.abs(festoon.region[1] - region[1]) <= 2) return;
       const f = cfg.festoon;
-      festoon = makeRope(festoonHooks(), { kind: 'festoon', slack: f.slack, seg: f.seg, every: f.every, scale: f.scale, drop: f.drop, iters: 18 }, festoon);
-      festoon.W = W;
+      festoon = makeRope(festoonHooks(region), { kind: 'festoon', slack: f.slack, seg: f.seg, every: f.every, scale: f.scale, drop: f.drop, iters: 18 }, festoon);
+      festoon.region = region;
     }
     // On the held page the line that arrives at the door is the wire, held up
     // at each door it went through and ending at the brass square.
@@ -1033,7 +1061,7 @@
       const d = isDark();
       if (d !== dark || !sprites) { dark = d; buildSprites(); }
       if (sized || !flakes.length) populate();
-      if (!festoon || Math.abs(festoon.W - W) > 2) buildFestoon();
+      syncFestoon();
       syncArrival();
       measureLedges();
       if (still) draw();

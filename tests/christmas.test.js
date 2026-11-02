@@ -55,8 +55,8 @@ test('the words beside the wordmark count down to Christmas and see the year out
   assert.equal(Season.line(on(2027, 1, 1)), 'Happy New Year');
 });
 
-test('the popup and the held page load the season check, then the drawing, in <head>', () => {
-  for (const page of ['popup.html', 'blocked.html']) {
+test('the popup, the held page and Settings load the season check, then the drawing, in <head>', () => {
+  for (const page of ['popup.html', 'blocked.html', 'options.html']) {
     const html = read(page);
     const head = html.slice(0, html.indexOf('</head>'));
     const season = head.indexOf('<script src="shared/season.js"></script>');
@@ -66,6 +66,8 @@ test('the popup and the held page load the season check, then the drawing, in <h
   }
   assert.match(read('popup.html'), /id="season-line"/, 'the popup has a place for the words');
   assert.match(read('blocked.html'), /\.has-christmas-line \.doors-across \.door-arrival/, 'the held page hides the plain line the lights replace');
+  assert.match(read('options.html'), /\.is-christmas \.main \{\s*padding-top:/, 'Settings makes room for the lights above its column');
+  assert.equal((read('options.html').match(/<script src="shared\/season\.js"><\/script>/g) || []).length, 1, 'and loads the season check once');
 });
 
 test('no website ever runs it', () => {
