@@ -134,9 +134,12 @@
     const sidebar = document.querySelector('.sidebar');
     if (sidebar && document.getElementById('section-customization')) {
       return {
-        text: '.section-header .section-head, .brand-name',
+        text: '.section-header .section-head, .brand-name, .release-title, .release-numeral',
         lines: '.section-header, .group, .rows',
         boxes: '.switch-track, .btn, .design-option, .layout-toggle',
+        // The Welcome banners: deep snow on top, folded over the edge, icicles under it.
+        roofs: '#release-card, #pass-card, #dev-message-card',
+        circles: '.warden-dial-arc',
         festoon: {
           span: 250, top: 2, slack: 1.045, seg: 7, every: 4, scale: 0.85, drop: 26,
           region: function (W, H) {
@@ -194,7 +197,11 @@
     // --- Snow ---------------------------------------------------------------------
 
     // max depth, edge hold, angle of repose (px per px), chance to settle
-    const KINDS = { line: [4.6, 1.8, 0.45, 0.3], text: [3.6, 1.3, 1.25, 0.55], box: [4.2, 1.8, 0.7, 0.45] };
+    const KINDS = {
+      line: [4.6, 1.8, 0.45, 0.3], text: [3.6, 1.3, 1.25, 0.55], box: [4.2, 1.8, 0.7, 0.45],
+      roof: [11, 8, 0.55, 0.85], circle: [5, 5, 0.9, 0.7]
+    };
+    const LIP = 2.5;   // how far a roof's snow folds down over its edge
     const memory = new WeakMap();   // element → the snow on it, kept across measures
     let ledges = [];
     let flakes = [];
@@ -401,9 +408,10 @@
           const bi = b[i], bj = b[i + 1];
           if (bi !== bi || bj !== bj || Math.abs(bi - bj) > 2) continue;
           const d = (bj - h[i + 1]) - (bi - h[i]);
-          // past the angle of repose it slides; below it, it only settles a little
+          // past the angle of repose it slides; below it, it only settles a
+          // little toward an even depth, so a curved top keeps its snow
           let m = d > R ? (d - R) * 0.3 : d < -R ? (d + R) * 0.3 : 0;
-          m += d * 0.025;
+          m += (h[i] - h[i + 1]) * 0.025;
           if (m > 0) m = Math.min(m, h[i]); else m = Math.max(m, -h[i + 1]);
           h[i] -= m;
           h[i + 1] += m;
@@ -422,7 +430,8 @@
           if (quiet) hv = L.hold;
           else if (hv - L.hold > 0.8) { hv -= 0.8; spill(L.x0 + i + (right ? 1.5 : -1.5), bi - hv, right ? 1 : -1, 0.8, null); }
         }
-        if (hv > L.max) hv = L.max;
+        const most = L.lim ? L.max * L.lim[i] : L.max;
+        if (hv > most) hv = most;
         h[i] = hv > 0 ? hv : 0;
       }
     }
@@ -432,6 +441,18 @@
         if (L.b[i] === L.b[i]) L.h[i] = L.max * frac * (0.72 + 0.28 * Math.sin(i * 0.05 + ph) * Math.sin(i * 0.013 + 1.7) + 0.12 * Math.random());
       }
       for (let k = 0; k < 60; k++) settle(L, 0, true);
+    }
+    // Whether what's under a ledge is dark (a band, a banner, the dark theme):
+    // snow there is drawn with a bright edge rather than an inked one.
+    function onDarkGround(el) {
+      for (let n = el; n && n.nodeType === 1; n = n.parentElement) {
+        const m = /rgba?\(([^)]+)\)/.exec(getComputedStyle(n).backgroundColor || '');
+        if (!m) continue;
+        const v = m[1].split(',').map(parseFloat);
+        if (v.length > 3 && v[3] < 0.5) continue;
+        return (0.2126 * v[0] + 0.7152 * v[1] + 0.0722 * v[2]) / 255 < 0.35;
+      }
+      return dark;
     }
     function ledge(el, kind, side, rect, style) {
       const w = Math.round(rect.width);
@@ -452,10 +473,33 @@
         if (kind === 'text') {
           rel = skyline(el, style, font, text, w, rect.height);
           if (!rel) return null;
+        } else if (kind === 'circle') {
+          // the top of a round thing, column by column, as far down as snow
+          // can lie on it (under about 45 degrees)
+          const R = rect.width / 2;
+          rel = new Float32Array(w);
+          for (let i = 0; i < w; i++) { const dx = i + 0.5 - R; rel[i] = Math.abs(dx) < R * 0.7 ? R - Math.sqrt(R * R - dx * dx) : NaN; }
         }
         st = { key: key, rel: rel, h: new Float32Array(w) };
+        if (kind === 'circle') {
+          // a mound: deepest at the top, nothing where it turns steep
+          st.lim = new Float32Array(w);
+          for (let i = 0; i < w; i++) { const u = (i + 0.5 - w / 2) / (w * 0.35); st.lim[i] = Math.max(0, 1 - u * u); }
+        }
+        if (kind === 'roof') {
+          // where the folded lip sags, and where icicles have grown
+          st.drip = new Float32Array(w);
+          st.icicles = [];
+          for (let i = 6 + Math.random() * 20; i < w - 6; i += 9 + Math.random() * 26) {
+            const c = i | 0, len = 0.8 + Math.random() * 2.2, half = 1.5 + Math.random() * 3;
+            for (let k = Math.max(0, c - 6); k < Math.min(w, c + 7); k++) st.drip[k] = Math.max(st.drip[k], len * Math.exp(-((k - c) * (k - c)) / (half * half)));
+            // none in front of the close button in the corner
+            if (c < w - 48 && Math.random() < 0.45) st.icicles.push({ i: c, len: 4 + Math.random() * Math.random() * 12, w: 1.8 + Math.random() * 2.2 });
+          }
+        }
         rec[side] = st;
       }
+      if (fresh || st.theme !== dark) { st.ground = onDarkGround(el); st.theme = dark; }
       const y = side === 'bottom' ? rect.bottom - (parseFloat(style.borderBottomWidth) || 1) : rect.top;
       const b = new Float32Array(w);
       let yMin = Infinity, yMax = -Infinity;
@@ -465,8 +509,10 @@
         if (v === v) { if (v < yMin) yMin = v; if (v > yMax) yMax = v; }
       }
       if (yMin === Infinity) return null;
-      const L = { el: el, x0: x0, x1: x0 + w, n: w, b: b, h: st.h, max: K[0], hold: K[1], repose: K[2], p: K[3], yMin: yMin, yMax: yMax };
-      if (fresh) seed(L, still ? 0.9 : 0.55);
+      const L = { el: el, kind: kind, st: st, lim: st.lim || null, x0: x0, x1: x0 + w, n: w, b: b, h: st.h, max: K[0], hold: K[1], repose: K[2], p: K[3], yMin: yMin, yMax: yMax };
+      // icicles stop short of whatever the banner holds under its top edge
+      if (kind === 'roof') L.room = Math.max(0, (parseFloat(style.paddingTop) || 0) - LIP - 6);
+      if (fresh) seed(L, still ? 0.9 : kind === 'roof' ? 0.75 : 0.55);
       return L;
     }
     function measureLedges() {
@@ -493,6 +539,15 @@
         if (!visible(el, r) || r.height < 4) return;
         const L = ledge(el, 'box', 'box', r, getComputedStyle(el));
         if (L) next.push(L);
+      });
+      [['roofs', 'roof'], ['circles', 'circle']].forEach(function (pair) {
+        if (!cfg[pair[0]]) return;
+        document.querySelectorAll(cfg[pair[0]]).forEach(function (el) {
+          const r = el.getBoundingClientRect();
+          if (!visible(el, r) || r.height < 4) return;
+          const L = ledge(el, pair[1], pair[1], r, getComputedStyle(el));
+          if (L) next.push(L);
+        });
       });
       ledges = next;
     }
@@ -558,10 +613,14 @@
       for (const L of ledges) settle(L, dt, false);
     }
     function drawLedges() {
-      const P = dark
+      const paper = dark
         ? { fill: '#e8edef', shade: 'rgba(120,140,155,0.35)', edge: 'rgba(255,255,255,0.9)' }
         : { fill: '#ffffff', shade: 'rgba(150,168,182,0.32)', edge: 'rgba(58,74,88,0.42)' };
+      const night = { fill: dark ? '#e8edef' : '#ffffff', shade: 'rgba(120,140,155,0.35)', edge: 'rgba(255,255,255,0.9)' };
       for (const L of ledges) {
+        // a roof's drift stands above its banner, on the page
+        if (L.kind === 'roof') { drawRoof(L, paper); continue; }
+        const P = L.st.ground ? night : paper;
         const b = L.b, h = L.h, n = L.n, x = L.x0;
         let i = 0;
         while (i < n) {
@@ -585,7 +644,74 @@
           for (let k = s; k < e; k++) ctx.lineTo(x + k + 0.5, b[k] - h[k]);
           ctx.lineTo(x + e, b[e - 1] - h[e - 1] + Math.min(h[e - 1], 1));
           ctx.strokeStyle = P.edge;
-          ctx.lineWidth = dark ? 0.6 : 0.75;
+          ctx.lineWidth = P === paper && !dark ? 0.75 : 0.6;
+          ctx.stroke();
+        }
+      }
+    }
+    // Deep snow on a banner: rounded over both ends, folded down over the top
+    // edge with a sagging lip that shades the band under it, and icicles
+    // where the lip has dripped and frozen.
+    function drawRoof(L, P) {
+      const b = L.b, h = L.h, n = L.n, x = L.x0, st = L.st, ov = 3;
+      let i = 0;
+      while (i < n) {
+        if (!(h[i] > 0.3)) { i++; continue; }
+        const s = i;
+        while (i < n && h[i] > 0.3) i++;
+        const e = i;
+        const sag = function (k) { return LIP + st.drip[k] * Math.min(1, h[k] / 4); };
+        const outline = function (top) {
+          ctx.beginPath();
+          ctx.moveTo(x + s - ov, b[s] + LIP);
+          ctx.quadraticCurveTo(x + s - ov - 1.5, b[s] - h[s] * top * 0.7, x + s + 1, b[s] - h[s] * top);
+          for (let k = s; k < e; k++) ctx.lineTo(x + k + 0.5, b[k] - h[k] * top);
+          ctx.quadraticCurveTo(x + e + ov + 1.5, b[e - 1] - h[e - 1] * top * 0.7, x + e + ov, b[e - 1] + LIP);
+          for (let k = e - 1; k >= s; k--) ctx.lineTo(x + k + 0.5, b[k] + sag(k));
+          ctx.closePath();
+        };
+        // the shade the lip throws on the band
+        ctx.beginPath();
+        ctx.moveTo(x + s - ov, b[s] + LIP + 1);
+        for (let k = s; k < e; k++) ctx.lineTo(x + k + 0.5, b[k] + sag(k) + 1.2);
+        ctx.lineTo(x + e + ov, b[e - 1] + LIP + 1);
+        ctx.strokeStyle = 'rgba(0,0,0,0.3)';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        outline(1);
+        ctx.fillStyle = P.fill;
+        ctx.fill();
+        outline(0.3);
+        ctx.fillStyle = P.shade;
+        ctx.fill();
+        ctx.beginPath();
+        ctx.moveTo(x + s - ov, b[s] + LIP);
+        ctx.quadraticCurveTo(x + s - ov - 1.5, b[s] - h[s] * 0.7, x + s + 1, b[s] - h[s]);
+        for (let k = s; k < e; k++) ctx.lineTo(x + k + 0.5, b[k] - h[k]);
+        ctx.quadraticCurveTo(x + e + ov + 1.5, b[e - 1] - h[e - 1] * 0.7, x + e + ov, b[e - 1] + LIP);
+        ctx.strokeStyle = P.edge;
+        ctx.lineWidth = dark ? 0.6 : 0.75;
+        ctx.stroke();
+        for (const ic of st.icicles) {
+          if (ic.i < s || ic.i >= e || h[ic.i] < 2) continue;
+          const len = Math.min(ic.len * Math.min(1, h[ic.i] / 5), L.room);
+          if (len < 2) continue;
+          const cx = x + ic.i + 0.5, y0 = b[ic.i] + sag(ic.i) - 0.6, hw = ic.w / 2;
+          const g = ctx.createLinearGradient(0, y0, 0, y0 + len);
+          g.addColorStop(0, 'rgba(255,255,255,0.95)');
+          g.addColorStop(1, 'rgba(205,228,238,0.55)');
+          ctx.beginPath();
+          ctx.moveTo(cx - hw, y0);
+          ctx.quadraticCurveTo(cx - hw * 0.25, y0 + len * 0.55, cx, y0 + len);
+          ctx.quadraticCurveTo(cx + hw * 0.25, y0 + len * 0.55, cx + hw, y0);
+          ctx.closePath();
+          ctx.fillStyle = g;
+          ctx.fill();
+          ctx.beginPath();
+          ctx.moveTo(cx - hw * 0.35, y0 + 1);
+          ctx.lineTo(cx - hw * 0.08, y0 + len * 0.72);
+          ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+          ctx.lineWidth = 0.5;
           ctx.stroke();
         }
       }
