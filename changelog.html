@@ -206,6 +206,12 @@
         <h3 class="group-label">Fixed</h3>
         <ul class="rows rows-closed">
           <li class="entry">
+            <h4 class="entry-title">Firefox was slow on busy pages</h4>
+            <p class="entry-body">
+              BlockNSFW stops pictures, frames and scripts from listed sites before they load. Chrome looks each one up in the list at once, but Firefox checked it against every one of the thousands of pieces the list is split into, so a page with ads and plenty of pictures could take twice as long to load. Firefox now gets the same list as one piece, and a page like that loads in about half the time it took. The same sites are blocked as before.
+            </p>
+          </li>
+          <li class="entry">
             <h4 class="entry-title">Pictures stayed black until clicked, with the AI Image Blocker on</h4>
             <p class="entry-body">
               A picture is kept hidden while the AI checks it. Most sites offer each picture in several sizes and let the browser pick one late; when the check started first, it checked a size that never showed, threw the answer away, and the picture on screen stayed a black box until a click opened it somewhere else. The picture on screen is now checked too, and shows (or blurs) when its answer comes back.

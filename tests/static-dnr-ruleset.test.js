@@ -210,3 +210,53 @@ test('C2: the allow id range is fully reclaimed on every update', () => {
     assert.ok(allIds.includes(id), `rule id ${id} is never removed`);
   }
 });
+
+// ---------------------------------------------------------------------------
+// Firefox gets the same ruleset as one rule
+// ---------------------------------------------------------------------------
+//
+// Firefox walks every rule for every sub-resource request; Chrome's thousands
+// of small rules cost it most of a second on a busy page. One rule with every
+// domain is a single lookup, and Firefox has no per-rule size limit.
+
+test('Firefox: one rule carrying exactly the domains Chrome blocks', async () => {
+  const { packForFirefox } = await import('../scripts/build-dnr-ruleset.mjs');
+  const firefoxRules = packForFirefox(rules);
+
+  assert.equal(firefoxRules.length, 1);
+  const [rule] = firefoxRules;
+  assert.equal(rule.action.type, 'block');
+  assert.equal(rule.priority, rules[0].priority,
+    'the whitelist allow rules have to outrank it exactly as they do on Chrome');
+  assert.deepEqual(rule.condition.resourceTypes, rules[0].condition.resourceTypes);
+  assert.equal(rule.condition.resourceTypes.includes('main_frame'), false);
+  assert.equal(rule.condition.requestDomains.length, allDomains.size);
+  assert.deepEqual(new Set(rule.condition.requestDomains), allDomains);
+});
+
+test('Firefox: rules that differ are refused rather than merged', async () => {
+  const { packForFirefox } = await import('../scripts/build-dnr-ruleset.mjs');
+  const base = rules[0];
+  const variants = [
+    { ...base, priority: base.priority + 1 },
+    { ...base, action: { type: 'allow' } },
+    { ...base, condition: { ...base.condition, resourceTypes: ['image'] } },
+    { ...base, condition: { ...base.condition, excludedRequestDomains: ['ok.example'] } }
+  ];
+  for (const odd of variants) {
+    assert.throws(() => packForFirefox([base, { ...odd, id: 2, condition: {
+      ...odd.condition, requestDomains: ['other.example'] } }]), /cannot be merged/);
+  }
+  assert.throws(() => packForFirefox([base, { ...base, id: 2 }]), /more than one rule/);
+});
+
+test('Firefox: only the Firefox package is repacked, after the rules folder is copied', () => {
+  const firefoxBuild = fs.readFileSync(path.join(ROOT, 'build-firefox.ps1'), 'utf8');
+  const chromeBuild = fs.readFileSync(path.join(ROOT, 'build-chrome.ps1'), 'utf8');
+  const copied = firefoxBuild.indexOf('Copying runtime folders');
+  const packed = firefoxBuild.search(/build-dnr-ruleset\.mjs --firefox \(Join-Path \$OutDir "rules\\blocklist-rules\.json"\)/);
+  assert.ok(copied !== -1, 'build-firefox.ps1 no longer copies the runtime folders');
+  assert.ok(packed > copied,
+    'the one-rule ruleset must overwrite the copied Chrome one, so it has to come after the copy');
+  assert.equal(chromeBuild.includes('--firefox'), false, 'Chrome must keep its small rules');
+});

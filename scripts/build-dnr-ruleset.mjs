@@ -37,8 +37,21 @@
 // Compiled size is not JSON size, so the packer works to a conservative JSON
 // budget and asserts the result, rather than assuming.
 //
+// FIREFOX GETS ONE RULE
+//
+// Chrome indexes every rule's requestDomains, so thousands of small rules cost
+// it nothing per request. Firefox does not: ExtensionDNR.sys.mjs walks every rule
+// of every enabled ruleset for every sub-resource request, one Set lookup per
+// rule. On a page with 20 ad frames and 120 images that walk added 0.6-0.8 s to
+// the load — most of what the extension costs there. Firefox
+// has no per-rule size limit, only a rule count, so build-firefox.ps1 packs the
+// same domains into a single rule (packForFirefox) and the walk is one lookup.
+// The committed file stays Chrome's; Firefox's is written into dist only.
+//
 // Usage:  node scripts/build-dnr-ruleset.mjs [--check]
+//         node scripts/build-dnr-ruleset.mjs --firefox <path>
 //         --check verifies the committed ruleset is current without writing.
+//         --firefox writes the one-rule Firefox ruleset to <path>.
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -154,6 +167,35 @@ export function packRules(domains, budget = RULE_BUDGET_BYTES) {
 }
 
 /**
+ * The same ruleset as one rule, for Firefox (see FIREFOX GETS ONE RULE above).
+ *
+ * Takes the checked output of buildRuleset() rather than re-packing domains,
+ * so every guard has already run and the two browsers cannot carry different
+ * lists. Refuses rules it cannot merge without changing what they block.
+ */
+export function packForFirefox(rules) {
+  const domains = [];
+  for (const rule of rules) {
+    const { requestDomains, resourceTypes, ...rest } = rule.condition;
+    if (rule.action.type !== 'block' || rule.priority !== BLOCK_RULE_PRIORITY ||
+        Object.keys(rest).length ||
+        JSON.stringify(resourceTypes) !== JSON.stringify(RESOURCE_TYPES)) {
+      throw new Error(`rule ${rule.id} differs from the others, so it cannot be merged`);
+    }
+    domains.push(...requestDomains);
+  }
+  if (new Set(domains).size !== domains.length) {
+    throw new Error('a domain appears in more than one rule');
+  }
+  return [{
+    id: 1,
+    priority: BLOCK_RULE_PRIORITY,
+    action: { type: 'block' },
+    condition: { requestDomains: domains, resourceTypes: RESOURCE_TYPES }
+  }];
+}
+
+/**
  * Remove every name that must never stand in for its children.
  *
  * Runs BEFORE the subdomain fold, and the order is load-bearing: with
@@ -222,6 +264,18 @@ function main() {
   const pslText = fs.readFileSync(PSL_SOURCE, 'utf8');
   const { rules, parsed, roots, dropped } = buildRuleset(hosts, pslText);
   const json = JSON.stringify(rules, null, 0) + '\n';
+
+  const firefoxAt = process.argv.indexOf('--firefox');
+  if (firefoxAt !== -1) {
+    const target = process.argv[firefoxAt + 1];
+    if (!target) throw new Error('--firefox needs the path to write to');
+    const firefoxRules = packForFirefox(rules);
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    fs.writeFileSync(target, JSON.stringify(firefoxRules, null, 0) + '\n');
+    console.log(`firefox ruleset    ${firefoxRules.length} rule, ` +
+      `${firefoxRules[0].condition.requestDomains.length} domains -> ${target}`);
+    return;
+  }
 
   if (check) {
     const existing = fs.existsSync(OUT) ? fs.readFileSync(OUT, 'utf8') : '';

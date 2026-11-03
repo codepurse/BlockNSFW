@@ -70,6 +70,15 @@ All notable project changes should be documented here going forward.
 
 ### Fixed
 
+- **Firefox was slow on busy pages.** Since 1.8.0, BlockNSFW stops
+  pictures, frames and scripts from listed sites before they load. Chrome
+  looks each one up in the list at once, but Firefox checked it against
+  every one of the thousands of pieces the list is split into, so a page
+  with ads and plenty of pictures took twice as long to load: a test page
+  with 20 ad frames and 120 pictures took 1.4 to 1.6 seconds, where it
+  takes about 0.65 without BlockNSFW. Firefox now gets the same list as
+  one piece, and that page loads in 0.55 to 0.8 seconds. The same sites
+  are blocked as before. Chrome and Edge are unchanged.
 - **Pictures stayed black until clicked, with the AI Image Blocker on.**
   A picture is kept hidden while the AI checks it, so it never shows before
   it has been seen. Most sites offer each picture in several sizes and let
@@ -181,6 +190,18 @@ All notable project changes should be documented here going forward.
 
 ### For contributors
 
+- The Firefox package carries the static ruleset as one rule. Firefox's
+  `ExtensionDNR.sys.mjs` walks every rule of every enabled ruleset for each
+  sub-resource request (one Set lookup per rule), where Chrome indexes
+  `requestDomains`, so Chrome's 1 KB packing (thousands of rules) cost
+  Firefox 0.6 to 0.8 s on a page of 20 ad frames and 120 images. Firefox
+  limits only the rule count, not a rule's size. `build-firefox.ps1` runs
+  `scripts/build-dnr-ruleset.mjs --firefox <path>` after copying `rules/`,
+  overwriting the package's copy with `packForFirefox(rules)`: the checked
+  Chrome rules merged into one, refusing any rule whose action, priority or
+  condition differs. The committed `rules/blocklist-rules.json` stays
+  Chrome's. Tests: `tests/static-dnr-ruleset.test.js` (same domains in one
+  rule; mismatched rules refused; only the Firefox build repacks).
 - Popup face is a Supporter extra, `extras/face.js` (an empty stand-in
   here): it fills `#popup-face` in `popup.html`, whose styles are public,
   and in `options.html` `#popup-card` (Your popup) draws At the top and

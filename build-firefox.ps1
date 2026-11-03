@@ -126,6 +126,13 @@ foreach ($folder in $RuntimeFolders) {
     }
 }
 
+Write-Host "==> Packing the static ruleset into one rule for Firefox" -ForegroundColor Cyan
+# Firefox walks every rule for every image, script and frame a page loads, so
+# Chrome's thousands of small rules cost it most of a second on a busy page.
+# Same domains, one rule (see FIREFOX GETS ONE RULE in the generator).
+node scripts/build-dnr-ruleset.mjs --firefox (Join-Path $OutDir "rules\blocklist-rules.json")
+if ($LASTEXITCODE -ne 0) { throw "Failed to pack the static DNR ruleset for Firefox" }
+
 Write-Host "==> Copying runtime files" -ForegroundColor Cyan
 foreach ($file in $RuntimeFiles) {
     $src = Join-Path $SrcDir $file
