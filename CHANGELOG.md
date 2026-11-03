@@ -70,6 +70,18 @@ All notable project changes should be documented here going forward.
 
 ### Fixed
 
+- **Pictures stayed black until clicked, with the AI Image Blocker on.**
+  A picture is kept hidden while the AI checks it, so it never shows before
+  it has been seen. Most sites offer each picture in several sizes and let
+  the browser pick one as it comes near the screen. When the check started
+  before the browser had picked, it checked the size offered first, then
+  threw the answer away because the picture had changed, and never checked
+  the one on screen. That picture stayed hidden, a black box on Reddit and
+  on most sites with a feed, until a click opened it somewhere else. Since
+  2.0.0. The picture on screen is now checked in its turn, and shows (or
+  blurs) when that answer comes back. A check that failed for the size the
+  browser didn't pick no longer puts the one it did pick on screen
+  unchecked.
 - **Pages about quitting porn were held at the fourth door.** The address
   check held any address with "porn" in it, whatever the words around it
   said: every Fight the New Drug article, NoFap forum threads, Healthline
@@ -216,6 +228,15 @@ All notable project changes should be documented here going forward.
   the FPL page and a league table, and a column for the Strict fuse bar.
   Tests: `tests/text-classifier-core.test.js` (an FPL history under the
   Strict fuse bar; a title over a table under the Balanced fuse bar).
+- `applyVerdict()` in `ai-image-blocker.js` no longer only drops a verdict
+  whose node has moved on (`currentSrc` changed mid-flight): it hands the
+  node to `onImageVisible()` to judge what it shows now, which joins an
+  in-flight classification or hits the cache when content.js already saw
+  the change. A failed classification does the same instead of revealing.
+  A srcset candidate change fires no attribute mutation, so nothing else
+  ever looks at that node again. Tests:
+  `tests/ai-image-recycled-node.test.js` (a srcset candidate chosen
+  mid-flight; a failed fallback).
 
 ## [2.0.3] - 2026-10-26
 

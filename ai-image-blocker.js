@@ -248,11 +248,22 @@
   // may be showing a different picture. Applying it blind is how an explicit
   // image ends up unblurred on X: the previous occupant's stale `allow` verdict
   // arrives and strips the blur off the image that replaced it. When the node
-  // has moved on, drop the verdict — the URL it now holds has its own
-  // classification pending.
+  // has moved on, drop the verdict and judge what it holds now.
+  //
+  // Judging it again is not optional. A srcset or <picture> image changes
+  // picture with no attribute change at all, so content.js never hears of it:
+  // a lazy image is seen before the browser has chosen its candidate, its
+  // fallback `src` is what gets classified, and then the browser loads the
+  // 800w candidate instead. Dropping the verdict alone left every such node
+  // hidden for good, a black box on Reddit and most feeds until clicked. When
+  // content.js did see the change, this joins its classification in flight or
+  // hits the cache, so it costs nothing.
   function applyVerdict(img, verdict, scores, expectedSrc) {
     if (!img || !img.classList) return;
-    if (expectedSrc && (img.currentSrc || img.src) !== expectedSrc) return;
+    if (expectedSrc && (img.currentSrc || img.src) !== expectedSrc) {
+      onImageVisible(img);
+      return;
+    }
     const alreadyBlocked = img.classList.contains('pblocker-ai-blocked');
     noteJudged(img, verdict === 'block');
     if (verdict === 'block') {
@@ -487,8 +498,11 @@
       applyVerdict(img, verdict, scores, src);
     } catch (_) {
       // Classification failed (CORS, network, SW error) - reveal the image
-      // rather than leaving it hidden forever.
-      clearPending(img);
+      // rather than leaving it hidden forever. Unless the node moved on: the
+      // failure was for a picture it no longer shows, and revealing would put
+      // the new one on screen unjudged. See applyVerdict().
+      if ((img.currentSrc || img.src) !== src) onImageVisible(img);
+      else clearPending(img);
     }
   }
 

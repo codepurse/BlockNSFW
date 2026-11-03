@@ -108,6 +108,13 @@ function loadBlocker({ settings = { enabled: true, aiImageBlocker: true }, pageH
       pendingClassifies.delete(src);
       cb({ success: true, scores });
     },
+    // Fail an in-flight classify for `src`, as a 404 or CORS refusal would.
+    failClassify(src) {
+      const cb = pendingClassifies.get(src);
+      assert.ok(cb, `no classification in flight for ${src}`);
+      pendingClassifies.delete(src);
+      cb({ success: false, error: 'HTTP 404' });
+    },
     isClassifying: (src) => pendingClassifies.has(src),
     async init() {
       api.init(settings);
@@ -206,6 +213,60 @@ test('the scores of a verdict dropped for a recycled node are still cached', asy
   h.api.onImageVisible(other);
   assert.equal(other.classList.contains(BLOCKED), true, 'served from cache');
   assert.equal(h.isClassifying(A), false, 'no second round-trip for the same URL');
+});
+
+// ─── srcset: the picture changes with no attribute change ────────────────────
+//
+// "Images stay black until I click them, on every site." A lazy srcset image is
+// seen before the browser has chosen its candidate, so its fallback `src` is
+// classified; then the browser loads a srcset candidate instead. No attribute
+// changed, so content.js never hands the node back, and the dropped verdict
+// left it hidden for good.
+
+const FALLBACK = 'https://preview.redd.it/hair.jpg?width=640';
+const CANDIDATE = 'https://preview.redd.it/hair.jpg?width=960';
+
+test('a srcset image that picks its picture mid-flight is judged on what it shows', async () => {
+  const h = loadBlocker({ pageHost: 'www.reddit.com' });
+  await h.init();
+
+  const img = makeImg(FALLBACK);
+  img.currentSrc = '';                    // no candidate chosen yet
+  h.api.onImageVisible(img);
+  assert.ok(h.isClassifying(FALLBACK));
+
+  img.currentSrc = CANDIDATE;             // the browser loads the 960w candidate
+  h.resolveClassify(FALLBACK, SAFE);
+  await new Promise((r) => setTimeout(r, 0));
+
+  assert.ok(h.isClassifying(CANDIDATE), 'the picture on screen is classified');
+  assert.equal(img.classList.contains(PENDING), true, 'and stays hidden until it is judged');
+
+  h.resolveClassify(CANDIDATE, SAFE);
+  await new Promise((r) => setTimeout(r, 0));
+
+  assert.equal(img.classList.contains(PENDING), false, 'a safe picture is revealed, not left black');
+});
+
+test('a failed classification of a picture the node no longer shows does not reveal the new one', async () => {
+  const h = loadBlocker({ pageHost: 'www.reddit.com' });
+  await h.init();
+
+  const img = makeImg(FALLBACK);
+  img.currentSrc = '';
+  h.api.onImageVisible(img);
+
+  img.currentSrc = CANDIDATE;
+  h.failClassify(FALLBACK);               // the fallback URL 404s
+  await new Promise((r) => setTimeout(r, 0));
+
+  assert.equal(img.classList.contains(PENDING), true, 'the new picture is not put on screen unjudged');
+  assert.ok(h.isClassifying(CANDIDATE));
+
+  h.resolveClassify(CANDIDATE, EXPLICIT);
+  await new Promise((r) => setTimeout(r, 0));
+
+  assert.equal(img.classList.contains(BLOCKED), true, 'the explicit candidate is blurred');
 });
 
 // ─── onImageSrcChanged: hide, don't unblur ───────────────────────────────────
