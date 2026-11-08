@@ -2,7 +2,7 @@
 
 All notable project changes should be documented here going forward.
 
-## [Unreleased]
+## [2.0.5] - 2026-11-08
 
 ### Added
 
@@ -21,10 +21,6 @@ All notable project changes should be documented here going forward.
   - Its Relaxed / Balanced / Strict bars are Wingman's own published
     low-false-alarm points (0.950 / 0.931 / 0.834).
   - Full write-up: `docs/research/nsfw-image-models-2026-11.md`.
-
-## [2.0.5] - 2026-11-08
-
-### Added
 
 - **Report a page held by mistake, from the held page.** Every design of
   the held page now ends with "Held by mistake?" and a Report this site
