@@ -90,7 +90,8 @@ test('the popup has a quick way to turn it off, on the same setting', () => {
 test('Welcome’s two Santa hats show only at Christmas, and keep still for reduced motion', () => {
   const html = read('options.html');
   const hats = html.match(/class="xmas-hat [^"]*"/g) || [];
-  assert.deepEqual(hats, ['class="xmas-hat xmas-hat-title"', 'class="xmas-hat xmas-hat-dial"'], 'one on the headline, one on the dial');
+  assert.deepEqual(hats, ['class="xmas-hat xmas-hat-title"', 'class="xmas-hat xmas-hat-tag"'], 'one on the headline, one on Warden’s open beta tag');
+  assert.match(html, /<span class="warden-tag"><svg class="xmas-hat xmas-hat-tag"[^>]*aria-hidden="true"/, 'the tag’s is decoration, first in it');
   assert.match(html, /<h3 class="pass-title"[^>]*><svg class="xmas-hat xmas-hat-title"[^>]*aria-hidden="true"/, 'the headline’s is decoration, first in it');
   assert.match(html, /\.xmas-hat \{\s*display: none;\s*\}/, 'hidden unless it is Christmas');
   assert.match(html, /\.is-christmas \.xmas-hat \{\s*display: block;/);
@@ -98,7 +99,7 @@ test('Welcome’s two Santa hats show only at Christmas, and keep still for redu
   const styles = (html.match(/<style>[\s\S]*?<\/style>/g) || []).join('\n');
   const hatCss = styles.slice(styles.indexOf('.xmas-hat {'), styles.indexOf('@keyframes xmas-hat-sway'));
   assert.ok(!/#[0-9a-f]{3,6}\b/i.test(hatCss), 'the hat’s colours live in its SVG, not in page CSS');
-  assert.ok(!/circles:/.test(read('ui/christmas.js')), 'the dial wears the hat, so no snow cap is drawn over it');
+  assert.ok(!/circles:/.test(read('ui/christmas.js')), 'no snow cap is drawn over a circle');
 });
 
 test('Settings has the switch, with the season check loaded before options.js', () => {

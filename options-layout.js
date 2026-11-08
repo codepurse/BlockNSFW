@@ -1,7 +1,6 @@
 // options-layout.js — the settings page's own layout behaviour: the
-// full-width toggle, the welcome cards folding to one line once read, the
-// Warden banner's countdown, and the sidebar, which shows one section at a
-// time.
+// full-width toggle, the welcome cards folding to one line once read, and the
+// sidebar, which shows one section at a time.
 //
 // Loaded from <head>, not the end of <body>, so a saved full-width choice is
 // on <html> before the first paint. Applied any later, the page would visibly
@@ -128,36 +127,6 @@
     }
   }
 
-  // The Warden banner's dial counts a cool-down down, the way Warden makes a
-  // change that loosens protection wait. It is an illustration: it starts from
-  // the same time on every visit, ticks only while the page is in view, and
-  // stands still for anyone who asked for reduced motion. The arc is the
-  // seconds left in the current minute, so it steps one tick at a time.
-  var COOLDOWN_START = 23 * 3600 + 59 * 60 + 41; // 23:59:41
-  var COOLDOWN_TOTAL = 24 * 3600;
-
-  function initWardenCooldown() {
-    var times = document.querySelectorAll('[data-cooldown]');
-    var arc = document.querySelector('.warden-dial-arc');
-    if (!times.length && !arc) return;
-    var length = arc ? Number(arc.getAttribute('stroke-dasharray')) : 0;
-    var left = COOLDOWN_START;
-    function pad(n) { return n < 10 ? '0' + n : String(n); }
-    function draw() {
-      var text = pad(Math.floor(left / 3600)) + ':' + pad(Math.floor((left % 3600) / 60)) + ':' + pad(left % 60);
-      for (var i = 0; i < times.length; i++) times[i].textContent = text;
-      if (arc) arc.setAttribute('stroke-dashoffset', (length * (1 - (left % 60) / 60)).toFixed(2));
-    }
-    draw();
-    var still = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    if (still) return;
-    setInterval(function () {
-      if (document.hidden) return;
-      left = left > 0 ? left - 1 : COOLDOWN_TOTAL - 1;
-      draw();
-    }, 1000);
-  }
-
   function initWidthToggle() {
     var btn = document.getElementById('layout-toggle');
     if (!btn) return;
@@ -245,7 +214,6 @@
   function init() {
     initWidthToggle();
     initWelcomeCards();
-    initWardenCooldown();
     initNav();
   }
 

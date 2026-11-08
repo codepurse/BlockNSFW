@@ -2,6 +2,19 @@
 
 All notable project changes should be documented here going forward.
 
+## [Unreleased]
+
+### Changed
+
+- **The Warden banner says it's an open beta.** Anyone can download Warden
+  now, so the banner at the top of Settings drops "Join the beta" and the
+  cool-down dial (the cool-down is a Pro feature) for "Warden is open.
+  Anyone can try it now." Beside it, four hairline rows give the status,
+  the price, what it runs on and that it needs no account. "Download
+  Warden" goes straight to the download page. Folded, the strip reads "open
+  beta · free for Windows 10 and 11". At Christmas, the Santa hat moves
+  from the dial to the corner of the open beta tag.
+
 ## [2.0.5] - 2026-11-08
 
 ### Fixed

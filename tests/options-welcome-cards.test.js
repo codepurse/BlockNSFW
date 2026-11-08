@@ -111,6 +111,18 @@ test('the banner opens on every visit, whatever an earlier build stored', () => 
   assert.ok(!('data-dev-message-read' in atFirstPaint));
 });
 
+test('the Warden banner says open beta and links to the download', () => {
+  const html = fs.readFileSync(path.join(ROOT, 'options.html'), 'utf8');
+  const start = html.indexOf('id="dev-message-card"');
+  const card = html.slice(start, html.indexOf('id="whats-new-card"', start)).replace(/<!--[\s\S]*?-->/g, '');
+  assert.match(card, /<span class="warden-strip-beta">open beta<\/span>/, 'the folded strip says it too');
+  assert.match(card, /<span class="warden-tag">[\s\S]*?open beta<\/span>/);
+  assert.match(card, /<dt class="meta">status<\/dt><dd>Open beta<\/dd>/);
+  assert.match(card, /<a class="btn btn-primary btn-sm" href="https:\/\/monolab\.dev\/warden\/download"[^>]*>[\s\S]*?Download Warden<\/a>/);
+  // The invite-only beta and its Pro cool-down dial are gone.
+  assert.ok(!/Join the beta|warden#beta|data-cooldown|cool-down/i.test(card));
+});
+
 test('opening a folded card from its strip is for this visit only', () => {
   const { attrs, store, cards } = load({ stored: { pblocker_whats_new_read: '1.8.0' } });
   cards['whats-new-card'].parts['[data-welcome="open"]'].click();

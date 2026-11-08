@@ -171,7 +171,7 @@
         lines: '.section-header, .group, .rows',
         boxes: '.switch-track, .btn, .design-option, .layout-toggle',
         // The Welcome banners: deep snow on top, folded over the edge, icicles
-        // under it. Warden's dial wears a Santa hat (options.html), not snow.
+        // under it. Warden's open beta tag wears a Santa hat (options.html).
         roofs: '#release-card, #pass-card, #dev-message-card',
         festoon: {
           span: 250, top: 2, slack: 1.045, seg: 7, every: 4, scale: 0.85, drop: 26,
