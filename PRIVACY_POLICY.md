@@ -244,6 +244,7 @@ If you choose to report a blocked or misblocked website, that report is sent to 
 - Service used: `699ac1b100018b3f455a.sgp.appwrite.run`
 - Purpose: review false positives, missed blocks, abuse prevention, and improve filtering
 - Data involved: the reported URL, normalized domain, report type, category, optional notes you submit, a generated device ID, a report key used to reduce duplicates, browser type, extension version, and standard request metadata
+- From the page shown when a site is held: tapping "Report this site" sends a "blocked by mistake" report with the held page's address without its query string or fragment, its domain, and a short note naming which protection layer held it (and the on-device AI's confidence, when the AI held it). It never sends the page's title, text, or the words it matched, and nothing is sent unless you tap the button
 - Access: submitted reports may be reviewed by authorized developers or administrators for moderation, abuse prevention, and product improvement
 - This is manual only. We do not send automatic background telemetry for ordinary browsing activity to our backend
 

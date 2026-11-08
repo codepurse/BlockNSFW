@@ -26,6 +26,10 @@ let score = getParam('score') || '';
 // it. Only ever read from session storage (loadStashedDetail): never from the
 // address, which any site can set, since this page is web-accessible.
 let rule = '';
+// Whether the detail came from session storage, which only the extension can
+// write. The query string is any website's to set, so only a stashed detail
+// may offer the one-tap report (renderReport).
+let detailTrusted = false;
 // `mode` is deliberately not read from the query string any more — see the
 // plain-HTML branch at the bottom of this file. content.js still sends it, so
 // older copies of the blocked page keep working during an update.
@@ -464,6 +468,7 @@ async function loadStashedDetail() {
     score = (typeof record.score === 'number' && isFinite(record.score))
       ? record.score.toFixed(2) : '';
     rule = typeof record.rule === 'string' ? record.rule : '';
+    detailTrusted = true;
     return true;
   }
   return false;
@@ -624,8 +629,138 @@ const detailSettled = new Promise(done => { markDetailSettled = done; });
   // Not in the design previews in Settings: those show the design, not you.
   if (!previewTheme) {
     renderMoment().catch((error) => console.warn('BlockNSFW: could not render the moment', error));
+    renderReport().catch((error) => console.warn('BlockNSFW: could not offer the report', error));
   }
 })();
+
+// --- Held by mistake ------------------------------------------------------------
+//
+// One tap reports the site as blocked by mistake, to the same community
+// reports backend as the form in Settings (appwrite-client.js), for a person
+// to check. It never lets the page through here: the page stays held, and a
+// fix reaches everyone in an update.
+//
+// What is sent: the address without its query or fragment (those can carry a
+// search, a session token or an email address), the site, and a note naming
+// what held it and the AI's confidence. Never the page title, its text, or the
+// words it matched.
+//
+// Offered only when the detail was stashed by the extension (detailTrusted).
+// This page is web-accessible, so any website can open it with a ?url= of its
+// choosing, and must not be able to set up a one-tap report about another
+// site. Not offered for the user's own rules, which are theirs to change in
+// Settings, nor for the two search holds, which are about a search, not a site.
+const REPORT_SKIP_REASONS = new Set([
+  'custom_blocklist',
+  'custom_title_pattern',
+  'custom_keyword',
+  'search_query',
+  'unsafe_search'
+]);
+
+function reportTarget() {
+  if (!detailTrusted || previewTheme || REPORT_SKIP_REASONS.has(reason)) return null;
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return null;
+    const domain = parsed.hostname.toLowerCase().replace(/^www\./, '');
+    if (!domain) return null;
+    return { url: parsed.origin + parsed.pathname, domain };
+  } catch (_) {
+    return null;
+  }
+}
+
+// The note a reviewer reads: where it came from, which rule, which door, and
+// how sure the AI was. Codes, not prose, so reports can be sorted by them.
+function reportNotes() {
+  const meta = getReasonMeta(reason);
+  const parts = ['held page', `reason=${reason || 'unknown'}`];
+  if (meta.layer) parts.push(`door=${meta.layer} (${LAYERS[meta.layer - 1]})`);
+  const pct = score ? Math.round(parseFloat(score) * 100) : NaN;
+  if (!Number.isNaN(pct)) parts.push(`ai=${pct}%`);
+  return parts.join(' · ');
+}
+
+function reportsClient() {
+  try {
+    return typeof PBlockerReports !== 'undefined' && PBlockerReports.isConfigured()
+      ? PBlockerReports
+      : null;
+  } catch (_) {
+    return null;
+  }
+}
+
+async function renderReport() {
+  const box = document.getElementById('report');
+  const idle = document.getElementById('report-idle');
+  const send = document.getElementById('report-send');
+  const note = document.getElementById('report-note');
+  const status = document.getElementById('report-status');
+  // The button's words, beside its icon: only these change while it sends.
+  const label = document.getElementById('report-send-label') || send;
+  const target = reportTarget();
+  const Reports = reportsClient();
+  if (!box || !idle || !send || !note || !status || !target || !Reports) return;
+
+  const key = Reports.buildReportKey('incorrectly_blocked', target.domain);
+  const settle = (text) => {
+    idle.hidden = true;
+    note.hidden = true;
+    status.textContent = text;
+    status.hidden = false;
+    box.classList.add('is-sent');
+  };
+
+  let already = false;
+  try {
+    already = await Reports.isReportKeyAlreadyReported(key);
+  } catch (_) {}
+  box.hidden = false;
+  if (already) {
+    settle('This site has been reported. Thank you: a person will check it.');
+    return;
+  }
+
+  let busy = false;
+  send.addEventListener('click', async () => {
+    if (busy) return;
+    busy = true;
+    send.disabled = true;
+    label.textContent = 'Sending…';
+    status.hidden = true;
+    try {
+      await Reports.submitReport({
+        url: target.url,
+        domain: target.domain,
+        reportType: 'incorrectly_blocked',
+        category: 'n/a',
+        notes: reportNotes()
+      });
+      settle('Reported. Thank you. A person will check it, and if it was a mistake, an update will let it through.');
+    } catch (error) {
+      const message = error && typeof error.message === 'string' ? error.message : '';
+      // Someone has reported it already, here or elsewhere: the same outcome
+      // for the person on this page. Remembered, so the next hold says so.
+      if (/already submitted/i.test(message)) {
+        try { await Reports.markReportKeyReported(key); } catch (_) {}
+        settle('This site has been reported. Thank you: a person will check it.');
+        return;
+      }
+      send.disabled = false;
+      label.textContent = 'Try again';
+      // fetch() rejects with a TypeError when there is no connection; its own
+      // words ("Failed to fetch") mean nothing to the person reading them.
+      status.textContent = error instanceof TypeError || !message
+        ? 'The report didn’t send. Check your connection, then try again.'
+        : message;
+      status.hidden = false;
+    } finally {
+      busy = false;
+    }
+  });
+}
 
 // --- For this moment ------------------------------------------------------------
 //

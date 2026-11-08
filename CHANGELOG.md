@@ -4,6 +4,20 @@ All notable project changes should be documented here going forward.
 
 ## [Unreleased]
 
+### Added
+
+- **Report a page held by mistake, from the held page.** Every design of
+  the held page now ends with "Held by mistake?" and a Report this site
+  button. One tap sends a "blocked by mistake" report for a person to
+  check: the address without anything after ? or #, the site, and which
+  layer held it (and how sure the AI was, if it was the AI). Never the
+  page's title, its text or the words it matched. The page stays held;
+  if it was a mistake, an update lets it through for everyone. It isn't
+  offered for your own blocklist entries and blocked words (change those
+  in Settings), for held searches, or when the held page was opened from
+  an address someone else made up. Same backend, limits and duplicate
+  check as Settings › Community.
+
 ### Changed
 
 - **The Warden banner says it's an open beta.** Anyone can download Warden

@@ -125,6 +125,8 @@ html[data-theme] .why {
   margin-top: 0;
   border-top: 0;
 }
+/* Held by mistake comes last, after why it was held, under its own hairline. */
+html[data-theme] .report { order: 4; align-self: stretch; margin-top: var(--space-2); }
 html[data-theme] .blocked-foot { margin-top: var(--space-6); }
 
 /* ===== Calm: the ensō ======================================================
@@ -471,6 +473,7 @@ html[data-theme="verse"] .blocked-card {
   }
   html[data-theme="verse"] .why[open] { flex-basis: 100%; }
   html[data-theme="verse"] .moment { flex-basis: 100%; }
+  html[data-theme="verse"] .report { flex-basis: 100%; }
 }
 
 .light-verse {
