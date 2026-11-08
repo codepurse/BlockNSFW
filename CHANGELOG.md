@@ -2,6 +2,26 @@
 
 All notable project changes should be documented here going forward.
 
+## [Unreleased]
+
+### Added
+
+- **A third image model: Wingman N017.** Settings › AI Image Blocker ›
+  Detection model now offers "Wingman N017 (MobileNetV4)". It's the
+  image-safety model from the Wingman Jr. project, published under
+  Apache-2.0. It is not in the package. Like ViT-384, its weights (~39 MB)
+  download once when it's first used and are kept on the computer, and the
+  bundled NSFW.js filters in the meantime or if the download fails.
+  - On 1,217 hard-to-judge safe images (beach, sport, beds, babies, anime),
+    at Balanced it wrongly blurred 1.2% of ordinary photos. NSFW.js wrongly
+    blurred 4.4%.
+  - It wrongly blurred no ordinary anime images.
+  - It caught 6 of 9 lingerie and glamour shots. NSFW.js caught 2.
+  - It does blur more swimwear and shirtless photos.
+  - Its Relaxed / Balanced / Strict bars are Wingman's own published
+    low-false-alarm points (0.950 / 0.931 / 0.834).
+  - Full write-up: `docs/research/nsfw-image-models-2026-11.md`.
+
 ## [2.0.5] - 2026-11-08
 
 ### Added

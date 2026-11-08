@@ -37,7 +37,7 @@ function fakeTopology(shardCount = 3) {
 
 // Minimal tf stand-in. Tensors are plain objects carrying their data so the
 // assertions can inspect what the module actually computed.
-function makeTfStub({ logits = [2.0, 0.0] } = {}) {
+function makeTfStub({ logits = [2.0, 0.0], outputs = null } = {}) {
   const disposed = [];
   const tensor = (data, shape) => ({
     data: async () => Float32Array.from(data),
@@ -51,7 +51,10 @@ function makeTfStub({ logits = [2.0, 0.0] } = {}) {
       const artifacts = await handler.load();
       return {
         _artifacts: artifacts,
-        predict: () => tensor(logits, [1, 2])
+        // `outputs` ([[data, shape], ...]) models a multi-output graph (n017).
+        predict: () => (outputs
+          ? outputs.map(([data, shape]) => tensor(data, shape))
+          : tensor(logits, [1, 2]))
       };
     },
     io: {
@@ -74,15 +77,19 @@ function makeTfStub({ logits = [2.0, 0.0] } = {}) {
 // `imageData` is the RGBA the canvas hands back for the resized image.
 function makeCanvasStub(fillRgba) {
   const drawn = [];
+  const filled = [];
   return {
     drawn,
+    filled,
     OffscreenCanvas: class {
       constructor(width, height) {
         this.width = width;
         this.height = height;
       }
       getContext() {
-        return {
+        const ctx = {
+          fillStyle: '',
+          fillRect: (x, y, w, h) => filled.push({ style: ctx.fillStyle, x, y, w, h }),
           drawImage: (bitmap, x, y, w, h) => drawn.push({ bitmap, x, y, w, h }),
           getImageData: (x, y, w, h) => {
             const data = new Uint8ClampedArray(w * h * 4);
@@ -95,6 +102,7 @@ function makeCanvasStub(fillRgba) {
             return { data, width: w, height: h };
           }
         };
+        return ctx;
       }
     }
   };
@@ -397,5 +405,77 @@ test('classify releases its tensors', async () => {
   const before = h.disposed.length;
   await h.api.classify(model, { fake: 'bitmap' }, 'vit384');
   // input + logits + softmax output.
+  assert.equal(h.disposed.length - before, 3);
+});
+
+// ─── n017 (Wingman Jr. N017): letterbox input, two outputs ────────────────
+
+const N017_OUTPUTS = [
+  [[0.97], [1, 1]],                    // unsafe_score
+  [[0.02, 0.01, 0.9, 0.07], [1, 4]]    // sqrx_probabilities: S, Q, R, X
+];
+
+test('n017 letterboxes: grey square, whole image centred with its aspect kept', async () => {
+  const h = loadClassifier({ tfStub: makeTfStub({ outputs: N017_OUTPUTS }) });
+  const model = await h.api.load('n017');
+  // A 2:1 landscape image.
+  await h.api.classify(model, { width: 400, height: 200 }, 'n017');
+
+  assert.equal(h.canvas.filled.length, 1, 'the square is filled before drawing');
+  assert.deepEqual(h.canvas.filled[0], { style: 'rgb(128,128,128)', x: 0, y: 0, w: 224, h: 224 });
+  assert.equal(h.canvas.drawn.length, 1);
+  assert.deepEqual(
+    { x: h.canvas.drawn[0].x, y: h.canvas.drawn[0].y, w: h.canvas.drawn[0].w, h: h.canvas.drawn[0].h },
+    { x: 0, y: 56, w: 224, h: 112 });
+});
+
+test('letterboxRect keeps portraits, squares and degenerate sizes inside the square', () => {
+  const h = loadClassifier();
+  assert.deepEqual({ ...h.api.letterboxRect(100, 300, 224) }, { x: 74, y: 0, w: 75, h: 224 });
+  assert.deepEqual({ ...h.api.letterboxRect(500, 500, 224) }, { x: 0, y: 0, w: 224, h: 224 });
+  assert.deepEqual({ ...h.api.letterboxRect(0, 0, 224) }, { x: 0, y: 0, w: 224, h: 224 });
+  assert.deepEqual({ ...h.api.letterboxRect(undefined, 10, 224) }, { x: 0, y: 0, w: 224, h: 224 });
+});
+
+test('n017 normalizes with ImageNet mean/std per channel, NHWC', async () => {
+  // Pure red: R = (1 - 0.485) / 0.229, G = (0 - 0.456) / 0.224, B = (0 - 0.406) / 0.225.
+  const h = loadClassifier({ fillRgba: [255, 0, 0, 255], tfStub: makeTfStub({ outputs: N017_OUTPUTS }) });
+  const model = await h.api.load('n017');
+  await h.api.classify(model, { width: 224, height: 224 }, 'n017');
+
+  const input = h.disposed.find((t) => t.shape && t.shape.length === 4);
+  assert.ok(input, 'an input tensor should have been created and disposed');
+  assert.deepEqual(Array.from(input.shape), [1, 224, 224, 3]);
+  assert.ok(Math.abs(input._data[0] - (1 - 0.485) / 0.229) < 1e-6);
+  assert.ok(Math.abs(input._data[1] - (0 - 0.456) / 0.224) < 1e-6);
+  assert.ok(Math.abs(input._data[2] - (0 - 0.406) / 0.225) < 1e-6);
+});
+
+test('n017 reads Unsafe and the four levels by output shape, in either order', async () => {
+  for (const outputs of [N017_OUTPUTS, [...N017_OUTPUTS].reverse()]) {
+    const h = loadClassifier({ tfStub: makeTfStub({ outputs }) });
+    const model = await h.api.load('n017');
+    const scores = await h.api.classify(model, { width: 300, height: 300 }, 'n017');
+    assert.deepEqual(Object.keys(scores).sort(), ['Explicit', 'Questionable', 'Racy', 'Safe', 'Unsafe']);
+    assert.ok(Math.abs(scores.Unsafe - 0.97) < 1e-6);
+    assert.ok(Math.abs(scores.Safe - 0.02) < 1e-6);
+    assert.ok(Math.abs(scores.Racy - 0.9) < 1e-6);
+    assert.ok(Math.abs(scores.Explicit - 0.07) < 1e-6);
+    assert.equal(h.models.scoresMatchModel(scores, 'n017'), true);
+    assert.equal(h.models.scoresMatchModel(scores, 'vit384'), false);
+  }
+});
+
+test('n017 refuses outputs it does not recognise instead of inventing a score', async () => {
+  const h = loadClassifier({ tfStub: makeTfStub({ outputs: [[[0.5, 0.5], [1, 2]]] }) });
+  const model = await h.api.load('n017');
+  await assert.rejects(h.api.classify(model, { width: 10, height: 10 }, 'n017'), /unexpected n017 outputs/);
+});
+
+test('n017 releases its input and both outputs', async () => {
+  const h = loadClassifier({ tfStub: makeTfStub({ outputs: N017_OUTPUTS }) });
+  const model = await h.api.load('n017');
+  const before = h.disposed.length;
+  await h.api.classify(model, { width: 100, height: 50 }, 'n017');
   assert.equal(h.disposed.length - before, 3);
 });

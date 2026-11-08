@@ -161,6 +161,32 @@ test("verdictFor ignores the other model's thresholds instead of blocking nothin
   assert.equal(sandbox.verdictFor({ NSFW: 0.05, SFW: 0.95 }, mobilenetBars), 'allow');
 });
 
+test('verdictFor reads n017 scores against the single unsafe bar', () => {
+  const sandbox = { Object };
+  vm.createContext(sandbox);
+  vm.runInContext(CORE_SOURCE, sandbox, { filename: 'ai-image-blocker-core.js' });
+  const n017 = (unsafe, racy = 0.1) =>
+    ({ Unsafe: unsafe, Safe: 1 - unsafe, Questionable: 0, Racy: racy, Explicit: 0 });
+
+  const balanced = Models.getThresholds('n017', 'balanced');
+  assert.equal(sandbox.verdictFor(n017(0.99), balanced), 'block');
+  assert.equal(sandbox.verdictFor(n017(balanced.unsafe), balanced), 'block'); // at the bar
+  assert.equal(sandbox.verdictFor(n017(balanced.unsafe - 0.001), balanced), 'allow');
+  // Only Unsafe decides: a high Racy share with a low unsafe score stays.
+  assert.equal(sandbox.verdictFor(n017(0.5, 0.45), balanced), 'allow');
+
+  // Strict blurs what Balanced lets through.
+  const strict = Models.getThresholds('n017', 'strict');
+  assert.equal(sandbox.verdictFor(n017(0.9), balanced), 'allow');
+  assert.equal(sandbox.verdictFor(n017(0.9), strict), 'block');
+
+  // Bars from another model never leave n017 scores unjudged: the default
+  // n017 bar applies instead.
+  assert.equal(sandbox.verdictFor(n017(0.99), Models.getThresholds('nsfwjs', 'balanced')), 'block');
+  assert.equal(sandbox.verdictFor(n017(0.10), Models.getThresholds('vit384', 'strict')), 'allow');
+  assert.equal(sandbox.verdictFor(n017(0.99), null), 'block');
+});
+
 // ─── the cache must not survive a model switch ───────────────────────────
 
 test('classify requests name the active model', async () => {

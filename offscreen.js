@@ -50,7 +50,7 @@ function loadModel(modelId) {
   const promise = (async () => {
     await ensureBackend();
     let model;
-    if (descriptor.kind === 'tfjs-graph-binary') {
+    if (Models.isGraphModel(descriptor)) {
       model = await self.VitClassifier.load(id, (progress) => {
         lastProgress = { model: id, ...progress };
       });
@@ -87,19 +87,17 @@ async function classify(src, modelId) {
 
   let bitmap;
   // Decode straight to the model's input size where the decoder supports it.
-  const opts = {
-    resizeWidth: descriptor.inputSize,
-    resizeHeight: descriptor.inputSize,
-    resizeQuality: 'high'
-  };
+  // A letterboxed model (n017) gets null and decodes at natural size, so its
+  // aspect ratio survives until the classifier pads it.
+  const opts = Models.decodeOptions(descriptor);
   try {
-    bitmap = await createImageBitmap(blob, opts);
+    bitmap = opts ? await createImageBitmap(blob, opts) : await createImageBitmap(blob);
   } catch (_) {
     bitmap = await createImageBitmap(blob);
   }
 
   try {
-    if (descriptor.kind === 'tfjs-graph-binary') {
+    if (Models.isGraphModel(descriptor)) {
       return await self.VitClassifier.classify(model, bitmap, descriptor.id);
     }
     const predictions = await model.classify(bitmap);

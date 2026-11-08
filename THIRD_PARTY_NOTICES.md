@@ -70,6 +70,26 @@ Verified note:
   code or its converted artifacts are used: the model is converted from the
   Apache-2.0 Hugging Face source independently.
 
+### Wingman Jr. N017 (optional, downloaded)
+
+The optional "Wingman N017" classifier is the N017 image-safety model from the
+Wingman Jr. project ([wingman-jr-addon/model](https://github.com/wingman-jr-addon/model/tree/master/N017)).
+It is a MobileNetV4 Hybrid-Medium fine-tune of timm's
+`mobilenetv4_hybrid_medium.e500_r224_in1k` checkpoint. Its serialized weights
+and graph representations are published under the **Apache License 2.0**
+(upstream `N017/N017_WEIGHTS_LICENSE.md`).
+
+- The execution graph (`models/n017/model.json`) is upstream's deployable
+  TensorFlow.js graph model (`N017/tfjs/n017_graph_model/model.json`), used
+  unmodified, and ships in the extension package.
+- The weight shards (`data/models/n017/group1-shard*of10.bin`) are upstream's
+  shards, unmodified. They are **not** bundled: they are downloaded once on
+  first use (see `N017_WEIGHTS_BASE_URL` in `shared/ai-image-models.js`) and
+  cached locally by the browser.
+- No Wingman Jr. add-on code is used. Only the model files are, together with
+  the preprocessing contract and threshold operating points from its README and
+  `evaluation_summary.json`.
+
 ## Fonts
 
 The extension pages use three typefaces, bundled as Latin-subset woff2 files

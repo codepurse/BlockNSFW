@@ -45,13 +45,21 @@ const DEFAULT_BINARY_THRESHOLDS = {
   nsfw: 0.30
 };
 
-// Score → verdict, for either model's score shape.
+// The n017 model (Wingman N017) gives one calibrated "unsafe" probability.
+// 0.931 is Wingman's own published operating point for a false-positive rate
+// under 0.6%; on our 1,217 hard safe images it wrongly blurred 1.2% of photos
+// and no anime. See the presets in shared/ai-image-models.js.
+const DEFAULT_UNSAFE_THRESHOLDS = {
+  unsafe: 0.931
+};
+
+// Score → verdict, for any model's score shape.
 //
 // Dispatch is on the SCORES, not on a caller-supplied model id, because the
 // scores are what get cached: a 24h-old entry has to be interpretable on its
-// own. The two shapes are disjoint (NSFW.js emits Porn/Hentai/Sexy/Drawing/
-// Neutral, the ViT emits NSFW/SFW), so presence of an `NSFW` key identifies
-// the binary model unambiguously.
+// own. The three shapes are disjoint (NSFW.js emits Porn/Hentai/Sexy/Drawing/
+// Neutral, the ViT emits NSFW/SFW, N017 emits Unsafe/Safe/Questionable/Racy/
+// Explicit), so an `Unsafe` key identifies N017 and an `NSFW` key the ViT.
 //
 // A `thresholds` object whose bars belong to the *other* model is ignored in
 // favour of that model's defaults, so a stale threshold object can never make
@@ -59,6 +67,14 @@ const DEFAULT_BINARY_THRESHOLDS = {
 // score would otherwise leave `nsfw` undefined and block nothing).
 function verdictFor(scores, thresholds) {
   if (!scores) return 'allow';
+
+  if (Object.prototype.hasOwnProperty.call(scores, 'Unsafe')) {
+    const supplied = thresholds && typeof thresholds.unsafe === 'number'
+      ? { unsafe: thresholds.unsafe }
+      : null;
+    const t = { ...DEFAULT_UNSAFE_THRESHOLDS, ...(supplied || {}) };
+    return (scores.Unsafe || 0) >= t.unsafe ? 'block' : 'allow';
+  }
 
   if (Object.prototype.hasOwnProperty.call(scores, 'NSFW')) {
     const supplied = thresholds && typeof thresholds.nsfw === 'number'

@@ -228,7 +228,7 @@ async function loadAiModel(options = {}) {
       if (tfLike && typeof tfLike.ready === 'function') {
         try { await tfLike.ready(); } catch (_) {}
       }
-      if (descriptor.kind === 'tfjs-graph-binary') {
+      if (self.AiImageModels.isGraphModel(descriptor)) {
         // Graph model: loaded directly with tf.loadGraphModel, because the
         // CSP-safe nsfwjs.runtime.js build cannot load graph models. Its
         // weights are fetched from the network on first use.
@@ -266,28 +266,29 @@ async function classifyImageBytes(blobOrArrayBuffer, modelId) {
   const descriptor = self.AiImageModels.resolveModel(modelId);
   const model = await loadAiModel({ model: descriptor.id });
   let bitmap;
-  const bitmapOptions = {
-    resizeWidth: descriptor.inputSize,
-    resizeHeight: descriptor.inputSize,
-    resizeQuality: 'high'
-  };
+  // null for a letterboxed model (n017): decode at natural size so the aspect
+  // ratio survives until the classifier pads it.
+  const bitmapOptions = self.AiImageModels.decodeOptions(descriptor);
+  const decode = (source) => (bitmapOptions
+    ? createImageBitmap(source, bitmapOptions)
+    : createImageBitmap(source));
   if (blobOrArrayBuffer instanceof ArrayBuffer ||
       ArrayBuffer.isView(blobOrArrayBuffer)) {
     const blob = new Blob([blobOrArrayBuffer]);
     try {
-      bitmap = await createImageBitmap(blob, bitmapOptions);
+      bitmap = await decode(blob);
     } catch (_) {
       bitmap = await createImageBitmap(blob);
     }
   } else {
     try {
-      bitmap = await createImageBitmap(blobOrArrayBuffer, bitmapOptions);
+      bitmap = await decode(blobOrArrayBuffer);
     } catch (_) {
       bitmap = await createImageBitmap(blobOrArrayBuffer);
     }
   }
   try {
-    if (descriptor.kind === 'tfjs-graph-binary') {
+    if (self.AiImageModels.isGraphModel(descriptor)) {
       return await self.VitClassifier.classify(model, bitmap, descriptor.id);
     }
     const predictions = await model.classify(bitmap);
@@ -483,7 +484,7 @@ const DEFAULT_SETTINGS = {
   instagramReelsEnabled: false,
   aiImageBlocker: false, // Beta — opt-in (off on fresh install)
   aiImageScanAllSites: true, // when AI image blocker is on, scan 1st-party too
-  aiImageModel: 'nsfwjs', // 'nsfwjs' (bundled) | 'vit384' (downloads weights)
+  aiImageModel: 'nsfwjs', // 'nsfwjs' (bundled) | 'vit384' | 'n017' (both download weights)
   aiStrictness: 'balanced',
   aiTextBlocker: false, // Beta — opt-in (off on fresh install)
   aiTextStrictness: 'balanced',

@@ -98,16 +98,16 @@ function normalizeAiStrictness(level) {
 }
 
 // ── AI image model picker ────────────────────────────────────────────────
-// Two classifiers, one of which is not in the extension package: vit384's
-// weights (~22 MB) are fetched on first use and cached locally, so the store
-// download stays small for the majority who never enable the AI blocker.
-// This section has to make that download visible rather than have the feature
-// mysteriously do nothing on a metered connection.
+// Three classifiers, two of which are not in the extension package: the
+// weights of vit384 (~22 MB) and n017 (~39 MB) are fetched on first use and
+// cached locally, so the store download stays small for the majority who never
+// enable the AI blocker. This section has to make that download visible rather
+// than have the feature mysteriously do nothing on a metered connection.
 
 function normalizeAiImageModel(id) {
   return typeof AiImageModels !== 'undefined'
     ? AiImageModels.normalizeModelId(id)
-    : (id === 'vit384' ? 'vit384' : 'nsfwjs');
+    : (id === 'vit384' || id === 'n017' ? id : 'nsfwjs');
 }
 
 function askBackground(message) {

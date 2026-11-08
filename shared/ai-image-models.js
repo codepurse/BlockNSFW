@@ -7,7 +7,7 @@
 // threshold presets in ONE place is what stops the three inference routes from
 // drifting apart.
 //
-// Two models, deliberately different in shape:
+// Three models, deliberately different in shape:
 //
 //   nsfwjs  MobileNetV2, a tfjs *layers* model loaded through nsfwjs. Five
 //           classes (Porn/Hentai/Sexy/Drawing/Neutral). Bundled in the
@@ -23,10 +23,19 @@
 //           that describes execution, so it stays reviewable — and only the
 //           numeric weight shards are fetched on first use and cached locally.
 //
-// Why the binary model is worth the extra machinery: NSFW.js's "Sexy" class
+//   n017    Wingman Jr. N017 (MobileNetV4 Hybrid-M, Apache-2.0), also a tfjs
+//           graph model with downloaded weights (~39 MB), loaded by the same
+//           code as vit384. Two outputs: one calibrated "unsafe" probability
+//           and a four-level split (Safe / Questionable / Racy / Explicit).
+//           Trained on images captured from real browsing sessions. In the
+//           2026-11 benchmark (docs/research/nsfw-image-models-2026-11.md) it
+//           wrongly blurred far fewer ordinary photos than NSFW.js, no safe
+//           anime, and caught more suggestive photos.
+//
+// Why a graph model is worth the extra machinery: NSFW.js's "Sexy" class
 // fires on beaches, fitness, fashion and ordinary portraits, which is why
 // verdictFor() has to hold that bar up at 0.90 (see ai-image-blocker-core.js).
-// A binary SFW/NSFW head has no such class to defend against.
+// A single calibrated NSFW/unsafe score has no such class to defend against.
 (function (root) {
   'use strict';
 
@@ -41,6 +50,12 @@
   var VIT384_WEIGHTS_BASE_URL =
     'https://raw.githubusercontent.com/codepurse/BlockNSFW/refs/heads/main/data/models/vit384/';
   var VIT384_WEIGHTS_VERSION = 1;
+
+  // Same arrangement for N017: graph in the package, shards in this repo's
+  // data/models/n017/, fetched once and cached. Same bump rule.
+  var N017_WEIGHTS_BASE_URL =
+    'https://raw.githubusercontent.com/codepurse/BlockNSFW/refs/heads/main/data/models/n017/';
+  var N017_WEIGHTS_VERSION = 1;
 
   var MODELS = {
     nsfwjs: {
@@ -109,6 +124,45 @@
         balanced: { nsfw: 0.30 },
         strict: { nsfw: 0.15 }
       }
+    },
+    n017: {
+      id: 'n017',
+      label: 'Wingman N017 (MobileNetV4)',
+      blurb: 'Fewer mistakes on ordinary photos and drawings, and catches ' +
+        'more suggestive images. Downloads once (~39 MB).',
+      kind: 'tfjs-graph-sqrx',
+      inputSize: 224,
+      bundled: false,
+      modelPath: 'models/n017/model.json',
+      weightsBaseUrl: N017_WEIGHTS_BASE_URL,
+      weightsVersion: N017_WEIGHTS_VERSION,
+      // The model's own deployment contract (N017/README.md upstream): pad the
+      // image to a square with mid grey, THEN resize, so nothing is squashed or
+      // cropped; scale to [0,1]; ImageNet mean/std per channel; NHWC.
+      resize: 'letterbox',
+      padRgb: [128, 128, 128],
+      norm: { mean: [0.485, 0.456, 0.406], std: [0.229, 0.224, 0.225] },
+      // `Unsafe` is the calibrated score the verdict reads. The four levels
+      // are kept for display and future tuning: Racy covers suggestive content
+      // and also some horror/gore; Explicit is nudity and sex.
+      scoreKeys: ['Unsafe', 'Safe', 'Questionable', 'Racy', 'Explicit'],
+      // Taken from Wingman's own published operating points (unsafe score at
+      // a false-positive rate below 0.4%, 0.6% and 1.5% on its 84,744-image
+      // evaluation; N017/evaluation_summary.json upstream), NOT invented, and
+      // checked against our own benchmark on 1,217 hard safe images:
+      //
+      //   0.950  0.7% of safe photos wrongly blurred, 0 safe anime, 5/9 sexualised caught
+      //   0.931  1.2%, 0 anime, 6/9
+      //   0.834  2.6%, 2% of anime, 8/9
+      //
+      // (NSFW.js Balanced on the same set: 4.4%, 0 anime, 2/9.) Wingman's
+      // 10%-FPR point (0.265) wrongly blurred 19% of safe photos and is
+      // deliberately not used.
+      thresholds: {
+        relaxed: { unsafe: 0.950 },
+        balanced: { unsafe: 0.931 },
+        strict: { unsafe: 0.834 }
+      }
     }
   };
 
@@ -171,6 +225,29 @@
     return model.weightsBaseUrl + String(relativePath || '').replace(/^\/+/, '');
   }
 
+  // Graph models (vit384, n017) are loaded and run by shared/vit-classifier.js;
+  // the bundled layers model goes through nsfwjs. Every inference route asks
+  // this rather than comparing `kind` strings itself.
+  function isGraphModel(modelId) {
+    var model = typeof modelId === 'object' && modelId ? modelId : resolveModel(modelId);
+    return String(model.kind || '').indexOf('tfjs-graph') === 0;
+  }
+
+  // createImageBitmap options for decoding an image for this model. Models fed
+  // a plain squash can have the decoder resize straight to the input size,
+  // which is cheap. A letterboxed model must keep the aspect ratio until the
+  // padding is drawn, so it gets null: decode as-is, and the classifier scales
+  // it into the padded square itself.
+  function decodeOptions(modelId) {
+    var model = typeof modelId === 'object' && modelId ? modelId : resolveModel(modelId);
+    if (model.resize === 'letterbox') return null;
+    return {
+      resizeWidth: model.inputSize,
+      resizeHeight: model.inputSize,
+      resizeQuality: 'high'
+    };
+  }
+
   var exported = {
     MODELS: MODELS,
     DEFAULT_MODEL_ID: DEFAULT_MODEL_ID,
@@ -181,7 +258,9 @@
     normalizeStrictness: normalizeStrictness,
     getThresholds: getThresholds,
     scoresMatchModel: scoresMatchModel,
-    weightShardUrl: weightShardUrl
+    weightShardUrl: weightShardUrl,
+    isGraphModel: isGraphModel,
+    decodeOptions: decodeOptions
   };
 
   if (typeof module !== 'undefined' && module.exports) {

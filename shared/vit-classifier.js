@@ -1,5 +1,7 @@
-// vit384 classifier: loads Marqo/nsfw-image-detection-384 as a tfjs
-// GraphModel and scores one image at a time.
+// Graph-model classifier: loads the downloadable image models (vit384 =
+// Marqo/nsfw-image-detection-384, n017 = Wingman Jr. N017) as tfjs GraphModels
+// and scores one image at a time. The file keeps its original name and global
+// (`VitClassifier`) because every inference context already loads it.
 //
 // Runs unchanged in all three inference contexts, because all three already
 // load vendor/tfjs/tf.es2017.js and expose it as a global `tf`:
@@ -131,7 +133,7 @@
   async function load(modelId, onProgress) {
     var tf = getTf();
     var model = Models.resolveModel(modelId);
-    if (model.kind !== 'tfjs-graph-binary') {
+    if (!Models.isGraphModel(model)) {
       throw new Error('not a graph model: ' + model.id);
     }
 
@@ -259,24 +261,95 @@
     // the canvas API gets, and it is free relative to the ViT forward pass.
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = 'high';
-    // Deliberately a squash to a square, NOT timm's aspect-preserving
-    // Resize+CenterCrop. Measured cost of the distortion on this model: 0.006
-    // of NSFW probability. Measured cost of center-cropping instead: anything
-    // in the outer edges of a wide or tall image becomes invisible to the
-    // filter. For a content blocker, a blind spot is far worse than a mild
-    // aspect distortion, so we keep the whole frame in view.
-    ctx.drawImage(bitmap, 0, 0, size, size);
+    if (model.resize === 'letterbox') {
+      // n017's contract: the whole image, aspect intact, centred on a mid-grey
+      // square. Like the squash below, nothing is cropped away, so the edges
+      // of a wide or tall image stay visible to the filter.
+      var pad = model.padRgb || [128, 128, 128];
+      ctx.fillStyle = 'rgb(' + pad[0] + ',' + pad[1] + ',' + pad[2] + ')';
+      ctx.fillRect(0, 0, size, size);
+      var box = letterboxRect(bitmap.width, bitmap.height, size);
+      ctx.drawImage(bitmap, box.x, box.y, box.w, box.h);
+    } else {
+      // Deliberately a squash to a square, NOT timm's aspect-preserving
+      // Resize+CenterCrop. Measured cost of the distortion on vit384: 0.006
+      // of NSFW probability. Measured cost of center-cropping instead: anything
+      // in the outer edges of a wide or tall image becomes invisible to the
+      // filter. For a content blocker, a blind spot is far worse than a mild
+      // aspect distortion, so we keep the whole frame in view.
+      ctx.drawImage(bitmap, 0, 0, size, size);
+    }
     var rgba = ctx.getImageData(0, 0, size, size).data;
 
-    var mean = model.norm.mean;
-    var std = model.norm.std;
+    // Mean/std are either one number for all channels (vit384) or one per
+    // channel in RGB order (n017, ImageNet statistics).
+    var mean = channelValues(model.norm.mean);
+    var std = channelValues(model.norm.std);
     var floats = new Float32Array(size * size * 3);
     for (var i = 0, j = 0; i < rgba.length; i += 4) {
-      floats[j++] = (rgba[i] / 255 - mean) / std;
-      floats[j++] = (rgba[i + 1] / 255 - mean) / std;
-      floats[j++] = (rgba[i + 2] / 255 - mean) / std;
+      floats[j++] = (rgba[i] / 255 - mean[0]) / std[0];
+      floats[j++] = (rgba[i + 1] / 255 - mean[1]) / std[1];
+      floats[j++] = (rgba[i + 2] / 255 - mean[2]) / std[2];
     }
     return tf.tensor4d(floats, [1, size, size, 3]);
+  }
+
+  function channelValues(v) {
+    return Array.isArray(v) ? v : [v, v, v];
+  }
+
+  // Where an image of width x height lands when fitted, aspect intact, inside a
+  // size x size square and centred. An image with no usable dimensions fills
+  // the square rather than vanishing.
+  function letterboxRect(width, height, size) {
+    var w = Number(width) || 0;
+    var h = Number(height) || 0;
+    if (w <= 0 || h <= 0) return { x: 0, y: 0, w: size, h: size };
+    var scale = size / Math.max(w, h);
+    var dw = Math.max(1, Math.round(w * scale));
+    var dh = Math.max(1, Math.round(h * scale));
+    return { x: Math.floor((size - dw) / 2), y: Math.floor((size - dh) / 2), w: dw, h: dh };
+  }
+
+  // A graph model with several outputs may hand them back as a single tensor,
+  // an array, or a name -> tensor map depending on how it was converted.
+  function outputTensors(out) {
+    if (!out) return [];
+    if (Array.isArray(out)) return out;
+    if (out.shape) return [out];
+    if (typeof out === 'object') {
+      return Object.keys(out).map(function (k) { return out[k]; });
+    }
+    return [];
+  }
+
+  function lastDim(t) {
+    return t && t.shape && t.shape.length ? t.shape[t.shape.length - 1] : 0;
+  }
+
+  // n017 emits two outputs, already activated by the exporter: `unsafe_score`
+  // [1,1] (sigmoid) and `sqrx_probabilities` [1,4] (softmax, Safe /
+  // Questionable / Racy / Explicit). Their order is not guaranteed across
+  // conversions, so they are told apart by shape, not position.
+  async function readSqrx(out) {
+    var tensors = outputTensors(out);
+    var unsafe = null;
+    var sqrx = null;
+    for (var i = 0; i < tensors.length; i++) {
+      var d = lastDim(tensors[i]);
+      if (d === 1 && !unsafe) unsafe = tensors[i];
+      else if (d === 4 && !sqrx) sqrx = tensors[i];
+    }
+    if (!unsafe || !sqrx) throw new Error('unexpected n017 outputs');
+    var u = await unsafe.data();
+    var p = await sqrx.data();
+    return {
+      Unsafe: u[0],
+      Safe: p[0],
+      Questionable: p[1],
+      Racy: p[2],
+      Explicit: p[3]
+    };
   }
 
   // Score one ImageBitmap. Returns the same shape the rest of the pipeline
@@ -287,6 +360,19 @@
     var input = toInputTensor(tf, bitmap, model);
     var logits = null;
     var probs = null;
+    if (model.kind === 'tfjs-graph-sqrx') {
+      var outputs = null;
+      try {
+        outputs = graph.predict(input);
+        return await readSqrx(outputs);
+      } finally {
+        try { input.dispose(); } catch (_) {}
+        var made = outputTensors(outputs);
+        for (var k = 0; k < made.length; k++) {
+          try { if (made[k] && made[k].dispose) made[k].dispose(); } catch (_) {}
+        }
+      }
+    }
     try {
       logits = graph.predict(input);
       // A graph model can hand back an array or a dict when it has multiple
@@ -319,7 +405,8 @@
     // exported for tests
     readManifest: readManifest,
     concatBuffers: concatBuffers,
-    shardCacheKey: shardCacheKey
+    shardCacheKey: shardCacheKey,
+    letterboxRect: letterboxRect
   };
 
   if (typeof module !== 'undefined' && module.exports) {

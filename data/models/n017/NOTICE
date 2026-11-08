@@ -1,0 +1,35 @@
+Wingman Jr. N017 — model weights
+================================
+
+The `group1-shard*of10.bin` files in this directory are the TensorFlow.js
+weight shards of the N017 image-safety model from the Wingman Jr. project:
+
+    https://github.com/wingman-jr-addon/model/tree/master/N017
+
+N017 is a MobileNetV4 Hybrid-Medium model fine-tuned from timm's
+`mobilenetv4_hybrid_medium.e500_r224_in1k` checkpoint. Its serialized weights
+and graph representations are published under the
+**Apache License, Version 2.0**:
+
+    https://www.apache.org/licenses/LICENSE-2.0
+    (upstream notice: N017/N017_WEIGHTS_LICENSE.md)
+
+IMPORTANT: these files are NOT covered by `data/LICENSE` (MIT), which applies
+to the blocklist and whitelist data in this repository. They remain under
+Apache-2.0, and that license travels with them.
+
+They are upstream's files, byte-for-byte unmodified
+(`N017/tfjs/n017_graph_model/group1-shard*of10.bin`). The matching graph
+topology, also unmodified, ships inside the extension package as
+`models/n017/model.json`.
+
+Why they live here rather than in the extension package: the BlockNSFW
+extension fetches them on first use and caches them locally. The ~39 MB is paid
+only by users who choose the Wingman N017 classifier, not by everyone who
+installs the extension. They are served from this directory via
+`N017_WEIGHTS_BASE_URL` in `shared/ai-image-models.js`. If these files are ever
+re-published, bump `N017_WEIGHTS_VERSION` in that same file. It is part of the
+client-side cache key, and without a bump clients keep serving the old weights
+from cache indefinitely.
+
+See also THIRD_PARTY_NOTICES.md in the repository root.
