@@ -3662,7 +3662,7 @@ function initGateways() {
 // About › Problems and ideas. The email starts with the version in its
 // subject; the address is also there to copy, for webmail, where an email
 // link opens nothing.
-const SUPPORT_EMAIL = 'support@monolab.dev';
+const SUPPORT_EMAIL = 'blocknsfw@monolab.dev';
 function initContact() {
   const link = $('contact-email');
   const copy = $('contact-copy');

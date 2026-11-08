@@ -918,7 +918,7 @@ the urge works even when you know every PIN.
   instead of asking people to write in for a beta, and both say plainly that
   the installer isn't signed yet.
 
-- **Problems and ideas go to support@monolab.dev.** Settings › About shows
+- **Problems and ideas go to blocknsfw@monolab.dev.** Settings › About shows
   the address with a Copy button, in place of the links to GitHub. Sites that
   should or shouldn't be blocked are still reported from Community.
 
