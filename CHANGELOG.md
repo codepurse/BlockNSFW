@@ -2,6 +2,22 @@
 
 All notable project changes should be documented here going forward.
 
+## [2.0.5] - 2026-11-08
+
+### Fixed
+
+- **Keeper, the password manager, was blocked.** keepersecurity.com was on
+  the built-in list by mistake, and so was keepass.fr, a download site for
+  KeePass. Neither has anything to do with adult content: both came in with
+  a large list of sites added in February 2026 that had some ordinary sites
+  mixed in. Both are off the list, and on the whitelist so a list update
+  can't bring them back. Reported by email.
+
+### Changed
+
+- **Help by email goes to blocknsfw@monolab.dev.** Settings › About and
+  Pass it on give BlockNSFW's own address in place of support@monolab.dev.
+
 ## [2.0.4] - 2026-10-30
 
 ### Added

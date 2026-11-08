@@ -25875,8 +25875,6 @@
 0.0.0.0    keep2share.cc
 0.0.0.0    keepaneyeadmk.hit.gemius.pl
 0.0.0.0    keepaneyemk.adocean.pl
-0.0.0.0    keepass.fr
-0.0.0.0    keepersecurity.com
 0.0.0.0    keepmeclosed.tumblr.com
 0.0.0.0    keepsmiiling.tumblr.com
 0.0.0.0    keepvacom.com
@@ -69773,8 +69771,6 @@
 0.0.0.0    www.keep2share.cc
 0.0.0.0    www.keepaneyeadmk.hit.gemius.pl
 0.0.0.0    www.keepaneyemk.adocean.pl
-0.0.0.0    www.keepass.fr
-0.0.0.0    www.keepersecurity.com
 0.0.0.0    www.keepvacom.com
 0.0.0.0    www.keezlive.com
 0.0.0.0    www.keezmovies.com
