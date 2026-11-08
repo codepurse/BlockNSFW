@@ -90,7 +90,7 @@ test('the popup has a quick way to turn it off, on the same setting', () => {
 test('Welcome’s two Santa hats show only at Christmas, and keep still for reduced motion', () => {
   const html = read('options.html');
   const hats = html.match(/class="xmas-hat [^"]*"/g) || [];
-  assert.deepEqual(hats, ['class="xmas-hat xmas-hat-title"', 'class="xmas-hat xmas-hat-tag"'], 'one on the headline, one on Warden’s open beta tag');
+  assert.deepEqual([...hats].sort(), ['class="xmas-hat xmas-hat-tag"', 'class="xmas-hat xmas-hat-title"'], 'one on the headline, one on Warden’s open beta tag');
   assert.match(html, /<span class="warden-tag"><svg class="xmas-hat xmas-hat-tag"[^>]*aria-hidden="true"/, 'the tag’s is decoration, first in it');
   assert.match(html, /<h3 class="pass-title"[^>]*><svg class="xmas-hat xmas-hat-title"[^>]*aria-hidden="true"/, 'the headline’s is decoration, first in it');
   assert.match(html, /\.xmas-hat \{\s*display: none;\s*\}/, 'hidden unless it is Christmas');

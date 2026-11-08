@@ -1599,7 +1599,12 @@
     html[data-dev-message-read] #dev-message-card {
       padding: 14px var(--space-5);
     }
-    #dev-message-card + #whats-new-card {
+    /* Warden leads the Welcome section; the bands under it keep a gap, and
+       What's New, after the last band, a wider one. */
+    #dev-message-card + #release-card {
+      margin-top: var(--space-4);
+    }
+    #whats-new-card {
       margin-top: var(--space-5);
     }
     #dev-message-card .welcome-strip {
@@ -1755,9 +1760,6 @@
     }
     html[data-pass-read] #pass-card {
       padding: 14px var(--space-5);
-    }
-    #pass-card + #dev-message-card {
-      margin-top: var(--space-4);
     }
     #pass-card .welcome-strip {
       color: var(--color-on-band);
@@ -3377,6 +3379,47 @@
           <p class="section-desc">What’s new in this version, and where to start.</p>
         </header>
 
+        <div class="welcome-card band-pine" id="dev-message-card">
+          <button type="button" class="welcome-strip" data-welcome="open">
+            <span class="welcome-strip-title">Warden</span>
+            <span class="welcome-strip-meta"><span class="warden-strip-beta">open beta</span> · free for Windows 10 and 11</span>
+            <span class="welcome-strip-open">Show <svg class="icon icon-12" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M4 6l4 4 4-4" /></svg></span>
+          </button>
+          <!-- Warden is an open beta: anyone can download it. Beside the words,
+               the four things a reader checks first, as hairline rows. In a
+               narrow card the rows move between the words and the buttons. -->
+          <div class="warden-banner">
+            <div class="warden-text">
+              <p class="meta warden-kicker"><span>warden</span> <span class="warden-tag"><svg class="xmas-hat xmas-hat-tag" viewBox="0 0 140 100" aria-hidden="true" focusable="false">
+                  <defs>
+                    <linearGradient id="xmas-hat-red-g" x1="0.1" y1="0.1" x2="0.9" y2="0.9"><stop offset="0" stop-color="#e5523d" /><stop offset="0.55" stop-color="#c4352a" /><stop offset="1" stop-color="#8f2219" /></linearGradient>
+                    <radialGradient id="xmas-hat-fur-g" cx="0.4" cy="0.3" r="0.8"><stop offset="0" stop-color="#ffffff" /><stop offset="0.7" stop-color="#eef2f3" /><stop offset="1" stop-color="#c9d4da" /></radialGradient>
+                  </defs>
+                  <path d="M20 70 C24 44 46 18 80 16 C102 15 118 28 122 48 C115 43 106 41 98 43 C92 52 90 61 90 70 Z" fill="url(#xmas-hat-red-g)" />
+                  <path d="M98 43 C106 41 115 43 122 48 C113 46.5 105 47 99 50 Z" fill="#3c0806" fill-opacity="0.35" />
+                  <path d="M31 63 C35 46 50 29 69 23" fill="none" stroke="#ffffff" stroke-opacity="0.32" stroke-width="2.4" stroke-linecap="round" />
+                  <g class="xmas-hat-pom" fill="url(#xmas-hat-fur-g)"><circle cx="122" cy="54" r="9.5" /><circle cx="115.5" cy="50" r="3.6" /><circle cx="128.5" cy="50.5" r="3.6" /><circle cx="122" cy="45.5" r="3.6" /><circle cx="116.5" cy="59.5" r="3.4" /><circle cx="127.5" cy="60" r="3.4" /></g>
+                  <g fill="url(#xmas-hat-fur-g)"><path d="M10 66 Q55 57 100 66 Q103 73 100 80 Q55 72 10 80 Q7 73 10 66 Z" /><circle cx="14" cy="65" r="3.6" /><circle cx="26" cy="63" r="3.6" /><circle cx="38" cy="61.7" r="3.6" /><circle cx="50" cy="61.2" r="3.6" /><circle cx="62" cy="61.2" r="3.6" /><circle cx="74" cy="61.9" r="3.6" /><circle cx="86" cy="63.2" r="3.6" /><circle cx="98" cy="65.2" r="3.6" /><circle cx="14" cy="79.6" r="3.4" /><circle cx="26" cy="78" r="3.4" /><circle cx="38" cy="77" r="3.4" /><circle cx="50" cy="76.5" r="3.4" /><circle cx="62" cy="76.5" r="3.4" /><circle cx="74" cy="77.1" r="3.4" /><circle cx="86" cy="78.3" r="3.4" /><circle cx="98" cy="80" r="3.4" /></g>
+                </svg>open beta</span> <span>from the maker of BlockNSFW</span></p>
+              <h3 class="warden-title" data-welcome="heading" tabindex="-1">Warden is open. <em>Anyone can try it now.</em></h3>
+              <p class="warden-lede">BlockNSFW guards this browser. Warden guards every browser and app on your Windows PC, and its free version stays free.</p>
+            </div>
+            <dl class="warden-specs">
+              <div class="warden-spec"><dt class="meta">status</dt><dd>Open beta</dd></div>
+              <div class="warden-spec"><dt class="meta">price</dt><dd>Free · Pro is optional</dd></div>
+              <div class="warden-spec"><dt class="meta">runs on</dt><dd>Windows 10 and 11</dd></div>
+              <div class="warden-spec"><dt class="meta">account</dt><dd>None needed</dd></div>
+            </dl>
+            <div class="warden-actions">
+              <a class="btn btn-primary btn-sm" href="https://monolab.dev/warden/download" target="_blank" rel="noopener noreferrer"><svg class="icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M8 2.5v8M4.5 7.5L8 11l3.5-3.5M3 13.5h10" /></svg>Download Warden</a>
+              <a class="arrow-link" href="https://monolab.dev/warden" target="_blank" rel="noopener noreferrer">Learn more <svg class="icon icon-up-right" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M4.5 11.5l7-7M6 4.5h5.5V10" /></svg></a>
+            </div>
+          </div>
+<button type="button" class="icon-btn warden-dismiss" data-welcome="ack" aria-label="Hide this message">
+            <svg class="icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M3.5 3.5l9 9M12.5 3.5l-9 9" /></svg>
+          </button>
+        </div>
+
         <!-- 2.0, while a 2.0.x is installed (options-layout.js). Its × folds
              it to one line for good; the release page has the whole story. -->
         <div class="welcome-card band-pine" id="release-card">
@@ -3448,47 +3491,6 @@
             </div>
           </div>
           <button type="button" class="icon-btn pass-dismiss" data-welcome="ack" aria-label="Hide this message">
-            <svg class="icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M3.5 3.5l9 9M12.5 3.5l-9 9" /></svg>
-          </button>
-        </div>
-
-        <div class="welcome-card band-pine" id="dev-message-card">
-          <button type="button" class="welcome-strip" data-welcome="open">
-            <span class="welcome-strip-title">Warden</span>
-            <span class="welcome-strip-meta"><span class="warden-strip-beta">open beta</span> · free for Windows 10 and 11</span>
-            <span class="welcome-strip-open">Show <svg class="icon icon-12" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M4 6l4 4 4-4" /></svg></span>
-          </button>
-          <!-- Warden is an open beta: anyone can download it. Beside the words,
-               the four things a reader checks first, as hairline rows. In a
-               narrow card the rows move between the words and the buttons. -->
-          <div class="warden-banner">
-            <div class="warden-text">
-              <p class="meta warden-kicker"><span>warden</span> <span class="warden-tag"><svg class="xmas-hat xmas-hat-tag" viewBox="0 0 140 100" aria-hidden="true" focusable="false">
-                  <defs>
-                    <linearGradient id="xmas-hat-red-g" x1="0.1" y1="0.1" x2="0.9" y2="0.9"><stop offset="0" stop-color="#e5523d" /><stop offset="0.55" stop-color="#c4352a" /><stop offset="1" stop-color="#8f2219" /></linearGradient>
-                    <radialGradient id="xmas-hat-fur-g" cx="0.4" cy="0.3" r="0.8"><stop offset="0" stop-color="#ffffff" /><stop offset="0.7" stop-color="#eef2f3" /><stop offset="1" stop-color="#c9d4da" /></radialGradient>
-                  </defs>
-                  <path d="M20 70 C24 44 46 18 80 16 C102 15 118 28 122 48 C115 43 106 41 98 43 C92 52 90 61 90 70 Z" fill="url(#xmas-hat-red-g)" />
-                  <path d="M98 43 C106 41 115 43 122 48 C113 46.5 105 47 99 50 Z" fill="#3c0806" fill-opacity="0.35" />
-                  <path d="M31 63 C35 46 50 29 69 23" fill="none" stroke="#ffffff" stroke-opacity="0.32" stroke-width="2.4" stroke-linecap="round" />
-                  <g class="xmas-hat-pom" fill="url(#xmas-hat-fur-g)"><circle cx="122" cy="54" r="9.5" /><circle cx="115.5" cy="50" r="3.6" /><circle cx="128.5" cy="50.5" r="3.6" /><circle cx="122" cy="45.5" r="3.6" /><circle cx="116.5" cy="59.5" r="3.4" /><circle cx="127.5" cy="60" r="3.4" /></g>
-                  <g fill="url(#xmas-hat-fur-g)"><path d="M10 66 Q55 57 100 66 Q103 73 100 80 Q55 72 10 80 Q7 73 10 66 Z" /><circle cx="14" cy="65" r="3.6" /><circle cx="26" cy="63" r="3.6" /><circle cx="38" cy="61.7" r="3.6" /><circle cx="50" cy="61.2" r="3.6" /><circle cx="62" cy="61.2" r="3.6" /><circle cx="74" cy="61.9" r="3.6" /><circle cx="86" cy="63.2" r="3.6" /><circle cx="98" cy="65.2" r="3.6" /><circle cx="14" cy="79.6" r="3.4" /><circle cx="26" cy="78" r="3.4" /><circle cx="38" cy="77" r="3.4" /><circle cx="50" cy="76.5" r="3.4" /><circle cx="62" cy="76.5" r="3.4" /><circle cx="74" cy="77.1" r="3.4" /><circle cx="86" cy="78.3" r="3.4" /><circle cx="98" cy="80" r="3.4" /></g>
-                </svg>open beta</span> <span>from the maker of BlockNSFW</span></p>
-              <h3 class="warden-title" data-welcome="heading" tabindex="-1">Warden is open. <em>Anyone can try it now.</em></h3>
-              <p class="warden-lede">BlockNSFW guards this browser. Warden guards every browser and app on your Windows PC, and its free version stays free.</p>
-            </div>
-            <dl class="warden-specs">
-              <div class="warden-spec"><dt class="meta">status</dt><dd>Open beta</dd></div>
-              <div class="warden-spec"><dt class="meta">price</dt><dd>Free · Pro is optional</dd></div>
-              <div class="warden-spec"><dt class="meta">runs on</dt><dd>Windows 10 and 11</dd></div>
-              <div class="warden-spec"><dt class="meta">account</dt><dd>None needed</dd></div>
-            </dl>
-            <div class="warden-actions">
-              <a class="btn btn-primary btn-sm" href="https://monolab.dev/warden/download" target="_blank" rel="noopener noreferrer"><svg class="icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M8 2.5v8M4.5 7.5L8 11l3.5-3.5M3 13.5h10" /></svg>Download Warden</a>
-              <a class="arrow-link" href="https://monolab.dev/warden" target="_blank" rel="noopener noreferrer">Learn more <svg class="icon icon-up-right" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M4.5 11.5l7-7M6 4.5h5.5V10" /></svg></a>
-            </div>
-          </div>
-<button type="button" class="icon-btn warden-dismiss" data-welcome="ack" aria-label="Hide this message">
             <svg class="icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M3.5 3.5l9 9M12.5 3.5l-9 9" /></svg>
           </button>
         </div>

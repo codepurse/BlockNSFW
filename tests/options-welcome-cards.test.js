@@ -111,10 +111,17 @@ test('the banner opens on every visit, whatever an earlier build stored', () => 
   assert.ok(!('data-dev-message-read' in atFirstPaint));
 });
 
+test('the Warden banner is the first row of Welcome, above the 2.0 card, Pass It On and What’s New', () => {
+  const html = fs.readFileSync(path.join(ROOT, 'options.html'), 'utf8');
+  const section = html.slice(html.indexOf('id="section-welcome"'), html.indexOf('id="section-protection"'));
+  const order = [...section.matchAll(/<div class="welcome-card[^"]*" id="([a-z-]+)"/g)].map((m) => m[1]);
+  assert.deepEqual(order, ['dev-message-card', 'release-card', 'pass-card', 'whats-new-card']);
+});
+
 test('the Warden banner says open beta and links to the download', () => {
   const html = fs.readFileSync(path.join(ROOT, 'options.html'), 'utf8');
   const start = html.indexOf('id="dev-message-card"');
-  const card = html.slice(start, html.indexOf('id="whats-new-card"', start)).replace(/<!--[\s\S]*?-->/g, '');
+  const card = html.slice(start, html.indexOf('<div class="welcome-card', start)).replace(/<!--[\s\S]*?-->/g, '');
   assert.match(card, /<span class="warden-strip-beta">open beta<\/span>/, 'the folded strip says it too');
   assert.match(card, /<span class="warden-tag">[\s\S]*?open beta<\/span>/);
   assert.match(card, /<dt class="meta">status<\/dt><dd>Open beta<\/dd>/);

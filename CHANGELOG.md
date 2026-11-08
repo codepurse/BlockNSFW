@@ -59,7 +59,9 @@ All notable project changes should be documented here going forward.
   the price, what it runs on and that it needs no account. "Download
   Warden" goes straight to the download page. Folded, the strip reads "open
   beta · free for Windows 10 and 11". At Christmas, the Santa hat moves
-  from the dial to the corner of the open beta tag.
+  from the dial to the corner of the open beta tag. The banner is also now
+  the first row of Welcome, above the 2.0 card, Pass It On and What's New;
+  it used to be third.
 - **Help by email goes to blocknsfw@monolab.dev.** Settings › About and
   Pass it on give BlockNSFW's own address in place of support@monolab.dev.
 
