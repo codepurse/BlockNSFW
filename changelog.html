@@ -182,6 +182,12 @@
         <h3 class="group-label">Fixed</h3>
         <ul class="rows rows-closed">
           <li class="entry">
+            <h4 class="entry-title">A downloaded image model could get stuck</h4>
+            <p class="entry-body">
+              If a web filter or proxy answered the model download with an empty or partial file, the extension kept it as if the download had worked, so the model never loaded while Settings said it was ready. Bad downloads are now refused and fetched again, and the built-in model keeps filtering meanwhile.
+            </p>
+          </li>
+          <li class="entry">
             <h4 class="entry-title">Keeper, the password manager, was blocked</h4>
             <p class="entry-body">
               keepersecurity.com was on the built-in list by mistake, and so was keepass.fr, a download site for KeePass. Neither has anything to do with adult content: both came in with a large list of sites added in February 2026 that had some ordinary sites mixed in. Both are off the list, and on the whitelist so a list update can&rsquo;t bring them back.

@@ -99,19 +99,67 @@
     if (cache) {
       try {
         var hit = await cache.match(key);
-        if (hit && hit.ok) return await hit.arrayBuffer();
+        if (hit && hit.status === 200) {
+          var cached = await hit.arrayBuffer();
+          if (cached && cached.byteLength > 0) return cached;
+        }
+        // An empty or non-200 entry (cached by an older build) is never a
+        // usable shard: drop it and download again.
+        if (hit) await cache.delete(key);
       } catch (_) {}
     }
 
     var resp = await fetch(url, { credentials: 'omit', cache: 'no-store' });
-    if (!resp || !resp.ok) {
+    // Exactly 200. A 204 or 206 is "ok" to fetch() but carries no shard or
+    // only part of one. A web filter or proxy that swallows the download
+    // answers exactly like that, and caching it would leave the model broken
+    // on every later load while Settings reports it as downloaded.
+    if (!resp || resp.status !== 200) {
       throw new Error('shard ' + relativePath + ': HTTP ' + (resp && resp.status));
     }
-
-    if (cache) {
-      try { await cache.put(key, resp.clone()); } catch (_) {}
+    var copy = cache ? resp.clone() : null;
+    var buf = await resp.arrayBuffer();
+    if (!buf || buf.byteLength === 0) {
+      throw new Error('shard ' + relativePath + ': empty download');
     }
-    return await resp.arrayBuffer();
+
+    if (cache && copy) {
+      try { await cache.put(key, copy); } catch (_) {}
+    }
+    return buf;
+  }
+
+  var DTYPE_BYTES = {
+    float32: 4, int32: 4, bool: 1, uint8: 1, int8: 1, float16: 2, uint16: 2, int16: 2
+  };
+
+  // Bytes the weight specs say the shards must add up to, or null when a spec
+  // uses a dtype this check doesn't know (then the size is not checked).
+  function expectedWeightBytes(specs) {
+    var total = 0;
+    for (var i = 0; i < specs.length; i++) {
+      var spec = specs[i] || {};
+      var dtype = spec.quantization && spec.quantization.dtype
+        ? spec.quantization.dtype
+        : spec.dtype;
+      var size = DTYPE_BYTES[dtype];
+      if (!size) return null;
+      var count = 1;
+      var shape = Array.isArray(spec.shape) ? spec.shape : [];
+      for (var d = 0; d < shape.length; d++) count *= Number(shape[d]) || 0;
+      total += count * size;
+    }
+    return total;
+  }
+
+  async function dropCachedShards(model, paths) {
+    if (!cachesAvailable()) return;
+    try {
+      var cache = await root.caches.open(SHARD_CACHE_NAME);
+      for (var i = 0; i < paths.length; i++) {
+        try { await cache.delete(shardCacheKey(model, paths[i])); } catch (_) {}
+      }
+    } catch (_) {}
   }
 
   function concatBuffers(buffers) {
@@ -158,11 +206,24 @@
     }
     report(manifest.paths.length, manifest.paths.length, 'weights');
 
+    // A truncated shard would otherwise load "successfully" and decode its
+    // missing weights as empty tensors deep inside tfjs. Check the total
+    // against what the manifest needs, and if it is short, forget the cached
+    // shards so the next attempt downloads them again instead of failing the
+    // same way forever.
+    var weightData = concatBuffers(buffers);
+    var expected = expectedWeightBytes(manifest.specs);
+    if (expected !== null && weightData.byteLength !== expected) {
+      await dropCachedShards(model, manifest.paths);
+      throw new Error('downloaded weights are incomplete (' + weightData.byteLength +
+        ' of ' + expected + ' bytes)');
+    }
+
     report(0, 1, 'compile');
     var graph = await tf.loadGraphModel(tf.io.fromMemory({
       modelTopology: topology.modelTopology,
       weightSpecs: manifest.specs,
-      weightData: concatBuffers(buffers),
+      weightData: weightData,
       // Forwarded, not dropped: the converter emits a `signature` naming the
       // graph's input/output tensors ("input:0" -> "Identity:0"). tfjs can
       // infer them from the GraphDef without it, but passing it through keeps
@@ -188,7 +249,13 @@
       var cache = await root.caches.open(SHARD_CACHE_NAME);
       for (var i = 0; i < manifest.paths.length; i++) {
         var hit = await cache.match(shardCacheKey(model, manifest.paths[i]));
-        if (!hit || !hit.ok) return false;
+        // Same rule as loadShard: only a 200 with a body counts, so an empty
+        // download cached by an older build never reads as "ready".
+        if (!hit || hit.status !== 200) return false;
+        var length = hit.headers && typeof hit.headers.get === 'function'
+          ? hit.headers.get('content-length')
+          : null;
+        if (length === '0') return false;
       }
       return true;
     } catch (_) {

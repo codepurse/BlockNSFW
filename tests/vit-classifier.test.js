@@ -30,7 +30,9 @@ function fakeTopology(shardCount = 3) {
     modelTopology: { node: [{ name: 'input' }, { name: 'logits' }] },
     weightsManifest: [{
       paths,
-      weights: [{ name: 'w', shape: [2], dtype: 'float32' }]
+      // One float32 per shard: the stub serves 4 bytes per shard, and load()
+      // checks the shards add up to what the manifest needs.
+      weights: [{ name: 'w', shape: [shardCount], dtype: 'float32' }]
     }]
   };
 }
@@ -115,7 +117,10 @@ function loadClassifier({
   tfStub = makeTfStub(),
   fillRgba = [255, 0, 0, 255],
   failShard = null,
-  topologyMissing = false
+  topologyMissing = false,
+  // name -> response overrides: { status, body } for a shard, to model a
+  // filter or proxy that answers 204, 206 or an empty 200.
+  shardResponses = {}
 } = {}) {
   const fetched = [];
   const cachePuts = [];
@@ -161,6 +166,10 @@ function loadClassifier({
       }
       const name = String(url).split('/').pop().split('?')[0];
       if (failShard && name === failShard) return makeResponse(null, false, 502);
+      if (shardResponses[name]) {
+        const r = shardResponses[name];
+        return makeResponse(r.body, r.status >= 200 && r.status < 300, r.status);
+      }
       return makeResponse(shardFor(name, shardIndex[name] || 0));
     },
     caches: {
@@ -478,4 +487,53 @@ test('n017 releases its input and both outputs', async () => {
   const before = h.disposed.length;
   await h.api.classify(model, { width: 100, height: 50 }, 'n017');
   assert.equal(h.disposed.length - before, 3);
+});
+
+// ─── downloads a filter or proxy swallowed ──────────────────────────────
+// Seen for real: Chrome's .bin fetches came back as empty 204s on a machine
+// with a web filter. Every such answer must fail the load and leave nothing
+// cached, or the model stays broken while Settings says "Downloaded".
+
+for (const [label, response] of [
+  ['an empty 204', { status: 204, body: new ArrayBuffer(0) }],
+  ['a 206 partial', { status: 206, body: new Uint8Array([2, 2]).buffer }],
+  ['an empty 200', { status: 200, body: new ArrayBuffer(0) }]
+]) {
+  test(`${label} for a shard fails the load and is not cached`, async () => {
+    const h = loadClassifier({
+      topology: fakeTopology(3),
+      shardResponses: { 'group1-shard2of3.bin': response }
+    });
+    await assert.rejects(h.api.load('vit384'), /group1-shard2of3\.bin: (HTTP 20[46]|empty download)/);
+    assert.equal(h.cachePuts.some((k) => k.includes('group1-shard2of3.bin')), false,
+      'the bad shard must not be cached');
+    assert.equal(await h.api.isCached('vit384'), false);
+  });
+}
+
+test('a truncated shard fails the size check and the cached shards are dropped', async () => {
+  // A 200 with too few bytes passes every per-shard check; only the total
+  // against the manifest catches it.
+  const h = loadClassifier({
+    topology: fakeTopology(3),
+    shardResponses: { 'group1-shard3of3.bin': { status: 200, body: new Uint8Array([3, 3]).buffer } }
+  });
+  await assert.rejects(h.api.load('vit384'), /incomplete \(10 of 12 bytes\)/);
+  assert.equal(h.cacheStore.size, 0, 'nothing may stay cached after a failed size check');
+  assert.equal(await h.api.isCached('vit384'), false);
+});
+
+test('an empty shard cached by an older build is replaced, not used', async () => {
+  const h = loadClassifier({ topology: fakeTopology(2) });
+  const model = h.models.getModel('vit384');
+  const badKey = h.api.shardCacheKey(model, 'group1-shard1of2.bin');
+  h.cacheStore.set(badKey, h.makeResponse(new ArrayBuffer(0), true, 204));
+  h.cacheStore.set(h.api.shardCacheKey(model, 'group1-shard2of2.bin'),
+    h.makeResponse(new Uint8Array([2, 2, 2, 2]).buffer, true, 200));
+
+  assert.equal(await h.api.isCached('vit384'), false, 'a cached 204 is not "downloaded"');
+  const graph = await h.api.load('vit384');
+  assert.deepEqual(Array.from(new Uint8Array(graph._artifacts.weightData)), [1, 1, 1, 1, 2, 2, 2, 2]);
+  assert.ok(h.fetched.some((u) => String(u).endsWith('group1-shard1of2.bin')), 'the bad shard is downloaded again');
+  assert.equal(await h.api.isCached('vit384'), true);
 });
