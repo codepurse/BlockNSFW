@@ -2,7 +2,7 @@
 
 All notable project changes should be documented here going forward.
 
-## [Unreleased]
+## [2.0.5] - 2026-11-08
 
 ### Added
 
@@ -18,19 +18,6 @@ All notable project changes should be documented here going forward.
   an address someone else made up. Same backend, limits and duplicate
   check as Settings › Community.
 
-### Changed
-
-- **The Warden banner says it's an open beta.** Anyone can download Warden
-  now, so the banner at the top of Settings drops "Join the beta" and the
-  cool-down dial (the cool-down is a Pro feature) for "Warden is open.
-  Anyone can try it now." Beside it, four hairline rows give the status,
-  the price, what it runs on and that it needs no account. "Download
-  Warden" goes straight to the download page. Folded, the strip reads "open
-  beta · free for Windows 10 and 11". At Christmas, the Santa hat moves
-  from the dial to the corner of the open beta tag.
-
-## [2.0.5] - 2026-11-08
-
 ### Fixed
 
 - **Keeper, the password manager, was blocked.** keepersecurity.com was on
@@ -42,6 +29,14 @@ All notable project changes should be documented here going forward.
 
 ### Changed
 
+- **The Warden banner says it's an open beta.** Anyone can download Warden
+  now, so the banner at the top of Settings drops "Join the beta" and the
+  cool-down dial (the cool-down is a Pro feature) for "Warden is open.
+  Anyone can try it now." Beside it, four hairline rows give the status,
+  the price, what it runs on and that it needs no account. "Download
+  Warden" goes straight to the download page. Folded, the strip reads "open
+  beta · free for Windows 10 and 11". At Christmas, the Santa hat moves
+  from the dial to the corner of the open beta tag.
 - **Help by email goes to blocknsfw@monolab.dev.** Settings › About and
   Pass it on give BlockNSFW's own address in place of support@monolab.dev.
 
