@@ -182,6 +182,12 @@
         <h3 class="group-label">Fixed</h3>
         <ul class="rows rows-closed">
           <li class="entry">
+            <h4 class="entry-title">The blocked counters could race ahead</h4>
+            <p class="entry-body">
+              On pages that keep changing the picture in a hidden image, like preview reels, carousels and feeds that reuse their slots, every change counted as another block, so the popup&rsquo;s counters could pass a thousand within a minute. A block now counts only when something new is hidden.
+            </p>
+          </li>
+          <li class="entry">
             <h4 class="entry-title">A downloaded image model could get stuck</h4>
             <p class="entry-body">
               If a web filter or proxy answered the model download with an empty or partial file, the extension kept it as if the download had worked, so the model never loaded while Settings said it was ready. Bad downloads are now refused and fetched again, and the built-in model keeps filtering meanwhile.

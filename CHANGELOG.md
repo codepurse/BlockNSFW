@@ -36,6 +36,13 @@ All notable project changes should be documented here going forward.
 
 ### Fixed
 
+- **The blocked counters could race ahead.** On pages that keep changing
+  the picture in a hidden image (preview reels, carousels, feeds that reuse
+  their slots), every change counted as another block. The popup's counters
+  could pass a thousand within a minute. A block now counts only when
+  something new is hidden. Image-search tiles count once per tile, and ad
+  frames or hidden posts that change inside no longer count again.
+  Reported by a supporter.
 - **A downloaded image model could get stuck unusable.** If a web filter
   or proxy answered the model download with an empty or partial file, the
   extension kept that file as if the download had worked. ViT-384 (and now
