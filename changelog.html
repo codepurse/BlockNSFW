@@ -151,12 +151,47 @@
     </header>
 
 
+    <!-- ===================== 2.0.7 ===================== -->
+    <section class="release" aria-labelledby="release-2-0-7">
+      <h2 class="section-head tnum" id="release-2-0-7">
+        <span class="index release-version">2.0.7</span>
+        <span>November 2026</span>
+        <span class="release-status meta-pine" data-status="current">Current</span>
+      </h2>
+      <div class="release-body">
+
+      <div class="group">
+        <h3 class="group-label">Fixed</h3>
+        <ul class="rows rows-closed">
+          <li class="entry">
+            <h4 class="entry-title">Private windows were a way round</h4>
+            <p class="entry-body">
+              Your browser lets anyone switch BlockNSFW off in private windows on its extensions page, and once that&rsquo;s off, no extension can see private windows at all. So BlockNSFW now locks that page instead. While you have a PIN, a pact or an access code, opening it asks for the same as turning protection off, then it stays open for 10 minutes. During Storm Mode and your risk hours it doesn&rsquo;t open. Turning private windows on never asks for anything. The switch is in Settings &rsaquo; Security &rsaquo; Private windows.
+            </p>
+          </li>
+          <li class="entry">
+            <h4 class="entry-title">Switching off site access was a way round</h4>
+            <p class="entry-body">
+              Chrome and Edge let anyone set an extension to work only &ldquo;when you click the extension&rdquo; from the toolbar, and that stopped all blocking. BlockNSFW now notices straight away. While your protection is locked, pages wait until you give it access again, which takes one button. Otherwise listed sites are still blocked, and the popup and Settings say what isn&rsquo;t being filtered.
+            </p>
+          </li>
+          <li class="entry">
+            <h4 class="entry-title">A new permission: your tabs</h4>
+            <p class="entry-body">
+              Both fixes need to see which page a tab is on, to recognise the extensions page, and to check pages while site access is off. BlockNSFW only compares those addresses on your device and never keeps or sends them. Firefox may ask you to accept &ldquo;Access browser tabs&rdquo; when it updates.
+            </p>
+          </li>
+        </ul>
+      </div>
+
+      </div>
+    </section>
+
     <!-- ===================== 2.0.6 ===================== -->
     <section class="release" aria-labelledby="release-2-0-6">
       <h2 class="section-head tnum" id="release-2-0-6">
         <span class="index release-version">2.0.6</span>
         <span>November 2026</span>
-        <span class="release-status meta-pine" data-status="current">Current</span>
       </h2>
       <div class="release-body">
 
