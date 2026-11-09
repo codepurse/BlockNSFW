@@ -68,10 +68,12 @@ All notable project changes should be documented here going forward.
   beta · free for Windows 10 and 11". At Christmas, the Santa hat moves
   from the dial to the corner of the open beta tag. The banner is also now
   the first row of Welcome, above the 2.0 card, Pass It On and What's New;
-  it used to be third. A new row gives Warden's Product Hunt launch,
-  December 5 at 12:01 AM Pacific, in your own time zone (for example
-  "Dec 5, 4:01 PM GMT+8") and links to its Product Hunt page. On the day it
-  says "Live now", and once the day is over the row goes.
+  it used to be third. A bar across its foot, with Product Hunt's logo,
+  asks for support for Warden's Product Hunt launch on December 5, 2026 at
+  12:01 AM Pacific. It gives that time in your own time zone too (for
+  example "Dec 5, 4:01 PM your time") and links to Warden's Product Hunt
+  page. On the day it says Warden is live, and once the day is over the bar
+  goes.
 - **Help by email goes to blocknsfw@monolab.dev.** Settings › About and
   Pass it on give BlockNSFW's own address in place of support@monolab.dev.
 

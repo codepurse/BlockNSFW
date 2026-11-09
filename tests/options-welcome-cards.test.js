@@ -201,18 +201,22 @@ test('the 2.0 band is gone on 1.x and from 2.1 on', () => {
   assert.ok(!('data-release-gone' in load({ version: '2.0.1' }).atFirstPaint));
 });
 
-// ─── Warden's Product Hunt launch row ────────────────────────────────────
-// 12:01 AM Pacific on 5 December 2026 (PST, UTC-8) = 08:01 UTC. The row says
-// it in the reader's own time zone, "Live now" on the launch day, and goes
-// once the day (midnight to midnight Pacific) is over.
+// ─── Warden's Product Hunt launch bar ────────────────────────────────────
+// 12:01 AM Pacific on 5 December 2026 (PST, UTC-8) = 08:01 UTC. The bar keeps
+// the Pacific time and adds the reader's own; on the launch day it says Warden
+// is live; once the day (midnight to midnight Pacific) is over it is hidden.
 
 const LAUNCH_UTC = Date.UTC(2026, 11, 5, 8, 1);
+const TITLE = 'Support us on Product Hunt. Warden launches December 5, 2026.';
 
 function loadAt(nowMs, timeZone = 'Asia/Manila') {
-  const row = { hidden: false };
-  const time = { textContent: 'Dec 5 · 12:01 AM PT' };
-  const linkAttrs = {};
-  const link = { setAttribute: (n, v) => { linkAttrs[n] = String(v); } };
+  const el = (text = '') => ({ textContent: text, hidden: false });
+  const parts = {
+    'warden-launch': el(),
+    'warden-launch-title': el(TITLE),
+    'warden-launch-pacific': el('12:01 AM Pacific'),
+    'warden-launch-local': el('')
+  };
   const RealDate = Date;
   class FakeDate extends RealDate {
     constructor(...args) { super(...(args.length ? args : [nowMs])); }
@@ -222,61 +226,72 @@ function loadAt(nowMs, timeZone = 'Asia/Manila') {
     documentElement: { getAttribute: () => null, setAttribute() {}, removeAttribute() {}, hasAttribute: () => false },
     readyState: 'complete',
     addEventListener() {},
-    getElementById: (id) => ({ 'warden-launch': row, 'warden-launch-time': time, 'warden-launch-link': link })[id] || null,
+    getElementById: (id) => parts[id] || null,
     querySelector: () => null,
     querySelectorAll: () => []
   };
   const context = {
     document,
     Date: FakeDate,
-    // The reader's zone is the browser's; pin it, in English, for the test.
-    // A plain function, since the page calls it with `new`.
-    Intl: { DateTimeFormat: function (_locale, opts) { return new Intl.DateTimeFormat('en-US', { ...opts, timeZone }); } },
+    Object,
+    // The reader's zone is the browser's: pin it, in English. A zone the page
+    // asks for itself (Pacific, to compare) is kept.
+    Intl: {
+      DateTimeFormat: function (_locale, opts) {
+        return new Intl.DateTimeFormat('en-US', { ...opts, timeZone: (opts && opts.timeZone) || timeZone });
+      }
+    },
     window: { scrollY: 0, addEventListener() {} },
     localStorage: { getItem: () => null, setItem() {} },
     chrome: { runtime: { getManifest: () => ({ version: '2.0.5' }) } }
   };
   vm.runInNewContext(SOURCE, context);
-  return { row, time, linkAttrs };
+  return {
+    hidden: parts['warden-launch'].hidden,
+    title: parts['warden-launch-title'].textContent,
+    when: parts['warden-launch-pacific'].textContent + parts['warden-launch-local'].textContent
+  };
 }
 
-test('the Product Hunt row gives the launch in the reader’s own time zone', () => {
+test('before the launch the bar gives the Pacific time and the reader’s own', () => {
   const before = LAUNCH_UTC - 3 * 24 * 3600 * 1000;
-  assert.equal(loadAt(before, 'Asia/Manila').time.textContent, 'Dec 5, 4:01 PM GMT+8');
-  assert.equal(loadAt(before, 'America/Los_Angeles').time.textContent, 'Dec 5, 12:01 AM PST');
-  assert.equal(loadAt(before, 'America/New_York').time.textContent, 'Dec 5, 3:01 AM EST');
-  assert.equal(loadAt(before, 'Europe/London').time.textContent, 'Dec 5, 8:01 AM GMT');
-  assert.equal(loadAt(before, 'Pacific/Auckland').time.textContent, 'Dec 5, 9:01 PM GMT+13');
+  assert.equal(loadAt(before, 'Asia/Manila').when, '12:01 AM Pacific · Dec 5, 4:01 PM your time');
+  assert.equal(loadAt(before, 'Europe/London').when, '12:01 AM Pacific · Dec 5, 8:01 AM your time');
+  assert.equal(loadAt(before, 'America/New_York').when, '12:01 AM Pacific · Dec 5, 3:01 AM your time');
   // West of Pacific it is still the evening before: the date moves too.
-  assert.equal(loadAt(before, 'Pacific/Honolulu').time.textContent, 'Dec 4, 10:01 PM HST');
-  assert.equal(loadAt(before).row.hidden, false);
-  // The link's spoken name carries the context the bare time lacks.
-  assert.equal(loadAt(before).linkAttrs['aria-label'], 'Warden on Product Hunt, launching Dec 5, 4:01 PM GMT+8');
+  assert.equal(loadAt(before, 'Pacific/Honolulu').when, '12:01 AM Pacific · Dec 4, 10:01 PM your time');
+  // A reader on Pacific time isn't told the same time twice.
+  assert.equal(loadAt(before, 'America/Los_Angeles').when, '12:01 AM Pacific');
+  const shown = loadAt(before);
+  assert.equal(shown.hidden, false);
+  assert.equal(shown.title, TITLE);
 });
 
-test('on the launch day the row says Live now, and after it the row is gone', () => {
-  assert.equal(loadAt(LAUNCH_UTC - 1).time.textContent, 'Dec 5, 4:01 PM GMT+8');
-  assert.equal(loadAt(LAUNCH_UTC).time.textContent, 'Live now');
-  assert.equal(loadAt(LAUNCH_UTC).linkAttrs['aria-label'], 'Warden on Product Hunt, live now');
+test('on the launch day the bar says Warden is live, and after it the bar is gone', () => {
+  assert.equal(loadAt(LAUNCH_UTC - 1).title, TITLE);
+  const live = loadAt(LAUNCH_UTC);
+  assert.equal(live.title, 'Warden is live on Product Hunt today. Support us there.');
+  assert.equal(live.when, 'Live until 11:59 PM Pacific');
+  assert.equal(live.hidden, false);
   // 11:59 PM Pacific on the 5th is still the launch day.
-  const lastMinute = Date.UTC(2026, 11, 6, 7, 59);
-  assert.equal(loadAt(lastMinute).time.textContent, 'Live now');
-  assert.equal(loadAt(lastMinute).row.hidden, false);
+  assert.equal(loadAt(Date.UTC(2026, 11, 6, 7, 59)).hidden, false);
   // Midnight Pacific: the day is over.
-  assert.equal(loadAt(Date.UTC(2026, 11, 6, 8, 0)).row.hidden, true);
+  assert.equal(loadAt(Date.UTC(2026, 11, 6, 8, 0)).hidden, true);
 });
 
-test('the page itself carries the launch in Pacific time, for when no script runs', () => {
+test('the launch bar is in the Warden banner, links to the launch, and never asks for upvotes', () => {
   const html = fs.readFileSync(path.join(ROOT, 'options.html'), 'utf8');
-  assert.match(html, /<div class="warden-spec" id="warden-launch"><dt class="meta">product hunt<\/dt>/);
-  assert.match(html, /<time id="warden-launch-time" datetime="2026-12-05T08:01:00Z" title="12:01 AM Pacific Time, December 5, 2026">Dec 5 · 12:01 AM PT<\/time>/);
-  // The value links to the launch page, in a new tab, with no opener or referrer.
-  const link = (html.match(/<a class="warden-launch-link"[^>]*>/) || [''])[0];
+  const card = html.slice(html.indexOf('id="dev-message-card"'), html.indexOf('<div class="welcome-card', html.indexOf('id="dev-message-card"') + 10));
+  const bar = card.slice(card.indexOf('<div class="warden-launch" id="warden-launch">'));
+  assert.ok(card.includes('<div class="warden-launch" id="warden-launch">'), 'the bar sits inside the Warden card');
+  assert.match(bar, /<svg class="ph-logo"[^>]*aria-hidden="true"/, 'Product Hunt’s logo is decoration');
+  assert.match(bar, new RegExp('<p class="warden-launch-title" id="warden-launch-title">' + TITLE.replace(/\./g, '\.') + '</p>'));
+  assert.match(bar, /<span id="warden-launch-pacific">12:01 AM Pacific<\/span>/, 'the page itself carries the Pacific time');
+  const link = (bar.match(/<a class="[^"]*warden-launch-link[^"]*"[^>]*>/) || [''])[0];
   assert.match(link, /href="https:\/\/www\.producthunt\.com\/products\/warden-9\?launch=warden-12"/);
   assert.match(link, /target="_blank"/);
   assert.match(link, /rel="noopener noreferrer"/);
-  assert.doesNotMatch(html.slice(html.indexOf('id="warden-launch"'), html.indexOf('</dl>', html.indexOf('id="warden-launch"'))),
-    /upvote/i, 'Product Hunt forbids asking for upvotes');
+  assert.doesNotMatch(bar.replace(/<!--[\s\S]*?-->/g, ''), /upvote/i, 'Product Hunt forbids asking for upvotes');
+  assert.match(html, /\.warden-launch\[hidden\] \{\s*display: none;\s*\}/, 'a hidden bar must not keep display: flex');
   assert.equal(new Date('2026-12-05T08:01:00Z').getTime(), LAUNCH_UTC);
-  assert.match(html, /\.warden-spec\[hidden\] \{\s*display: none;\s*\}/, 'a hidden row must not keep display: flex');
 });

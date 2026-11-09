@@ -1630,12 +1630,11 @@
        facts between the words and the buttons. */
     .warden-banner {
       display: grid;
-      /* 280px keeps every spec on one line, the longest being the Product
-         Hunt link in a half-hour zone ("Dec 5, 1:31 PM GMT+5:30 ↗"). */
-      grid-template-columns: minmax(0, 1fr) 280px;
+      grid-template-columns: minmax(0, 1fr) 248px;
       grid-template-areas:
         "text specs"
-        "actions specs";
+        "actions specs"
+        "launch launch";
       column-gap: 36px;
       padding-right: var(--space-5);
     }
@@ -1710,10 +1709,6 @@
       padding: 9px 0;
       border-bottom: 1px solid var(--color-band-rule);
     }
-    /* The Product Hunt row is removed once the launch day is over. */
-    .warden-spec[hidden] {
-      display: none;
-    }
     .warden-spec dt {
       line-height: 18px;
     }
@@ -1724,24 +1719,49 @@
       text-align: right;
       color: var(--color-on-band);
     }
-    /* The Product Hunt row's value is a link to the launch page: the same
-       ink as the other values, underlined only on hover and focus. */
-    .warden-launch-link {
-      display: inline-flex;
+    /* Warden's Product Hunt launch: a bar across the foot of the banner, set
+       off by a hairline. Product Hunt's own orange "P" is the one spot of
+       colour, so the launch reads at a glance; the words stay in the band's
+       inks. Hidden by options-layout.js once the launch day is over. */
+    .warden-launch {
+      grid-area: launch;
+      display: flex;
+      flex-wrap: wrap;
       align-items: center;
-      gap: 4px;
-      color: inherit;
-      text-decoration: none;
-      text-underline-offset: 3px;
+      gap: var(--space-3) var(--space-4);
+      margin-top: var(--space-5);
+      padding-top: var(--space-4);
+      border-top: 1px solid var(--color-band-rule);
     }
-    .warden-launch-link:hover,
-    .warden-launch-link:focus-visible {
-      text-decoration: underline;
+    .warden-launch[hidden] {
+      display: none;
     }
-    .warden-launch-link .icon {
-      width: 12px;
-      height: 12px;
+    .ph-logo {
+      width: 32px;
+      height: 32px;
       flex: none;
+    }
+    .warden-launch-text {
+      /* Narrow enough to stay beside the logo on a phone; the button is the
+         part that wraps to its own line. */
+      flex: 1 1 12rem;
+      min-width: 0;
+    }
+    .warden-launch-title {
+      font-size: 15px;
+      line-height: 1.35;
+      color: var(--color-on-band);
+    }
+    .warden-launch-when {
+      margin-top: 2px;
+      font-size: 13px;
+      color: var(--color-on-band-2);
+    }
+    .warden-launch-link {
+      flex: none;
+      min-height: 36px;
+      padding-inline: var(--space-4);
+      font-size: 14px;
     }
     @container (max-width: 38rem) {
       .warden-banner {
@@ -1749,7 +1769,8 @@
         grid-template-areas:
           "text"
           "specs"
-          "actions";
+          "actions"
+          "launch";
       }
       .warden-specs {
         margin-top: var(--space-4);
@@ -3434,14 +3455,22 @@
               <div class="warden-spec"><dt class="meta">price</dt><dd>Free · Pro is optional</dd></div>
               <div class="warden-spec"><dt class="meta">runs on</dt><dd>Windows 10 and 11</dd></div>
               <div class="warden-spec"><dt class="meta">account</dt><dd>None needed</dd></div>
-              <!-- Product Hunt launch, 12:01 AM Pacific on 5 December 2026.
-                   options-layout.js rewrites it in the reader's own time zone,
-                   says "Live now" on the day, and removes the row after it. -->
-              <div class="warden-spec" id="warden-launch"><dt class="meta">product hunt</dt><dd><a class="warden-launch-link" id="warden-launch-link" href="https://www.producthunt.com/products/warden-9?launch=warden-12" target="_blank" rel="noopener noreferrer" aria-label="Warden on Product Hunt, launching December 5, 12:01 AM Pacific"><time id="warden-launch-time" datetime="2026-12-05T08:01:00Z" title="12:01 AM Pacific Time, December 5, 2026">Dec 5 · 12:01 AM PT</time><svg class="icon icon-up-right" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M4.5 11.5l7-7M6 4.5h5.5V10" /></svg></a></dd></div>
             </dl>
             <div class="warden-actions">
               <a class="btn btn-primary btn-sm" href="https://monolab.dev/warden/download" target="_blank" rel="noopener noreferrer"><svg class="icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M8 2.5v8M4.5 7.5L8 11l3.5-3.5M3 13.5h10" /></svg>Download Warden</a>
               <a class="arrow-link" href="https://monolab.dev/warden" target="_blank" rel="noopener noreferrer">Learn more <svg class="icon icon-up-right" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M4.5 11.5l7-7M6 4.5h5.5V10" /></svg></a>
+            </div>
+            <!-- Warden's Product Hunt launch: 12:01 AM Pacific on 5 December 2026.
+                 options-layout.js adds the time in the reader's own zone, says "live
+                 today" on the day, and hides the bar once the day is over. Product
+                 Hunt's rules forbid asking for upvotes, so it asks for support. -->
+            <div class="warden-launch" id="warden-launch">
+              <svg class="ph-logo" viewBox="0 0 40 40" aria-hidden="true" focusable="false"><circle cx="20" cy="20" r="20" fill="#da552f" /><path fill="#fff" fill-rule="evenodd" d="M16 11h7.5a5.75 5.75 0 0 1 0 11.5H20V29h-4zm4 4v3.5h3.5a1.75 1.75 0 0 0 0-3.5z" /></svg>
+              <div class="warden-launch-text">
+                <p class="warden-launch-title" id="warden-launch-title">Support us on Product Hunt. Warden launches December 5, 2026.</p>
+                <p class="warden-launch-when"><span id="warden-launch-pacific">12:01 AM Pacific</span><span id="warden-launch-local"></span></p>
+              </div>
+              <a class="btn btn-ghost btn-sm warden-launch-link" id="warden-launch-link" href="https://www.producthunt.com/products/warden-9?launch=warden-12" target="_blank" rel="noopener noreferrer">Visit Warden on Product Hunt <svg class="icon icon-up-right" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M4.5 11.5l7-7M6 4.5h5.5V10" /></svg></a>
             </div>
           </div>
 <button type="button" class="icon-btn warden-dismiss" data-welcome="ack" aria-label="Hide this message">
