@@ -20,6 +20,8 @@ try {
     self.importScripts('shared/totp.js');
     self.importScripts('shared/pact.js');
     self.importScripts('shared/boost.js');
+    self.importScripts('shared/extensions-lock.js');
+    self.importScripts('shared/site-access.js');
     self.importScripts('shared/moments.js');
     self.importScripts('shared/gateways.js');
     self.importScripts('shared/ledger.js');
@@ -491,6 +493,7 @@ const DEFAULT_SETTINGS = {
   gateways: [], // built-in gateway ids turned on; all off until chosen (shared/gateways.js)
   gatewaysCustom: [], // the user's own gateway sites: 'site.com' or 'site.com/path'
   gatewayPauseSeconds: 10,
+  lockExtensionsPage: true, // the browser's extensions page asks for the PIN or Pact (shared/extensions-lock.js)
 };
 
 // Default trusted domains for images (gaming, social media, e-commerce platforms)
@@ -4236,6 +4239,14 @@ async function pactApply(entry) {
       }
       break;
     }
+    case 'extensions-page': {
+      // Nobody is usually sitting there when a wait ends, so the opening
+      // keeps until its first use (ExtensionsLock.visit).
+      if (self.ExtensionsLock) {
+        await browserAPI.storage.local.set({ [self.ExtensionsLock.ALLOW_KEY]: self.ExtensionsLock.grantAfterWait(now) });
+      }
+      break;
+    }
     case 'pact': {
       const pact = await pactReadPact();
       if (!pact) break;
@@ -4576,6 +4587,316 @@ ensureFirstSeen()
   .catch(() => {})
   .then(setGoodbyePage)
   .catch(e => console.warn('BlockNSFW: goodbye page could not be set', e));
+
+// ============================================
+// THE EXTENSIONS PAGE LOCK (shared/extensions-lock.js)
+// ============================================
+// The browser's extensions page is where BlockNSFW can be turned off or
+// switched off in private windows, and no extension can lock those switches.
+// So while the page is locked, a tab arriving on it is sent to Settings,
+// which asks for the same as turning protection off before letting it
+// through. An opening lasts ten minutes. When it ends, or Storm Mode or Risk
+// Hours begin, a tab still on the page is sent back too.
+//
+// Seeing that a tab is on the page takes the "tabs" permission. The address is
+// only compared against the extensions page; nothing keeps or sends it.
+
+const EXT_LOCK_ALARM = 'pblocker-extensions-page';
+// Tabs being sent to Settings right now.
+const extLockSending = new Set();
+let extLockChain = Promise.resolve();
+
+// Jobs run one at a time. A job must never await another extLockSerial call:
+// it would wait on itself.
+function extLockSerial(job) {
+  const run = extLockChain.then(job, job);
+  extLockChain = run.catch(() => {});
+  return run;
+}
+
+async function extLockRead() {
+  const L = self.ExtensionsLock;
+  const store = await browserAPI.storage.local.get(L.keys());
+  return { state: L.lockState(store), allowance: store[L.ALLOW_KEY] };
+}
+
+// Changing it fires storage.onChanged, and the sweep that follows sets the
+// alarm for the new edge.
+async function extLockStore(allowance) {
+  const key = self.ExtensionsLock.ALLOW_KEY;
+  if (allowance) await browserAPI.storage.local.set({ [key]: allowance });
+  else await browserAPI.storage.local.remove(key);
+}
+
+async function extLockSchedule(allowance) {
+  if (!browserAPI.alarms) return;
+  try {
+    const edge = self.ExtensionsLock.nextEdge(allowance, Date.now());
+    if (edge === null) await browserAPI.alarms.clear(EXT_LOCK_ALARM);
+    else browserAPI.alarms.create(EXT_LOCK_ALARM, { when: edge + 500 });
+  } catch (error) {
+    console.warn('BlockNSFW: extensions page alarm could not be set', error);
+  }
+}
+
+async function extLockSend(tabId, target, extra) {
+  if (typeof tabId !== 'number' || extLockSending.has(tabId)) return;
+  extLockSending.add(tabId);
+  try {
+    const settings = browserAPI.runtime.getURL('options.html');
+    const tab = await browserAPI.tabs.get(tabId).catch(() => null);
+    if (!tab) return; // closed meanwhile
+    // Already on its way there: Chromium reports the navigation in flight.
+    if (typeof tab.pendingUrl === 'string' && tab.pendingUrl.startsWith(settings)) return;
+    const path = self.ExtensionsLock.lockPagePath(target, extra);
+    await browserAPI.tabs.update(tabId, { url: browserAPI.runtime.getURL(path) });
+  } catch (error) {
+    console.warn('BlockNSFW: a tab could not be sent away from the extensions page', error);
+  } finally {
+    extLockSending.delete(tabId);
+  }
+}
+
+async function extLockPrivateAllowed() {
+  try {
+    const api = browserAPI.extension;
+    if (!api || typeof api.isAllowedIncognitoAccess !== 'function') return false;
+    return !!(await api.isAllowedIncognitoAccess());
+  } catch (_) {
+    return false;
+  }
+}
+
+// The free opening for turning private windows on ends as soon as they are,
+// and the tab goes back to Settings, which says it worked. Chrome reloads
+// the extension when the switch changes but doesn't wake it, so this is
+// looked at on every wake and every check rather than waited for.
+async function extLockPrivateDone(allowance, tabs) {
+  const opening = self.ExtensionsLock.normalizeAllowance(allowance);
+  if (!opening || opening.reason !== 'private' || !(await extLockPrivateAllowed())) return false;
+  await extLockStore(null);
+  for (const tab of tabs) await extLockSend(tab.id, tab.url || tab.pendingUrl, 'done=private');
+  return true;
+}
+
+// A tab arrived on the page: let it stay, or send it to Settings.
+function extLockVisit(tabId, url) {
+  return extLockSerial(async () => {
+    const { state, allowance } = await extLockRead();
+    if (await extLockPrivateDone(allowance, [{ id: tabId, url }])) return;
+    if (!state.locked) return;
+    const verdict = self.ExtensionsLock.visit(allowance, Date.now(), state.boost);
+    if (verdict.allowance !== undefined) await extLockStore(verdict.allowance);
+    if (!verdict.allow) await extLockSend(tabId, url);
+  });
+}
+
+// Every tab already on the page: on each wake, and after the lock or an
+// opening changed.
+function extLockSweep() {
+  if (!self.ExtensionsLock) return Promise.resolve();
+  return extLockSerial(async () => {
+    const L = self.ExtensionsLock;
+    const { state, allowance } = await extLockRead();
+    let tabs = [];
+    try {
+      tabs = await browserAPI.tabs.query({});
+    } catch (_) {}
+    const open = tabs.filter(tab => tab && L.isExtensionsPage(tab.url || tab.pendingUrl));
+    // Clearing the opening fires another sweep, which sets the alarm.
+    if (await extLockPrivateDone(allowance, open)) return;
+    await extLockSchedule(allowance);
+    if (!state.locked || !open.length) return;
+    const verdict = L.visit(allowance, Date.now(), state.boost);
+    if (verdict.allowance !== undefined) await extLockStore(verdict.allowance);
+    if (verdict.allow) return;
+    for (const tab of open) await extLockSend(tab.id, tab.url || tab.pendingUrl);
+  });
+}
+
+try {
+  browserAPI.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+    if (!self.ExtensionsLock || !changeInfo) return;
+    let url = '';
+    if (typeof changeInfo.url === 'string') url = changeInfo.url;
+    else if (changeInfo.status === 'loading' && tab) url = tab.url || tab.pendingUrl || '';
+    if (!url || !self.ExtensionsLock.isExtensionsPage(url)) return;
+    extLockVisit(tabId, url).catch(e => console.warn('BlockNSFW: extensions page check failed', e));
+  });
+} catch (_) {
+  // tabs.onUpdated unavailable in this build.
+}
+
+browserAPI.storage.onChanged.addListener((changes, area) => {
+  if (area !== 'local' || !self.ExtensionsLock) return;
+  if (self.ExtensionsLock.keys().some(key => key in changes)) {
+    extLockSweep().catch(e => console.warn('BlockNSFW: extensions page sweep failed', e));
+  }
+});
+
+if (browserAPI.alarms && browserAPI.alarms.onAlarm) {
+  browserAPI.alarms.onAlarm.addListener((alarm) => {
+    if (alarm && alarm.name === EXT_LOCK_ALARM) extLockSweep().catch(e => console.warn('BlockNSFW: extensions page sweep failed', e));
+  });
+}
+
+// Every wake: the version that brings the lock may arrive while the page is
+// open, and private windows may have just been switched on.
+extLockSweep().catch(e => console.warn('BlockNSFW: extensions page sweep failed', e));
+
+// ============================================
+// SITE ACCESS (shared/site-access.js)
+// ============================================
+// Site access switched to "When you click the extension" from the toolbar
+// menu stops the content script and the static rules, so nothing is blocked.
+// The tabs permission still shows every tab's address, so while access is
+// withheld the background judges each page itself: with protection locked
+// every page waits on access.html until access is given back, otherwise
+// listed sites go to the blocked page. While access is there, the tab
+// listener returns at once.
+
+// null until checked on this wake.
+let siteAccessGranted = null;
+// Tabs being sent somewhere, and the last address each was sent away from:
+// one navigation fires several updates, and a block must count once.
+const siteAccessSending = new Set();
+const siteAccessRecent = new Map();
+
+async function siteAccessCheck() {
+  siteAccessGranted = self.SiteAccess ? await self.SiteAccess.contains(browserAPI.permissions) : true;
+  return siteAccessGranted;
+}
+
+async function siteAccessMode() {
+  const SA = self.SiteAccess;
+  if (!SA) return 'off';
+  // Asked again whenever it isn't known to be there: access given back must
+  // let the very next page through, even before permissions.onAdded lands.
+  if (siteAccessGranted !== true) await siteAccessCheck();
+  if (siteAccessGranted) return 'off';
+  const L = self.ExtensionsLock;
+  const store = await browserAPI.storage.local.get(L ? L.keys() : [SETTINGS_KEY]);
+  const settings = store[SETTINGS_KEY] || {};
+  return SA.mode({
+    granted: false,
+    enabled: settings.enabled !== false,
+    locked: L ? SA.locked(L.lockState(store)) : false
+  });
+}
+
+async function siteAccessStash(key, value) {
+  const area = browserAPI.storage && browserAPI.storage.session;
+  if (!area || typeof area.set !== 'function') return null;
+  try {
+    await area.set({ [key]: { ...value, ts: Date.now() } });
+    return key;
+  } catch (_) {
+    return null;
+  }
+}
+
+async function siteAccessHold(tabId, url) {
+  const SA = self.SiteAccess;
+  const key = await siteAccessStash(SA.newHoldKey(), { url });
+  await browserAPI.tabs.update(tabId, { url: browserAPI.runtime.getURL(SA.holdPath(key, url)) });
+}
+
+// Which reason the blocked page names, as the content script would have.
+function siteAccessReason(url) {
+  try {
+    if (isUrlInDefaultBlocklist(url)) return 'default_blocklist';
+    if (urlMatchesCompiled(url)) return 'custom_blocklist';
+    if (hostnameMatchesAdultKeywords(new URL(url).hostname.toLowerCase())) return 'smart_filter';
+  } catch (_) {}
+  return 'default_blocklist';
+}
+
+// The blocked page, reached the way content.js reaches it: the address in
+// session storage under a random key, never in the URL.
+async function siteAccessBlock(tabId, url) {
+  const reason = siteAccessReason(url);
+  const key = await siteAccessStash(`pblocker_block_detail_${self.SiteAccess.newHoldKey().slice(self.SiteAccess.HOLD_PREFIX.length)}`,
+    { url, reason, matched: [], score: null, rule: null });
+  const page = key
+    ? `blocked.html?k=${encodeURIComponent(key)}`
+    : `blocked.html?url=${encodeURIComponent(url)}&reason=${encodeURIComponent(reason)}`;
+  queueBlockEvent('website_blocked', {
+    url,
+    reason: reason === 'custom_blocklist' ? 'Blocked by custom blocklist'
+      : reason === 'smart_filter' ? 'Blocked by smart keyword filter' : 'Blocked by built-in blocklist',
+    tabId
+  });
+  await browserAPI.tabs.update(tabId, { url: browserAPI.runtime.getURL(page) });
+}
+
+function siteAccessVisit(tabId, url) {
+  if (typeof tabId !== 'number' || siteAccessSending.has(tabId)) return Promise.resolve();
+  if (siteAccessRecent.get(tabId) === url) return Promise.resolve();
+  siteAccessSending.add(tabId);
+  return (async () => {
+    const mode = await siteAccessMode();
+    if (mode === 'off') return;
+    if (mode === 'hold') {
+      await siteAccessHold(tabId, url);
+    } else if (await shouldBlock(url)) {
+      await siteAccessBlock(tabId, url);
+    } else {
+      return;
+    }
+    siteAccessRecent.set(tabId, url);
+    setTimeout(() => { if (siteAccessRecent.get(tabId) === url) siteAccessRecent.delete(tabId); }, 3000);
+  })().finally(() => siteAccessSending.delete(tabId));
+}
+
+// Every open page, when access goes or protection locks while it is gone.
+async function siteAccessSweep() {
+  if ((await siteAccessMode()) === 'off') return;
+  let tabs = [];
+  try {
+    tabs = await browserAPI.tabs.query({});
+  } catch (_) {}
+  for (const tab of tabs) {
+    const url = tab && (tab.url || tab.pendingUrl);
+    if (self.SiteAccess.isWebUrl(url)) await siteAccessVisit(tab.id, url).catch(() => {});
+  }
+}
+
+try {
+  browserAPI.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+    if (!self.SiteAccess || siteAccessGranted === true || !changeInfo) return;
+    let url = '';
+    if (typeof changeInfo.url === 'string') url = changeInfo.url;
+    else if (changeInfo.status === 'loading' && tab) url = tab.url || tab.pendingUrl || '';
+    if (!self.SiteAccess.isWebUrl(url)) return;
+    siteAccessVisit(tabId, url).catch(e => console.warn('BlockNSFW: site access check failed', e));
+  });
+} catch (_) {
+  // tabs.onUpdated unavailable in this build.
+}
+
+if (browserAPI.permissions && browserAPI.permissions.onRemoved) {
+  browserAPI.permissions.onRemoved.addListener(() => {
+    siteAccessCheck()
+      .then(granted => { if (!granted) return siteAccessSweep(); })
+      .catch(e => console.warn('BlockNSFW: site access sweep failed', e));
+  });
+}
+if (browserAPI.permissions && browserAPI.permissions.onAdded) {
+  // access.html sees this too and sends its tab on.
+  browserAPI.permissions.onAdded.addListener(() => { siteAccessCheck().catch(() => {}); });
+}
+
+browserAPI.storage.onChanged.addListener((changes, area) => {
+  if (area !== 'local' || siteAccessGranted !== false || !self.ExtensionsLock) return;
+  // A PIN set, a Pact made, Risk Hours starting, protection turned back on.
+  if (self.ExtensionsLock.keys().some(key => key in changes)) {
+    siteAccessSweep().catch(e => console.warn('BlockNSFW: site access sweep failed', e));
+  }
+});
+
+siteAccessCheck()
+  .then(granted => { if (!granted) return siteAccessSweep(); })
+  .catch(e => console.warn('BlockNSFW: site access check failed', e));
 
 // --- The goodbye page ---------------------------------------------------------
 //

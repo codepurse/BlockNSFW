@@ -47,6 +47,7 @@ const DEFAULT_SETTINGS = {
   gateways: [], // built-in gateway ids turned on; all off until chosen (shared/gateways.js)
   gatewaysCustom: [], // the user's own gateway sites: 'site.com' or 'site.com/path'
   gatewayPauseSeconds: 10,
+  lockExtensionsPage: true, // shared/extensions-lock.js
 };
 
 // The 24 sites Reset puts back on the trusted list.
@@ -697,6 +698,8 @@ const QrCode = self.QrCode || null;
 const Boost = self.Boost || null;
 const Moments = self.Moments || null;
 const Gateways = self.Gateways || null;
+// The browser's extensions page, locked like turning protection off.
+const ExtensionsLock = self.ExtensionsLock || null;
 
 // During Storm Mode or Risk Hours nothing that loosens protection can be done,
 // not even with a pact's wait or a witness code. Resolves true, after saying
@@ -3329,11 +3332,27 @@ async function getExtensionsBaseURL() {
   }
 }
 
-// Helper: robustly attempt to open the browser's extensions page
-async function openExtensionsManagePage() {
+// Helper: robustly attempt to open the browser's extensions page.
+// `opts.url`: a page other than BlockNSFW's own details. `opts.sameTab`: open it
+// in this tab, as when the lock sent the tab here. `opts.message`: what the
+// fallback says, where the browser won't let an extension open the page.
+async function openExtensionsManagePage(opts) {
+  const options = opts || {};
   const base = await getExtensionsBaseURL();
   const id = (browserAPI && browserAPI.runtime && browserAPI.runtime.id) ? browserAPI.runtime.id : '';
-  const manageUrl = id ? (base + '?id=' + id) : base;
+  const manageUrl = options.url || (id ? (base + '?id=' + id) : base);
+
+  if (options.sameTab) {
+    try {
+      const tab = await browserAPI.tabs.getCurrent();
+      if (tab && typeof tab.id === 'number') {
+        await browserAPI.tabs.update(tab.id, { url: manageUrl });
+        return true;
+      }
+    } catch (_) {
+      // Firefox refuses about:addons; the copy fallback below covers it.
+    }
+  }
 
   // 1) Try window.open with full URL
   try {
@@ -3364,13 +3383,291 @@ async function openExtensionsManagePage() {
     title: 'Open the extensions page',
     description: 'Your browser doesn’t let an extension open this page itself.',
     code: manageUrl,
-    message: 'The link is copied. Paste it into the address bar, then turn on “Allow in incognito”.',
+    message: options.message || 'The link is copied. Paste it into the address bar, then turn on “Allow in incognito”.',
     buttons: [
       { text: 'Copy the link again', type: 'secondary', onClick: () => { try { navigator.clipboard.writeText(manageUrl); } catch(_) {}; return true; } },
       { text: 'Done', type: 'primary', value: true }
     ]
   });
   return false;
+}
+
+// --- Private windows and the extensions page lock ------------------------
+//
+// Only the browser's extensions page can switch BlockNSFW off in private
+// windows (or turn it off), and the browser won't let an extension lock those
+// switches. So while a PIN, a Pact or the access code guards loosening
+// changes, the background sends any tab arriving on that page here, and
+// opening it asks for the same as turning protection off
+// (shared/extensions-lock.js). Turning private windows ON only strengthens
+// protection, so that opening is free, short, and ends once they're on.
+
+async function isPrivateAllowed() {
+  try {
+    const api = browserAPI && browserAPI.extension;
+    if (!api || typeof api.isAllowedIncognitoAccess !== 'function') return false;
+    return !!(await api.isAllowedIncognitoAccess());
+  } catch (_) {
+    return false;
+  }
+}
+
+async function readExtensionsLock() {
+  const store = await browserAPI.storage.local.get(ExtensionsLock.keys());
+  return {
+    state: ExtensionsLock.lockState(store),
+    allowance: ExtensionsLock.normalizeAllowance(store[ExtensionsLock.ALLOW_KEY])
+  };
+}
+
+async function grantExtensionsPage(reason) {
+  const allowance = ExtensionsLock.grant(reason, Date.now());
+  await browserAPI.storage.local.set({ [ExtensionsLock.ALLOW_KEY]: allowance });
+  return allowance;
+}
+
+function formatClock(ms) {
+  const now = Date.now();
+  if (Pact) return Pact.formatWhen(ms, now);
+  try { return new Date(ms).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }); } catch (_) { return ''; }
+}
+
+async function isFirefoxBrowser() {
+  return (await getExtensionsBaseURL()) === 'about:addons';
+}
+
+// Resolves true once the page may open now: unlocked, or the check passed (or
+// a witness let it through). Under a Pact the opening waits instead, and the
+// background readies it once the wait is over.
+async function unlockExtensionsPage() {
+  if (!ExtensionsLock) return true;
+  const { state } = await readExtensionsLock();
+  if (!state.locked) return true;
+  const outcome = await guardWeakeningOutcome('open the extensions page', { critical: true },
+    { kind: 'extensions-page', payload: {} });
+  if (outcome !== 'now') return false;
+  await grantExtensionsPage('unlock');
+  return true;
+}
+
+// What the copy fallback says once the page is open (Firefox won't let an
+// extension open about:addons itself).
+async function openedMessage(allowance, turningOn) {
+  const firefox = await isFirefoxBrowser();
+  const toggle = firefox ? '“Run in Private Windows”' : '“Allow in incognito”';
+  const until = allowance && allowance.until ? ` It stays open until ${formatClock(allowance.until)}.` : '';
+  return turningOn
+    ? `The link is copied. Paste it into the address bar, then turn on ${toggle} for BlockNSFW.${until}`
+    : `The link is copied. Paste it into the address bar.${until}`;
+}
+
+// For turning private windows on: free, since it makes protection stronger.
+async function openExtensionsPageToTurnOnPrivate(sameTab) {
+  let allowance = null;
+  if (ExtensionsLock && (await readExtensionsLock()).state.locked) {
+    allowance = await grantExtensionsPage('private');
+  }
+  const opened = await openExtensionsManagePage({ sameTab, message: await openedMessage(allowance, true) });
+  if (opened && !sameTab) {
+    const firefox = await isFirefoxBrowser();
+    showToast(`On the extensions page, turn on ${firefox ? '“Run in Private Windows”' : '“Allow in incognito”'} for BlockNSFW.`, 'info');
+  }
+  return opened;
+}
+
+// The "Allow in private windows" switch and the "Open the extensions page"
+// link. With private windows on, getting to the page loosens protection.
+async function openExtensionsPageFromSettings() {
+  if (!(await isPrivateAllowed())) return openExtensionsPageToTurnOnPrivate(false);
+  if (!(await unlockExtensionsPage())) return false;
+  const { allowance } = ExtensionsLock ? await readExtensionsLock() : { allowance: null };
+  return openExtensionsManagePage({ message: await openedMessage(allowance, false) });
+}
+
+async function renderExtensionsLock() {
+  const toggle = $('lock-extensions-page');
+  const line = $('lock-extensions-page-state');
+  if (!ExtensionsLock || !toggle) return;
+  const { state, allowance } = await readExtensionsLock();
+  toggle.checked = state.switchOn;
+  if (!line) return;
+  const now = Date.now();
+  let text = 'Locked.';
+  if (state.boost) {
+    const boost = Boost ? await Boost.readState(browserAPI.storage.local) : null;
+    text = boost && boost.active === 'storm'
+      ? 'Shut while Storm Mode is on.'
+      : 'Shut during your risk hours.';
+  } else if (!state.switchOn) {
+    text = 'Off. Anyone can open the extensions page.';
+  } else if (!state.guarded) {
+    text = 'Not locked yet. It locks once you set a PIN or make a pact.';
+  } else if (allowance && allowance.until > now) {
+    text = allowance.reason === 'private'
+      ? `Open until ${formatClock(allowance.until)}, to turn on private windows.`
+      : `Open until ${formatClock(allowance.until)}.`;
+  } else if (allowance && allowance.readyUntil > now) {
+    text = `Your pact’s wait is over. It opens the next time you go there, until ${formatClock(allowance.readyUntil)}.`;
+  }
+  line.textContent = text;
+}
+
+// A tab the lock sent here, on its way to the extensions page.
+async function handleExtensionsPageArrival() {
+  if (!ExtensionsLock) return;
+  const target = ExtensionsLock.targetFrom(location.search);
+  if (!target) return;
+  const done = new URLSearchParams(location.search).get('done');
+  // A reload shouldn't ask again; the hash keeps the group in view.
+  try { history.replaceState(null, '', location.pathname + location.hash); } catch (_) {}
+  const group = $('private-windows-group');
+  if (group && window.BlockNSFWSettings) window.BlockNSFWSettings.reveal(group);
+
+  if (done === 'private') {
+    showToast('Private windows are protected now.', 'success');
+    return;
+  }
+
+  const { state } = await readExtensionsLock();
+  // Unlocked since the tab was sent here: carry on to where it was going.
+  if (!state.locked) {
+    await openExtensionsManagePage({ url: target, sameTab: true, message: await openedMessage(null, false) });
+    return;
+  }
+
+  const privateOn = await isPrivateAllowed();
+  const boost = state.boost && Boost ? await Boost.readState(browserAPI.storage.local) : null;
+  const why = 'It’s where BlockNSFW can be turned off, or switched off in private windows.';
+  let description;
+  if (boost) {
+    description = `${why} ${boost.active === 'storm' ? 'Storm Mode is on' : 'Your risk hours are on'} until ${formatClock(boost.until)}, so it stays shut until then.`;
+  } else {
+    const minutes = Math.round(ExtensionsLock.OPEN_MS / 60000);
+    description = `${why} Opening it asks for the same as turning protection off. Then it stays open for ${minutes} minutes.`;
+  }
+  const privateMinutes = Math.round(ExtensionsLock.PRIVATE_MS / 60000);
+  const message = privateOn ? '' : `Private windows aren’t protected yet. To turn them on, it opens for ${privateMinutes} minutes without asking for anything.`;
+
+  const buttons = [{ text: boost ? 'OK' : 'Cancel', type: 'secondary', value: null }];
+  if (!boost) buttons.push({ text: 'Open it', type: privateOn ? 'primary' : 'secondary', value: 'unlock' });
+  if (!privateOn) buttons.push({ text: 'Turn on private windows', type: 'primary', value: 'private' });
+
+  const choice = await createModal({
+    title: boost ? 'The extensions page is shut' : 'The extensions page is locked',
+    description,
+    message,
+    buttons
+  });
+
+  if (choice === 'private') {
+    await openExtensionsPageToTurnOnPrivate(true);
+  } else if (choice === 'unlock') {
+    if (!(await unlockExtensionsPage())) {
+      renderExtensionsLock();
+      return;
+    }
+    const { allowance } = await readExtensionsLock();
+    await openExtensionsManagePage({ url: target, sameTab: true, message: await openedMessage(allowance, false) });
+  }
+}
+
+// Site access switched off in the toolbar menu (shared/site-access.js):
+// what that costs, with the button that gives it back.
+async function renderAccessBanner() {
+  const banner = $('access-banner');
+  const SA = self.SiteAccess;
+  if (!banner || !SA) return;
+  const granted = await SA.contains(browserAPI.permissions);
+  banner.classList.toggle('hidden', granted);
+  if (granted) return;
+  let locked = false;
+  if (ExtensionsLock) {
+    try { locked = SA.locked((await readExtensionsLock()).state); } catch (_) {}
+  }
+  $('access-banner-sub').textContent = SA.describe(locked, true);
+}
+
+function setupAccessBanner() {
+  const give = $('access-banner-give');
+  if (!give || !self.SiteAccess) return;
+  // Asked straight from the click: Firefox shows the prompt only inside the gesture.
+  give.addEventListener('click', () => {
+    self.SiteAccess.request(browserAPI.permissions).then((ok) => {
+      if (!ok) showToast('Your browser didn’t give BlockNSFW access.', 'warning');
+      renderAccessBanner();
+    });
+  });
+  if (browserAPI.permissions && browserAPI.permissions.onAdded) {
+    browserAPI.permissions.onAdded.addListener(() => renderAccessBanner());
+    browserAPI.permissions.onRemoved.addListener(() => renderAccessBanner());
+  }
+  if (ExtensionsLock) {
+    browserAPI.storage.onChanged.addListener((changes, area) => {
+      if (area === 'local' && ExtensionsLock.keys().some((key) => key in changes)) renderAccessBanner();
+    });
+  }
+  renderAccessBanner();
+}
+
+function setupExtensionsLock() {
+  setupAccessBanner();
+  const incognitoToggle = $('allow-incognito');
+  if (incognitoToggle) {
+    incognitoToggle.addEventListener('change', async () => {
+      // An extension can't change this itself; the switch opens the page.
+      // A check that didn't pass, or a Pact's wait, says so itself.
+      try {
+        await openExtensionsPageFromSettings();
+      } catch (err) {
+        showToast('The extensions page didn’t open. Open it yourself and turn on “Allow in incognito”.', 'warning');
+      } finally {
+        // Back to the real state: the browser decides it, not this switch.
+        setTimeout(async () => {
+          const allowed = await isPrivateAllowed();
+          if ($('allow-incognito')) $('allow-incognito').checked = allowed;
+          setStatusWord($('incognito-status'), allowed ? 'allowed' : 'not allowed', allowed);
+        }, 800);
+      }
+    });
+  }
+
+  const openBtn = $('open-incognito-settings');
+  if (openBtn) {
+    openBtn.addEventListener('click', async (e) => {
+      e.preventDefault();
+      await openExtensionsPageFromSettings();
+    });
+  }
+
+  const lockToggle = $('lock-extensions-page');
+  if (lockToggle && ExtensionsLock) {
+    lockToggle.addEventListener('change', async (e) => {
+      const s = await getSettings();
+      const wasOn = s[ExtensionsLock.SETTING] !== false;
+      if (wasOn && !e.target.checked) {
+        const ok = await guardWeakening('stop locking the extensions page', { critical: true },
+          settingsChange({ [ExtensionsLock.SETTING]: false }));
+        if (!ok) {
+          e.target.checked = true;
+          renderExtensionsLock();
+          return;
+        }
+      }
+      s[ExtensionsLock.SETTING] = e.target.checked;
+      await setSettings(s);
+      renderExtensionsLock();
+    });
+    browserAPI.storage.onChanged.addListener((changes, area) => {
+      if (area === 'local' && ExtensionsLock.keys().some((key) => key in changes)) renderExtensionsLock();
+    });
+    // An opening's end is a time, not a change.
+    setInterval(() => {
+      if (document.visibilityState === 'visible') renderExtensionsLock();
+    }, 30000);
+  }
+
+  renderExtensionsLock();
+  handleExtensionsPageArrival().catch((err) => console.warn('BlockNSFW: extensions page arrival failed', err));
 }
 
 // --- Update-available banner ---------------------------------------------
@@ -4679,46 +4976,8 @@ async function init() {
     showToast('The blocked page is back to Classic.', 'success');
   });
 
-  // Incognito handling
-  const incognitoToggle = $('allow-incognito');
-  if (incognitoToggle) {
-    incognitoToggle.addEventListener('change', async (e) => {
-      // We cannot programmatically change incognito access. Open the extensions page.
-      try {
-        await openExtensionsManagePage();
-        showToast('On the extensions page, turn on “Allow in incognito” for BlockNSFW.', 'info');
-      } catch (err) {
-        showToast('The extensions page didn’t open. Open it yourself and turn on “Allow in incognito”.', 'warning');
-      } finally {
-        // Reset toggle to reflect actual state after a brief delay
-        setTimeout(async () => {
-          try {
-            if (browserAPI && browserAPI.extension && typeof browserAPI.extension.isAllowedIncognitoAccess === 'function') {
-              const allowed = await new Promise((resolve) => {
-                try {
-                  const maybe = browserAPI.extension.isAllowedIncognitoAccess((a) => resolve(!!a));
-                  if (maybe && typeof maybe.then === 'function') {
-                    maybe.then((a) => resolve(!!a)).catch(() => resolve(false));
-                  }
-                } catch (_) { resolve(false); }
-              });
-              if ($('allow-incognito')) $('allow-incognito').checked = !!allowed;
-              setStatusWord($('incognito-status'), allowed ? 'allowed' : 'not allowed', !!allowed);
-            }
-          } catch (_) {}
-        }, 800);
-      }
-    });
-  }
-
-  // Open Extensions Page button
-  const openBtn = $('open-incognito-settings');
-  if (openBtn) {
-    openBtn.addEventListener('click', async (e) => {
-      e.preventDefault();
-      await openExtensionsManagePage();
-    });
-  }
+  // Private windows, and the extensions page lock
+  setupExtensionsLock();
 
   $('save').addEventListener('click', async () => {
     const settings = await getSettings();

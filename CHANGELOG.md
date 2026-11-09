@@ -2,6 +2,50 @@
 
 All notable project changes should be documented here going forward.
 
+## [Unreleased]
+
+### Fixed
+
+- **Private windows were a way round.** Someone with a PIN set, even during
+  Risk hours, could switch BlockNSFW off in private windows on the browser's
+  extensions page, then browse freely there. The browser keeps that switch to
+  itself, and once it's off, no extension can see private windows. So
+  BlockNSFW now locks the page instead (Settings › Security › Private windows,
+  "Lock the extensions page", on by default).
+  - While a PIN, a Pact or the access code is set, a tab going to
+    chrome://extensions, edge://extensions or about:addons is sent to Settings.
+  - Opening the page asks for the same as turning protection off: your PIN and
+    access code, or the Pact's wait. It then stays open for 10 minutes.
+  - During Storm Mode and Risk hours it doesn't open at all.
+  - This also covers the extensions page's Turn off switch.
+  - Turning private windows *on* never asks for anything. That opening lasts
+    3 minutes and ends as soon as they're on.
+  - Turning the lock off counts as loosening protection.
+  - It's a speed bump, not a wall: removing the extension, a guest window,
+    another profile or another browser still get past it. Extension Guard
+    closes those on Windows.
+- **Site access was a way round too.** Chrome and Edge let anyone switch an
+  extension's site access to "When you click the extension" from the
+  toolbar's extensions menu, with no visit to the extensions page. That
+  stopped all blocking: the content script stops running, and the blocklist's
+  static rules need site access. BlockNSFW now notices the moment it happens
+  and judges pages from the background instead.
+  - With a PIN, a Pact or the access code set, or during Storm Mode and Risk
+    hours, every page waits on a "BlockNSFW can't see this page" page until
+    access is given back. One button asks the browser for it, and the page
+    goes on by itself once access returns, from there or from the toolbar.
+  - Otherwise listed sites still go to the blocked page. The popup and
+    Settings say that images, search results and page words aren't filtered,
+    with a button that gives access back.
+  - Tested in Edge 157: a listed site was held and an ordinary page opened;
+    with a PIN, open and new pages waited; once access was back, they went on.
+- Needs the `tabs` permission to see that a tab is on the extensions page, and
+  to judge pages while site access is off.
+  Chrome and Edge show no new warning, because BlockNSFW can already read all
+  sites. Firefox may ask existing users to accept "Access browser tabs" when
+  they update. Tab addresses are only compared, never kept or sent
+  (privacy policy updated).
+
 ## [2.0.6] - 2026-11-09
 
 ### Added

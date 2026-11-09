@@ -3381,6 +3381,18 @@
         </div>
       </div>
 
+      <!-- Site access switched off in the toolbar menu (shared/site-access.js,
+           background.js "Site access"): what isn't filtered, and the fix. -->
+      <div class="banner hidden" id="access-banner" role="status">
+        <div class="banner-text">
+          <p class="row-label">BlockNSFW can’t read sites</p>
+          <p class="row-desc" id="access-banner-sub"></p>
+        </div>
+        <div class="banner-actions">
+          <button type="button" class="btn btn-primary btn-sm" id="access-banner-give">Give access again</button>
+        </div>
+      </div>
+
       <!-- Entries with a path: shown after the 2.0.3 update to someone whose
            entries held their whole site until then (background.js,
            notePathEntries), until each is dealt with. -->
@@ -4723,23 +4735,39 @@ title/Example Domain/"></textarea>
           </div>
         </div>
 
-        <div class="group group-split">
+        <!-- The extensions page lock: shared/extensions-lock.js, background.js
+             ("The extensions page lock"), options.js (openExtensionsPage). A
+             tab arriving on the page lands here with ?extensions-page=. -->
+        <div class="group group-split" id="private-windows-group">
           <div class="group-aside">
           <div class="group-head">
             <h3 class="group-title">Private windows</h3>
             <span class="meta status-word" id="incognito-status">checking</span>
           </div>
-          <p class="group-desc">Whether BlockNSFW runs in private (incognito) windows. Your browser only lets you change this on the extension’s own page.</p>
+          <p class="group-desc">Whether BlockNSFW runs in private (incognito) windows. Only the browser’s extensions page can change that, and the browser doesn’t let an extension lock the switch. So BlockNSFW locks the page instead.</p>
           </div>
           <div class="group-body">
           <div class="rows rows-closed">
             <div class="row">
               <div class="row-text">
                 <label class="row-label" for="allow-incognito">Allow in private windows</label>
-                <p class="row-desc" id="allow-incognito-desc">Opens the extension’s page, where you turn on “Allow in incognito”.</p>
+                <p class="row-desc" id="allow-incognito-desc">Opens the extension’s page, where you turn on “Allow in incognito”. Turning it on never asks for anything.</p>
               </div>
               <label class="switch">
                 <input type="checkbox" class="switch-input" role="switch" id="allow-incognito" aria-describedby="allow-incognito-desc" />
+                <span class="switch-track" aria-hidden="true"><span class="switch-thumb"></span></span>
+                <span class="switch-state" aria-hidden="true"></span>
+              </label>
+            </div>
+            <div class="row">
+              <div class="row-text">
+                <label class="row-label" for="lock-extensions-page">Lock the extensions page</label>
+                <p class="row-desc" id="lock-extensions-page-desc">That page is where BlockNSFW can be turned off, or switched off in private windows. While you have a PIN or a Pact, opening it asks for the same as turning protection off, and it stays shut during Storm Mode and your risk hours.</p>
+                <p class="row-desc" id="lock-extensions-page-state" aria-live="polite"></p>
+                <span class="locked-note" data-lock="critical" data-lock-when="Turning it off" hidden></span>
+              </div>
+              <label class="switch">
+                <input type="checkbox" class="switch-input" role="switch" id="lock-extensions-page" aria-describedby="lock-extensions-page-desc lock-extensions-page-state" />
                 <span class="switch-track" aria-hidden="true"><span class="switch-thumb"></span></span>
                 <span class="switch-state" aria-hidden="true"></span>
               </label>
@@ -5158,6 +5186,8 @@ title/Example Domain/"></textarea>
   <script src="shared/qr.js"></script>
   <script src="shared/pact.js"></script>
   <script src="shared/boost.js"></script>
+  <script src="shared/extensions-lock.js"></script>
+  <script src="shared/site-access.js"></script>
   <script src="shared/moments.js"></script>
   <script src="shared/gateways.js"></script>
   <script src="shared/ledger.js"></script>

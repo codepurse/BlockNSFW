@@ -81,6 +81,8 @@ $RuntimeFiles   = @(
     "morning.js",
     "gateway.html",
     "gateway.js",
+    "access.html",
+    "access.js",
     "week.html",
     "week.js",
     "path.html",

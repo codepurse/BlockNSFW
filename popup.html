@@ -88,6 +88,9 @@
       text-overflow: ellipsis;
       white-space: nowrap;
     }
+    .update-sub-wrap {
+      white-space: normal;
+    }
     .icon-btn {
       display: inline-flex;
       align-items: center;
@@ -603,6 +606,16 @@
   </div>
 
 
+  <!-- Site access switched off in the toolbar menu (shared/site-access.js):
+       what isn't filtered, and the one tap that gives it back. -->
+  <div class="update hidden" id="access-banner" role="status">
+    <p class="update-text">
+      <span class="row-label">BlockNSFW can’t read sites</span>
+      <span class="row-desc update-sub update-sub-wrap" id="access-banner-sub"></span>
+    </p>
+    <button type="button" class="btn btn-ghost btn-sm" id="access-banner-give">Give access</button>
+  </div>
+
   <p class="notice popup-notice" id="popup-notice" role="alert"></p>
 
   <section class="pact-waiting hidden" id="pact-waiting" aria-labelledby="pact-waiting-head">
@@ -924,6 +937,8 @@
   <script src="shared/pin-hash.js"></script>
   <script src="shared/pact.js"></script>
   <script src="shared/boost.js"></script>
+  <script src="shared/extensions-lock.js"></script>
+  <script src="shared/site-access.js"></script>
   <script src="shared/weekly.js"></script>
   <script src="shared/supporter.js"></script>
   <script src="shared/path.js"></script>

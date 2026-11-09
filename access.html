@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Waiting for site access · BlockNSFW</title>
+  <script src="ui/scheme.js"></script>
+  <link rel="stylesheet" href="ui/tokens.css" />
+  <link rel="stylesheet" href="ui/components.css" />
+  <style>
+    /* Where a page waits while BlockNSFW's site access is switched off and
+       protection is locked (shared/site-access.js). One calm column, like
+       the Gateway pause: what happened, and the one thing that fixes it. */
+    body {
+      min-height: 100vh;
+    }
+    .wait {
+      max-width: 38rem;
+      margin-inline: auto;
+      padding: clamp(var(--space-6), 12vh, 96px) var(--space-4) var(--space-7);
+    }
+    .wait-eyebrow {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--space-2);
+    }
+    .wait-kind {
+      color: var(--color-brass);
+    }
+    .wait-where {
+      overflow-wrap: anywhere;
+    }
+    .wait-title {
+      margin-top: var(--space-4);
+      font-family: var(--font-display);
+      font-size: clamp(34px, 5vw, 48px);
+      font-weight: 400;
+      line-height: 1.1;
+      letter-spacing: -0.015em;
+      text-wrap: balance;
+    }
+    .wait-title:focus {
+      outline: none;
+    }
+    .wait-lede {
+      margin-top: var(--space-4);
+      font-size: 17px;
+      line-height: 1.55;
+      color: var(--color-ink-2);
+    }
+    .wait-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--space-3);
+      margin-top: var(--space-6);
+    }
+    .wait-actions .btn {
+      min-height: 48px;
+      padding-inline: var(--space-5);
+      font-size: 15px;
+    }
+    .wait-said {
+      margin-top: var(--space-4);
+      font-size: 15px;
+      line-height: 1.5;
+      color: var(--color-ink-2);
+    }
+    .wait-foot {
+      margin-top: var(--space-7);
+      font-size: 13px;
+      line-height: 1.5;
+      color: var(--color-ink-2);
+    }
+  </style>
+</head>
+<body>
+  <main class="wait">
+    <p class="meta wait-eyebrow"><span class="wait-kind">Site access</span><span aria-hidden="true" id="where-dot" hidden>·</span><span class="wait-where" id="where"></span></p>
+    <h1 class="wait-title" id="head" tabindex="-1">BlockNSFW can’t see this page</h1>
+    <p class="wait-lede" id="lede">Its site access was switched off, so it can’t read pages or filter them. Your protection is locked, so pages wait here until it can see them again.</p>
+    <div class="wait-actions">
+      <button type="button" class="btn btn-primary" id="give">Give BlockNSFW access again</button>
+      <button type="button" class="btn btn-ghost" id="close">Close this tab</button>
+    </div>
+    <p class="wait-said" id="said" role="status" aria-live="polite"></p>
+    <p class="wait-foot">Your browser asks you to confirm. Setting BlockNSFW back to all sites in the toolbar’s extensions menu works too.</p>
+  </main>
+  <script src="shared/site-access.js"></script>
+  <script src="access.js"></script>
+</body>
+</html>

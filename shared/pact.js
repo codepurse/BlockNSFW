@@ -67,7 +67,8 @@
     'model-clear',      // { model }: delete downloaded model weights
     'audit-clear',      // empty the audit log
     'risk-hours',       // { risk }: turn Risk Hours off or shorten them (shared/boost.js)
-    'pact'              // { action: 'delay', delayMs } | { action: 'end' } | { action: 'remove-witness' }
+    'extensions-page',  // {}: open the browser's extensions page (shared/extensions-lock.js)
+    'pact'            // { action: 'delay', delayMs } | { action: 'end' } | { action: 'remove-witness' }
   ];
 
   // --- The pact itself -------------------------------------------------------

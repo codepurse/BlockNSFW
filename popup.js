@@ -1867,8 +1867,42 @@ function setupPreview() {
 }
 
 // Initialize popup
+// Site access switched off in the toolbar menu (shared/site-access.js): say
+// what that costs, with the one tap that gives it back.
+async function renderAccessBanner() {
+  const banner = $('access-banner');
+  const SA = self.SiteAccess;
+  if (!banner || !SA) return;
+  const granted = await SA.contains(browserAPI.permissions);
+  banner.classList.toggle('hidden', granted);
+  if (granted) return;
+  let locked = false;
+  if (self.ExtensionsLock) {
+    try {
+      const store = await browserAPI.storage.local.get(self.ExtensionsLock.keys());
+      locked = SA.locked(self.ExtensionsLock.lockState(store));
+    } catch (_) {}
+  }
+  $('access-banner-sub').textContent = SA.describe(locked, false);
+}
+
+function setupAccessBanner() {
+  const give = $('access-banner-give');
+  if (!give || !self.SiteAccess) return;
+  // Asked straight from the click: Firefox shows the prompt only inside the gesture.
+  give.addEventListener('click', () => {
+    self.SiteAccess.request(browserAPI.permissions).then(() => renderAccessBanner());
+  });
+  if (browserAPI.permissions && browserAPI.permissions.onAdded) {
+    browserAPI.permissions.onAdded.addListener(() => renderAccessBanner());
+    browserAPI.permissions.onRemoved.addListener(() => renderAccessBanner());
+  }
+  renderAccessBanner();
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
   document.body.classList.add('loading');
+  setupAccessBanner();
   if (PREVIEW) setupPreview();
 
   // Set up event listeners

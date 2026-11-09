@@ -1,6 +1,6 @@
 # Privacy Policy for BlockNSFW
 
-**Last Updated:** October 31, 2026
+**Last Updated:** November 9, 2026
 
 ## Overview
 
@@ -16,6 +16,7 @@ BlockNSFW may handle data in the following ways:
 - **When you change settings:** the extension stores your configuration and related preferences in browser extension storage on your device.
 - **When optional network-based features are used:** the extension may send limited data to third-party services that help provide a feature, such as DNS filtering, rule updates, or Reddit NSFW checks.
 - **When you manually submit a report:** the extension sends the information you choose to submit, along with limited technical data needed to process the report.
+- **To lock the browser's extensions page, and to keep blocking when site access is switched off:** the extension sees the address of each tab as it changes (the browser's "tabs" permission). It uses it to tell whether the tab is the browser's own extensions page (such as chrome://extensions or about:addons), and, only while BlockNSFW's site access is switched off, to check the page against the blocklist on your device, the way it would otherwise check it inside the page. Those addresses are not kept or sent anywhere. A page held while site access is off keeps its address in the browser's session storage, in memory only, until the page goes on or the browser closes.
 
 ## Data We Handle
 
@@ -74,6 +75,8 @@ BlockNSFW stores data locally in your browser extension storage on your device. 
   codes. With a witness, also the key their authenticator app shares with
   this one, and your recovery codes
 - Storm Mode and your risk hours, if you use them: when each starts and ends
+- Whether the browser's extensions page is locked, and, while it is open to
+  you after the check, until when. A time only, never an address
 - Streak and usage-related local counters used by extension features
 - The result of the most recent update check
 - Setup progress, such as whether first-run onboarding has been completed
