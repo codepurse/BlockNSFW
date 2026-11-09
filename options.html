@@ -1630,7 +1630,9 @@
        facts between the words and the buttons. */
     .warden-banner {
       display: grid;
-      grid-template-columns: minmax(0, 1fr) 248px;
+      /* 280px keeps every spec on one line, the longest being the Product
+         Hunt link in a half-hour zone ("Dec 5, 1:31 PM GMT+5:30 ↗"). */
+      grid-template-columns: minmax(0, 1fr) 280px;
       grid-template-areas:
         "text specs"
         "actions specs";
@@ -1708,6 +1710,10 @@
       padding: 9px 0;
       border-bottom: 1px solid var(--color-band-rule);
     }
+    /* The Product Hunt row is removed once the launch day is over. */
+    .warden-spec[hidden] {
+      display: none;
+    }
     .warden-spec dt {
       line-height: 18px;
     }
@@ -1717,6 +1723,25 @@
       line-height: 18px;
       text-align: right;
       color: var(--color-on-band);
+    }
+    /* The Product Hunt row's value is a link to the launch page: the same
+       ink as the other values, underlined only on hover and focus. */
+    .warden-launch-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      color: inherit;
+      text-decoration: none;
+      text-underline-offset: 3px;
+    }
+    .warden-launch-link:hover,
+    .warden-launch-link:focus-visible {
+      text-decoration: underline;
+    }
+    .warden-launch-link .icon {
+      width: 12px;
+      height: 12px;
+      flex: none;
     }
     @container (max-width: 38rem) {
       .warden-banner {
@@ -3409,6 +3434,10 @@
               <div class="warden-spec"><dt class="meta">price</dt><dd>Free · Pro is optional</dd></div>
               <div class="warden-spec"><dt class="meta">runs on</dt><dd>Windows 10 and 11</dd></div>
               <div class="warden-spec"><dt class="meta">account</dt><dd>None needed</dd></div>
+              <!-- Product Hunt launch, 12:01 AM Pacific on 5 December 2026.
+                   options-layout.js rewrites it in the reader's own time zone,
+                   says "Live now" on the day, and removes the row after it. -->
+              <div class="warden-spec" id="warden-launch"><dt class="meta">product hunt</dt><dd><a class="warden-launch-link" id="warden-launch-link" href="https://www.producthunt.com/products/warden-9?launch=warden-12" target="_blank" rel="noopener noreferrer" aria-label="Warden on Product Hunt, launching December 5, 12:01 AM Pacific"><time id="warden-launch-time" datetime="2026-12-05T08:01:00Z" title="12:01 AM Pacific Time, December 5, 2026">Dec 5 · 12:01 AM PT</time><svg class="icon icon-up-right" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M4.5 11.5l7-7M6 4.5h5.5V10" /></svg></a></dd></div>
             </dl>
             <div class="warden-actions">
               <a class="btn btn-primary btn-sm" href="https://monolab.dev/warden/download" target="_blank" rel="noopener noreferrer"><svg class="icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M8 2.5v8M4.5 7.5L8 11l3.5-3.5M3 13.5h10" /></svg>Download Warden</a>

@@ -211,9 +211,58 @@
     route();
   }
 
+  // Warden launches on Product Hunt at 12:01 AM Pacific on 5 December 2026.
+  // That is PST (UTC-8), so 08:01 UTC. A Product Hunt day runs midnight to
+  // midnight Pacific, so the launch day ends at 08:00 UTC on 6 December.
+  //
+  // Readers are worldwide, and "12:01 AM Pacific" means 4:01 PM on the same
+  // day in Manila, 8:01 AM in London and 3:01 AM in New York. So the banner
+  // says it in the reader's own time and names the zone ("Dec 5, 4:01 PM
+  // GMT+8"). The hover title and the page's own text keep the Pacific time.
+  var WARDEN_LAUNCH_UTC = Date.UTC(2026, 11, 5, 8, 1);
+  var WARDEN_LAUNCH_DAY_END_UTC = Date.UTC(2026, 11, 6, 8, 0);
+
+  // What the row says at `now`, or null once the launch day is over.
+  function wardenLaunchText(now) {
+    if (now >= WARDEN_LAUNCH_DAY_END_UTC) return null;
+    if (now >= WARDEN_LAUNCH_UTC) return 'Live now';
+    try {
+      return new Intl.DateTimeFormat(undefined, {
+        month: 'short',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+        timeZoneName: 'short'
+      }).format(new Date(WARDEN_LAUNCH_UTC));
+    } catch (_) {
+      return 'Dec 5 · 12:01 AM PT';
+    }
+  }
+
+  function initWardenLaunch() {
+    var row = document.getElementById('warden-launch');
+    var time = document.getElementById('warden-launch-time');
+    var link = document.getElementById('warden-launch-link');
+    if (!row || !time) return;
+    var text = wardenLaunchText(Date.now());
+    if (text === null) {
+      row.hidden = true;
+      return;
+    }
+    time.textContent = text;
+    // The link's spoken name says what the bare time can't on its own.
+    // (Product Hunt's rules forbid asking for upvotes, so it never does.)
+    if (link) {
+      link.setAttribute('aria-label', text === 'Live now'
+        ? 'Warden on Product Hunt, live now'
+        : 'Warden on Product Hunt, launching ' + text);
+    }
+  }
+
   function init() {
     initWidthToggle();
     initWelcomeCards();
+    initWardenLaunch();
     initNav();
   }
 

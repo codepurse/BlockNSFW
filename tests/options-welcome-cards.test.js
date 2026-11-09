@@ -200,3 +200,83 @@ test('the 2.0 band is gone on 1.x and from 2.1 on', () => {
   assert.ok('data-release-gone' in load({ version: '2.10.0' }).atFirstPaint);
   assert.ok(!('data-release-gone' in load({ version: '2.0.1' }).atFirstPaint));
 });
+
+// ─── Warden's Product Hunt launch row ────────────────────────────────────
+// 12:01 AM Pacific on 5 December 2026 (PST, UTC-8) = 08:01 UTC. The row says
+// it in the reader's own time zone, "Live now" on the launch day, and goes
+// once the day (midnight to midnight Pacific) is over.
+
+const LAUNCH_UTC = Date.UTC(2026, 11, 5, 8, 1);
+
+function loadAt(nowMs, timeZone = 'Asia/Manila') {
+  const row = { hidden: false };
+  const time = { textContent: 'Dec 5 · 12:01 AM PT' };
+  const linkAttrs = {};
+  const link = { setAttribute: (n, v) => { linkAttrs[n] = String(v); } };
+  const RealDate = Date;
+  class FakeDate extends RealDate {
+    constructor(...args) { super(...(args.length ? args : [nowMs])); }
+    static now() { return nowMs; }
+  }
+  const document = {
+    documentElement: { getAttribute: () => null, setAttribute() {}, removeAttribute() {}, hasAttribute: () => false },
+    readyState: 'complete',
+    addEventListener() {},
+    getElementById: (id) => ({ 'warden-launch': row, 'warden-launch-time': time, 'warden-launch-link': link })[id] || null,
+    querySelector: () => null,
+    querySelectorAll: () => []
+  };
+  const context = {
+    document,
+    Date: FakeDate,
+    // The reader's zone is the browser's; pin it, in English, for the test.
+    // A plain function, since the page calls it with `new`.
+    Intl: { DateTimeFormat: function (_locale, opts) { return new Intl.DateTimeFormat('en-US', { ...opts, timeZone }); } },
+    window: { scrollY: 0, addEventListener() {} },
+    localStorage: { getItem: () => null, setItem() {} },
+    chrome: { runtime: { getManifest: () => ({ version: '2.0.5' }) } }
+  };
+  vm.runInNewContext(SOURCE, context);
+  return { row, time, linkAttrs };
+}
+
+test('the Product Hunt row gives the launch in the reader’s own time zone', () => {
+  const before = LAUNCH_UTC - 3 * 24 * 3600 * 1000;
+  assert.equal(loadAt(before, 'Asia/Manila').time.textContent, 'Dec 5, 4:01 PM GMT+8');
+  assert.equal(loadAt(before, 'America/Los_Angeles').time.textContent, 'Dec 5, 12:01 AM PST');
+  assert.equal(loadAt(before, 'America/New_York').time.textContent, 'Dec 5, 3:01 AM EST');
+  assert.equal(loadAt(before, 'Europe/London').time.textContent, 'Dec 5, 8:01 AM GMT');
+  assert.equal(loadAt(before, 'Pacific/Auckland').time.textContent, 'Dec 5, 9:01 PM GMT+13');
+  // West of Pacific it is still the evening before: the date moves too.
+  assert.equal(loadAt(before, 'Pacific/Honolulu').time.textContent, 'Dec 4, 10:01 PM HST');
+  assert.equal(loadAt(before).row.hidden, false);
+  // The link's spoken name carries the context the bare time lacks.
+  assert.equal(loadAt(before).linkAttrs['aria-label'], 'Warden on Product Hunt, launching Dec 5, 4:01 PM GMT+8');
+});
+
+test('on the launch day the row says Live now, and after it the row is gone', () => {
+  assert.equal(loadAt(LAUNCH_UTC - 1).time.textContent, 'Dec 5, 4:01 PM GMT+8');
+  assert.equal(loadAt(LAUNCH_UTC).time.textContent, 'Live now');
+  assert.equal(loadAt(LAUNCH_UTC).linkAttrs['aria-label'], 'Warden on Product Hunt, live now');
+  // 11:59 PM Pacific on the 5th is still the launch day.
+  const lastMinute = Date.UTC(2026, 11, 6, 7, 59);
+  assert.equal(loadAt(lastMinute).time.textContent, 'Live now');
+  assert.equal(loadAt(lastMinute).row.hidden, false);
+  // Midnight Pacific: the day is over.
+  assert.equal(loadAt(Date.UTC(2026, 11, 6, 8, 0)).row.hidden, true);
+});
+
+test('the page itself carries the launch in Pacific time, for when no script runs', () => {
+  const html = fs.readFileSync(path.join(ROOT, 'options.html'), 'utf8');
+  assert.match(html, /<div class="warden-spec" id="warden-launch"><dt class="meta">product hunt<\/dt>/);
+  assert.match(html, /<time id="warden-launch-time" datetime="2026-12-05T08:01:00Z" title="12:01 AM Pacific Time, December 5, 2026">Dec 5 · 12:01 AM PT<\/time>/);
+  // The value links to the launch page, in a new tab, with no opener or referrer.
+  const link = (html.match(/<a class="warden-launch-link"[^>]*>/) || [''])[0];
+  assert.match(link, /href="https:\/\/www\.producthunt\.com\/products\/warden-9\?launch=warden-12"/);
+  assert.match(link, /target="_blank"/);
+  assert.match(link, /rel="noopener noreferrer"/);
+  assert.doesNotMatch(html.slice(html.indexOf('id="warden-launch"'), html.indexOf('</dl>', html.indexOf('id="warden-launch"'))),
+    /upvote/i, 'Product Hunt forbids asking for upvotes');
+  assert.equal(new Date('2026-12-05T08:01:00Z').getTime(), LAUNCH_UTC);
+  assert.match(html, /\.warden-spec\[hidden\] \{\s*display: none;\s*\}/, 'a hidden row must not keep display: flex');
+});
