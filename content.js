@@ -3732,8 +3732,7 @@ async function filterSearchResults() {
       }
       const shouldBlock = await shouldBlockElement(container, backgroundVerdicts[candidateIndex], { explicitOnly });
       if (debugMode) log(`[${index}] Result should be blocked: ${shouldBlock}`);
-      if (shouldBlock) {
-        hideElement(container, 'search-result');
+      if (shouldBlock && hideElement(container, 'search-result')) {
         blockedCount++;
         if (debugMode) log(`[${index}] Blocked result successfully`);
       }
@@ -4074,8 +4073,7 @@ function holdQuickBlockedResults(entry) {
       if (container.parentElement && container.parentElement.closest('[data-pblocker-hidden="true"]')) return;
       const host = searchResultHost(container, engine);
       if (!host || (host !== blocked && !host.endsWith('.' + blocked))) return;
-      hideElement(container, 'search-result');
-      held++;
+      if (hideElement(container, 'search-result')) held++;
     });
     if (held > 0) {
       notifyBackground('search_result_filtered', { count: held });
@@ -4117,8 +4115,7 @@ async function filterSocialFeed() {
     const post = posts[index];
     try {
       if (shouldBlockSocialPost(post, site) || backgroundVerdicts[index]) {
-        hideElement(post, 'social-post');
-        blockedCount++;
+        if (hideElement(post, 'social-post')) blockedCount++;
       } else {
         post.dataset.pblockerProcessed = 'true';
       }
@@ -4168,8 +4165,14 @@ function getImageSearchTile(element) {
 }
 
 // Element hiding and replacement
+// Returns true only when this call hid something that was showing. Callers
+// report a block to the background ONLY on true. Reporting after a call that
+// did nothing is how one hidden thumbnail was counted again every time the
+// page swapped its picture (a preview reel, a carousel, a recycled feed slot):
+// ten thumbnails sent the popup's counters up by ~2,000 a minute, which a new
+// supporter saw within a minute of installing (2026-11-09).
 function hideElement(element, type) {
-  if (!element || element.dataset.pblockerHidden) return;
+  if (!element || element.dataset.pblockerHidden) return false;
 
   // Held before the image branch below can swap `element` for its wrapping tile:
   // the address lives on the <img>, not on the tile.
@@ -4182,7 +4185,8 @@ function hideElement(element, type) {
     const tile = getImageSearchTile(element);
     if (tile && tile !== element) {
       element.dataset.pblockerHidden = 'true';
-      if (tile.dataset.pblockerHidden) return;
+      // The tile was already held, and counted, through another of its images.
+      if (tile.dataset.pblockerHidden) return false;
       element = tile;
     }
   }
@@ -4215,7 +4219,7 @@ function hideElement(element, type) {
     // grid of held tiles reads as an error state. On an ordinary page the
     // placeholder earns its keep — it holds the layout and explains the hole in
     // the article — so it stays there.
-    if (isImagesSearchContext() || getImageSearchTile(element)) return;
+    if (isImagesSearchContext() || getImageSearchTile(element)) return true;
     try {
       const placeholder = createBlockedImagePlaceholder(element, type);
       if (element.parentNode) {
@@ -4225,6 +4229,7 @@ function hideElement(element, type) {
       log('Error drawing held media placeholder:', error);
     }
   }
+  return true;
 }
 
 const BLOCKED_SUMMARY_ID = 'pblocker-blocked-summary';
@@ -5490,8 +5495,7 @@ function maybeBlockImage(img) {
   // Skip already hidden
   if (img.dataset.pblockerHidden === 'true') return;
   if (shouldBlockImage(img)) {
-    hideElement(img, 'image');
-    notifyBackground('image_filtered', { count: 1 });
+    if (hideElement(img, 'image')) notifyBackground('image_filtered', { count: 1 });
     return;
   }
   if (subscriptionHostsInBackground) checkImageHostWithBackground(img);
@@ -5516,8 +5520,7 @@ function checkImageHostWithBackground(img) {
   isUrlBlockedByBackground(url).then((blocked) => {
     if (!blocked || !isEnabled || img.dataset.pblockerHidden === 'true') return;
     if (getEffectiveImageUrl(img) !== url) return; // src changed while we asked
-    hideElement(img, 'image');
-    notifyBackground('image_filtered', { count: 1 });
+    if (hideElement(img, 'image')) notifyBackground('image_filtered', { count: 1 });
   });
 }
 
@@ -5587,10 +5590,11 @@ function observeImage(img) {
   
   // CRITICAL FIX: Check image URL immediately (before it loads/displays)
   // Don't wait for IntersectionObserver - block bad URLs instantly
+  // An image already held arrives here again whenever the page changes its
+  // src. It stays hidden, and was counted the first time (see hideElement).
   const quickCheck = shouldBlockImageQuickly(img);
   if (quickCheck) {
-    hideElement(img, 'image');
-    notifyBackground('image_filtered', { count: 1 });
+    if (hideElement(img, 'image')) notifyBackground('image_filtered', { count: 1 });
     return; // Don't observe further
   }
 
@@ -5603,10 +5607,7 @@ function observeImage(img) {
     Promise.all(relatedUrls.map(isUrlBlockedByBackground)).then(verdicts => {
       if (!verdicts.some(Boolean) || !img.isConnected) return;
       if (getEffectiveImageUrl(img) !== checkedUrl) return;
-      if (img.dataset.pblockerHidden !== 'true') {
-        hideElement(img, 'image');
-        notifyBackground('image_filtered', { count: 1 });
-      }
+      if (hideElement(img, 'image')) notifyBackground('image_filtered', { count: 1 });
     }).catch(() => {});
   }
   
@@ -5723,8 +5724,8 @@ function processIframe(iframe) {
     iframe.dataset.pblockerCheckedSrc = src;
 
     if (shouldHide) {
-      hideElement(iframe, 'iframe');
-      notifyBackground('iframe_filtered', { src });
+      // A held frame re-pointed by an ad rotator comes back through here.
+      if (hideElement(iframe, 'iframe')) notifyBackground('iframe_filtered', { src });
     } else if (src) {
       isUrlBlockedByBackground(src).then(blocked => {
         // Bails on `pblockerHidden`, not `pblockerProcessed` — the latter is now
@@ -5732,8 +5733,7 @@ function processIframe(iframe) {
         // verdict from ever being applied.
         if (!blocked || !iframe.isConnected || iframe.dataset.pblockerHidden === 'true') return;
         if ((iframe.getAttribute('src') || '') !== src) return; // re-pointed meanwhile
-        hideElement(iframe, 'iframe');
-        notifyBackground('iframe_filtered', { src });
+        if (hideElement(iframe, 'iframe')) notifyBackground('iframe_filtered', { src });
       }).catch(() => {});
     }
   } catch (err) {
@@ -5780,8 +5780,7 @@ function shouldBlockMedia(video) {
 function maybeBlockMedia(video) {
   if (video.dataset.pblockerHidden === 'true') return;
   if (shouldBlockMedia(video)) {
-    hideElement(video, 'video');
-    notifyBackground('video_filtered', { count: 1 });
+    if (hideElement(video, 'video')) notifyBackground('video_filtered', { count: 1 });
   }
 }
 
@@ -5809,10 +5808,7 @@ function observeMedia(video) {
   if (urls.length > 0) {
     Promise.all(urls.map(isUrlBlockedByBackground)).then(verdicts => {
       if (!verdicts.some(Boolean) || !video.isConnected) return;
-      if (video.dataset.pblockerHidden !== 'true') {
-        hideElement(video, 'video');
-        notifyBackground('video_filtered', { count: 1 });
-      }
+      if (hideElement(video, 'video')) notifyBackground('video_filtered', { count: 1 });
     }).catch(() => {});
   }
 }
@@ -5991,8 +5987,7 @@ async function processPendingResults() {
     try {
       const shouldBlock = await shouldBlockElement(container, backgroundVerdicts[i], { explicitOnly });
       if (shouldBlock) {
-        hideElement(container, 'search-result');
-        blockedCount++;
+        if (hideElement(container, 'search-result')) blockedCount++;
       } else {
         // Mark inspected to avoid redundant checks
         container.dataset.pblockerProcessed = 'true';
@@ -6031,10 +6026,11 @@ async function processPendingSocial() {
   for (let i = 0; i < candidates.length; i++) {
     const el = candidates[i];
     try {
-      // First, apply fast synchronous checks (labels + direct adult links)
+      // First, apply fast synchronous checks (labels + direct adult links).
+      // A held post is never marked processed, so any attribute change inside
+      // it (a like count, a timestamp) brings it back here: count it once.
       if (shouldBlockSocialPost(el, site) || backgroundVerdicts[i]) {
-        hideElement(el, 'social-post');
-        blockedCount++;
+        if (hideElement(el, 'social-post')) blockedCount++;
       } else if (site === 'reddit') {
         // Optional asynchronous check: if the post links to an NSFW subreddit
         const subLink = el.querySelector('a[href*="/r/"]');
@@ -6043,8 +6039,7 @@ async function processPendingSocial() {
           try {
             const isNSFW = await shouldBlockRedditPage(subLink.href);
             if (isNSFW) {
-              hideElement(el, 'social-post');
-              blockedCount++;
+              if (hideElement(el, 'social-post')) blockedCount++;
               blocked = true;
             }
           } catch (_) {}

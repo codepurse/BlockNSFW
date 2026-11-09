@@ -53,7 +53,13 @@ function harness({ blockedHosts = [], backgroundBlocked = [] } = {}) {
     isHostInDefaultBlocklist(host) { return blockedHosts.includes(host); },
     matchesAdultKeywordHost() { return false; },
     containsAdultKeywords() { return false; },
-    hideElement(el, type) { sandbox.calls.hidden.push(type); el.dataset.pblockerHidden = 'true'; },
+    // Mirrors the real return value: true only when this call hid it.
+    hideElement(el, type) {
+      if (el.dataset.pblockerHidden) return false;
+      sandbox.calls.hidden.push(type);
+      el.dataset.pblockerHidden = 'true';
+      return true;
+    },
     notifyBackground(type, data) { sandbox.calls.notified.push([type, data]); },
     isUrlBlockedByBackground(url) {
       sandbox.calls.backgroundChecks.push(url);
