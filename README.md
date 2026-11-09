@@ -7,7 +7,7 @@ Project status:
 - Already used by thousands of users
 - Source-first repo with Chrome and Firefox build scripts
 
-Current version: `2.0.5`
+Current version: `2.0.6`
 
 ## Install
 
