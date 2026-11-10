@@ -4827,9 +4827,9 @@ title/Example Domain/"></textarea>
             <div class="row">
               <div class="row-text">
                 <label class="row-label" for="lock-extensions-page">Lock the extensions page</label>
-                <p class="row-desc" id="lock-extensions-page-desc">That page is where BlockNSFW can be turned off, or switched off in private windows. Once you turn this on, and while you have a PIN or a pact, opening it asks for the same as turning protection off. It’s off until you choose it, so read what it costs first.</p>
+                <p class="row-desc" id="lock-extensions-page-desc">That page is where BlockNSFW can be turned off, or switched off in private windows. Once you turn this on, and while you have a PIN or a pact, opening it asks for your PIN or your pact’s wait. It needs a PIN to work: without one (or a pact), it locks nothing. It’s off until you choose it, so read what it costs first.</p>
                 <p class="row-desc" id="lock-extensions-page-state" aria-live="polite"></p>
-                <span class="locked-note" data-lock="critical" data-lock-when="Turning it off" hidden></span>
+                <span class="locked-note" data-lock="normal" data-lock-when="Turning it off" hidden></span>
                 <!-- What the lock costs. The are-you-sure dialog copies this
                      list (options.js, confirmExtensionsLock). -->
                 <div class="lock-warning" id="lock-warning" role="note" aria-labelledby="lock-warning-head">
@@ -4837,7 +4837,7 @@ title/Example Domain/"></textarea>
                   <div>
                     <p class="lock-warning-head" id="lock-warning-head">This can lock you out of your own extensions page</p>
                     <ul class="lock-warning-list" id="lock-warning-list">
-                      <li><strong>Every visit asks.</strong> Your PIN and access code, or your pact’s wait, even just to manage another extension.</li>
+                      <li><strong>Every visit asks.</strong> Your PIN, or your pact’s wait, even just to manage another extension.</li>
                       <li><strong>Hard hours shut it.</strong> During Storm Mode and your risk hours it doesn’t open at all, whatever you type.</li>
                       <li><strong>There’s no “forgot PIN” button.</strong> Forget your PIN, and the page stays shut until you remember it.</li>
                       <li><strong>Getting out takes the same.</strong> Turning this switch off asks for everything above, unless the page is already open to you.</li>

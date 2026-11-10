@@ -1,5 +1,5 @@
 // shared/extensions-lock.js
-// The browser's extensions page, locked like turning protection off.
+// The browser's extensions page, locked behind the PIN.
 //
 // The extensions page (chrome://extensions, edge://extensions, about:addons)
 // is where BlockNSFW can be turned off, or switched off in private windows.
@@ -7,8 +7,14 @@
 // once private windows are switched off the browser hides them from the
 // extension altogether. What an extension can do is notice a tab arriving on
 // that page and send it to Settings instead, where opening it asks for the
-// same as turning protection off: the PIN and the access code, the Pact's
-// wait, and never during Storm Mode or Risk Hours.
+// PIN, or the Pact's wait, and never opens during Storm Mode or Risk Hours.
+//
+// It needs a PIN or a Pact. Without either it locks nothing, and an access
+// code alone doesn't lock it. The code asks there, after the PIN, only when
+// it's set to guard every change (scope 'all'). On its default scope it
+// guards the master switches alone, and the user chose PIN-only for this page
+// (2026-11-10): the code on every visit to manage any extension was more than
+// the page is worth.
 //
 // It is a speed bump, like every lock in a browser extension: removing the
 // extension from the toolbar menu, a guest window, another profile or another
@@ -17,9 +23,8 @@
 //
 // Off until the person turns it on (Settings › Security › Private windows),
 // through a warning and an are-you-sure, because it can shut them out of their
-// own extensions page. Once on, it is locked while something guards loosening
-// changes (a PIN, a Pact or the access code), and Storm Mode and Risk Hours
-// shut it outright. With the switch off nothing here applies, hard hours
+// own extensions page. Once on, it is locked while there is a PIN or a Pact,
+// and Storm Mode and Risk Hours shut it outright. With the switch off nothing here applies, hard hours
 // included: nobody gets a lock they didn't choose.
 //
 // An opening is stored under ALLOW_KEY:
@@ -92,22 +97,32 @@
   // `store` holds the raw values under the keys above.
   function lockState(store) {
     var data = store || {};
+    var code = data[ACCESS_CODE_KEY];
     var guarded = {
       pin: pinIsSet(data[PIN_KEY]),
       pact: !!(data[PACT_KEY] && data[PACT_KEY].active === true),
-      code: !!(data[ACCESS_CODE_KEY] && data[ACCESS_CODE_KEY].enabled === true)
+      code: !!(code && code.enabled === true)
     };
+    // Mirrors AccessCode.requiredFor(config, 'normal'), the tier Settings
+    // opens this page with: the code asks here, after the PIN, only on the
+    // 'all' scope.
+    var codeAsksHere = guarded.code && code.scope === 'all';
     var boost = boostOn(data[BOOST_STATE_KEY]);
     var on = switchOn(data[SETTINGS_KEY]);
+    // `guarded` (any of the three) is what holds pages while site access is
+    // off (shared/site-access.js). The page itself needs a PIN or a Pact: an
+    // access code alone never locks it.
     var hasGuard = guarded.pin || guarded.pact || guarded.code;
+    var pageGuard = guarded.pin || guarded.pact;
     return {
-      locked: on && (boost || hasGuard),
+      locked: on && (boost || pageGuard),
       boost: boost,
       switchOn: on,
       guarded: hasGuard,
       pin: guarded.pin,
       pact: guarded.pact,
-      code: guarded.code
+      code: guarded.code,
+      codeHere: codeAsksHere
     };
   }
 

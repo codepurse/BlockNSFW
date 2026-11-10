@@ -28,11 +28,13 @@ All notable project changes should be documented here going forward.
   windows, "Lock the extensions page"). It's off by default, because it can
   shut someone out of their own extensions page; turning it on shows what it
   costs and asks "Are you sure?" first.
-  - Once it's on, while a PIN, a Pact or the access code is set, a tab going
-    to chrome://extensions, edge://extensions or about:addons is sent to
-    Settings.
-  - Opening the page asks for the same as turning protection off: your PIN and
-    access code, or the Pact's wait. It then stays open for 10 minutes.
+  - Once it's on, while a PIN or a Pact is set, a tab going to
+    chrome://extensions, edge://extensions or about:addons is sent to
+    Settings. It needs a PIN or a Pact to work: without either it locks
+    nothing, and Settings says so beside the switch and when you turn it on.
+  - Opening the page asks for your PIN, or the Pact's wait. It then stays open
+    for 10 minutes. The access code asks there too only when it's set to guard
+    every change, not on its default of the master switches alone.
   - During Storm Mode and Risk hours it doesn't open at all.
   - This also covers the extensions page's Turn off switch.
   - Turning private windows *on* never asks for anything. That opening lasts

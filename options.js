@@ -3396,10 +3396,10 @@ async function openExtensionsManagePage(opts) {
 //
 // Only the browser's extensions page can switch BlockNSFW off in private
 // windows (or turn it off), and the browser won't let an extension lock those
-// switches. So while a PIN, a Pact or the access code guards loosening
-// changes, the background sends any tab arriving on that page here, and
-// opening it asks for the same as turning protection off
-// (shared/extensions-lock.js). Turning private windows ON only strengthens
+// switches. So while a PIN or a Pact guards loosening changes, the background
+// sends any tab arriving on that page here, and opening it asks for the PIN,
+// or the Pact's wait. The access code joins in only when it's set to guard
+// every change (shared/extensions-lock.js). Turning private windows ON only strengthens
 // protection, so that opening is free, short, and ends once they're on.
 
 async function isPrivateAllowed() {
@@ -3443,7 +3443,10 @@ async function unlockExtensionsPage() {
   if (!ExtensionsLock) return true;
   const { state } = await readExtensionsLock();
   if (!state.locked) return true;
-  const outcome = await guardWeakeningOutcome('open the extensions page', { critical: true },
+  // 'normal', not 'critical': the PIN (or a pact's wait) is enough here, and
+  // the access code asks only on its "every change" scope. ExtensionsLock's
+  // lockState reads the scope the same way.
+  const outcome = await guardWeakeningOutcome('open the extensions page', { tier: 'normal' },
     { kind: 'extensions-page', payload: {} });
   if (outcome !== 'now') return false;
   await grantExtensionsPage('unlock');
@@ -3501,8 +3504,9 @@ async function renderExtensionsLock() {
     text = boost && boost.active === 'storm'
       ? 'Shut while Storm Mode is on.'
       : 'Shut during your risk hours.';
-  } else if (!state.guarded) {
-    text = 'Not locked yet. It locks once you set a PIN or make a pact.';
+  } else if (!state.locked) {
+    // An access code alone doesn't lock it (ExtensionsLock.lockState).
+    text = 'Not locked: it needs a PIN. Set one under PIN, above, or make a pact. Until then anyone can open the extensions page.';
   } else if (allowance && allowance.until > now) {
     text = allowance.reason === 'private'
       ? `Open until ${formatClock(allowance.until)}, to turn on private windows.`
@@ -3544,7 +3548,12 @@ async function handleExtensionsPageArrival() {
     description = `${why} ${boost.active === 'storm' ? 'Storm Mode is on' : 'Your risk hours are on'} until ${formatClock(boost.until)}, so it stays shut until then.`;
   } else {
     const minutes = Math.round(ExtensionsLock.OPEN_MS / 60000);
-    description = `${why} Opening it asks for the same as turning protection off. Then it stays open for ${minutes} minutes.`;
+    // What the gate will ask for, said as it will ask it.
+    // Locked means a PIN or a pact (ExtensionsLock.lockState).
+    const asks = state.pact ? 'waits out your pact'
+      : state.codeHere ? 'asks for your PIN and access code'
+      : 'asks for your PIN';
+    description = `${why} Opening it ${asks}. Then it stays open for ${minutes} minutes.`;
   }
   const privateMinutes = Math.round(ExtensionsLock.PRIVATE_MS / 60000);
   const message = privateOn ? '' : `Private windows aren’t protected yet. To turn them on, it opens for ${privateMinutes} minutes without asking for anything.`;
@@ -3615,8 +3624,9 @@ function setupAccessBanner() {
 // list the Settings row shows. Cancel is where focus starts.
 async function confirmExtensionsLock() {
   const list = $('lock-warning-list');
-  const { state } = ExtensionsLock ? await readExtensionsLock() : { state: { guarded: true } };
-  const later = state.guarded ? '' : '<p class="dialog-message">It starts once you set a PIN, make a pact or turn on the access code. Until then nothing changes.</p>';
+  const { state } = ExtensionsLock ? await readExtensionsLock() : { state: { pin: true } };
+  // It needs a PIN or a pact; an access code alone doesn't lock it.
+  const later = state.pin || state.pact ? '' : '<p class="dialog-message">It needs a PIN to work, and you haven’t set one. Until you set a PIN (or make a pact), nothing changes: anyone can still open the extensions page.</p>';
   const choice = await createModal({
     title: 'Are you sure you want to lock it?',
     description: 'Once it’s on, the browser’s extensions page stops opening on a click.',
@@ -3682,7 +3692,8 @@ function setupExtensionsLock() {
       const { state, allowance } = await readExtensionsLock();
       const paidOpen = !state.boost && allowance && allowance.reason !== 'private' && allowance.until > Date.now();
       if (wasOn && !e.target.checked && !paidOpen) {
-        const ok = await guardWeakening('stop locking the extensions page', { critical: true },
+        // The same as opening the page asks: the PIN, not the access code.
+        const ok = await guardWeakening('stop locking the extensions page', { tier: 'normal' },
           settingsChange({ [ExtensionsLock.SETTING]: false }));
         if (!ok) {
           e.target.checked = true;

@@ -1,11 +1,12 @@
-// The browser's extensions page, locked like turning protection off
+// The browser's extensions page, locked behind the PIN
 // (shared/extensions-lock.js, background.js "The extensions page lock").
 //
 // Reported 2026-11-09: with a PIN and Risk hours on, someone switched
 // BlockNSFW off in private windows from the extensions page and browsed
 // freely there. No extension can lock that switch, so the page itself is
-// locked: a tab arriving on it is sent to Settings, which asks for the same
-// as turning protection off.
+// locked: a tab arriving on it is sent to Settings, which asks for the PIN or
+// a pact's wait. The access code joins in only on its "every change" scope
+// (chosen 2026-11-10: PIN only there).
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('fs');
@@ -54,14 +55,58 @@ test('off by default, and off means off, hard hours included', () => {
   assert.equal(L.lockState({ [L.SETTINGS_KEY]: { lockExtensionsPage: 'yes' } }).switchOn, false, 'only true turns it on');
 });
 
-test('switched on, locked once a PIN, a pact or the access code guards loosening', () => {
+test('switched on, locked once a PIN or a pact guards loosening', () => {
   assert.equal(L.lockState({ ...ON }).locked, false, 'nothing set: nothing to ask for');
   assert.equal(L.lockState({ ...ON, [L.PIN_KEY]: PIN }).locked, true);
   assert.equal(L.lockState({ ...ON, [L.PIN_KEY]: '1234' }).locked, true, 'a PIN an older version saved');
   assert.equal(L.lockState({ ...ON, [L.PIN_KEY]: '' }).locked, false);
   assert.equal(L.lockState({ ...ON, [L.PACT_KEY]: { active: true } }).locked, true);
-  assert.equal(L.lockState({ ...ON, [L.ACCESS_CODE_KEY]: { enabled: true } }).locked, true);
-  assert.equal(L.lockState({ ...ON, [L.ACCESS_CODE_KEY]: { enabled: false } }).locked, false);
+});
+
+test('it needs a PIN or a pact: an access code alone never locks the page', () => {
+  const code = (config, extra = {}) => L.lockState({ ...ON, [L.ACCESS_CODE_KEY]: config, ...extra });
+  assert.equal(code({ enabled: true }).locked, false, 'its default scope');
+  assert.equal(code({ enabled: true, scope: 'all' }).locked, false, 'even guarding every change');
+  assert.equal(code({ enabled: true }).guarded, true, 'pages still wait while site access is off');
+  assert.equal(code({ enabled: true, scope: 'all' }, { [L.PIN_KEY]: PIN }).locked, true, 'with a PIN it locks');
+});
+
+test('after the PIN, the access code asks only when it guards every change', () => {
+  const code = (config) => L.lockState({ ...ON, [L.PIN_KEY]: PIN, [L.ACCESS_CODE_KEY]: config });
+  assert.equal(code({ enabled: true }).codeHere, false, 'its default scope: the master switches alone');
+  assert.equal(code({ enabled: true, scope: 'critical' }).codeHere, false);
+  assert.equal(code({ enabled: true, scope: 'all' }).codeHere, true, 'every change');
+  assert.equal(code({ enabled: false, scope: 'all' }).codeHere, false);
+});
+
+test('Settings says the lock needs a PIN', () => {
+  const html = fs.readFileSync(path.join(ROOT, 'options.html'), 'utf8');
+  const desc = html.slice(html.indexOf('id="lock-extensions-page-desc"'), html.indexOf('id="lock-extensions-page-state"'));
+  assert.ok(desc.includes('It needs a PIN to work'), 'beside the switch');
+  const source = fs.readFileSync(path.join(ROOT, 'options.js'), 'utf8');
+  assert.ok(source.includes('Not locked: it needs a PIN.'), 'the state line, switched on with no PIN');
+  assert.ok(source.includes('It needs a PIN to work, and you haven’t set one.'), 'the are-you-sure dialog');
+  assert.ok(!source.includes('} else if (!state.guarded) {'), 'the state line follows locked, not guarded');
+});
+
+test('codeHere matches what the access code asks for at the tier Settings opens the page with', () => {
+  const configs = [null, {}, { enabled: true }, { enabled: true, scope: 'critical' }, { enabled: true, scope: 'all' },
+    { enabled: false, scope: 'all' }, { enabled: true, scope: 'nonsense' }];
+  for (const config of configs) {
+    assert.equal(L.lockState({ ...ON, [L.ACCESS_CODE_KEY]: config }).codeHere,
+      AccessCode.requiredFor(config, 'normal'), JSON.stringify(config));
+  }
+});
+
+test('opening the page and switching the lock off ask at the normal tier, not the critical one', () => {
+  const source = fs.readFileSync(path.join(ROOT, 'options.js'), 'utf8');
+  assert.ok(source.includes("guardWeakeningOutcome('open the extensions page', { tier: 'normal' }"), 'opening');
+  assert.ok(source.includes("guardWeakening('stop locking the extensions page', { tier: 'normal' }"), 'switching off');
+  const html = fs.readFileSync(path.join(ROOT, 'options.html'), 'utf8');
+  const row = html.slice(html.indexOf('id="lock-extensions-page-desc"'), html.indexOf('id="lock-warning"'));
+  assert.match(row, /data-lock="normal" data-lock-when="Turning it off"/, 'the note says what turning it off asks');
+  assert.doesNotMatch(html.slice(html.indexOf('id="lock-warning-list"'), html.indexOf('id="lock-warning-list"') + 400),
+    /access code/, 'the warning no longer promises the code on every visit');
 });
 
 test('switched on, Storm Mode and Risk hours shut it even with no PIN', () => {

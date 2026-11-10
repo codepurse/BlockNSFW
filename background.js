@@ -4594,8 +4594,8 @@ ensureFirstSeen()
 // The browser's extensions page is where BlockNSFW can be turned off or
 // switched off in private windows, and no extension can lock those switches.
 // So while the page is locked, a tab arriving on it is sent to Settings,
-// which asks for the same as turning protection off before letting it
-// through. An opening lasts ten minutes. When it ends, or Storm Mode or Risk
+// which asks for the PIN (or a pact's wait) before letting it through. An
+// opening lasts ten minutes. When it ends, or Storm Mode or Risk
 // Hours begin, a tab still on the page is sent back too.
 //
 // Seeing that a tab is on the page takes the "tabs" permission. The address is
