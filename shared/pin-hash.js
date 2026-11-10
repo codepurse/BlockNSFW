@@ -92,19 +92,52 @@
     return diff === 0;
   }
 
+  // Up to 2.0.3 the PIN boxes stopped taking characters at a fixed length:
+  // 20 in Settings, both where the PIN was set and where it was asked for,
+  // and 8 in the toolbar popup (from 1.6.1). A longer PIN was saved cut to
+  // that length, without a word, and kept matching because every entry was
+  // cut the same way. 2.0.4 lifted the limits, so the whole PIN now arrives
+  // and no longer matches what was saved. Reported by email 2026-11-10 with
+  // a 619-character PIN. So a PIN that doesn't match is tried again as those
+  // boxes would have cut it. That matches only when the cut-short text is
+  // exactly what was saved, so it lets nobody in without the PIN.
+  var OLD_BOX_LIMITS = [20, 8];
+
+  // The PIN as typed, then as each old box would have kept it: cut, then
+  // trimmed, as those boxes' pages trimmed what they read.
+  function candidates(pin) {
+    var list = [pin];
+    for (var i = 0; i < OLD_BOX_LIMITS.length; i++) {
+      if (pin.length <= OLD_BOX_LIMITS[i]) continue;
+      var cut = pin.slice(0, OLD_BOX_LIMITS[i]).trim();
+      if (cut && list.indexOf(cut) < 0) list.push(cut);
+    }
+    return list;
+  }
+
   // Resolves { ok, upgrade }: `upgrade` is true when a correct PIN was found
   // stored as plain text and should be re-saved with `hash`.
   function verify(stored, pin) {
     if (typeof pin !== 'string' || !pin) return Promise.resolve({ ok: false, upgrade: false });
+    var tries = candidates(pin);
     if (typeof stored === 'string') {
-      var ok = stored.length > 0 && sameText(stored, pin);
+      var ok = false;
+      for (var i = 0; i < tries.length; i++) {
+        if (stored.length > 0 && sameText(stored, tries[i])) ok = true;
+      }
       return Promise.resolve({ ok: ok, upgrade: ok });
     }
     if (!isHashed(stored)) return Promise.resolve({ ok: false, upgrade: false });
     var iterations = Number(stored.iter) || ITERATIONS;
-    return derive(pin, fromHex(stored.salt), iterations).then(function (digest) {
-      return { ok: sameText(digest, stored.hash), upgrade: false };
-    });
+    var salt = fromHex(stored.salt);
+    var at = 0;
+    function next() {
+      if (at >= tries.length) return { ok: false, upgrade: false };
+      return derive(tries[at++], salt, iterations).then(function (digest) {
+        return sameText(digest, stored.hash) ? { ok: true, upgrade: false } : next();
+      });
+    }
+    return Promise.resolve().then(next);
   }
 
   // A PIN the extension makes up, for when the witness is to hold it: six
@@ -165,7 +198,9 @@
           if (result.ok) {
             var done = Promise.resolve(storage.remove(LOCK_KEY));
             if (result.upgrade) {
-              done = done.then(function () { return hash(entered); }).then(function (hashed) {
+              // The plain-text PIN itself, not what was typed: a long entry
+              // may have matched as an old box cut it (see OLD_BOX_LIMITS).
+              done = done.then(function () { return hash(stored); }).then(function (hashed) {
                 var payload = {};
                 payload[KEY] = hashed;
                 return storage.set(payload);

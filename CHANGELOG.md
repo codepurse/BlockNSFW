@@ -6,6 +6,20 @@ All notable project changes should be documented here going forward.
 
 ### Fixed
 
+- **A long PIN stopped working after 2.0.4.** Up to 2.0.3, Settings' PIN boxes
+  stopped taking characters at 20 without a word, both where the PIN was set
+  and where it was asked for. The popup's stopped at 8. So a longer PIN was
+  saved cut short, and it kept matching because every entry was cut the same
+  way. 2.0.4 took the limits off, so the whole PIN arrived, no longer matched,
+  and the person was locked out. Reported by email with a 619-character PIN.
+  - A PIN that doesn't match is now also tried as those boxes would have cut
+    it: its first 20 characters, then its first 8. Both the whole PIN and the
+    cut-short one work again, with nothing to do.
+  - It lets nobody in without the PIN. It only matches when the cut-short text
+    is exactly the PIN that was saved, and a PIN saved whole still needs every
+    character.
+  - To have the whole of a long PIN count, set it again in Settings ›
+    Security › PIN.
 - **Private windows were a way round.** Someone with a PIN set, even during
   Risk hours, could switch BlockNSFW off in private windows on the browser's
   extensions page, then browse freely there. The browser keeps that switch to
