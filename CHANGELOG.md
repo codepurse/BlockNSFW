@@ -30,8 +30,8 @@ All notable project changes should be documented here going forward.
   costs and asks "Are you sure?" first.
   - Once it's on, while a PIN or a Pact is set, a tab going to
     chrome://extensions, edge://extensions or about:addons is sent to
-    Settings. It needs a PIN or a Pact to work: without either it locks
-    nothing, and Settings says so beside the switch and when you turn it on.
+    Settings. It needs a PIN or a Pact to work, so until there is one the
+    switch is greyed out, with a line under it saying to set a PIN first.
   - Opening the page asks for your PIN, or the Pact's wait. It then stays open
     for 10 minutes. The access code asks there too only when it's set to guard
     every change, not on its default of the master switches alone.

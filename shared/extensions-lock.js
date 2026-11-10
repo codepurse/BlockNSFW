@@ -126,6 +126,14 @@
     };
   }
 
+  // Whether Settings lets the switch be used. Turning it on with no PIN and
+  // no Pact would lock nothing, so it is greyed out until there is one. Once
+  // on, it always stays usable, so it can be turned off again (a PIN cleared
+  // later leaves it on but unlocked).
+  function canTurnOn(state) {
+    return !!(state && (state.switchOn || state.pin || state.pact));
+  }
+
   function keys() {
     return [ALLOW_KEY, SETTINGS_KEY, PIN_KEY, ACCESS_CODE_KEY, PACT_KEY, BOOST_STATE_KEY];
   }
@@ -213,6 +221,7 @@
     isExtensionsPage: isExtensionsPage,
     pinIsSet: pinIsSet,
     lockState: lockState,
+    canTurnOn: canTurnOn,
     keys: keys,
     normalizeAllowance: normalizeAllowance,
     grant: grant,

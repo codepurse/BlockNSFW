@@ -85,8 +85,21 @@ test('Settings says the lock needs a PIN', () => {
   assert.ok(desc.includes('It needs a PIN to work'), 'beside the switch');
   const source = fs.readFileSync(path.join(ROOT, 'options.js'), 'utf8');
   assert.ok(source.includes('Not locked: it needs a PIN.'), 'the state line, switched on with no PIN');
-  assert.ok(source.includes('It needs a PIN to work, and you haven’t set one.'), 'the are-you-sure dialog');
+  assert.ok(source.includes('Off. It can’t be turned on until you set a PIN.'), 'the state line, greyed out');
+  assert.ok(source.includes('toggle.disabled = !ExtensionsLock.canTurnOn(state);'), 'the switch follows canTurnOn');
   assert.ok(!source.includes('} else if (!state.guarded) {'), 'the state line follows locked, not guarded');
+});
+
+test('the switch is greyed out while off with no PIN and no pact, never once on', () => {
+  const can = (extra) => L.canTurnOn(L.lockState({ [L.SETTINGS_KEY]: {}, ...extra }));
+  assert.equal(can({}), false, 'off, nothing set');
+  assert.equal(can({ [L.ACCESS_CODE_KEY]: { enabled: true, scope: 'all' } }), false, 'an access code alone');
+  assert.equal(can({ [L.BOOST_STATE_KEY]: { active: 'risk', until: T0 } }), false, 'risk hours alone');
+  assert.equal(can({ [L.PIN_KEY]: PIN }), true, 'a PIN');
+  assert.equal(can({ [L.PIN_KEY]: '1234' }), true, 'a PIN an older version saved');
+  assert.equal(can({ [L.PACT_KEY]: { active: true } }), true, 'a pact');
+  assert.equal(L.canTurnOn(L.lockState({ ...ON })), true, 'on with the PIN since cleared: it can still be turned off');
+  assert.equal(L.canTurnOn(null), false);
 });
 
 test('codeHere matches what the access code asks for at the tier Settings opens the page with', () => {

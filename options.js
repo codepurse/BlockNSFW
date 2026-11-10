@@ -3493,12 +3493,17 @@ async function renderExtensionsLock() {
   if (!ExtensionsLock || !toggle) return;
   const { state, allowance } = await readExtensionsLock();
   toggle.checked = state.switchOn;
+  // Greyed out while it would lock nothing: off, with no PIN and no pact.
+  // Setting a PIN redraws this (the storage listener in setupExtensionsLock).
+  toggle.disabled = !ExtensionsLock.canTurnOn(state);
   if (!line) return;
   const now = Date.now();
   let text = 'Locked.';
   if (!state.switchOn) {
     // Off is the default: the person chooses it, through the warning below.
-    text = 'Off. Anyone can open the extensions page.';
+    text = toggle.disabled
+      ? 'Off. It can’t be turned on until you set a PIN. Set one under PIN, above.'
+      : 'Off. Anyone can open the extensions page.';
   } else if (state.boost) {
     const boost = Boost ? await Boost.readState(browserAPI.storage.local) : null;
     text = boost && boost.active === 'storm'
@@ -3624,9 +3629,8 @@ function setupAccessBanner() {
 // list the Settings row shows. Cancel is where focus starts.
 async function confirmExtensionsLock() {
   const list = $('lock-warning-list');
-  const { state } = ExtensionsLock ? await readExtensionsLock() : { state: { pin: true } };
-  // It needs a PIN or a pact; an access code alone doesn't lock it.
-  const later = state.pin || state.pact ? '' : '<p class="dialog-message">It needs a PIN to work, and you haven’t set one. Until you set a PIN (or make a pact), nothing changes: anyone can still open the extensions page.</p>';
+  // No PIN-less case here: with no PIN and no pact the switch is greyed out
+  // (ExtensionsLock.canTurnOn), and the change handler checks again.
   const choice = await createModal({
     title: 'Are you sure you want to lock it?',
     description: 'Once it’s on, the browser’s extensions page stops opening on a click.',
@@ -3636,7 +3640,6 @@ async function confirmExtensionsLock() {
         <svg class="lock-warning-icon" viewBox="0 0 20 20" aria-hidden="true" focusable="false"><path d="M10 2.5 18.5 17h-17L10 2.5z" /><path d="M10 8v4.25" /><path d="M10 14.6v.01" /></svg>
         <ul class="lock-warning-list">${list ? list.innerHTML : ''}</ul>
       </div>
-      ${later}
     `,
     buttons: [
       { text: 'Cancel', type: 'secondary', value: false },
@@ -3681,6 +3684,14 @@ function setupExtensionsLock() {
     lockToggle.addEventListener('change', async (e) => {
       const s = await getSettings();
       const wasOn = s[ExtensionsLock.SETTING] !== false;
+      // The PIN may have been cleared in another tab since the switch was
+      // drawn: turning it on still needs one.
+      if (!wasOn && e.target.checked && !ExtensionsLock.canTurnOn((await readExtensionsLock()).state)) {
+        e.target.checked = false;
+        renderExtensionsLock();
+        showToast('Set a PIN first. The lock needs one to work.', 'warning');
+        return;
+      }
       if (!wasOn && e.target.checked && !(await confirmExtensionsLock())) {
         e.target.checked = false;
         return;
