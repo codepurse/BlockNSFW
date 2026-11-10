@@ -41,23 +41,39 @@ test('recognises the extensions page in every browser, and nothing else', () => 
   }
 });
 
-test('locked once a PIN, a pact or the access code guards loosening', () => {
-  assert.equal(L.lockState({}).locked, false, 'nothing set: nothing to ask for');
-  assert.equal(L.lockState({ [L.PIN_KEY]: PIN }).locked, true);
-  assert.equal(L.lockState({ [L.PIN_KEY]: '1234' }).locked, true, 'a PIN an older version saved');
-  assert.equal(L.lockState({ [L.PIN_KEY]: '' }).locked, false);
-  assert.equal(L.lockState({ [L.PACT_KEY]: { active: true } }).locked, true);
-  assert.equal(L.lockState({ [L.ACCESS_CODE_KEY]: { enabled: true } }).locked, true);
-  assert.equal(L.lockState({ [L.ACCESS_CODE_KEY]: { enabled: false } }).locked, false);
+// The switch is off until the person turns it on (2026-11-10: it can shut
+// them out of their own extensions page, so it is a choice, never a default).
+const ON = { [L.SETTINGS_KEY]: { lockExtensionsPage: true } };
+
+test('off by default, and off means off, hard hours included', () => {
+  assert.equal(L.lockState({}).switchOn, false);
+  assert.equal(L.lockState({ [L.SETTINGS_KEY]: {} }).switchOn, false, 'a settings object without the key');
+  assert.equal(L.lockState({ [L.PIN_KEY]: PIN }).locked, false, 'a PIN alone locks nothing');
+  assert.equal(L.lockState({ [L.PIN_KEY]: PIN, [L.BOOST_STATE_KEY]: { active: 'risk', until: T0 } }).locked, false,
+    'nor do risk hours, unless it was chosen');
+  assert.equal(L.lockState({ [L.SETTINGS_KEY]: { lockExtensionsPage: 'yes' } }).switchOn, false, 'only true turns it on');
 });
 
-test('the switch turns the lock off, but Storm Mode and Risk hours shut it anyway', () => {
-  const off = { [L.SETTINGS_KEY]: { lockExtensionsPage: false } };
-  assert.equal(L.lockState({ ...off, [L.PIN_KEY]: PIN }).locked, false);
-  assert.equal(L.lockState({ ...off, [L.BOOST_STATE_KEY]: { active: 'risk', until: T0 } }).locked, true);
-  assert.equal(L.lockState({ [L.BOOST_STATE_KEY]: { active: 'storm', until: T0 } }).locked, true,
-    'a boost shuts it even with no PIN');
-  assert.equal(L.lockState({ [L.SETTINGS_KEY]: {} }).switchOn, true, 'on unless turned off');
+test('switched on, locked once a PIN, a pact or the access code guards loosening', () => {
+  assert.equal(L.lockState({ ...ON }).locked, false, 'nothing set: nothing to ask for');
+  assert.equal(L.lockState({ ...ON, [L.PIN_KEY]: PIN }).locked, true);
+  assert.equal(L.lockState({ ...ON, [L.PIN_KEY]: '1234' }).locked, true, 'a PIN an older version saved');
+  assert.equal(L.lockState({ ...ON, [L.PIN_KEY]: '' }).locked, false);
+  assert.equal(L.lockState({ ...ON, [L.PACT_KEY]: { active: true } }).locked, true);
+  assert.equal(L.lockState({ ...ON, [L.ACCESS_CODE_KEY]: { enabled: true } }).locked, true);
+  assert.equal(L.lockState({ ...ON, [L.ACCESS_CODE_KEY]: { enabled: false } }).locked, false);
+});
+
+test('switched on, Storm Mode and Risk hours shut it even with no PIN', () => {
+  assert.equal(L.lockState({ ...ON, [L.BOOST_STATE_KEY]: { active: 'risk', until: T0 } }).locked, true);
+  assert.equal(L.lockState({ ...ON, [L.BOOST_STATE_KEY]: { active: 'storm', until: T0 } }).locked, true);
+});
+
+test('both builds default the switch to off', () => {
+  for (const file of ['background.js', 'options.js']) {
+    const source = fs.readFileSync(path.join(ROOT, file), 'utf8');
+    assert.match(source, /lockExtensionsPage: false,/, file);
+  }
 });
 
 test('an opening lasts ten minutes, then shuts', () => {
@@ -193,8 +209,8 @@ function loadLock(initial = {}, opts = {}) {
 
 const SETTINGS_URL = 'chrome-extension://blocknsfw/options.html?extensions-page=';
 
-test('background: a tab arriving on the page goes to Settings while a PIN is set', async () => {
-  const { ctx, updates } = loadLock({ [L.PIN_KEY]: PIN });
+test('background: switched on, a tab arriving on the page goes to Settings while a PIN is set', async () => {
+  const { ctx, updates } = loadLock({ ...ON, [L.PIN_KEY]: PIN });
   const listeners = ctx.chrome.tabs.onUpdated.listeners;
   for (const listener of listeners) listener(7, { url: 'chrome://extensions/?id=abc' }, { id: 7 });
   for (const listener of listeners) listener(8, { url: 'https://example.com/' }, { id: 8 });
@@ -204,6 +220,13 @@ test('background: a tab arriving on the page goes to Settings while a PIN is set
   assert.ok(updates[0].url.startsWith(SETTINGS_URL + encodeURIComponent('chrome://extensions/?id=abc')));
 });
 
+test('background: with the switch left off, a PIN locks nothing', async () => {
+  const { ctx, updates } = loadLock({ [L.PIN_KEY]: PIN });
+  await ctx.extLockVisit(7, 'chrome://extensions/');
+  await ctx.extLockVisit(8, 'about:addons');
+  assert.equal(updates.length, 0);
+});
+
 test('background: with nothing guarding loosening, the page opens as before', async () => {
   const { ctx, updates } = loadLock({});
   await ctx.extLockVisit(7, 'chrome://extensions/');
@@ -211,7 +234,7 @@ test('background: with nothing guarding loosening, the page opens as before', as
 });
 
 test('background: an opening lets the tab stay until it runs out', async () => {
-  const { ctx, updates, clock } = loadLock({ [L.PIN_KEY]: PIN, [L.ALLOW_KEY]: L.grant('unlock', T0) });
+  const { ctx, updates, clock } = loadLock({ ...ON, [L.PIN_KEY]: PIN, [L.ALLOW_KEY]: L.grant('unlock', T0) });
   await ctx.extLockVisit(7, 'chrome://extensions/');
   assert.equal(updates.length, 0);
   clock.now = T0 + 11 * MIN;
@@ -221,6 +244,7 @@ test('background: an opening lets the tab stay until it runs out', async () => {
 
 test('background: during risk hours even an opening is refused', async () => {
   const { ctx, updates } = loadLock({
+    ...ON,
     [L.ALLOW_KEY]: L.grant('unlock', T0),
     [L.BOOST_STATE_KEY]: { active: 'risk', until: T0 + 60 * MIN, snapshot: {} },
   });
@@ -230,7 +254,7 @@ test('background: during risk hours even an opening is refused', async () => {
 
 test('background: a sweep sends back a tab left open after its opening ran out', async () => {
   const { ctx, updates, clock, storage } = loadLock(
-    { [L.PIN_KEY]: PIN, [L.ALLOW_KEY]: L.grant('unlock', T0) },
+    { ...ON, [L.PIN_KEY]: PIN, [L.ALLOW_KEY]: L.grant('unlock', T0) },
     { tabs: [{ id: 3, url: 'edge://extensions/' }, { id: 4, url: 'https://example.com/' }] });
   await ctx.extLockSweep();
   assert.equal(updates.length, 0, 'still open');

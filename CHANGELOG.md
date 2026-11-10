@@ -10,10 +10,13 @@ All notable project changes should be documented here going forward.
   Risk hours, could switch BlockNSFW off in private windows on the browser's
   extensions page, then browse freely there. The browser keeps that switch to
   itself, and once it's off, no extension can see private windows. So
-  BlockNSFW now locks the page instead (Settings › Security › Private windows,
-  "Lock the extensions page", on by default).
-  - While a PIN, a Pact or the access code is set, a tab going to
-    chrome://extensions, edge://extensions or about:addons is sent to Settings.
+  BlockNSFW can now lock the page instead (Settings › Security › Private
+  windows, "Lock the extensions page"). It's off by default, because it can
+  shut someone out of their own extensions page; turning it on shows what it
+  costs and asks "Are you sure?" first.
+  - Once it's on, while a PIN, a Pact or the access code is set, a tab going
+    to chrome://extensions, edge://extensions or about:addons is sent to
+    Settings.
   - Opening the page asks for the same as turning protection off: your PIN and
     access code, or the Pact's wait. It then stays open for 10 minutes.
   - During Storm Mode and Risk hours it doesn't open at all.

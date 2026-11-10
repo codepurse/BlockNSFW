@@ -47,7 +47,7 @@ const DEFAULT_SETTINGS = {
   gateways: [], // built-in gateway ids turned on; all off until chosen (shared/gateways.js)
   gatewaysCustom: [], // the user's own gateway sites: 'site.com' or 'site.com/path'
   gatewayPauseSeconds: 10,
-  lockExtensionsPage: true, // shared/extensions-lock.js
+  lockExtensionsPage: false, // opt-in, through a warning (shared/extensions-lock.js)
 };
 
 // The 24 sites Reset puts back on the trusted list.
@@ -3493,13 +3493,14 @@ async function renderExtensionsLock() {
   if (!line) return;
   const now = Date.now();
   let text = 'Locked.';
-  if (state.boost) {
+  if (!state.switchOn) {
+    // Off is the default: the person chooses it, through the warning below.
+    text = 'Off. Anyone can open the extensions page.';
+  } else if (state.boost) {
     const boost = Boost ? await Boost.readState(browserAPI.storage.local) : null;
     text = boost && boost.active === 'storm'
       ? 'Shut while Storm Mode is on.'
       : 'Shut during your risk hours.';
-  } else if (!state.switchOn) {
-    text = 'Off. Anyone can open the extensions page.';
   } else if (!state.guarded) {
     text = 'Not locked yet. It locks once you set a PIN or make a pact.';
   } else if (allowance && allowance.until > now) {

@@ -493,7 +493,7 @@ const DEFAULT_SETTINGS = {
   gateways: [], // built-in gateway ids turned on; all off until chosen (shared/gateways.js)
   gatewaysCustom: [], // the user's own gateway sites: 'site.com' or 'site.com/path'
   gatewayPauseSeconds: 10,
-  lockExtensionsPage: true, // the browser's extensions page asks for the PIN or Pact (shared/extensions-lock.js)
+  lockExtensionsPage: false, // opt-in: the browser's extensions page asks for the PIN or Pact (shared/extensions-lock.js)
 };
 
 // Default trusted domains for images (gaming, social media, e-commerce platforms)

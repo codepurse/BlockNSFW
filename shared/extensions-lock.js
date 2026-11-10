@@ -15,9 +15,12 @@
 // browser all get past it. Extension Guard (a separate Windows app) is what
 // closes those.
 //
-// Locked while the switch is on (it is unless turned off) and something guards
-// loosening changes: a PIN, a Pact or the access code. Storm Mode and Risk
-// Hours shut it whatever the switch says.
+// Off until the person turns it on (Settings › Security › Private windows),
+// through a warning and an are-you-sure, because it can shut them out of their
+// own extensions page. Once on, it is locked while something guards loosening
+// changes (a PIN, a Pact or the access code), and Storm Mode and Risk Hours
+// shut it outright. With the switch off nothing here applies, hard hours
+// included: nobody gets a lock they didn't choose.
 //
 // An opening is stored under ALLOW_KEY:
 //   { until, reason }      open until `until` (OPEN_MS after the check passed)
@@ -81,8 +84,9 @@
       (rawState.active === 'storm' || rawState.active === 'risk'));
   }
 
+  // Off unless turned on.
   function switchOn(settings) {
-    return !(settings && typeof settings === 'object' && settings[SETTING] === false);
+    return !!(settings && typeof settings === 'object' && settings[SETTING] === true);
   }
 
   // `store` holds the raw values under the keys above.
@@ -97,7 +101,7 @@
     var on = switchOn(data[SETTINGS_KEY]);
     var hasGuard = guarded.pin || guarded.pact || guarded.code;
     return {
-      locked: boost || (on && hasGuard),
+      locked: on && (boost || hasGuard),
       boost: boost,
       switchOn: on,
       guarded: hasGuard,
