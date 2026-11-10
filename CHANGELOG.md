@@ -20,7 +20,12 @@ All notable project changes should be documented here going forward.
   - This also covers the extensions page's Turn off switch.
   - Turning private windows *on* never asks for anything. That opening lasts
     3 minutes and ends as soon as they're on.
-  - Turning the lock off counts as loosening protection.
+  - Turning the lock off counts as loosening protection. While the page is
+    already open to you after the check or a pact's wait, it asks nothing
+    more, since the page itself could turn BlockNSFW off then.
+  - The switch carries a warning in plain words: every visit asks, hard hours
+    shut it, there's no "forgot PIN" button, and getting out takes the same.
+    Turning it back on asks "Are you sure?" with the same points.
   - It's a speed bump, not a wall: removing the extension, a guest window,
     another profile or another browser still get past it. Extension Guard
     closes those on Windows.

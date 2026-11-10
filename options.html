@@ -3120,6 +3120,71 @@
     #pact-pending-head {
       margin: var(--space-5) 0 var(--space-2);
     }
+
+    /* The extensions page lock's warning: what it costs, said before anyone
+       relies on it. Danger is kept for loosening actions elsewhere; here it
+       marks the one switch that can shut the person out of their own
+       browser's extensions page. A rule, a mark and plain sentences: no fill
+       behind the whole row, so it reads as a warning and not as an error. */
+    .lock-warning {
+      display: grid;
+      grid-template-columns: 20px minmax(0, 1fr);
+      column-gap: var(--space-3);
+      margin-top: var(--space-4);
+      padding: var(--space-4) var(--space-4) var(--space-4) var(--space-3);
+      border: 1px solid var(--color-danger);
+      border-left-width: 4px;
+      background: color-mix(in srgb, var(--color-danger) 7%, var(--color-sheet));
+    }
+    .lock-warning-icon {
+      width: 20px;
+      height: 20px;
+      margin-top: 1px;
+      fill: none;
+      stroke: var(--color-danger);
+      stroke-width: 1.6;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+    .lock-warning-head {
+      margin: 0;
+      font-size: 15px;
+      font-weight: 600;
+      line-height: 1.35;
+      color: var(--color-danger);
+    }
+    /* Each point leads with its bold phrase, so no bullets: the points sit
+       flush under the heading, a hairline apart. */
+    .lock-warning-list {
+      margin: var(--space-2) 0 0;
+      padding: 0;
+      list-style: none;
+      font-size: 14px;
+      line-height: 1.5;
+      color: var(--color-ink);
+    }
+    .lock-warning-list li {
+      padding: var(--space-2) 0;
+    }
+    .lock-warning-list li + li {
+      border-top: 1px solid color-mix(in srgb, var(--color-danger) 28%, transparent);
+    }
+    .lock-warning-list li:last-child {
+      padding-bottom: 0;
+    }
+    .lock-warning-list strong {
+      font-weight: 600;
+    }
+    /* The same list inside the are-you-sure dialog. */
+    .dialog-body .lock-warning {
+      margin-top: 0;
+    }
+    .dialog-body .lock-warning-list {
+      margin-top: 0;
+    }
+    .dialog-body .lock-warning-list li:first-child {
+      padding-top: 0;
+    }
     #pact-on .row-control {
       gap: var(--space-3);
     }
@@ -4765,6 +4830,20 @@ title/Example Domain/"></textarea>
                 <p class="row-desc" id="lock-extensions-page-desc">That page is where BlockNSFW can be turned off, or switched off in private windows. While you have a PIN or a Pact, opening it asks for the same as turning protection off, and it stays shut during Storm Mode and your risk hours.</p>
                 <p class="row-desc" id="lock-extensions-page-state" aria-live="polite"></p>
                 <span class="locked-note" data-lock="critical" data-lock-when="Turning it off" hidden></span>
+                <!-- What the lock costs. The are-you-sure dialog copies this
+                     list (options.js, confirmExtensionsLock). -->
+                <div class="lock-warning" id="lock-warning" role="note" aria-labelledby="lock-warning-head">
+                  <svg class="lock-warning-icon" viewBox="0 0 20 20" aria-hidden="true" focusable="false"><path d="M10 2.5 18.5 17h-17L10 2.5z" /><path d="M10 8v4.25" /><path d="M10 14.6v.01" /></svg>
+                  <div>
+                    <p class="lock-warning-head" id="lock-warning-head">This can lock you out of your own extensions page</p>
+                    <ul class="lock-warning-list" id="lock-warning-list">
+                      <li><strong>Every visit asks.</strong> Your PIN and access code, or your pact’s wait, even just to manage another extension.</li>
+                      <li><strong>Hard hours shut it.</strong> During Storm Mode and your risk hours it doesn’t open at all, whatever you type.</li>
+                      <li><strong>There’s no “forgot PIN” button.</strong> Forget your PIN, and the page stays shut until you remember it.</li>
+                      <li><strong>Getting out takes the same.</strong> Turning this switch off asks for everything above, unless the page is already open to you.</li>
+                    </ul>
+                  </div>
+                </div>
               </div>
               <label class="switch">
                 <input type="checkbox" class="switch-input" role="switch" id="lock-extensions-page" aria-describedby="lock-extensions-page-desc lock-extensions-page-state" />

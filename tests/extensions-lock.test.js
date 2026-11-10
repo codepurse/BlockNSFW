@@ -123,6 +123,24 @@ test('both builds ask for the tabs permission, and a pact can carry an opening',
   assert.match(html, /id="lock-extensions-page"/);
 });
 
+test('the lock warns before anyone relies on it, and asks once when turned on', () => {
+  // Asked for 2026-11-09: the switch can shut someone out of their own
+  // extensions page, so a plain description was not enough.
+  const html = fs.readFileSync(path.join(ROOT, 'options.html'), 'utf8');
+  const panel = html.slice(html.indexOf('id="lock-warning"'), html.indexOf('</ul>', html.indexOf('id="lock-warning-list"')));
+  assert.ok(panel.length > 0, 'the warning panel is in the lock row');
+  assert.equal((panel.match(/<li>/g) || []).length, 4);
+  assert.match(panel, /no “forgot PIN” button/);
+  const options = fs.readFileSync(path.join(ROOT, 'options.js'), 'utf8');
+  assert.match(options, /async function confirmExtensionsLock\(\)/);
+  assert.match(options, /!wasOn && e\.target\.checked && !\(await confirmExtensionsLock\(\)\)/,
+    'turning the lock on goes through the are-you-sure dialog');
+  // Turning it off asks nothing more while a paid-for opening is running,
+  // never on the free private-windows one, never during a boost.
+  assert.match(options, /const paidOpen = !state\.boost && allowance && allowance\.reason !== 'private' && allowance\.until > Date\.now\(\);/);
+  assert.match(options, /if \(wasOn && !e\.target\.checked && !paidOpen\)/);
+});
+
 // --- The background, driven ----------------------------------------------------
 
 function memoryStorage(initial) {

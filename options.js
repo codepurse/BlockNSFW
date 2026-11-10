@@ -3609,6 +3609,32 @@ function setupAccessBanner() {
   renderAccessBanner();
 }
 
+// Turning the lock on is free, as every strengthening is, but it can shut
+// someone out of their own extensions page, so it asks once, with the same
+// list the Settings row shows. Cancel is where focus starts.
+async function confirmExtensionsLock() {
+  const list = $('lock-warning-list');
+  const { state } = ExtensionsLock ? await readExtensionsLock() : { state: { guarded: true } };
+  const later = state.guarded ? '' : '<p class="dialog-message">It starts once you set a PIN, make a pact or turn on the access code. Until then nothing changes.</p>';
+  const choice = await createModal({
+    title: 'Are you sure you want to lock it?',
+    description: 'Once it’s on, the browser’s extensions page stops opening on a click.',
+    // Static markup from this page, never anything a person typed.
+    bodyHTML: `
+      <div class="lock-warning" role="note">
+        <svg class="lock-warning-icon" viewBox="0 0 20 20" aria-hidden="true" focusable="false"><path d="M10 2.5 18.5 17h-17L10 2.5z" /><path d="M10 8v4.25" /><path d="M10 14.6v.01" /></svg>
+        <ul class="lock-warning-list">${list ? list.innerHTML : ''}</ul>
+      </div>
+      ${later}
+    `,
+    buttons: [
+      { text: 'Cancel', type: 'secondary', value: false },
+      { text: 'Yes, lock it', type: 'destructive', value: true }
+    ]
+  });
+  return choice === true;
+}
+
 function setupExtensionsLock() {
   setupAccessBanner();
   const incognitoToggle = $('allow-incognito');
@@ -3644,7 +3670,17 @@ function setupExtensionsLock() {
     lockToggle.addEventListener('change', async (e) => {
       const s = await getSettings();
       const wasOn = s[ExtensionsLock.SETTING] !== false;
-      if (wasOn && !e.target.checked) {
+      if (!wasOn && e.target.checked && !(await confirmExtensionsLock())) {
+        e.target.checked = false;
+        return;
+      }
+      // While the page is already open to you, after the check or a pact's
+      // wait, you could turn BlockNSFW off on it anyway, so asking again here
+      // guards nothing. The free opening for private windows asked nothing,
+      // so it doesn't count, and Storm Mode or Risk Hours void every opening.
+      const { state, allowance } = await readExtensionsLock();
+      const paidOpen = !state.boost && allowance && allowance.reason !== 'private' && allowance.until > Date.now();
+      if (wasOn && !e.target.checked && !paidOpen) {
         const ok = await guardWeakening('stop locking the extensions page', { critical: true },
           settingsChange({ [ExtensionsLock.SETTING]: false }));
         if (!ok) {
