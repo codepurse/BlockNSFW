@@ -1,6 +1,6 @@
 # Adult AI sites to review
 
-_Written by the curation pipeline on 2026-11-08 03:54 UTC. Marks you make here are kept when it runs again._
+_Written by the curation pipeline on 2026-11-15 04:23 UTC. Marks you make here are kept when it runs again._
 
 Sites the blocklists we follow (Block List Project, StevenBlack) carry that look like
 adult AI services: nudify, undress and deepfake tools, sex chat and companion apps,
@@ -144,7 +144,7 @@ Left off: 56 sites with no address. They come back here if they return.
 - [ ] `undressbae.com` · BLP HZ · Cloudflare allows
 - [ ] `undressed.com` · BLP OI · Cloudflare allows
 - [ ] `undressgirl.com` · BLP OI · Cloudflare allows
-- [ ] `undressherapp.net` · BLP OI · Cloudflare allows
+- [ ] `undressherapp.net` · BLP OI · Cloudflare not asked
 - [ ] `undressing.app` · BLP OI · Cloudflare allows
 - [ ] `undressio.com` · BLP OI · Cloudflare allows
 - [ ] `undressninja.com` · BLP HZ · Cloudflare allows
@@ -223,7 +223,6 @@ Left off: 56 sites with no address. They come back here if they return.
 - [ ] `sexbot.gallery` · BLP · Cloudflare blocks
 - [ ] `sexbot.nl` · BLP · Cloudflare blocks
 - [ ] `sexbot.us` · BLP · Cloudflare blocks
-- [ ] `sexbot.work` · BLP · Cloudflare blocks
 - [ ] `sexchatbot.net` · BLP · Cloudflare blocks
 - [ ] `aigirlfriend.baby` · BLP HZ OI · Cloudflare allows
 - [ ] `ai-sexchat.com` · BLP OI · Cloudflare allows
@@ -243,7 +242,7 @@ Left off: 56 sites with no address. They come back here if they return.
 - [ ] `girlfriendgpt.ai` · BLP OI · Cloudflare allows
 - [ ] `sexchatai.pages.dev` · BLP OI · Cloudflare allows
 - [ ] `sextingai.app` · BLP OI · Cloudflare allows
-- [ ] `sextingai.net` · BLP OI · Cloudflare allows
+- [ ] `sextingai.net` · BLP OI · no address
 - [ ] `sextingaibot.com` · BLP OI · Cloudflare allows
 - [ ] `sexyaigirlfriend.xyz` · BLP OI · Cloudflare allows
 - [ ] `aigf.club` · BLP · Cloudflare allows
@@ -278,6 +277,7 @@ Left off: 56 sites with no address. They come back here if they return.
 - [ ] `sexbot.cam` · BLP · Cloudflare allows
 - [ ] `sexbot.co` · BLP · Cloudflare allows
 - [ ] `sexbot.watch` · BLP · Cloudflare allows
+- [ ] `sexbot.work` · BLP · no address
 - [ ] `sexbot9000.tumblr.com` · BLP · Cloudflare allows
 - [ ] `sexchatai.xyz` · BLP · Cloudflare allows
 - [ ] `sexgpt-bot.xyz` · BLP · Cloudflare allows
@@ -327,7 +327,6 @@ Left off: 56 sites with no address. They come back here if they return.
 - [ ] `aisexlove.club` · BLP OI · Cloudflare allows
 - [ ] `aisexmex.com` · BLP OI · Cloudflare allows
 - [ ] `aisexrank.top` · BLP OI · Cloudflare allows
-- [ ] `aisextube.com` · BLP HZ · Cloudflare allows
 - [ ] `aisexy.ai` · BLP OI · Cloudflare allows
 - [ ] `aisexy.shop` · BLP OI · Cloudflare allows
 - [ ] `aisexychat.com` · BLP OI · Cloudflare allows
@@ -372,6 +371,7 @@ Left off: 56 sites with no address. They come back here if they return.
 - [ ] `aisextbot.com` · BLP · Cloudflare allows
 - [ ] `aisextoyreviews.com` · BLP · Cloudflare allows
 - [ ] `aisextoys.xyz` · BLP · Cloudflare allows
+- [ ] `aisextube.com` · BLP · Cloudflare allows
 - [ ] `basexai.xyz` · BLP · Cloudflare allows
 - [ ] `becausexai.com` · BLP · Cloudflare allows
 - [ ] `blocksexai.xyz` · BLP · Cloudflare allows
@@ -451,7 +451,6 @@ Left off: 56 sites with no address. They come back here if they return.
 - [x] `lusychat.ai` · BLP HZ OI · Cloudflare blocks
 - [x] `luvy.ai` · BLP HZ OI · Cloudflare blocks
 - [x] `maturenl.ai` · BLP HZ OI · Cloudflare blocks
-- [x] `motionmuse.ai` · BLP HZ OI · Cloudflare blocks
 - [x] `nakedly.ai` · SB BLP HZ · Cloudflare blocks
 - [x] `nextpart.ai` · SB BLP HZ · Cloudflare blocks
 - [x] `nudemaker.ai` · BLP HZ OI · Cloudflare blocks
@@ -487,6 +486,7 @@ Left off: 56 sites with no address. They come back here if they return.
 - [x] `kalon.ai` · BLP HZ · Cloudflare blocks
 - [x] `kissyvid.ai` · BLP OI · Cloudflare blocks
 - [x] `me4u.ai` · BLP HZ · Cloudflare blocks
+- [x] `motionmuse.ai` · BLP OI · Cloudflare blocks
 - [x] `myimg.ai` · BLP HZ · Cloudflare blocks
 - [x] `privee.ai` · BLP HZ · Cloudflare blocks
 - [x] `sexchatgpt.ai` · BLP OI · Cloudflare blocks
@@ -518,6 +518,7 @@ Left off: 56 sites with no address. They come back here if they return.
 - [ ] `redgifs.ai` · SB BLP HZ OI · Cloudflare allows
 - [ ] `secrets.ai` · SB BLP HZ OI · Cloudflare allows
 - [ ] `thotchat.ai` · SB BLP HZ OI · Cloudflare allows
+- [ ] `xchar.ai` · SB BLP HZ OI · Cloudflare allows
 - [ ] `aroused.ai` · BLP HZ OI · Cloudflare allows
 - [ ] `cornhub.ai` · SB BLP OI · Cloudflare allows
 - [ ] `darlink.ai` · BLP HZ OI · Cloudflare allows
@@ -568,7 +569,6 @@ Left off: 56 sites with no address. They come back here if they return.
 - [ ] `trynectar.ai` · SB BLP HZ · Cloudflare allows
 - [ ] `unhinged.ai` · BLP HZ OI · Cloudflare allows
 - [ ] `wishapp.ai` · BLP HZ OI · Cloudflare allows
-- [ ] `xchar.ai` · SB BLP OI · Cloudflare allows
 - [ ] `xotic.ai` · BLP HZ OI · Cloudflare allows
 - [ ] `66y.ai` · BLP OI · Cloudflare allows
 - [ ] `91av.ai` · BLP OI · Cloudflare allows
