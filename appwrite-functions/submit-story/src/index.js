@@ -8,6 +8,62 @@ const DEFAULT_PAGE = 10;                    // approved stories per feed page
 const MAX_PAGE = 50;                        // hard cap per request
 const REPORT_HIDE_THRESHOLD = 3;            // distinct devices needed to auto-hide
 
+// --- Feed cache ------------------------------------------------------------
+// Appwrite bills one database read per document a query returns, and the free
+// plan stops answering at 500K reads a month. In Nov 2026 the feed used all of
+// it, and every app and extension user lost their stories until the reset. So
+// each page served is kept in this container's memory, and a request inside a
+// kept window is served from it (the extension's 50-story shelf also answers
+// the 10-story feed pages).
+//
+// A kept page answers only while no story has changed since it was read: each
+// request first reads the most recently changed story (one read), and an
+// approval, like, report or new submission moves that on. A page kept across an
+// approval would sit still while "Load more" reads the shifted feed, and repeat
+// a story, which app 1.19.0 crashes on. Deleting doesn't move it, so
+// FEED_TTL_MS bounds how long a deleted story can still show.
+//
+// Module scope survives between executions only while Appwrite keeps this
+// container warm. A request whose page has to be read costs one read more than
+// before the cache; one served from it costs one read instead of the page.
+const FEED_TTL_MS = 30 * 60 * 1000;   // how long a story deleted in the console can still show
+const FEED_CACHE_MAX = 20;            // windows kept; oldest goes first
+const feedCache = new Map();          // `${offset}:${limit}` → { offset, stories, total, at, version }
+
+// Which change the stories are at: the most recently changed one. One read.
+async function feedVersion(databases, dbId, collId) {
+  const list = await databases.listDocuments(dbId, collId, [
+    Query.orderDesc('$updatedAt'),
+    Query.limit(1),
+  ]);
+  const last = list.documents[0];
+  return last ? `${last.$updatedAt} ${last.$id}` : '';
+}
+
+function cachedFeedPage(offset, limit, now, version) {
+  for (const [key, e] of feedCache) {
+    if (now - e.at >= FEED_TTL_MS || e.version !== version) {
+      feedCache.delete(key);
+      continue;
+    }
+    const end = e.offset + e.stories.length;
+    // Starts at or after the window's start, and the window holds all of it or
+    // the feed ends there (past the end is an empty page, still free).
+    if (e.offset <= offset && (offset + limit <= end || end >= e.total)) {
+      const from = offset - e.offset;
+      return { stories: e.stories.slice(from, from + limit), total: e.total };
+    }
+  }
+  return null;
+}
+
+function rememberFeedPage(offset, limit, stories, total, now, version) {
+  const key = `${offset}:${limit}`;
+  feedCache.delete(key);
+  if (feedCache.size >= FEED_CACHE_MAX) feedCache.delete(feedCache.keys().next().value);
+  feedCache.set(key, { offset, stories, total, at: now, version });
+}
+
 function makeDatabases() {
   const client = new Client()
     // Endpoint + project are auto-injected by Appwrite; fall back if not.
@@ -31,6 +87,18 @@ module.exports = async ({ req, res, log, error }) => {
       const q = req.query || {};
       const limit = Math.min(Math.max(parseInt(q.limit, 10) || DEFAULT_PAGE, 1), MAX_PAGE);
       const offset = Math.max(parseInt(q.offset, 10) || 0, 0);
+      const now = Date.now();
+      // Read before the page, so a change made while it's read shows up as a
+      // newer version next time instead of being missed.
+      const version = await feedVersion(databases, dbId, collId);
+
+      const kept = cachedFeedPage(offset, limit, now, version);
+      if (kept) {
+        log(`Feed ${offset}:${limit} from cache`);
+        return res.json({ ok: true, stories: kept.stories, total: kept.total }, 200, {
+          'Cache-Control': 'public, max-age=60',
+        });
+      }
 
       const list = await databases.listDocuments(dbId, collId, [
         Query.equal('status', 'approved'),
@@ -46,6 +114,8 @@ module.exports = async ({ req, res, log, error }) => {
         likes: d.likes || 0,
         createdAt: d.$createdAt,
       }));
+      rememberFeedPage(offset, limit, stories, list.total, now, version);
+      log(`Feed ${offset}:${limit} read ${stories.length} stories`);
       return res.json({ ok: true, stories, total: list.total }, 200, {
         'Cache-Control': 'public, max-age=60',
       });
