@@ -286,6 +286,38 @@ test('a like after an approval leaves the pages to be read again, and nothing re
   assert.equal(seen[0], 'waiting');
 });
 
+test('a story hidden by reports and then liked leaves the feed on the next load', async () => {
+  // A phone can keep showing a story for hours after it was hidden, and take a like on it.
+  seed(30);
+  const fn = coldStart();
+  await feed(fn, 0, 10);
+  for (const device of ['a', 'b', 'c']) await post(fn, { action: 'report', storyId: 's29', deviceId: device });
+  await post(fn, { action: 'like', storyId: 's29', like: true, deviceId: 'd' });
+
+  const after = await feed(fn, 0, 10);
+  assert.ok(!ids(after).includes('s29'));
+  assert.deepEqual(after, await uncached(0, 10));
+});
+
+test('a story approved again and then liked does not repeat on the next page', async () => {
+  seed(30);
+  // Hidden when the first page is kept; its place is between s25 and s24.
+  db.collections.get('stories').set('back', story('back', Date.parse('2026-10-01T00:24:30Z'), 'hidden'));
+  const fn = coldStart();
+  await feed(fn, 0, 10);
+
+  clock = START + 2 * MIN;
+  approveInConsole('back');
+  await post(fn, { action: 'like', storyId: 'back', like: true, deviceId: 'a' });
+
+  const page1 = await feed(fn, 0, 10);
+  const page2 = await feed(fn, 10, 10);
+  const seen = ids(page1, page2);
+  assert.equal(new Set(seen).size, seen.length, `repeated: ${seen.join(' ')}`);
+  assert.ok(ids(page1).includes('back'));
+  assert.deepEqual(page1, await uncached(0, 10));
+});
+
 test('a like costs no extra read when nothing is kept', async () => {
   seed(30);
   const fn = coldStart();

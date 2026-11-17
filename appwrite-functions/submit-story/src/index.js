@@ -67,18 +67,22 @@ function rememberFeedPage(offset, limit, stories, total, now, version) {
 
 // A like changes one number on one story and leaves the feed's order and
 // length alone, so the kept pages take the new count instead of being read
-// again. Only when the like is the one change since they were read: one read
-// lists the stories changed after their version, and anything else there (an
-// approval in the console, a like another copy of this function saved) leaves
-// them to be read again. Called after the like is saved; no read if nothing is
-// kept.
-async function keepPagesThroughLike(databases, dbId, collId, storyId, likes, now) {
+// again. Only when the like is the one change since they were read: the liked
+// story itself must not have changed since (hidden by reports, approved or
+// unapproved in the console, all of which move its place in the feed; a phone
+// can still show a hidden story and take a like on it), and one read lists the
+// stories changed after their version, where anything else (an approval, a
+// like another copy of this function saved) leaves them to be read again.
+// Called after the like is saved with the story's $updatedAt from before it;
+// no read if nothing is kept.
+async function keepPagesThroughLike(databases, dbId, collId, storyId, lastChanged, likes, now) {
   let version = '';
   for (const e of feedCache.values()) {
     if (now - e.at < FEED_TTL_MS && e.version > version) version = e.version;
   }
   if (!version) return false;
   const since = version.slice(0, version.indexOf(' '));
+  if (!lastChanged || lastChanged > since) return false;
   const changed = await databases.listDocuments(dbId, collId, [
     Query.greaterThan('$updatedAt', since),
     Query.limit(2),
@@ -194,7 +198,7 @@ module.exports = async ({ req, res, log, error }) => {
         const updated = await databases.updateDocument(dbId, collId, storyId, { likes, likedBy });
         likes = Number(updated.likes) || 0;
         try {
-          if (await keepPagesThroughLike(databases, dbId, collId, storyId, likes, Date.now())) {
+          if (await keepPagesThroughLike(databases, dbId, collId, storyId, doc.$updatedAt, likes, Date.now())) {
             log(`Like on ${storyId} kept in the cached feed`);
           }
         } catch (e) {
