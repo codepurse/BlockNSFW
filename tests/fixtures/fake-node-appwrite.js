@@ -21,6 +21,7 @@ function notFound() {
 
 const Query = {
   equal: (attribute, value) => ({ method: 'equal', attribute, value }),
+  greaterThan: (attribute, value) => ({ method: 'greaterThan', attribute, value }),
   greaterThanEqual: (attribute, value) => ({ method: 'greaterThanEqual', attribute, value }),
   orderDesc: (attribute) => ({ method: 'orderDesc', attribute }),
   limit: (value) => ({ method: 'limit', value }),
@@ -40,6 +41,7 @@ class Databases {
     let offset = 0;
     for (const q of queries) {
       if (q.method === 'equal') docs = docs.filter((d) => d[q.attribute] === q.value);
+      if (q.method === 'greaterThan') docs = docs.filter((d) => d[q.attribute] > q.value);
       if (q.method === 'greaterThanEqual') docs = docs.filter((d) => d[q.attribute] >= q.value);
       if (q.method === 'orderDesc') docs.sort((a, b) => (a[q.attribute] < b[q.attribute] ? 1 : -1));
       if (q.method === 'limit') limit = q.value;

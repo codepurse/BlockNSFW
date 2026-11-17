@@ -18,10 +18,11 @@ const REPORT_HIDE_THRESHOLD = 3;            // distinct devices needed to auto-h
 //
 // A kept page answers only while no story has changed since it was read: each
 // request first reads the most recently changed story (one read), and an
-// approval, like, report or new submission moves that on. A page kept across an
+// approval, report or new submission moves that on. A page kept across an
 // approval would sit still while "Load more" reads the shifted feed, and repeat
 // a story, which app 1.19.0 crashes on. Deleting doesn't move it, so
-// FEED_TTL_MS bounds how long a deleted story can still show.
+// FEED_TTL_MS bounds how long a deleted story can still show. A like moves it
+// too, but the kept pages take the new count instead (keepPagesThroughLike).
 //
 // Module scope survives between executions only while Appwrite keeps this
 // container warm. A request whose page has to be read costs one read more than
@@ -62,6 +63,36 @@ function rememberFeedPage(offset, limit, stories, total, now, version) {
   feedCache.delete(key);
   if (feedCache.size >= FEED_CACHE_MAX) feedCache.delete(feedCache.keys().next().value);
   feedCache.set(key, { offset, stories, total, at: now, version });
+}
+
+// A like changes one number on one story and leaves the feed's order and
+// length alone, so the kept pages take the new count instead of being read
+// again. Only when the like is the one change since they were read: one read
+// lists the stories changed after their version, and anything else there (an
+// approval in the console, a like another copy of this function saved) leaves
+// them to be read again. Called after the like is saved; no read if nothing is
+// kept.
+async function keepPagesThroughLike(databases, dbId, collId, storyId, likes, now) {
+  let version = '';
+  for (const e of feedCache.values()) {
+    if (now - e.at < FEED_TTL_MS && e.version > version) version = e.version;
+  }
+  if (!version) return false;
+  const since = version.slice(0, version.indexOf(' '));
+  const changed = await databases.listDocuments(dbId, collId, [
+    Query.greaterThan('$updatedAt', since),
+    Query.limit(2),
+  ]);
+  const only = changed.documents[0];
+  if (changed.total !== 1 || !only || only.$id !== storyId) return false;
+  const next = `${only.$updatedAt} ${only.$id}`;
+  for (const e of feedCache.values()) {
+    if (e.version !== version) continue;
+    // A new array of new objects: a page already handed out stays as it was.
+    e.stories = e.stories.map((s) => (s.id === storyId ? { ...s, likes } : s));
+    e.version = next;
+  }
+  return true;
 }
 
 function makeDatabases() {
@@ -161,7 +192,16 @@ module.exports = async ({ req, res, log, error }) => {
         }
 
         const updated = await databases.updateDocument(dbId, collId, storyId, { likes, likedBy });
-        return res.json({ ok: true, likes: Number(updated.likes) || 0 });
+        likes = Number(updated.likes) || 0;
+        try {
+          if (await keepPagesThroughLike(databases, dbId, collId, storyId, likes, Date.now())) {
+            log(`Like on ${storyId} kept in the cached feed`);
+          }
+        } catch (e) {
+          // The like is saved; the kept pages are just read again next time.
+          log(`Cached feed not kept through a like: ${e.message}`);
+        }
+        return res.json({ ok: true, likes });
       }
 
       // Report a story as inappropriate — deduped per device via reportedBy.

@@ -3,7 +3,8 @@
 // Appwrite bills one database read per document a query returns, and the feed
 // used up the free plan's 500K a month. The function now keeps each page it
 // serves in memory and serves it again while no story has changed, which costs
-// one read to check instead of the page. These tests run it against a fake
+// one read to check instead of the page. A like, the commonest change, is put
+// into the kept pages instead of dropping them. These tests run it against a fake
 // database that counts billed reads, and check each kept answer against a
 // freshly loaded copy of the function, which has nothing kept and so answers
 // as the function did before it kept pages.
@@ -217,6 +218,86 @@ test('a like is shown on the next load', async () => {
 
   await post(fn, { action: 'like', storyId: 's29', like: false, deviceId: 'phone-a' });
   assert.deepEqual(await feed(fn, 0, 10), await uncached(0, 10));
+});
+
+test('a like keeps the kept pages, with the new count', async () => {
+  seed(30);
+  const fn = coldStart();
+  await feed(fn, 0, 10);
+  await feed(fn, 0, 50);
+
+  const before = db.reads;
+  const liked = await post(fn, { action: 'like', storyId: 's25', like: true, deviceId: 'phone-a' });
+  assert.equal(liked.body.likes, 1);
+  assert.equal(db.reads - before, 2, 'the story, and what changed since the pages were read');
+  assert.ok(logs.includes('Like on s25 kept in the cached feed'));
+
+  for (const [offset, limit] of [[0, 10], [0, 50], [2, 5]]) {
+    const page = await measured(fn, offset, limit);
+    assert.equal(page.reads, 1, `offset ${offset}, limit ${limit}`);
+    assert.deepEqual(page.answer, await uncached(offset, limit));
+  }
+
+  await post(fn, { action: 'like', storyId: 's25', like: false, deviceId: 'phone-a' });
+  const unliked = await measured(fn, 0, 10);
+  assert.equal(unliked.reads, 1);
+  assert.deepEqual(unliked.answer, await uncached(0, 10));
+});
+
+test('likes one after another all land in the kept pages', async () => {
+  seed(30);
+  const fn = coldStart();
+  await feed(fn, 0, 10);
+  for (const [storyId, deviceId] of [['s29', 'a'], ['s28', 'b'], ['s29', 'c']]) {
+    await post(fn, { action: 'like', storyId, like: true, deviceId });
+  }
+  const page = await measured(fn, 0, 10);
+  assert.equal(page.reads, 1);
+  assert.deepEqual(page.answer.body.stories.slice(0, 2).map((s) => s.likes), [2, 1]);
+  assert.deepEqual(page.answer, await uncached(0, 10));
+});
+
+test('a page handed out before a like stays as it was sent', async () => {
+  seed(30);
+  const fn = coldStart();
+  const sent = await feed(fn, 0, 10);
+  const copy = structuredClone(sent.body);
+  await post(fn, { action: 'like', storyId: 's29', like: true, deviceId: 'a' });
+  assert.deepEqual(sent.body, copy);
+});
+
+test('a like after an approval leaves the pages to be read again, and nothing repeats', async () => {
+  seed(30);
+  db.collections.get('stories').set('waiting', story('waiting', START - 60 * MIN, 'pending'));
+  const fn = coldStart();
+  await feed(fn, 0, 10);
+
+  clock = START + 2 * MIN;
+  approveInConsole('waiting');
+  await post(fn, { action: 'like', storyId: 's29', like: true, deviceId: 'phone-a' });
+  assert.ok(!logs.some((m) => m.startsWith('Like on')));
+
+  const page1 = await measured(fn, 0, 10);
+  assert.equal(page1.reads, 11);
+  assert.deepEqual(page1.answer, await uncached(0, 10));
+  const page2 = await feed(fn, 10, 10);
+  const seen = ids(page1.answer, page2);
+  assert.equal(new Set(seen).size, seen.length, `repeated: ${seen.join(' ')}`);
+  assert.equal(seen[0], 'waiting');
+});
+
+test('a like costs no extra read when nothing is kept', async () => {
+  seed(30);
+  const fn = coldStart();
+  let before = db.reads;
+  await post(fn, { action: 'like', storyId: 's29', like: true, deviceId: 'a' });
+  assert.equal(db.reads - before, 1);
+
+  await feed(fn, 0, 10);
+  clock = START + 31 * MIN;               // the kept page has expired
+  before = db.reads;
+  await post(fn, { action: 'like', storyId: 's28', like: true, deviceId: 'a' });
+  assert.equal(db.reads - before, 1);
 });
 
 test('a story hidden by reports leaves the feed on the next load', async () => {
