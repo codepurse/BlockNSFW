@@ -12,11 +12,15 @@ const REPORT_HIDE_THRESHOLD = 3;            // distinct devices needed to auto-h
 // Appwrite bills one database read per document a query returns, and the free
 // plan stops answering at 500K reads a month. In Nov 2026 the feed used all of
 // it, and every app and extension user lost their stories until the reset. So
-// each page served is kept in this container's memory, and a request inside a
-// kept window is served from it (the extension's 50-story shelf also answers
-// the 10-story feed pages).
+// the stories it reads are kept in this container's memory in blocks of
+// FEED_BLOCK (the feed's 0-9, 10-19, ...), and a request whose stories are all
+// in kept blocks is served from them. The apps ask for whole blocks (10 stories
+// from 0, 10, 20...; the extension's shelf 50 from 0), and a request at any
+// other offset or size is answered from the same blocks, so a script asking
+// for odd windows can't keep the cache missing. A request past the end of the
+// feed is answered from the feed's length without reading.
 //
-// A kept page answers only while no story has changed since it was read: each
+// A kept block answers only while no story has changed since it was read: each
 // request first reads the most recently changed story (one read), and an
 // approval, report or new submission moves that on. A page kept across an
 // approval would sit still while "Load more" reads the shifted feed, and repeat
@@ -25,11 +29,14 @@ const REPORT_HIDE_THRESHOLD = 3;            // distinct devices needed to auto-h
 // too, but the kept pages take the new count instead (keepPagesThroughLike).
 //
 // Module scope survives between executions only while Appwrite keeps this
-// container warm. A request whose page has to be read costs one read more than
-// before the cache; one served from it costs one read instead of the page.
+// container warm. A request whose blocks have to be read costs one read more
+// than before the cache (an odd window reads its whole blocks, up to 18 more);
+// one served from them costs one read instead of the page.
 const FEED_TTL_MS = 30 * 60 * 1000;   // how long a story deleted in the console can still show
-const FEED_CACHE_MAX = 20;            // windows kept; oldest goes first
-const feedCache = new Map();          // `${offset}:${limit}` → { offset, stories, total, at, version }
+const FEED_BLOCK = 10;                // stories per kept block: the apps' page size
+const FEED_CACHE_MAX = 100;           // blocks kept (1,000 stories); oldest goes first
+const feedCache = new Map();          // block's first offset → { stories, at, version }
+let feedTotal = null;                 // { total, at, version }: the feed's length at the latest read
 
 // Which change the stories are at: the most recently changed one. One read.
 async function feedVersion(databases, dbId, collId) {
@@ -41,28 +48,37 @@ async function feedVersion(databases, dbId, collId) {
   return last ? `${last.$updatedAt} ${last.$id}` : '';
 }
 
+// The first offset of the block an offset falls in, and the end of the block
+// the last story of a request falls in: the whole blocks a request needs.
+const blockStart = (offset) => Math.floor(offset / FEED_BLOCK) * FEED_BLOCK;
+const blockEnd = (offset, limit) => Math.ceil((offset + limit) / FEED_BLOCK) * FEED_BLOCK;
+
+// The kept answer to a request, or null if a block it needs isn't kept.
 function cachedFeedPage(offset, limit, now, version) {
-  for (const [key, e] of feedCache) {
-    if (now - e.at >= FEED_TTL_MS || e.version !== version) {
-      feedCache.delete(key);
-      continue;
-    }
-    const end = e.offset + e.stories.length;
-    // Starts at or after the window's start, and the window holds all of it or
-    // the feed ends there (past the end is an empty page, still free).
-    if (e.offset <= offset && (offset + limit <= end || end >= e.total)) {
-      const from = offset - e.offset;
-      return { stories: e.stories.slice(from, from + limit), total: e.total };
-    }
+  for (const [start, b] of feedCache) {
+    if (now - b.at >= FEED_TTL_MS || b.version !== version) feedCache.delete(start);
   }
-  return null;
+  if (!feedTotal || now - feedTotal.at >= FEED_TTL_MS || feedTotal.version !== version) return null;
+  const { total } = feedTotal;
+  const first = blockStart(offset);
+  const run = [];
+  for (let start = first; start < Math.min(offset + limit, total); start += FEED_BLOCK) {
+    const block = feedCache.get(start);
+    if (!block) return null;
+    run.push(...block.stories);
+  }
+  return { stories: run.slice(offset - first, offset - first + limit), total };
 }
 
-function rememberFeedPage(offset, limit, stories, total, now, version) {
-  const key = `${offset}:${limit}`;
-  feedCache.delete(key);
-  if (feedCache.size >= FEED_CACHE_MAX) feedCache.delete(feedCache.keys().next().value);
-  feedCache.set(key, { offset, stories, total, at: now, version });
+// Keeps the stories a read returned, from offset `from` (a block's first), as
+// blocks, and the feed's length.
+function rememberFeedBlocks(from, stories, total, now, version) {
+  feedTotal = { total, at: now, version };
+  for (let i = 0; i < stories.length; i += FEED_BLOCK) {
+    feedCache.delete(from + i);
+    if (feedCache.size >= FEED_CACHE_MAX) feedCache.delete(feedCache.keys().next().value);
+    feedCache.set(from + i, { stories: stories.slice(i, i + FEED_BLOCK), at: now, version });
+  }
 }
 
 // A like changes one number on one story and leaves the feed's order and
@@ -96,6 +112,7 @@ async function keepPagesThroughLike(databases, dbId, collId, storyId, lastChange
     e.stories = e.stories.map((s) => (s.id === storyId ? { ...s, likes } : s));
     e.version = next;
   }
+  if (feedTotal && feedTotal.version === version) feedTotal.version = next;
   return true;
 }
 
@@ -135,22 +152,26 @@ module.exports = async ({ req, res, log, error }) => {
         });
       }
 
+      // Read every block the request needs in one query, kept or not, so an
+      // answer never mixes kept stories with ones read now.
+      const from = blockStart(offset);
       const list = await databases.listDocuments(dbId, collId, [
         Query.equal('status', 'approved'),
         Query.orderDesc('$createdAt'),
-        Query.limit(limit),
-        Query.offset(offset),
+        Query.limit(blockEnd(offset, limit) - from),
+        Query.offset(from),
       ]);
       // Only expose public fields — deviceId/browser/version stay private.
-      const stories = list.documents.map((d) => ({
+      const read = list.documents.map((d) => ({
         id: d.$id,
         title: d.title || '',
         content: d.content || '',
         likes: d.likes || 0,
         createdAt: d.$createdAt,
       }));
-      rememberFeedPage(offset, limit, stories, list.total, now, version);
-      log(`Feed ${offset}:${limit} read ${stories.length} stories`);
+      rememberFeedBlocks(from, read, list.total, now, version);
+      const stories = read.slice(offset - from, offset - from + limit);
+      log(`Feed ${offset}:${limit} read ${read.length} stories`);
       return res.json({ ok: true, stories, total: list.total }, 200, {
         'Cache-Control': 'public, max-age=60',
       });

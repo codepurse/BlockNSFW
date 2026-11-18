@@ -148,10 +148,55 @@ test('the 50-story shelf also answers the 10-story pages inside it', async () =>
     assert.deepEqual(page.answer, await uncached(offset, limit));
   }
 
-  // Past the kept stories but not the end of the feed: read as before.
+  // Past the kept stories but not the end of the feed: its whole blocks, 40-59,
+  // are read in one go (the kept 40-49 too, so the answer is all one read).
   const beyond = await measured(fn, 45, 10);
-  assert.equal(beyond.reads, 11);
+  assert.equal(beyond.reads, 21);
   assert.deepEqual(beyond.answer, await uncached(45, 10));
+  assert.equal((await measured(fn, 45, 10)).reads, 1);
+});
+
+test('a request at an odd offset or size gets exactly the stories it asked for', async () => {
+  seed(30);
+  const order = Array.from({ length: 30 }, (_, i) => `s${29 - i}`); // newest first
+  const fn = coldStart();
+  const windows = [[5, 10], [13, 7], [0, 1], [7, 50], [25, 10], [29, 3], [30, 10], [95, 10], [0, 50]];
+  for (const pass of ['read', 'kept']) {
+    for (const [offset, limit] of windows) {
+      const page = await feed(fn, offset, limit);
+      assert.deepEqual(ids(page), order.slice(offset, offset + limit), `${pass} ${offset}:${limit}`);
+      assert.equal(page.body.total, 30);
+      assert.deepEqual(page, await uncached(offset, limit));
+    }
+  }
+});
+
+test('odd windows cannot keep the cache missing', async () => {
+  // A script asking for 50 stories from every offset in turn cost 51 reads a
+  // request before (10,710 here). Each block is now read a few times at most.
+  seed(120);
+  const fn = coldStart();
+  const sweep = async () => {
+    const before = db.reads;
+    for (let offset = 0; offset < 70; offset++) await feed(fn, offset, 50);
+    return db.reads - before;
+  };
+  const first = await sweep();
+  assert.ok(first < 600, `first sweep: ${first} reads`);
+  assert.equal(await sweep(), 70);   // all from memory: the check alone
+  assert.equal(await sweep(), 70);
+});
+
+test('a page far past the end costs only the check', async () => {
+  seed(30);
+  const fn = coldStart();
+  // Nothing kept yet: the check, and an empty read that gives the feed's length.
+  assert.equal((await measured(fn, 1000000, 50)).reads, 2);
+  for (const offset of [30, 999, 1000000, 5000000]) {
+    const page = await measured(fn, offset, 50);
+    assert.equal(page.reads, 1, `offset ${offset}`);
+    assert.deepEqual(page.answer.body, { ok: true, stories: [], total: 30 });
+  }
 });
 
 test('a feed kept whole answers a page past its end', async () => {
