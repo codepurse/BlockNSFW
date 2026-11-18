@@ -149,6 +149,15 @@ test('generate: excludes visually ambiguous glyphs', () => {
   }
 });
 
+test('generate: has no dead-key characters', () => {
+  // "~" waits for the next key on many layouts and merges with it ("~" then
+  // "n" types "ñ"), so a code typed right came out wrong. Reported by email,
+  // 2026-11-16, after "countless attempts" at a 256-character code.
+  for (const char of '~^`´¨\'"') {
+    assert.ok(!AccessCode.CHARS.includes(char), `charset should not contain ${char}`);
+  }
+});
+
 test('generate: charset has no duplicate characters', () => {
   // A repeated character would be twice as likely as the rest.
   assert.equal(new Set(AccessCode.CHARS).size, AccessCode.CHARS.length);
@@ -219,4 +228,82 @@ test('hardenEntry: refuses paste, drop and copy', () => {
 
 test('hardenEntry: tolerates a missing element', () => {
   assert.doesNotThrow(() => AccessCode.hardenEntry(null, null));
+});
+
+// The counter and the wrong-answer line (email report, 2026-11-16: "after
+// countless attempts on the 256 challenge ... does it really work?"). The
+// end of the code sat below a scroll, and a miss said only "That didn't match".
+
+test('countLine: counts what is typed against the code length', () => {
+  assert.equal(AccessCode.countLine('', 256), '0 of 256 typed');
+  assert.equal(AccessCode.countLine(undefined, 64), '0 of 64 typed');
+  assert.equal(AccessCode.countLine('abc', 32), '3 of 32 typed');
+  assert.equal(AccessCode.countLine('x'.repeat(256), 256), '256 of 256 typed');
+  assert.equal(AccessCode.countLine('x'.repeat(260), 256), '260 of 256 typed, 4 too many');
+});
+
+test('countLine: says nothing about whether the characters are right', () => {
+  // Counting only: a running right/wrong would let the code be fixed up as it
+  // goes instead of typed in one go.
+  assert.equal(AccessCode.countLine('AAAA', 8), AccessCode.countLine('Ab3#', 8));
+});
+
+test('checkEntry: the exact code passes', () => {
+  assert.deepEqual(AccessCode.checkEntry('Ab3#xY', 'Ab3#xY'), { ok: true, fresh: false, message: '' });
+});
+
+test('checkEntry: an empty box keeps the code and asks for it', () => {
+  const answer = AccessCode.checkEntry('', 'Ab3#xY');
+  assert.equal(answer.ok, false);
+  assert.equal(answer.fresh, false);
+  assert.equal(answer.message, 'Type the code above first.');
+});
+
+test('checkEntry: every wrong answer gets a fresh code', () => {
+  for (const typed of ['Ab3#xy', 'Ab3#x', 'Ab3#xYZ', 'b3#xY', ' Ab3#xY', 'Ab3#xY ']) {
+    const answer = AccessCode.checkEntry(typed, 'Ab3#xY');
+    assert.equal(answer.ok, false, typed);
+    assert.equal(answer.fresh, true, typed);
+    assert.match(answer.message, / Type the new code above\.$/, typed);
+  }
+});
+
+test('checkEntry: names the first character that differs', () => {
+  assert.equal(AccessCode.checkEntry('Ab3#qY', 'Ab3#xY').message,
+    'Character 5 didn’t match: you typed “q”, the code had “x”. Type the new code above.');
+});
+
+test('checkEntry: a letter in the wrong case says that case counts', () => {
+  assert.equal(AccessCode.checkEntry('Ab3#xy', 'Ab3#xY').message,
+    'Character 6 didn’t match: you typed “y”, the code had “Y”. ' +
+    'Capital and small letters count. Type the new code above.');
+});
+
+test('checkEntry: a character a dead key turned into another shows what arrived', () => {
+  // Codes no longer contain "~", but a layout can still change a key.
+  assert.match(AccessCode.checkEntry('Abñ#', 'Ab3#').message,
+    /^Character 3 didn’t match: you typed “ñ”, the code had “3”\./);
+});
+
+test('checkEntry: a character left out is named as left out', () => {
+  assert.equal(AccessCode.checkEntry('Ab#xY', 'Ab3#xY').message,
+    'You left out character 3, “3”. Type the new code above.');
+});
+
+test('checkEntry: an extra character is named as extra', () => {
+  assert.equal(AccessCode.checkEntry('Ab33#xY', 'Ab3#xY').message,
+    'There’s an extra “3” at character 4. Type the new code above.');
+  assert.equal(AccessCode.checkEntry('Ab3 #xY', 'Ab3#xY').message,
+    'There’s an extra space at character 4. Type the new code above.');
+});
+
+test('checkEntry: stopping short says how much was typed', () => {
+  const code = AccessCode.generate(256);
+  assert.equal(AccessCode.checkEntry(code.slice(0, 221), code).message,
+    'You typed 221 of the 256 characters. Type the new code above.');
+});
+
+test('checkEntry: typing on past the end says how long the code is', () => {
+  assert.equal(AccessCode.checkEntry('Ab3#xYzz', 'Ab3#xY').message,
+    'You typed 8 characters, and the code has 6. Type the new code above.');
 });

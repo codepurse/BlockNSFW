@@ -919,10 +919,12 @@ textarea.input {
   margin-top: var(--space-5);
 }
 
-/* The access code: a block of characters to retype by hand. */
+/* The access code: a block of characters to retype by hand. All of it shows.
+   The box used to stop at 8.5rem and scroll, so the end of a 256-character
+   code sat out of sight (35 characters in Settings, 94 in the popup), and a
+   careful typist stopped where the box seemed to end. When a dialog is
+   taller than the window, the dialog scrolls as a whole instead. */
 .access-code-display {
-  max-height: 8.5rem;
-  overflow-y: auto;
   padding: var(--space-3);
   border: 1px solid var(--color-rule);
   background: var(--color-paper);

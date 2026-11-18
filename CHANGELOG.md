@@ -20,6 +20,19 @@ All notable project changes should be documented here going forward.
 - The stories server itself now reads far less (it answers repeat visits from
   memory), but that ships separately, as the Appwrite function, not in this
   package.
+- **A 256-character access code could look impossible to type.** Reported by
+  email, after many careful tries.
+  - The box showing the code stopped at six lines and scrolled, so the end of a
+    long code was out of sight: 35 characters in Settings, 94 in the popup.
+    The whole code now shows.
+  - Codes no longer use "~". On US-International and many European keyboard
+    layouts it merges with the next key ("~" then "n" types "ñ"), so a code
+    typed right came out wrong. Nearly every 256-character code had one.
+  - A count under the box says how many characters are in ("221 of 256
+    typed"). It counts only, and never says whether they're right.
+  - A wrong answer says where it first went wrong (a character that didn't
+    match, one left out or one extra, a letter in the wrong case) before the
+    new code takes its place. Continue with nothing typed keeps the code.
 
 ## [2.0.7] - 2026-11-09
 

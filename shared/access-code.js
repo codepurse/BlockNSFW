@@ -28,7 +28,13 @@
 
   // Ambiguous glyphs (O/0, I/l/1) are excluded: the point is deliberate
   // effort, not guessing which character you're looking at.
-  var CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%&*+=?~';
+  //
+  // So is "~". On US-International and many European layouts (Polish
+  // Programmers, French, Nordic, Portuguese, German on a Mac) it's a dead key:
+  // it waits for the next key and merges with it, so "~" then "n" types "ñ".
+  // A careful typist got a wrong answer from a code they'd typed right, and
+  // nearly every 256-character code had one (reported by email, 2026-11-16).
+  var CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%&*+=?';
   var LENGTHS = [32, 64, 128, 256];
 
   // Scope: which changes have to face the code.
@@ -126,6 +132,58 @@
     return code;
   }
 
+  // The line under the box while typing. A 256-character code is too long to
+  // check by eye, so a missed or doubled character shows before Continue.
+  // It counts only: it never says whether what's typed so far is right, or
+  // the code could be fixed up as it goes instead of typed in one go.
+  function countLine(typed, length) {
+    var count = Array.from(String(typed == null ? '' : typed)).length;
+    var line = count + ' of ' + length + ' typed';
+    return count > length ? line + ', ' + (count - length) + ' too many' : line;
+  }
+
+  function shownChar(ch) {
+    return ch === ' ' ? 'a space' : '“' + ch + '”';
+  }
+
+  // Where a wrong answer first went wrong. Said before the fresh code takes its
+  // place, so it can't help with the next one: it's there so someone who keeps
+  // missing can see why (a letter in the wrong case, a key their keyboard
+  // turns into something else, a character left out). It used to be "That
+  // didn't match" and nothing more, so one slip in 256 looked like a code that
+  // could never be typed.
+  function mismatchLine(typed, expected) {
+    var t = Array.from(typed);
+    var e = Array.from(expected);
+    var i = 0;
+    while (i < t.length && i < e.length && t[i] === e[i]) i++;
+    if (i < t.length && i < e.length) {
+      var where = 'character ' + (i + 1);
+      if (t.slice(i).join('') === e.slice(i + 1).join('')) {
+        return 'You left out ' + where + ', ' + shownChar(e[i]) + '.';
+      }
+      if (t.slice(i + 1).join('') === e.slice(i).join('')) {
+        return 'There’s an extra ' + (t[i] === ' ' ? 'space' : shownChar(t[i])) + ' at ' + where + '.';
+      }
+      var line = 'Character ' + (i + 1) + ' didn’t match: you typed ' + shownChar(t[i]) +
+        ', the code had ' + shownChar(e[i]) + '.';
+      if (t[i].toLowerCase() === e[i].toLowerCase()) line += ' Capital and small letters count.';
+      return line;
+    }
+    if (t.length < e.length) return 'You typed ' + t.length + ' of the ' + e.length + ' characters.';
+    return 'You typed ' + t.length + ' characters, and the code has ' + e.length + '.';
+  }
+
+  // The answer to Continue. `fresh`: a wrong answer gets a new code, so an
+  // attempt can't be assembled piecemeal. An empty box isn't an attempt, so it
+  // keeps the code being read.
+  function checkEntry(typed, expected) {
+    var value = String(typed == null ? '' : typed);
+    if (value === expected) return { ok: true, fresh: false, message: '' };
+    if (!value) return { ok: false, fresh: false, message: 'Type the code above first.' };
+    return { ok: false, fresh: true, message: mismatchLine(value, expected) + ' Type the new code above.' };
+  }
+
   // `storage` is browserAPI.storage.local from the calling page.
   function readConfig(storage) {
     return Promise.resolve(storage.get(KEY)).then(function (stored) {
@@ -173,6 +231,8 @@
     requiredFor: requiredFor,
     lengthFor: lengthFor,
     generate: generate,
+    countLine: countLine,
+    checkEntry: checkEntry,
     readConfig: readConfig,
     writeConfig: writeConfig,
     hardenEntry: hardenEntry

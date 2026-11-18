@@ -813,7 +813,8 @@ async function showAccessCodeModal(actionLabel = 'this action', opts) {
         <label class="field-label" for="modal-access-code-input">The code, typed by hand</label>
         <input type="text" class="input input-mono pin-input access-code-input" id="modal-access-code-input"
                autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
-               aria-describedby="modal-access-code-hint">
+               aria-describedby="modal-access-code-count modal-access-code-hint">
+        <p class="field-hint tnum" id="modal-access-code-count">0 of ${length} typed</p>
         <p class="field-hint pin-hint" id="modal-access-code-hint" aria-live="polite">Copy and paste are turned off on purpose.</p>
       </div>
     `,
@@ -826,18 +827,28 @@ async function showAccessCodeModal(actionLabel = 'this action', opts) {
           const input = document.getElementById('modal-access-code-input');
           const display = document.getElementById('modal-access-code');
           const hint = document.getElementById('modal-access-code-hint');
+          const count = document.getElementById('modal-access-code-count');
           if (!input) return false;
 
-          if (input.value === expected) return true;
+          const answer = AccessCode.checkEntry(input.value, expected);
+          if (answer.ok) return true;
 
           // Wrong: issue a fresh code so the attempt can't be chipped away at.
-          expected = generateAccessCode(length);
-          if (display) display.textContent = expected;
-          input.value = '';
+          // The line says where this one went wrong first.
+          if (answer.fresh) {
+            expected = generateAccessCode(length);
+            if (display) {
+              display.textContent = expected;
+              display.scrollTop = 0;
+            }
+            input.value = '';
+            if (count) count.textContent = AccessCode.countLine('', length);
+          }
           input.classList.add('error');
           input.setAttribute('aria-invalid', 'true');
           setTimeout(() => input.classList.remove('error'), 500);
-          setHint(hint, 'That didn’t match. Type the new code above.', 'error');
+          setHint(hint, answer.message, 'error');
+          input.focus();
           return false; // keep the modal open
         }
       }
@@ -852,10 +863,16 @@ async function showAccessCodeModal(actionLabel = 'this action', opts) {
 
   // Refuses paste/drop into the box and copy off the display — the feature is
   // worthless if the code can be moved across in two seconds.
-  AccessCode.hardenEntry(
-    document.getElementById('modal-access-code-input'),
-    document.getElementById('modal-access-code')
-  );
+  const codeInput = document.getElementById('modal-access-code-input');
+  AccessCode.hardenEntry(codeInput, document.getElementById('modal-access-code'));
+
+  // How many characters are in so far (it never says whether they're right).
+  const codeCount = document.getElementById('modal-access-code-count');
+  if (codeInput && codeCount) {
+    codeInput.addEventListener('input', () => {
+      codeCount.textContent = AccessCode.countLine(codeInput.value, length);
+    });
+  }
 
   return (await modalPromise) === true;
 }

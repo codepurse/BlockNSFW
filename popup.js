@@ -182,6 +182,7 @@ function getAccessCodeElements() {
     desc: $('access-code-modal-desc'),
     display: $('access-code-display'),
     input: $('access-code-input'),
+    count: $('access-code-count'),
     error: $('access-code-error'),
     ok: $('access-code-ok'),
     cancel: $('access-code-cancel')
@@ -199,7 +200,13 @@ async function showAccessCodeModal(actionLabel = 'this action') {
   let expected = AccessCode.generate(length);
   el.desc.textContent = `Type the code below exactly to ${actionLabel}.`;
   el.display.textContent = expected;
+  el.display.scrollTop = 0;
   el.input.value = '';
+  // How many characters are in so far (it never says whether they're right).
+  const showCount = () => {
+    if (el.count) el.count.textContent = AccessCode.countLine(el.input.value, length);
+  };
+  showCount();
   setFieldError(el.input, el.error, '');
   // The markup is static and reused, so harden it once rather than stacking a
   // fresh set of listeners every time the modal opens.
@@ -215,20 +222,27 @@ async function showAccessCodeModal(actionLabel = 'this action') {
       el.ok.onclick = null;
       el.cancel.onclick = null;
       el.input.onkeydown = null;
+      el.input.oninput = null;
       closeDialog(el.overlay);
     };
+    el.input.oninput = showCount;
     el.ok.onclick = () => {
-      if (el.input.value === expected) {
+      const answer = AccessCode.checkEntry(el.input.value, expected);
+      if (answer.ok) {
         cleanup();
         resolve(true);
         return;
       }
       // Wrong: issue a fresh code so the attempt can't be chipped away at.
-      expected = AccessCode.generate(length);
-      el.display.textContent = expected;
-      el.display.scrollTop = 0;
-      el.input.value = '';
-      setFieldError(el.input, el.error, 'That didn’t match. Type the new code above.');
+      // The line says where this one went wrong first.
+      if (answer.fresh) {
+        expected = AccessCode.generate(length);
+        el.display.textContent = expected;
+        el.display.scrollTop = 0;
+        el.input.value = '';
+        showCount();
+      }
+      setFieldError(el.input, el.error, answer.message);
       el.input.focus();
     };
     el.cancel.onclick = () => { cleanup(); resolve(false); };
