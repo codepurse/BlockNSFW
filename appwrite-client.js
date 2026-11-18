@@ -186,6 +186,37 @@ const DAILY_STORY_LIMIT = 1;
 const PBlockerStories = (() => {
   const api = typeof browser === 'undefined' ? chrome : browser;
 
+  // A failed call carries `kind`, so pages can say plainly what happened and
+  // never show the server's own words ("This project has reached its resource
+  // limit"): 'offline' (no connection), 'limit' (Appwrite says the project is
+  // over its plan's monthly limits), 'unavailable' (Appwrite or the function
+  // didn't answer properly otherwise: down, or a server error), or 'refused'
+  // (the function answered and said no, in words meant for the person, like
+  // the one-story-a-week limit).
+  function storiesError(kind, message) {
+    const err = new Error(message);
+    err.kind = kind;
+    return err;
+  }
+
+  async function callStories(url, init) {
+    let response;
+    try {
+      response = await fetch(url, init);
+    } catch (_) {
+      // Appwrite's own refusals can come without CORS headers and land here too.
+      throw storiesError(navigator.onLine === false ? 'offline' : 'unavailable', 'Stories didn’t answer.');
+    }
+    const result = await response.json().catch(() => ({}));
+    if (response.ok && result.ok) return result;
+    // The function always answers with `ok`; an answer without it is Appwrite's.
+    const refused = result.ok === false && response.status < 500;
+    const message = result.message || `Stories answered ${response.status}.`;
+    // 'limit': Appwrite has stopped answering until the plan's month resets.
+    const kind = refused ? 'refused' : /resource limit/i.test(message) ? 'limit' : 'unavailable';
+    throw storiesError(kind, message);
+  }
+
   return {
     // Human-friendly remaining time, e.g. "6d 23h", "45m 10s".
     formatWait(ms) {
@@ -249,16 +280,10 @@ const PBlockerStories = (() => {
       }
 
       const url = `${APPWRITE_STORIES_FUNCTION_URL}?offset=${offset}&limit=${limit}`;
-      const response = await fetch(url, {
+      const result = await callStories(url, {
         method: 'GET',
         headers: { Accept: 'application/json' },
       });
-
-      const result = await response.json().catch(() => ({}));
-
-      if (!response.ok || !result.ok) {
-        throw new Error(result.message || 'Failed to load stories.');
-      }
 
       return {
         stories: Array.isArray(result.stories) ? result.stories : [],
@@ -280,17 +305,11 @@ const PBlockerStories = (() => {
       let deviceId = '';
       try { deviceId = await PBlockerReports.getDeviceId(); } catch (_) {}
 
-      const response = await fetch(APPWRITE_STORIES_FUNCTION_URL, {
+      const result = await callStories(APPWRITE_STORIES_FUNCTION_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'like', storyId, like: !!liked, deviceId }),
       });
-
-      const result = await response.json().catch(() => ({}));
-
-      if (!response.ok || !result.ok) {
-        throw new Error(result.message || 'Failed to update like.');
-      }
 
       return { ok: true, likes: Number(result.likes) || 0 };
     },
@@ -329,7 +348,7 @@ const PBlockerStories = (() => {
       let version = '';
       try { version = api.runtime.getManifest().version; } catch (_) {}
 
-      const response = await fetch(APPWRITE_STORIES_FUNCTION_URL, {
+      const result = await callStories(APPWRITE_STORIES_FUNCTION_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -342,12 +361,6 @@ const PBlockerStories = (() => {
           version,
         }),
       });
-
-      const result = await response.json().catch(() => ({}));
-
-      if (!response.ok || !result.ok) {
-        throw new Error(result.message || 'Failed to submit story. Please try again.');
-      }
 
       await this.setCooldown();
       await this.incrementDailyCount();

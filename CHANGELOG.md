@@ -69,6 +69,17 @@ All notable project changes should be documented here going forward.
   sites. Firefox may ask existing users to accept "Access browser tabs" when
   they update. Tab addresses are only compared, never kept or sent
   (privacy policy updated).
+- **Community stories said "This project has reached its resource limit."**
+  In November the stories server ran out of its monthly allowance, and the
+  page went empty under "The stories didn't load. Try again in a moment" and
+  the server's own words. Trying again couldn't help until the month reset.
+  - When stories can't be loaded, the page shows the ones from the last visit,
+    with one line saying how old they are and why.
+  - With none kept, it says "Stories are taking a break" (or "You're offline"),
+    and that nothing is wrong on the person's side. The server's words are
+    never shown.
+  - Coming back online loads the stories again by itself.
+  - A story that can't be sent says so plainly, and the words stay in the box.
 
 ## [2.0.6] - 2026-11-09
 

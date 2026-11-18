@@ -55,7 +55,11 @@
     } catch (_) {}
   }
 
-  // --- Feed cache (stale-while-revalidate) ----------------------------------
+  // --- Feed cache -------------------------------------------------------------
+  // The first page last loaded. For a minute it's shown without asking; after
+  // that the page asks again, but keeps the copy, so when Stories can't be
+  // reached (offline, or Appwrite over its monthly limit) the page shows the
+  // stories it last had instead of an empty feed.
   const CACHE_KEY = 'pblocker_stories_feed_cache';
   const CACHE_TTL_MS = 60_000;
 
@@ -64,9 +68,8 @@
     try {
       const stored = await api.storage.local.get(CACHE_KEY);
       const c = stored[CACHE_KEY];
-      if (!c || typeof c.fetchedAt !== 'number') return null;
-      if (Date.now() - c.fetchedAt > CACHE_TTL_MS) return null;
-      return c;
+      if (!c || typeof c.fetchedAt !== 'number' || !Array.isArray(c.stories)) return null;
+      return { ...c, fresh: !c.expired && Date.now() - c.fetchedAt <= CACHE_TTL_MS };
     } catch (_) {
       return null;
     }
@@ -81,9 +84,17 @@
     } catch (_) {}
   }
 
-  async function invalidateFeedCache() {
+  // After a like: ask again next visit, and keep the copy to fall back on, with
+  // the story's new count in it.
+  async function expireFeedCache(storyId, likes) {
     if (!api || !api.storage) return;
-    try { await api.storage.local.remove(CACHE_KEY); } catch (_) {}
+    try {
+      const stored = await api.storage.local.get(CACHE_KEY);
+      const c = stored[CACHE_KEY];
+      if (!c || !Array.isArray(c.stories)) return;
+      const stories = c.stories.map((s) => (s && s.id === storyId ? { ...s, likes } : s));
+      await api.storage.local.set({ [CACHE_KEY]: { ...c, stories, expired: true } });
+    } catch (_) {}
   }
 
   // --- States ---------------------------------------------------------------
@@ -119,6 +130,45 @@
 
   function clearState() {
     feedState.replaceChildren();
+  }
+
+  // What to say when Stories can't be reached, by why (`kind` from
+  // appwrite-client.js). Never the server's own words.
+  function downWords(kind) {
+    if (kind === 'offline') {
+      return { title: 'You’re offline', detail: 'Stories will load when you’re back online.' };
+    }
+    if (kind === 'limit') {
+      return {
+        title: 'Stories are taking a break',
+        detail: 'So many people read them this month that they’re resting for now. They’ll be back soon, and nothing is wrong on your side.',
+      };
+    }
+    return {
+      title: 'Stories are taking a break',
+      detail: 'They aren’t answering right now. They’ll be back soon, and nothing is wrong on your side.',
+    };
+  }
+
+  // "3 hours ago", for the stories kept from the last visit.
+  function sinceWords(at) {
+    const mins = Math.max(1, Math.round((Date.now() - at) / 60000));
+    if (mins < 60) return mins === 1 ? 'a minute ago' : `${mins} minutes ago`;
+    const hours = Math.round(mins / 60);
+    if (hours < 24) return hours === 1 ? 'an hour ago' : `${hours} hours ago`;
+    const days = Math.round(hours / 24);
+    return days === 1 ? 'yesterday' : `${days} days ago`;
+  }
+
+  // One quiet line above stories kept from an earlier visit.
+  function showSavedNote(savedAt, kind) {
+    feedState.replaceChildren();
+    const note = document.createElement('p');
+    note.className = 'state-note ink-2';
+    note.textContent = kind === 'offline'
+      ? `You’re offline, so these are the stories from ${sinceWords(savedAt)}. New ones will load when you’re back online.`
+      : `Stories are taking a break, so these are the ones from ${sinceWords(savedAt)}. New ones will appear when they’re back.`;
+    feedState.appendChild(note);
   }
 
   // --- A voice from the community -------------------------------------------
@@ -289,7 +339,7 @@
         const res = await PBlockerStories.likeStory(story.id, target);
         serverLiked = target;
         if (res && typeof res.likes === 'number') serverLikes = res.likes;
-        invalidateFeedCache();
+        expireFeedCache(story.id, serverLikes);
       } catch (_) {
         // Push failed — fall back to the server's known state.
         uiLiked = serverLiked;
@@ -346,6 +396,7 @@
   let total = 0;           // total approved stories
   let loadingMore = false;
   let feedLoading = false;
+  let downKind = '';       // why the last load failed ('' when it didn't)
 
   // Appends a page of stories and returns the new posts, in order.
   function appendStories(stories) {
@@ -379,6 +430,9 @@
 
   function renderFooter() {
     footer.replaceChildren();
+    // Kept stories from an earlier visit: the next page would need Stories,
+    // and the note above already says it's away.
+    if (downKind) return;
     if (loaded < total) {
       const btn = document.createElement('button');
       btn.type = 'button';
@@ -394,7 +448,9 @@
     }
   }
 
-  function renderFirstPage(stories, totalCount) {
+  // `saved` is { at, kind } when these are the stories kept from an earlier
+  // visit because Stories can't be reached now.
+  function renderFirstPage(stories, totalCount, saved = null) {
     loaded = 0;
     total = totalCount;
     feed.replaceChildren();
@@ -405,7 +461,8 @@
       showState('empty', 'No stories yet. Yours could be the first.');
       return;
     }
-    clearState();
+    if (saved) showSavedNote(saved.at, saved.kind);
+    else clearState();
     const posts = appendStories(stories);
     updateCount(total);
     renderFooter();
@@ -420,16 +477,16 @@
       // Liked set is always local — cheap.
       try { likedSet = await getLikedSet(); } catch (_) { likedSet = new Set(); }
 
-      // Fresh cache and not forced → render it and make NO network request.
-      if (!force) {
-        const cached = await readFeedCache();
-        if (cached) {
-          renderFirstPage(cached.stories, cached.total);
-          return;
-        }
+      const cached = await readFeedCache();
+
+      // A copy from the last minute and no refresh asked for: show it, ask nothing.
+      if (!force && cached && cached.fresh) {
+        downKind = '';
+        renderFirstPage(cached.stories, cached.total);
+        return;
       }
 
-      // Cache miss or forced refresh → fetch from the function.
+      // Otherwise ask the function.
       feed.setAttribute('aria-busy', 'true');
       showState('loading', 'Loading stories…');
       footer.replaceChildren();
@@ -438,11 +495,27 @@
           throw new Error('The story service didn’t start. Reload the page.');
         }
         const page = await PBlockerStories.fetchStories({ offset: 0, limit: PAGE_SIZE });
+        downKind = '';
         renderFirstPage(page.stories, page.total);
         writeFeedCache(page.stories, page.total);
       } catch (err) {
-        updateCount(0);
-        showState('error', 'The stories didn’t load. Try again in a moment.', (err && err.message) || '');
+        const kind = err && err.kind;
+        if (kind === 'offline' || kind === 'limit' || kind === 'unavailable') {
+          downKind = kind;
+          if (cached && cached.stories.length) {
+            // The stories from last time, rather than an empty page.
+            renderFirstPage(cached.stories, cached.total, { at: cached.fetchedAt, kind });
+          } else {
+            updateCount(0);
+            const words = downWords(kind);
+            showState('error', words.title, words.detail);
+          }
+        } else {
+          // Something on this side (the page's own scripts): its own words.
+          downKind = '';
+          updateCount(0);
+          showState('error', 'The stories didn’t load.', (err && err.message) || '');
+        }
       }
     } finally {
       feed.removeAttribute('aria-busy');
@@ -480,6 +553,11 @@
       loadingMore = false;
     }
   }
+
+  // Back online after the page said it was offline: load what it missed.
+  window.addEventListener('online', () => {
+    if (downKind === 'offline' && !feedLoading) loadInitial({ force: true });
+  });
 
   const REFRESH_COOLDOWN_MS = 5000;
   let refreshLockUntil = 0;
@@ -676,7 +754,16 @@
           closeTimer = setTimeout(close, 1800);
         }
       } catch (err) {
-        setStatus((err && err.message) || 'Your story didn’t send. Check your connection and try again.', 'error');
+        // Stories away or offline: say so, never the server's words. A refusal
+        // from the function (one a week) and checks made here say their own.
+        const kind = err && err.kind;
+        let message = (err && err.message) || 'Your story didn’t send. Check your connection and try again.';
+        if (kind === 'offline') {
+          message = 'You’re offline. Your words are still here, so you can send them when you’re back online.';
+        } else if (kind === 'limit' || kind === 'unavailable') {
+          message = 'Stories can’t take new ones right now. Your words are still here, so you can copy them and try again later.';
+        }
+        setStatus(message, 'error');
       } finally {
         posting = false;
         submitBtn.removeAttribute('aria-busy');
