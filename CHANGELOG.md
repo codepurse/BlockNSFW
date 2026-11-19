@@ -33,6 +33,22 @@ All notable project changes should be documented here going forward.
   - A wrong answer says where it first went wrong (a character that didn't
     match, one left out or one extra, a letter in the wrong case) before the
     new code takes its place. Continue with nothing typed keeps the code.
+- **NSFW subreddits opened unblocked when signed out of Reddit.** To tell
+  whether a subreddit is NSFW, the extension asked Reddit's
+  `/r/<name>/about.json`. Reddit now refuses that address to signed-out
+  visitors ("You've been blocked by network security", a 403), for every
+  subreddit, and the refusal was read as "not NSFW". So the page loaded.
+  - The answer is read from the page Reddit serves, which carries it
+    (`<reddit-page-data>`, `subreddit.isNsfw`). No request is needed for it.
+  - A refusal now counts as no answer, not as "not NSFW". It is never
+    remembered, and the extension stops asking about.json for ten minutes
+    after one, rather than send a refused request for every post in a feed.
+  - The page is checked again once it has parsed, since the first check runs
+    before Reddit's data is there.
+  - Posts on current Reddit (`<shreddit-post>`) are recognised, and one Reddit
+    marks `nsfw` is hidden. The old selectors matched a Reddit layout that no
+    longer exists, so no post was ever hidden.
+  - Tests: `tests/reddit-nsfw.test.js`.
 
 ## [2.0.7] - 2026-11-09
 

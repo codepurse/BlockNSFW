@@ -236,6 +236,8 @@ GitHub-hosted URL and caches them in your browser.
 
 When Reddit-related filtering features are used, BlockNSFW may query Reddit endpoints to determine whether a subreddit is marked as NSFW.
 
+On a subreddit's own page, BlockNSFW first reads the NSFW flag Reddit includes in that page. That reading happens on your device and sends nothing. Reddit is asked only when the page doesn't answer, and not at all for ten minutes after Reddit refuses a request.
+
 - Service used: `www.reddit.com`
 - Purpose: help identify NSFW Reddit content
 - Data involved: subreddit name or Reddit URL needed for the check, plus standard request metadata. Because this request is made from the page you are on, it carries your Reddit cookies when you are browsing Reddit itself

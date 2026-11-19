@@ -511,6 +511,11 @@ const INSTAGRAM_REELS_STYLE_ID = 'pblocker-instagram-reels-style';
 // Reddit NSFW checking
 let redditNSFWCache = new Map(); // Cache for Reddit subreddit NSFW status
 const REDDIT_CACHE_DURATION = 30 * 60 * 1000; // 30 minutes
+// Reddit refuses about.json to a whole client at once (signed out, or not
+// trusted by its bot check), not to one subreddit. After a refusal, stop asking
+// for a while rather than send one refused request per post in a feed.
+let redditApiRefusedUntil = 0;
+const REDDIT_API_BACKOFF_MS = 10 * 60 * 1000; // 10 minutes
 
 // Performance optimization: Debouncing and caching
 const DEBOUNCE_DELAY = 100;
@@ -1774,8 +1779,10 @@ const SEARCH_SELECTORS = {
 // Social site specific selectors - target post containers (not whole feeds)
 const SOCIAL_SELECTORS = {
   reddit: {
-    // New Reddit uses data-testid post containers; include classic .Post as fallback
-    containers: 'div[data-testid="post-container"], article[data-testid="post-container"], .Post'
+    // Current Reddit renders each post as <shreddit-post> (marked `nsfw` when
+    // Reddit counts it as NSFW). The data-testid containers are the previous
+    // redesign, and .Post the one before; both kept for old.reddit-style pages.
+    containers: 'shreddit-post, div[data-testid="post-container"], article[data-testid="post-container"], .Post'
   },
   twitter: {
     // Twitter/X tweet articles
@@ -3393,13 +3400,54 @@ function extractSubredditFromURL(url) {
   }
 }
 
+// Reddit's own answer, from the page it served.
+//
+// Reddit refuses /r/<sub>/about.json to signed-out visitors with an HTML 403
+// ("You've been blocked by network security"): its HTML pages are served once
+// the browser passes a JavaScript challenge, its JSON endpoints are refused
+// outright. Every subreddit page it renders still carries the flag:
+//   <reddit-page-data data='{"subreddit":{"id":"t5_…","isNsfw":true,…}}'>
+// Reading it needs no request, so there is nothing for Reddit to refuse.
+//
+// true/false only when the data is about `subredditName`. null when the element
+// has not parsed yet, is malformed, has no flag, or names another subreddit (an
+// in-app navigation can leave the previous page's data behind). The name may
+// sit on <shreddit-screenview-data> instead; it is taken from there only when
+// both elements carry the same subreddit id, i.e. describe the same render.
+function readRedditPageNsfw(subredditName, doc) {
+  if (!subredditName || !doc || typeof doc.querySelector !== 'function') return null;
+  const subredditData = (selector) => {
+    try {
+      const el = doc.querySelector(selector);
+      const raw = el && el.getAttribute('data');
+      const sub = raw ? JSON.parse(raw).subreddit : null;
+      return sub && typeof sub === 'object' ? sub : null;
+    } catch (_) {
+      return null;
+    }
+  };
+  const page = subredditData('reddit-page-data[data]');
+  if (!page || typeof page.isNsfw !== 'boolean') return null;
+  let name = typeof page.name === 'string' ? page.name : '';
+  if (!name) {
+    const view = subredditData('shreddit-screenview-data[data]');
+    if (view && typeof view.name === 'string' && page.id && view.id === page.id) name = view.name;
+  }
+  name = name.replace(/^\/?r\//i, '').toLowerCase();
+  if (!name || name !== String(subredditName).toLowerCase()) return null;
+  return page.isNsfw;
+}
+
+// true or false when Reddit has answered, null when it has not (refused,
+// failed, or no answer yet). A refusal is not "not NSFW": it is never cached,
+// so the page data can still answer once it has parsed.
 async function checkRedditSubredditNSFW(subredditName) {
   if (!useSmartBlocking) return false;
   if (!subredditName) return false;
-  
+
   const cacheKey = subredditName.toLowerCase();
   const now = Date.now();
-  
+
   // Check cache first
   if (redditNSFWCache.has(cacheKey)) {
     const cached = redditNSFWCache.get(cacheKey);
@@ -3410,12 +3458,28 @@ async function checkRedditSubredditNSFW(subredditName) {
       return cached.isNSFW;
     }
   }
-  
+
+  // 1) The page Reddit served, when it is the subreddit asked about.
+  if ((extractSubredditFromURL(window.location.href) || '').toLowerCase() === cacheKey) {
+    const fromPage = readRedditPageNsfw(subredditName, document);
+    if (fromPage !== null) {
+      redditNSFWCache.set(cacheKey, { isNSFW: fromPage, timestamp: now });
+      if (debugMode) log(`Reddit page data: r/${subredditName} NSFW status: ${fromPage}`);
+      return fromPage;
+    }
+  }
+
+  // 2) about.json, unless Reddit refused it recently.
+  if (now < redditApiRefusedUntil) {
+    if (debugMode) log(`Reddit API refused recently; r/${subredditName} unknown`);
+    return null;
+  }
+
   try {
     if (debugMode) {
       log(`Checking Reddit API for r/${subredditName}...`);
     }
-    
+
     // Fetch subreddit info from Reddit API
     const apiUrl = `https://www.reddit.com/r/${subredditName}/about.json`;
     const response = await fetch(apiUrl, {
@@ -3423,50 +3487,72 @@ async function checkRedditSubredditNSFW(subredditName) {
         'User-Agent': 'BlockNSFW Extension'
       }
     });
-    
+
     if (!response.ok) {
+      // 403 "blocked by network security" or 429: Reddit refused to answer.
+      if (response.status === 403 || response.status === 429) {
+        redditApiRefusedUntil = now + REDDIT_API_BACKOFF_MS;
+      }
       if (debugMode) {
         log(`Reddit API error for r/${subredditName}: ${response.status}`);
       }
-      return false;
+      return null;
     }
-    
+
     const data = await response.json();
-    const isNSFW = data?.data?.over18 || false;
-    
+    const over18 = data && data.data ? data.data.over18 : undefined;
+    if (typeof over18 !== 'boolean') return null;
+
     // Cache the result
     redditNSFWCache.set(cacheKey, {
-      isNSFW: isNSFW,
+      isNSFW: over18,
       timestamp: now
     });
-    
+
     if (debugMode) {
-      log(`Reddit r/${subredditName} NSFW status: ${isNSFW}`);
+      log(`Reddit r/${subredditName} NSFW status: ${over18}`);
     }
-    
-    return isNSFW;
-    
+
+    return over18;
+
   } catch (error) {
     log('Error checking Reddit subreddit NSFW status:', error);
-    return false;
+    return null;
   }
 }
 
 async function shouldBlockRedditPage(url) {
   if (!useSmartBlocking) return false;
   if (!isRedditURL(url)) return false;
-  
+
   const subreddit = extractSubredditFromURL(url);
   if (!subreddit) return false;
-  
-  // Check if subreddit is NSFW
-  const isNSFW = await checkRedditSubredditNSFW(subreddit);
-  
+
+  // Check if subreddit is NSFW. Unknown (null) does not block.
+  const isNSFW = (await checkRedditSubredditNSFW(subreddit)) === true;
+
   if (isNSFW && debugMode) {
     log(`Blocking Reddit page - r/${subreddit} is marked as NSFW`);
   }
-  
+
   return isNSFW;
+}
+
+// processContent() first runs at document_start, before <reddit-page-data> has
+// parsed, so its Reddit check can only reach about.json, which Reddit refuses
+// to signed-out visitors. It may also still be busy (and so skip) when the
+// page finishes parsing. This asks again on its own: once the page has parsed,
+// and whenever Reddit renders new page data.
+async function recheckRedditPage() {
+  if (!IS_TOP_FRAME || blockedTriggered || !isEnabled || !useSmartBlocking) return false;
+  const href = window.location.href;
+  if (!isRedditURL(href) || !extractSubredditFromURL(href)) return false;
+  if (await isCurrentPageWhitelisted()) return false;
+  if (!(await shouldBlockRedditPage(href))) return false;
+  if (blockedTriggered || window.location.href !== href) return false;
+  log('Reddit page blocked - subreddit is NSFW (page data)');
+  redirectToBlockedPage('reddit_nsfw');
+  return true;
 }
 
 // Social post-level blocking (synchronous): detect NSFW labels or adult-domain links
@@ -3477,6 +3563,8 @@ function shouldBlockSocialPost(element, site) {
 
     // 1) NSFW/Sensitive labels
     if (site === 'reddit') {
+      // Current Reddit marks the post itself: <shreddit-post nsfw>.
+      if (useSmartBlocking && typeof element.hasAttribute === 'function' && element.hasAttribute('nsfw')) return true;
       // Reddit posts commonly show an "NSFW" badge
       if (useSmartBlocking && text.includes('nsfw')) return true;
       // Badge/aria-based hints
@@ -6174,6 +6262,7 @@ function setupMutationObserver() {
     let scheduleSocialProcess = false;
     let schedulePageTextScan = false;
     let scheduleMedia = false;
+    let scheduleRedditRecheck = false;
     const engine = getSearchEngine();
     const containerSelector = engine ? searchContainerSelector(SEARCH_SELECTORS[engine]) : null;
     const socialSite = getSocialSite();
@@ -6196,6 +6285,9 @@ function setupMutationObserver() {
           if (el.tagName === 'IMG') observeImage(el);
           else if (el.tagName === 'VIDEO') observeMedia(el);
           else if (el.tagName === 'IFRAME') processIframe(el);
+          // Reddit's answer to "is this subreddit NSFW" arriving in the page
+          // (see readRedditPageNsfw). A tag-name compare, so free elsewhere.
+          else if (el.tagName === 'REDDIT-PAGE-DATA') scheduleRedditRecheck = true;
           // A full-page text scan is only worth scheduling when a text feature
           // is actually enabled. We no longer read el.textContent per node just
           // to decide this — the debounced scan re-reads the page once anyway,
@@ -6304,6 +6396,9 @@ function setupMutationObserver() {
     // Tight scope: prefer incremental result processing over full-page reprocessing
     if (scheduleMedia) {
       scheduleMediaDiscovery();
+    }
+    if (scheduleRedditRecheck) {
+      recheckRedditPage();
     }
     if (scheduleResultsProcess) {
       debouncedProcessResults();
@@ -6459,6 +6554,9 @@ function setupEventListeners() {
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', () => {
       setTimeout(processContent, 100);
+      // Not left to processContent: it skips while an earlier pass is still
+      // running, and on Reddit that pass started before the page data parsed.
+      recheckRedditPage();
     }, { once: true });
   }
 
@@ -6671,7 +6769,7 @@ if (typeof window !== 'undefined') {
       log(`Testing Reddit NSFW status for r/${subredditName}...`);
       try {
         const isNSFW = await checkRedditSubredditNSFW(subredditName);
-        log(`Result: r/${subredditName} is ${isNSFW ? 'NSFW' : 'SFW'}`);
+        log(`Result: r/${subredditName} is ${isNSFW === null ? 'unknown (Reddit did not answer)' : isNSFW ? 'NSFW' : 'SFW'}`);
         return isNSFW;
       } catch (error) {
         log('Error testing Reddit NSFW:', error);
