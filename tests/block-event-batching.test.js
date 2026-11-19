@@ -20,6 +20,9 @@ const KEYS = {
 async function harness() {
   const context = loadBackgroundContext();
   await vm.runInContext('backgroundInitializationPromise', context);
+  // Startup leaves the dynamic-rules update running past ready; its reads are
+  // startup's, not the flush's, so let it finish before counting.
+  await vm.runInContext('dnrUpdateChain', context);
 
   const disk = {};
   const writes = [];

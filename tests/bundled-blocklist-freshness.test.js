@@ -36,7 +36,10 @@ test('packaged blocklist is fresh until its normal refresh TTL expires', async (
     throw new Error(`unexpected remote fetch: ${url}`);
   };
   await context.loadDefaultBlocklist();
-  await new Promise(resolve => setImmediate(resolve));
+  // The cache write is detached from init, so wait for it to land.
+  for (let i = 0; i < 50 && !writes.some(value => value[META_KEY]); i++) {
+    await new Promise(resolve => setTimeout(resolve, 5));
+  }
 
   const metaWrite = writes.find(value => value[META_KEY]);
   assert.equal(metaWrite[META_KEY].source, 'bundled');

@@ -40,9 +40,36 @@ test('locked means a PIN, a pact, the access code, or a boost, not the extension
   assert.equal(SA.locked(L.lockState({})), false);
 });
 
+// Safari 17 stores "Always allow on every website" as *://*/* and answers
+// false for <all_urls> (measured 2026-11). Chrome and Firefox answer for the
+// pattern the page needs; a withheld grant answers false for both.
+function permissionsStub(granted) {
+  return {
+    contains: async (p) => {
+      assert.equal(p.origins.length, 1);
+      assert.ok(['<all_urls>', '*://*/*'].includes(p.origins[0]), p.origins[0]);
+      return granted.includes(p.origins[0]);
+    },
+  };
+}
+
+test('Safari: all sites granted as *://*/* counts as access', async () => {
+  assert.equal(await SA.contains(permissionsStub(['*://*/*'])), true);
+  assert.equal(await SA.contains(permissionsStub(['*://*/*', 'https://*/*'])), true);
+});
+
+test('Chrome and Firefox: <all_urls> still counts as access', async () => {
+  assert.equal(await SA.contains(permissionsStub(['<all_urls>'])), true);
+});
+
+test('withheld access, with neither pattern granted, is no access', async () => {
+  assert.equal(await SA.contains(permissionsStub([])), false);
+  assert.equal(await SA.contains(permissionsStub(['https://*/*'])), false, 'a single-scheme grant is not all of the web');
+});
+
 test('asks the browser for all sites, and trusts a browser that cannot say', async () => {
   assert.equal(await SA.contains(undefined), true);
-  assert.equal(await SA.contains({ contains: async (p) => { assert.deepEqual(p, { origins: ['<all_urls>'] }); return false; } }), false);
+  assert.equal(await SA.contains({ contains: async (p) => { assert.ok(p.origins.length === 1); return false; } }), false);
   assert.equal(await SA.contains({ contains: async () => { throw new Error('x'); } }), true);
   assert.equal(await SA.request({ request: async () => true }), true);
   assert.equal(await SA.request({ request: () => { throw new Error('no gesture'); } }), false);
