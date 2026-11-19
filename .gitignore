@@ -45,3 +45,6 @@ tools/text_corpus/cache/
 # (RELEASE_NOTES_1.7.6.md and on) are committed.
 /RELEASE_NOTES_1.9.0.md
 /RESTYLE_REPORT_1.10.md
+
+# Chrome writes this when the repository root is loaded unpacked
+_metadata/

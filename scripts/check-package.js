@@ -1,6 +1,6 @@
 // scripts/check-package.js
 // Checks a finished package, and keeps a note of what went into it.
-// build-chrome.ps1 and build-firefox.ps1 run it after -Zip; RELEASE_CHECKLIST.md
+// build-chrome/firefox .ps1 (-Zip) and .sh (--zip) run it after zipping; RELEASE_CHECKLIST.md
 // says what to do with the note.
 //
 //   node scripts/check-package.js tree

@@ -71,7 +71,9 @@ Main files:
 - `data/UNSAFE_SEARCH.json` - search engines SafeSearch can't reach, blocked while "Block other search engines" is on, added since the last release (the ones that ship are in `shared/unsafe-search.js`)
 - `data/SOURCE_NOTES.txt` - data-file provenance, curation policy, missed-site flow
 - `blocklist.json` - bundled fallback blocklist (regenerated from `data/HOSTS.txt`)
-- `build-chrome.ps1` / `build-firefox.ps1` - release bundle scripts
+- `build-chrome.ps1` / `build-firefox.ps1` - release bundle scripts (Windows)
+- `build-chrome.sh` / `build-firefox.sh` - the same builds on macOS and Linux (`scripts/build-extension.sh`)
+- `build-safari.sh` - Safari Web Extension and its Xcode project (macOS)
 
 Tech stack:
 
@@ -150,10 +152,24 @@ powershell -ExecutionPolicy Bypass -File .\build-firefox.ps1
 powershell -ExecutionPolicy Bypass -File .\build-firefox.ps1 -Zip
 ```
 
+macOS and Linux (bash, node and zip): the same steps, checks and file lists,
+read from the `.ps1` scripts so the two can't drift.
+
+```bash
+./build-chrome.sh            # or --zip, --open-source, --zip --sandbox
+./build-firefox.sh
+```
+
+Safari (macOS with Xcode): the Firefox build, wrapped in a Mac app.
+
+```bash
+./build-safari.sh --build    # add --open-source without extras-private/
+```
+
 A build from this repository alone is the open-source build: every
 protection, without the Supporter extras (see "Open source, and the Supporter
-extras" below). `-Zip` makes a store package and needs the extras; add
-`-OpenSource` to package without them. A store package also refuses to
+extras" below). `-Zip` (`--zip`) makes a store package and needs the extras; add
+`-OpenSource` (`--open-source`) to package without them. A store package also refuses to
 build while Supporter is still in Polar's sandbox (`RELEASE_CHECKLIST.md`,
 section 0); `-Zip -Sandbox` makes a test package, never for a store.
 Every zip is read back by `scripts/check-package.js` before the build calls
@@ -164,6 +180,7 @@ Build output:
 
 - `dist\chrome\`
 - `dist\firefox\`
+- `dist/safari/` (`extension/`, `xcode/`, and with `--build` the app in `build/`)
 
 ## Manual Smoke Test
 
