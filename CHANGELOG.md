@@ -43,6 +43,9 @@ All notable project changes should be documented here going forward.
   - A refusal now counts as no answer, not as "not NSFW". It is never
     remembered, and the extension stops asking about.json for ten minutes
     after one, rather than send a refused request for every post in a feed.
+    Firefox receives the refusal as a failed request rather than a 403; that
+    pauses it the same way, and no longer prints an error on every Reddit
+    page.
   - The page is checked again once it has parsed, since the first check runs
     before Reddit's data is there.
   - Posts on current Reddit (`<shreddit-post>`) are recognised, and one Reddit

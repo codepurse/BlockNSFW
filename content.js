@@ -3428,7 +3428,9 @@ function readRedditPageNsfw(subredditName, doc) {
   };
   const page = subredditData('reddit-page-data[data]');
   if (!page || typeof page.isNsfw !== 'boolean') return null;
-  let name = typeof page.name === 'string' ? page.name : '';
+  // Reddit serves the name as `prefixedName` ("r/pics"); `name` is accepted too.
+  let name = typeof page.name === 'string' ? page.name
+    : typeof page.prefixedName === 'string' ? page.prefixedName : '';
   if (!name) {
     const view = subredditData('shreddit-screenview-data[data]');
     if (view && typeof view.name === 'string' && page.id && view.id === page.id) name = view.name;
@@ -3516,7 +3518,11 @@ async function checkRedditSubredditNSFW(subredditName) {
     return over18;
 
   } catch (error) {
-    log('Error checking Reddit subreddit NSFW status:', error);
+    // Firefox's content script receives Reddit's refusal as a NetworkError,
+    // not a 403. Same pause, and no console error: it happens on every Reddit
+    // page there and says nothing the user can act on.
+    redditApiRefusedUntil = now + REDDIT_API_BACKOFF_MS;
+    if (debugMode) log('Reddit API request failed for r/' + subredditName + ':', error);
     return null;
   }
 }

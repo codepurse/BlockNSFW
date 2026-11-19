@@ -62,6 +62,7 @@ function loadRedditCheck({ href = 'https://www.reddit.com/r/gonewild/', doc = re
     document: doc,
     requests,
     redirects,
+    logged: [],
     async fetch(url) {
       requests.push(url);
       const next = replies.length ? replies.shift() : response(403, '<html>blocked</html>');
@@ -76,7 +77,7 @@ function loadRedditCheck({ href = 'https://www.reddit.com/r/gonewild/', doc = re
     let isEnabled = true;
     let blockedTriggered = false;
     const IS_TOP_FRAME = true;
-    function log() {}
+    function log(...args) { logged.push(args.map(String).join(' ')); }
     async function isCurrentPageWhitelisted() { return false; }
     function redirectToBlockedPage(reason) { blockedTriggered = true; redirects.push(reason); }
     let redditNSFWCache = new Map();
@@ -168,6 +169,26 @@ test('a network failure or an answer without over18 is unknown', async () => {
   const odd = loadRedditCheck({ replies: [response(200, { kind: 't5' })] });
   assert.equal(await odd.checkRedditSubredditNSFW('gonewild'), null);
   assert.equal(odd.cacheSize(), 0);
+});
+
+test('a network failure pauses about.json too, and stays out of the console', async () => {
+  // Firefox's content script gets Reddit's refusal as a NetworkError, not a
+  // 403. Without a pause, every post linking a subreddit in a feed would send
+  // a failing request and print an error.
+  const ctx = loadRedditCheck({ replies: [new TypeError('NetworkError when attempting to fetch resource.')] });
+  assert.equal(await ctx.checkRedditSubredditNSFW('gonewild'), null);
+  assert.equal(await ctx.checkRedditSubredditNSFW('pics'), null);
+  assert.equal(await ctx.checkRedditSubredditNSFW('aww'), null);
+  assert.equal(ctx.requests.length, 1, 'no further about.json after a network failure');
+  assert.deepEqual(ctx.logged, [], 'nothing logged with debug mode off');
+});
+
+test('the page data names the subreddit as prefixedName ("r/<name>")', () => {
+  // As Reddit serves it: no `name`, and no <shreddit-screenview-data> needed.
+  const ctx = loadRedditCheck();
+  const page = { subreddit: { id: 't5_2qq5c', isNsfw: true, prefixedName: 'r/gonewild' } };
+  assert.equal(ctx.readRedditPageNsfw('gonewild', redditDocument({ page })), true);
+  assert.equal(ctx.readRedditPageNsfw('pics', redditDocument({ page })), null);
 });
 
 test('page data for another subreddit is not read for a link elsewhere', async () => {
