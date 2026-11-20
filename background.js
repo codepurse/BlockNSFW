@@ -988,6 +988,26 @@ async function storeBlocklistInCache(domains) {
   return meta;
 }
 
+// The chunk cache only makes the next wake cheaper, so nothing waits on it.
+// Writes run detached and one at a time: Safari can leave a storage.local.set
+// unsettled forever, and a second multi-megabyte write queued behind it would
+// only pile up. A write that never settles therefore also blocks later writes
+// for this lifetime, which is the point; the in-memory list is already live.
+let blocklistCacheWrite = null;
+function cacheBlocklistInBackground(domains, onStored) {
+  if (blocklistCacheWrite) return;
+  blocklistCacheWrite = (async () => {
+    try {
+      const meta = await storeBlocklistInCache(domains);
+      if (meta && onStored) await onStored(meta);
+    } catch (error) {
+      console.warn('BlockNSFW: blocklist cache write failed', error);
+    } finally {
+      blocklistCacheWrite = null;
+    }
+  })();
+}
+
 async function loadBlocklistFromCache() {
   const meta = blocklistMeta || (await loadBlocklistMeta());
   if (!meta || !meta.chunkCount) {
@@ -1041,17 +1061,14 @@ async function ensureRemoteBlocklistUpToDate(options = {}) {
 
       const remoteDomains = await fetchRemoteBlocklist();
       if (remoteDomains.length > 0) {
-        const newMeta = await storeBlocklistInCache(remoteDomains);
-        const refreshedDomains = await loadBlocklistFromCache();
-        if (Array.isArray(refreshedDomains) && refreshedDomains.length > 0) {
-          defaultBlocklist = refreshedDomains;
-        } else {
-          defaultBlocklist = remoteDomains.map(normalizeDomainForCache).filter(isLikelyDomain);
-        }
+        // Applied in memory first and not read back from the cache: the write
+        // below may never settle, and verdicts must not wait on it.
+        defaultBlocklist = Array.from(new Set(remoteDomains.map(normalizeDomainForCache).filter(isLikelyDomain)));
         defaultBlocklistSet = new Set(defaultBlocklist);
         await applyPublicSuffixGuard();
         await rebuildCompiledPatterns();
-        return { meta: newMeta, domains: defaultBlocklist };
+        cacheBlocklistInBackground(remoteDomains);
+        return { meta: blocklistMeta, domains: defaultBlocklist };
       }
 
       return { meta, domains: defaultBlocklist };
@@ -2506,22 +2523,22 @@ async function loadDefaultBlocklist() {
       // 204k domains, while ensureRemoteBlocklistUpToDate() returned early
       // because the metadata was not stale. The chunk cache, whose entire
       // purpose is to make a wake cheap, was never populated at all.
-      const meta = await storeBlocklistInCache(defaultBlocklist);
-      if (meta) {
+      // Not awaited: initialisation must not wait on this write (Safari can
+      // leave it unsettled). The in-memory meta below keeps the bundled
+      // timestamp for this lifetime; the stored one lands when the write does.
+      blocklistMeta = {
+        updatedAt: BUNDLED_BLOCKLIST_BUILT_AT || Date.now(),
+        chunkCount: 0,
+        version: 1,
+        source: 'bundled',
+        domainCount: defaultBlocklist.length
+      };
+      cacheBlocklistInBackground(defaultBlocklist, async meta => {
         meta.source = 'bundled';
         meta.updatedAt = BUNDLED_BLOCKLIST_BUILT_AT || Date.now();
         blocklistMeta = meta;
         await browserAPI.storage.local.set({ [BLOCKLIST_CACHE_META_KEY]: meta });
-      } else {
-        blocklistMeta = {
-          updatedAt: BUNDLED_BLOCKLIST_BUILT_AT || Date.now(),
-          chunkCount: 0,
-          version: 1,
-          source: 'bundled',
-          domainCount: defaultBlocklist.length
-        };
-        await browserAPI.storage.local.set({ [BLOCKLIST_CACHE_META_KEY]: blocklistMeta });
-      }
+      });
     } else {
       // Preserve the original bundled timestamp across restarts so its normal
       // TTL can expire and trigger a remote refresh.
@@ -3868,7 +3885,25 @@ async function getActiveWhitelistDomains() {
   }
 }
 
-async function updateDnrRules() {
+// One update at a time, and calls that arrive while one is waiting to start
+// share it: it reads the settings when it starts, so it already covers them.
+// Two at once each clear the rules and re-add them, and Safari refuses the
+// second copy of an id that's already there, which counted good rules as
+// refused (seen 2026-11-19: startup and the settings-defaults write overlapped).
+let dnrUpdateChain = Promise.resolve();
+let dnrUpdateWaiting = null;
+function updateDnrRules() {
+  if (dnrUpdateWaiting) return dnrUpdateWaiting;
+  const run = dnrUpdateChain.then(() => {
+    dnrUpdateWaiting = null;
+    return syncDynamicRules();
+  });
+  dnrUpdateWaiting = run;
+  dnrUpdateChain = run.catch(() => {});
+  return run;
+}
+
+async function syncDynamicRules() {
   try {
     if (!browserAPI.declarativeNetRequest || typeof browserAPI.declarativeNetRequest.updateDynamicRules !== 'function') {
       console.warn('BlockNSFW: declarativeNetRequest API not available; skipping dynamic rules');
@@ -3893,14 +3928,110 @@ async function updateDnrRules() {
       addRules.push(...buildCustomImageBlockRules(imageBlockDomains));
     }
 
-    await browserAPI.declarativeNetRequest.updateDynamicRules({
-      removeRuleIds: ALL_DNR_RULE_IDS,
-      addRules
-    });
-
-    console.log(`BlockNSFW: Dynamic rules updated (${addRules.length} active)`);
+    const applied = await applyDynamicRules(addRules);
+    console.log(`BlockNSFW: Dynamic rules updated (${applied} of ${addRules.length} active)`);
   } catch (error) {
     console.error('BlockNSFW: failed to update dynamic rules', error);
+  }
+}
+
+// updateDynamicRules is all-or-nothing: one rule the browser can't take
+// rejects the whole call. Safari compiles DNR rules into WebKit content-blocker
+// rules, whose regex has no alternation (`a|b`) and no `\d`, so it refused the
+// Bing rule and with it every SafeSearch, whitelist-allow and custom-image
+// rule (Safari 17, 2026-11-19: dynamic rules 0).
+//
+// The batch is still tried first, so a browser that takes it keeps one atomic
+// swap with no moment where the allow rules are missing. Only when it's
+// refused are the old rules cleared and each new one added on its own, so the
+// rules the browser can't take are the only ones missing.
+//
+// That fallback is ~23 calls, and Safari recompiles every rule list, static
+// ruleset included, on each one it accepts. So a browser that refused rules
+// gets them remembered (DNR_STATE_KEY): later updates leave them out and go in
+// one call, and an update that would change nothing makes no call at all.
+// A browser that never refused anything stores nothing and takes the batch
+// every time, as before. Returns how many rules are in force.
+async function applyDynamicRules(addRules) {
+  const dnr = browserAPI.declarativeNetRequest;
+  const state = await readDnrState();
+  const refusedIds = new Set(state ? state.refused : []);
+  const wanted = addRules.filter(rule => !refusedIds.has(rule.id));
+  const signature = JSON.stringify(wanted);
+
+  if (state && state.signature === signature && await dnrRulesInForce(dnr, wanted)) {
+    return wanted.length;
+  }
+
+  try {
+    await dnr.updateDynamicRules({ removeRuleIds: ALL_DNR_RULE_IDS, addRules: wanted });
+    if (state) await writeDnrState({ ...state, signature });
+    return wanted.length;
+  } catch (batchError) {
+    console.warn('BlockNSFW: dynamic rules refused as a batch, adding them one at a time', batchError);
+  }
+
+  await dnr.updateDynamicRules({ removeRuleIds: ALL_DNR_RULE_IDS });
+  const accepted = [];
+  const refused = [];
+  for (const rule of wanted) {
+    try {
+      await dnr.updateDynamicRules({ addRules: [rule] });
+      accepted.push(rule);
+    } catch (error) {
+      refusedIds.add(rule.id);
+      refused.push(`${rule.id}: ${error && error.message ? error.message : error}`);
+    }
+  }
+  if (refused.length) {
+    console.warn(`BlockNSFW: ${refused.length} dynamic rule(s) this browser can't take:\n  ${refused.join('\n  ')}`);
+  }
+  await writeDnrState({ ...dnrStateScope(), refused: [...refusedIds], signature: JSON.stringify(accepted) });
+  return accepted.length;
+}
+
+// Refusals hold for one extension version in one browser build: a release can
+// rewrite a refused rule, and a browser update can start taking it.
+const DNR_STATE_KEY = 'pblocker_dnr_state';
+
+function dnrStateScope() {
+  return {
+    version: browserAPI.runtime.getManifest().version,
+    ua: typeof navigator !== 'undefined' && navigator.userAgent ? navigator.userAgent : ''
+  };
+}
+
+async function readDnrState() {
+  try {
+    const { [DNR_STATE_KEY]: state } = await browserAPI.storage.local.get(DNR_STATE_KEY);
+    const scope = dnrStateScope();
+    if (state && state.version === scope.version && state.ua === scope.ua &&
+        Array.isArray(state.refused) && typeof state.signature === 'string') {
+      return state;
+    }
+  } catch (_) {}
+  return null;
+}
+
+async function writeDnrState(state) {
+  try {
+    await browserAPI.storage.local.set({ [DNR_STATE_KEY]: state });
+  } catch (error) {
+    console.warn('BlockNSFW: could not remember the refused dynamic rules', error);
+  }
+}
+
+// The browser can drop dynamic rules (Safari clears them with the extension's
+// data), so "nothing changed" also needs the ids it holds to be the ids wanted.
+async function dnrRulesInForce(dnr, wanted) {
+  if (typeof dnr.getDynamicRules !== 'function') return false;
+  try {
+    const managed = new Set(ALL_DNR_RULE_IDS);
+    const held = (await dnr.getDynamicRules()).map(rule => rule.id).filter(id => managed.has(id));
+    const want = wanted.map(rule => rule.id);
+    return held.length === want.length && want.every(id => held.includes(id));
+  } catch (_) {
+    return false;
   }
 }
 
@@ -3947,7 +4078,10 @@ function initializeBackground() {
       .catch(e => console.warn('BlockNSFW: subscribed lists could not be loaded', e));
     await rebuildCompiledPatterns();
     await initializeExtensionStateTracking();
-    await updateDnrRules();
+    // Not awaited: verdicts never read the dynamic rules, and in Safari each
+    // accepted call recompiles every rule list, static ruleset included. Awaited,
+    // it held ready (and onboarding) back 16-28 s on every wake (2026-11-19).
+    updateDnrRules().catch(e => console.warn('BlockNSFW: dynamic rules update failed', e));
     ensureRemoteWhitelistUpToDate().catch(e => console.warn('BlockNSFW: initial whitelist sync failed', e));
     ensureUnsafeSearchUpToDate().catch(e => console.warn('BlockNSFW: search engine list sync failed', e));
     // Not forced: each subscription re-downloads only once its own day is up.

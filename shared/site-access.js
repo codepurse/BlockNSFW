@@ -26,7 +26,13 @@
 (function (root) {
   'use strict';
 
+  // What a request asks for (both manifests declare <all_urls>, which covers it).
   var ORIGINS = ['<all_urls>'];
+  // What the code needs: content scripts and DNR host access cover http and
+  // https pages, which is *://*/*. Safari 17 stores an "Always allow on every
+  // website" grant as *://*/* and answers false for <all_urls> (measured
+  // 2026-11), so either pattern counts as access.
+  var NEEDED_ORIGINS = ['*://*/*'];
   // A held page's address travels in session storage under this prefix, never
   // in the URL, where it would reach history (see BLOCK_DETAIL_PREFIX in
   // content.js for why that matters here).
@@ -43,7 +49,7 @@
   }
 
   // 'off' (access is there, or protection is off: nothing to do), 'hold' or
-  // 'net'. `granted` is permissions.contains for ORIGINS.
+  // 'net'. `granted` is contains() for the permissions above.
   function mode(input) {
     var o = input || {};
     if (o.granted !== false || o.enabled === false) return 'off';
@@ -51,14 +57,21 @@
   }
 
   // Resolves true when the API can't say: a browser without it has no switch.
-  function contains(permissions) {
+  // Access is there if either pattern is granted; an <all_urls> grant still
+  // answers true in Chrome and Firefox, as before.
+  function containsOne(permissions, origins) {
     try {
-      if (!permissions || typeof permissions.contains !== 'function') return Promise.resolve(true);
-      return Promise.resolve(permissions.contains({ origins: ORIGINS }))
+      return Promise.resolve(permissions.contains({ origins: origins }))
         .then(function (ok) { return ok !== false; }, function () { return true; });
     } catch (_) {
       return Promise.resolve(true);
     }
+  }
+
+  function contains(permissions) {
+    if (!permissions || typeof permissions.contains !== 'function') return Promise.resolve(true);
+    return Promise.all([containsOne(permissions, ORIGINS), containsOne(permissions, NEEDED_ORIGINS)])
+      .then(function (answers) { return answers[0] || answers[1]; });
   }
 
   function newHoldKey() {
